@@ -21,6 +21,7 @@ import { useSyncExternalStore } from 'react'
 import { onAccountChange } from '../state/account'
 import { attachmentsApi, newAttachmentId, type LinkCard } from './api'
 import { loadLimits } from './info'
+import { dropEditor, keepEditor } from './large'
 import { BlockView } from './NodeView'
 import { enqueue } from './uploads'
 
@@ -164,6 +165,12 @@ export function insertLink(editor: Editor, noteId: string, href: string): void {
 export function attachmentEditing(noteId: string): AnyExtension {
   return Extension.create({
     name: 'noteAttachments',
+    onCreate() {
+      keepEditor(noteId, this.editor)
+    },
+    onDestroy() {
+      dropEditor(noteId, this.editor)
+    },
     addProseMirrorPlugins() {
       const editor = this.editor
       return [

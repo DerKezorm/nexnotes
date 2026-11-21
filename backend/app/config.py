@@ -66,6 +66,9 @@ class Settings(BaseSettings):
     #: Extra languages as JSON files, one per language (``es.json``). Empty: ``<data_dir>/locales``.
     locales_dir: Path | None = None
     disable_background: bool = False
+    #: The work queue's thread (text recognition, NOTES-11). Empty: it runs unless ``disable_background`` is set; the
+    #: server's tests leave it off and run the queue themselves.
+    work_queue: bool | None = None
     #: Where the update check asks for the newest release. Empty: GitHub's API. The tests point it elsewhere.
     update_url: str = ""
     frontend_dist: Path = PROJECT_DIR / "frontend" / "dist"

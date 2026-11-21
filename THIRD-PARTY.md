@@ -18,5 +18,12 @@ fetched by the package managers alone: files that lie in this repository or go i
 | typst 0.15.0 | sets the PDF of a note (Python binding of Typst, which it bundles) | Apache-2.0 |
 | pypdf (tests only, not in the image) | reads the text of the PDFs in the tests | BSD-3-Clause |
 
+## Programs in the image
+
+| Program | What it does here | Licence |
+|---|---|---|
+| Tesseract (Debian `tesseract-ocr`) with the language data `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `pol`, `tur` and `osd` (`tesseract-ocr-*`) | reads the text of attached pictures, scans and PDFs | Apache-2.0 |
+| Leptonica (Debian `libleptonica6`, through Tesseract) | reads pictures for Tesseract | BSD-2-Clause |
+
 The other dependencies are listed in `backend/requirements.txt` and `frontend/package.json` and come with their own
 licence files; the About page names the main ones.

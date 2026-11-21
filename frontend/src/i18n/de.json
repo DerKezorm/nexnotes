@@ -1513,5 +1513,25 @@
       "not_found": "Der Export „{{name}}“ ging nicht: Den Ordner gibt es nicht mehr.",
       "failed": "Der Export „{{name}}“ ist fehlgeschlagen."
     }
+  },
+  "ocr": {
+    "showText": "Text anzeigen",
+    "hideText": "Text ausblenden",
+    "title": "Erkannter Text",
+    "pageOf": "Seite {{page}} von {{pages}}",
+    "previous": "Vorige Seite",
+    "next": "Nächste Seite",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "insert": "In die Notiz einfügen",
+    "inserted": "In die Notiz eingefügt",
+    "pending": "Text wird noch erkannt. Die Suche findet ihn, sobald er fertig ist.",
+    "pendingPages_one": "Seite {{pages}}: Text wird noch erkannt. Die Suche findet ihn, sobald er fertig ist.",
+    "pendingPages_other": "Seiten {{pages}}: Text wird noch erkannt. Die Suche findet ihn, sobald er fertig ist.",
+    "none": "Kein Text erkannt",
+    "unavailable": "Die Texterkennung ist auf diesem Server nicht eingerichtet.",
+    "locked": "Die Notiz ist gesperrt. Ihr Text wird nicht erkannt.",
+    "loading": "Wird geladen …",
+    "picture": "Seite des Anhangs"
   }
 }

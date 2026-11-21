@@ -9,6 +9,8 @@ import './notes/register'
 import './folders'
 // "Anhänge" right after the inbox among the places (drawing "Seitenleiste").
 import './attachments'
+// The recognised text of pictures, scans and PDFs: their large view, and hits of the search in them.
+import './ocr'
 import './search'
 import './tags'
 import './history'

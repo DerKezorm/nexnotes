@@ -28,7 +28,7 @@ from ..db import SessionLocal
 from ..deps import Account, DbSession
 from ..errors import error
 from ..models_attachments import Attachment
-from ..services import attachments, linkpreview, notes, settings_service
+from ..services import attachments, linkpreview, notes, ocr, settings_service
 
 logger = logging.getLogger("nexnotes.attachments")
 
@@ -87,7 +87,14 @@ async def upload(
     note_id: Annotated[str, Query(max_length=36)],
     attachment_id: Annotated[str, Query(alias="id", max_length=32)],
     name: Annotated[str, Query(max_length=1000)] = "",
+    role: Annotated[str | None, Query(alias="as", max_length=20)] = None,
+    text: Annotated[str | None, Query(pattern="^device$")] = None,
 ) -> dict[str, Any]:
+    """From the iOS app (NOTES-11 AC-5): ``as=scan`` makes a picture a scan, ``text=device`` says the recognised text
+    comes afterwards (``PUT /api/attachments/{id}/text``). Both are read by the recognition when the row is written."""
+    if role not in (None, "scan"):
+        raise error("invalid_input", "The input is not valid.", 422, fields=["as"])
+    hints = ocr.HINTS.set(ocr.Hints(device=text == "device", scan=role == "scan"))
     declared_text = request.headers.get("content-length")
     declared = int(declared_text) if declared_text and declared_text.isdigit() else None
     try:
@@ -104,6 +111,8 @@ async def upload(
         # The connection went while the file came (EC-2): nothing was kept, the page offers to upload again.
         logger.info("An upload broke off note=%s", note_id)
         raise error("upload_broken", "The upload broke off.", 400) from None
+    finally:
+        ocr.HINTS.reset(hints)
     if not new:
         response.status_code = 200
     return attachments.out(row)
