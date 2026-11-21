@@ -586,6 +586,31 @@ describe('tabs in the page', () => {
     expect($('title-icon')).toBeNull()
   })
 
+  it('NOTES-8 AC-1 the tab of the side used last stands out: honey along its top, bold, aria-current', async () => {
+    await render('/notes/soup')
+    await act(async () => openNoteInNewTab('shop'))
+    await idle()
+    const tab = (note: string) => $$('tab').find((one) => one.dataset.note === note)!
+    // One side: the front tab is the active one, the other is neither shown nor marked.
+    expect(tab('shop').getAttribute('aria-current')).toBe('true')
+    expect(tab('shop').className).toContain('font-semibold')
+    expect(tab('shop').className).toContain('shadow-[inset_0_3px_0_var(--color-accent-500)]')
+    expect(tab('soup').getAttribute('aria-current')).toBeNull()
+    expect(tab('soup').getAttribute('aria-selected')).toBe('false')
+    // Two sides: both shown (aria-selected), only the side used last is current, and the mark follows the focus.
+    await act(async () => openNoteBeside('meet'))
+    await idle()
+    const shown = $$('tab').filter((one) => one.getAttribute('aria-selected') === 'true')
+    expect(shown).toHaveLength(2)
+    expect(shown.filter((one) => one.getAttribute('aria-current') === 'true').map((one) => one.dataset.note)).toEqual(['meet'])
+    expect(tab('shop').className).not.toContain('font-semibold')
+    await act(async () => tabs.focus('left'))
+    await idle()
+    expect(tab('shop').getAttribute('aria-current')).toBe('true')
+    expect(tab('meet').getAttribute('aria-current')).toBeNull()
+    expect(tab('meet').className).not.toContain('shadow-[inset_0_3px_0')
+  })
+
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {
     await render('/notes/soup')
     await act(async () => {

@@ -19,7 +19,7 @@ import { isMac } from './desktop'
 import { draggedTab as draggedTabNow, setDraggedTab, shortcutText, SIDE_LABEL, TAB_DRAG, TAB_MAX, tabMin, tabRows } from './layout'
 import type { TabMeta } from './meta'
 import { closeTab, endSplit, openNoteInNewTab, showTab } from './open'
-import { focusedKey, MAX_TABS, type Tab, type TabsState } from './state'
+import { focusedKey, focusSide, MAX_TABS, type Tab, type TabsState } from './state'
 import { tabs as store } from './store'
 
 function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
@@ -121,6 +121,9 @@ export function TabBar({ state, metas, split, open }: Props) {
     const title = titleOf(tab)
     const side = tab.key === state.left ? 'left' : tab.key === state.right ? 'right' : null
     const shown = open && side !== null
+    // The tab of the side used last (NOTES-8 AC-1): honey along its top and bold, so it stands out by shape and
+    // weight too, not by color alone.
+    const active = shown && side === focusSide(state)
     const mark = meta?.state === 'deleted' ? 'deleted' : meta?.state === 'gone' ? 'gone' : meta?.locked ? 'locked' : null
     const hint = [title, mark ? t(`tabs.state.${mark}`) : '', index < MAX_TABS ? shortcutText(String(index + 1)) : ''].filter(Boolean).join(' · ')
     return (
@@ -128,6 +131,8 @@ export function TabBar({ state, metas, split, open }: Props) {
         key={tab.key}
         role="tab"
         aria-selected={shown}
+        aria-current={active ? 'true' : undefined}
+        data-active={active || undefined}
         aria-keyshortcuts={`Alt+Shift+${index + 1}`}
         tabIndex={tab.key === (focused ?? state.tabs[0]?.key) ? 0 : -1}
         title={hint}
@@ -166,7 +171,11 @@ export function TabBar({ state, metas, split, open }: Props) {
         }}
         className={
           'group flex h-[38px] min-w-0 cursor-default items-center gap-1.5 rounded-t-[9px] border border-b-0 pr-1 pl-3 text-[13px] outline-offset-[-2px] select-none ' +
-          (shown ? 'border-ink-700 bg-ink-850 text-mist-100' : 'border-transparent text-mist-500 hover:bg-ink-900 hover:text-mist-300') +
+          (active
+            ? 'border-ink-700 bg-ink-850 font-semibold text-mist-100 shadow-[inset_0_3px_0_var(--color-accent-500)]'
+            : shown
+              ? 'border-ink-700 bg-ink-850 text-mist-300'
+              : 'border-transparent text-mist-500 hover:bg-ink-900 hover:text-mist-300') +
           (over === tab.key ? ' shadow-[inset_2px_0_0_var(--color-accent-500)]' : '')
         }
       >
