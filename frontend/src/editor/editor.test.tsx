@@ -444,6 +444,48 @@ describe('NOTES-3 AC-11 highlighter', () => {
     expect(editor.view.dom.querySelector('mark')?.getAttribute('style')).toBeNull()
     for (const color of ['green', 'blue', 'rose', 'violet']) expect(css).toContain(`mark[data-color='${color}'] { background: var(--nn-mark-${color}); }`)
   })
+
+  it('NOTES-3 AC-11 a marker sits in the line without padding or margin, the selection is never honey', () => {
+    // The browser test (e2e/highlight.spec.ts) measures the letters; here the rules themselves.
+    const rule = css.match(/\.nn-editor mark \{([^}]*)\}/)![1]
+    expect(rule).toMatch(/padding:\s*0;/)
+    expect(rule).toMatch(/margin:\s*0;/)
+    expect(rule).not.toMatch(/padding:\s*0\s+\S/)
+    expect(css).toMatch(/\.nn-editor \.ProseMirror ::selection \{ background: var\(--nn-select\); \}/)
+    expect(css.match(/--nn-select: rgb\(([^)]*)\)/g)).not.toContain('--nn-select: rgb(242 193 78')
+    for (const color of ['honey', 'green', 'blue', 'rose', 'violet']) expect(css).toMatch(new RegExp(`\\.ProseMirror mark${color === 'honey' ? '' : `\\[data-color='${color}'\\]`}::selection`))
+  })
+
+  it('NOTES-3 AC-11 AC-13 one undo takes back exactly the marker, however soon after typing; redo sets it again', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<p>fafasdfasdfaf</p>')
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+    // Typed a moment ago (well inside the undo manager's 500 ms), then marked: two steps, not one.
+    typeText(editor, 'x')
+    editor.commands.setTextSelection({ from: 4, to: 11 })
+    expect(editor.state.doc.textBetween(4, 11)).toBe('asdfasd')
+    editor.chain().focus().setHighlight({ color: 'honey' }).run()
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.view.dom.querySelector('mark')).toBeNull()
+    expect(editor.getText()).toBe('fafasdfasdfafx')
+    expect(editor.commands.redo()).toBe(true)
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    expect(editor.view.dom.querySelector('mark')?.getAttribute('data-color')).toBe('honey')
+    // Typing right after marking is a step of its own too: its undo leaves the marker.
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+    typeText(editor, 'y')
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.getText()).toBe('fafasdfasdfafx')
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    // Taking the marker away is one step as well.
+    editor.commands.setTextSelection({ from: 4, to: 11 })
+    editor.chain().focus().unsetHighlight().run()
+    expect(editor.view.dom.querySelector('mark')).toBeNull()
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    expect(editor.getText()).toBe('fafasdfasdfafx')
+  })
 })
 
 describe('NOTES-3 AC-12 folding headings', () => {
