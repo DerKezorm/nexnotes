@@ -588,7 +588,8 @@
     "smart_folder_exists": "Einen intelligenten Ordner „{{name}}“ gibt es schon. Wähle einen anderen Namen.",
     "smart_folder_name_invalid": "Gib dem intelligenten Ordner einen Namen mit höchstens {{maximum}} Zeichen.",
     "smart_condition_invalid": "Eine Bedingung ist nicht vollständig. Prüf sie noch einmal.",
-    "smart_folder_not_found": "Diesen intelligenten Ordner gibt es nicht mehr."
+    "smart_folder_not_found": "Diesen intelligenten Ordner gibt es nicht mehr.",
+    "list_style_unknown": "Wähl Liste, Karten, Kompakt oder Kacheln."
   },
   "folders": {
     "section": "Ordner",
@@ -803,7 +804,7 @@
     "emptyAll": "Noch keine Notizen",
     "emptyAllText": "Was du schreibst, steht hier: alle Notizen aus allen Ordnern und die, die andere mit dir teilen.",
     "group": "Nach Datum",
-    "groupLabel": "Nach Datum gruppieren",
+    "groupLabel": "Gruppieren",
     "groupOffByTitle": "Nach Titel sortiert gibt es keine Gruppen.",
     "groups": {
       "month": "Letzte 30 Tage",
@@ -845,7 +846,7 @@
       "created": "Erstellt",
       "desc": "Neueste zuerst",
       "descTitle": "Z bis A",
-      "label": "Sortierung",
+      "label": "Sortieren",
       "title": "Titel A bis Z",
       "titleDesc": "Titel Z bis A",
       "updated": "Zuletzt geändert"
@@ -853,9 +854,26 @@
     "tasks": "{{done}} von {{total}}",
     "view": {
       "label": "Ansicht",
-      "list": "Liste",
-      "tiles": "Kacheln",
+      "show": "Zeigen",
+      "notes": "Notizen",
       "gallery": "Anhänge"
+    },
+    "groupNone": "Keine Gruppen",
+    "state": {
+      "grouped": "nach Datum gruppiert"
+    },
+    "style": {
+      "label": "Darstellung",
+      "list": "Liste",
+      "cards": "Karten",
+      "compact": "Kompakt",
+      "tiles": "Kacheln"
+    },
+    "hints": {
+      "label": "Hinweise",
+      "text": "Checklisten, Anhänge, Schlagwörter",
+      "attachments_one": "{{count}} Anhang",
+      "attachments_other": "{{count}} Anhänge"
     }
   },
   "notes": {
@@ -1950,7 +1968,8 @@
       "unnamed": "ohne Namen",
       "gone": "Gelöscht: {{name}}"
     },
-    "sharedPage": "Freigaben verwalten"
+    "sharedPage": "Freigaben verwalten",
+    "menu": "Aktionen für „{{name}}“"
   },
   "pwa": {
     "update": "Es gibt eine neue Version von nexnotes.",

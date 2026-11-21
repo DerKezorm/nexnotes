@@ -66,20 +66,25 @@ test('NOTES-7 AC-7 "Shared with me" and "Attachments" are smart folders: the sha
   await expect(theirs.getByTestId('note-saved')).toHaveText('saved')
   await section.getByTestId('sidebar-smart-folder').filter({ hasText: 'Attachments' }).click()
   await expect(theirs.getByTestId('note-list')).toHaveAttribute('data-mode', 'gallery')
+  await theirs.getByTestId('list-view').click()
   await expect(theirs.getByTestId('list-mode-gallery')).toHaveAttribute('aria-checked', 'true')
+  await theirs.keyboard.press('Escape')
   const tile = theirs.getByTestId('gallery-item').filter({ hasText: 'contract.pdf' })
   await expect(tile).toContainText(`in “Contract ${stamp}”`)
   await tile.click()
   await expect(theirs).toHaveURL(new RegExp(`/smart/[^?]+\\?.*attachment=.*note=${own.id}`))
   await expect(theirs.getByTestId('note-body')).toBeVisible()
-  // List and tiles stay at hand, kept over a reload.
+  // The notes stay at hand in the menu "Ansicht", kept over a reload.
+  await theirs.getByTestId('list-view').click()
   await theirs.getByTestId('list-mode-list').click()
+  await theirs.keyboard.press('Escape')
   await expect(theirs.getByTestId('note-row').filter({ hasText: `Contract ${stamp}` })).toBeVisible()
   await theirs.reload()
   await expect(theirs.getByTestId('note-list')).toHaveAttribute('data-mode', 'list')
 
   // Deleted, "Shared with me" is gone and does not come back; the page stays at its address.
   await section.getByTestId('sidebar-smart-folder').filter({ hasText: 'Shared with me' }).click()
+  await theirs.getByTestId('smart-more').click()
   await theirs.getByTestId('smart-delete-open').click()
   await theirs.getByTestId('smart-delete-confirm').click()
   await expect(section.getByTestId('sidebar-smart-folder').filter({ hasText: 'Shared with me' })).toHaveCount(0)

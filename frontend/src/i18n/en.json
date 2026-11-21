@@ -588,7 +588,8 @@
     "smart_folder_exists": "There is already a smart folder named “{{name}}”. Choose another name.",
     "smart_folder_name_invalid": "A smart folder needs a name of at most {{maximum}} characters.",
     "smart_condition_invalid": "A condition is not complete. Check it once more.",
-    "smart_folder_not_found": "This smart folder no longer exists."
+    "smart_folder_not_found": "This smart folder no longer exists.",
+    "list_style_unknown": "Choose list, cards, compact or tiles."
   },
   "folders": {
     "section": "Folders",
@@ -803,7 +804,7 @@
     "emptyAll": "No notes yet",
     "emptyAllText": "What you write shows up here: every note from every folder, and the ones others share with you.",
     "group": "By date",
-    "groupLabel": "Group by date",
+    "groupLabel": "Group",
     "groupOffByTitle": "Sorted by title, there are no groups.",
     "groups": {
       "month": "Last 30 days",
@@ -853,9 +854,26 @@
     "tasks": "{{done}} of {{total}}",
     "view": {
       "label": "View",
-      "list": "List",
-      "tiles": "Tiles",
+      "show": "Show",
+      "notes": "Notes",
       "gallery": "Attachments"
+    },
+    "groupNone": "No groups",
+    "state": {
+      "grouped": "grouped by date"
+    },
+    "style": {
+      "label": "Look",
+      "list": "List",
+      "cards": "Cards",
+      "compact": "Compact",
+      "tiles": "Tiles"
+    },
+    "hints": {
+      "label": "Hints",
+      "text": "Checklists, attachments, tags",
+      "attachments_one": "{{count}} attachment",
+      "attachments_other": "{{count}} attachments"
     }
   },
   "notes": {
@@ -1950,7 +1968,8 @@
       "unnamed": "without a name",
       "gone": "Deleted: {{name}}"
     },
-    "sharedPage": "Manage shares"
+    "sharedPage": "Manage shares",
+    "menu": "Actions for “{{name}}”"
   },
   "pwa": {
     "update": "A new version of nexnotes is here.",
