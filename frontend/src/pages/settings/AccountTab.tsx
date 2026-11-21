@@ -10,11 +10,13 @@ import { useSearchParams } from 'react-router-dom'
 
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { Field, Problem } from '../../components/Field'
+import { PasswordConfirmField } from '../../components/PasswordConfirm'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
 import { browserLanguage, changeLanguage, languageOptions, type LanguageOption } from '../../i18n'
 import { copyText } from '../../lib/copy'
 import { errorText, problemText, signInErrorText } from '../../lib/errors'
 import { day } from '../../lib/format'
+import { usePasswordConfirm } from '../../lib/passwordConfirm'
 import { go } from '../../lib/providers'
 import { useAuth } from '../../state/auth'
 import { Card, saveAsFile } from './ui'
@@ -36,7 +38,7 @@ export function AccountTab() {
   }, [])
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
-  const [again, setAgain] = useState('')
+  const again = usePasswordConfirm(next)
   const [linkPassword, setLinkPassword] = useState('')
   const [linking, setLinking] = useState<string | null>(null)
   const linkedSlug = params.get('linked')
@@ -198,18 +200,19 @@ export function AccountTab() {
                 event.preventDefault()
                 if (!current) return setProblem(errorText('current_password_missing'))
                 if (!next) return setProblem(errorText('password_missing'))
-                if (next !== again) return setProblem(t('me.password.mismatch'))
+                setProblem(null)
+                if (!again.matches()) return
                 void run(async () => {
-                  await authApi.password(current, next)
+                  await authApi.password(current, next, again.confirm)
                   setCurrent('')
                   setNext('')
-                  setAgain('')
+                  again.clear()
                 }, t('me.password.done'))
               }}
             >
               <Field label={t('me.password.current')} value={current} onChange={setCurrent} type="password" autoComplete="current-password" />
               <Field label={t('me.password.new')} value={next} onChange={setNext} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: me.min_password ?? 12 })} />
-              <Field label={t('me.password.again')} value={again} onChange={setAgain} type="password" autoComplete="new-password" />
+              <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} labelClassName="font-medium text-mist-100" />
               <button type="submit" disabled={busy} className={LOUD}>
                 {t('me.password.submit')}
               </button>

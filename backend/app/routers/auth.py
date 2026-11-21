@@ -59,6 +59,8 @@ class SetupIn(BaseModel):
     display_name: str = Field(max_length=200)
     email: str = Field(default="", max_length=255)
     password: str = Field(max_length=200)
+    #: The password typed a second time; checked when given (see ``check_confirm``).
+    password_confirm: str | None = Field(default=None, max_length=200)
     language: str = Field(default="", max_length=16)
     #: The setup code from the server's log (or NEXNOTES_SETUP_TOKEN).
     code: str = Field(default="", max_length=200)
@@ -73,6 +75,8 @@ class LoginIn(BaseModel):
 class PasswordChangeIn(BaseModel):
     current: str = Field(max_length=200)
     new: str = Field(max_length=200)
+    #: The new password typed a second time; checked when given (see ``check_confirm``).
+    password_confirm: str | None = Field(default=None, max_length=200)
 
 
 class LanguageIn(BaseModel):
@@ -116,6 +120,13 @@ def check_password(password: str) -> None:
         accounts.check_password_rule(password)
     except AccountError as exc:
         raise fail(exc) from exc
+
+
+def check_confirm(password: str, confirm: str | None) -> None:
+    """A new password typed twice must be the same twice. The web pages always send the second one; a client that
+    leaves it out (a script, an app with one field) is not checked, since only a person typing can mistype."""
+    if confirm is not None and confirm != password:
+        raise error("password_mismatch", "The passwords do not match.", 422, field="password_confirm")
 
 
 def check_language(language: str) -> str:
@@ -198,6 +209,7 @@ def setup(payload: SetupIn, request: Request, response: Response, db: DbSession)
             headers={"Retry-After": str(wait)},
         )
     language = check_language(payload.language)
+    check_confirm(payload.password, payload.password_confirm)
     try:
         account = accounts.create_operator(
             db, display_name=payload.display_name, email=payload.email, password=payload.password, code=payload.code
@@ -318,6 +330,7 @@ def change_password(payload: PasswordChangeIn, request: Request, response: Respo
     if row.sign_in != SIGN_IN_PASSWORD:
         raise error("oidc_account", "This account signs in through OIDC.", 409)
     check_password(payload.new)
+    check_confirm(payload.new, payload.password_confirm)
     reauth_guard(request, row)
     try:
         accounts.change_password(db, row, payload.current, payload.new)

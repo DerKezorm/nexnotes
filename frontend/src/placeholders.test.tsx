@@ -121,6 +121,7 @@ describe.each(['en', 'de'])('no raw placeholder in a refusal (%s)', (language) =
     const fields = [...box.querySelectorAll('input')]
     type(fields[1], 'Robin')
     type(fields[3], 'twelve chars')
+    type(fields[4], 'twelve chars')
     await act(async () => box.querySelector('form')!.requestSubmit())
     await settle()
     shows(code)
@@ -146,6 +147,7 @@ describe.each(['en', 'de'])('no raw placeholder in a refusal (%s)', (language) =
     const fields = [...box.querySelectorAll('input')]
     type(fields[0], 'Lena')
     type(fields[2], 'eleven char')
+    type(fields[3], 'eleven char')
     await act(async () => box.querySelector('form')!.requestSubmit())
     await settle()
     shows(code)

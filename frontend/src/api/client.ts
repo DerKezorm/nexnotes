@@ -336,7 +336,7 @@ export type AddressQuestion = { count: number; hand: number; address: string }
 
 export const authApi = {
   setupState: () => api<SetupState>('/api/setup'),
-  setup: (body: { display_name: string; email: string; password: string; code: string; language: string }) =>
+  setup: (body: { display_name: string; email: string; password: string; password_confirm: string; code: string; language: string }) =>
     api<Me>('/api/setup', { method: 'POST', body }),
   methods: () => api<Methods>('/api/auth/methods'),
   login: (name: string, password: string) => api<Me | { second_factor: true }>('/api/auth/login', { method: 'POST', body: { name, password } }),
@@ -347,7 +347,8 @@ export const authApi = {
   me: () => api<Me>('/api/auth/me'),
   language: (language: string) => api<Me>('/api/me/language', { method: 'PUT', body: { language } }),
   profile: (change: { display_name?: string; email?: string }) => api<Me>('/api/me/profile', { method: 'PUT', body: change }),
-  password: (current: string, next: string) => api<void>('/api/auth/password', { method: 'PUT', body: { current, new: next } }),
+  password: (current: string, next: string, confirm: string) =>
+    api<void>('/api/auth/password', { method: 'PUT', body: { current, new: next, password_confirm: confirm } }),
   whatsNewSeen: () => api<Me>('/api/me/whats-new/seen', { method: 'POST' }),
   resetNoticeSeen: () => api<Me>('/api/me/password-reset-notice/seen', { method: 'POST' }),
   myProviders: () => api<MyProvider[]>('/api/oidc/me'),
@@ -364,12 +365,13 @@ export const authApi = {
 /** A reset link from the operator, opened without an account. */
 export const resetApi = {
   offer: (token: string) => api<{ name: string; min_password: number; expires_at: string }>(`/api/reset/${encodeURIComponent(token)}`),
-  use: (token: string, password: string) => api<void>(`/api/reset/${encodeURIComponent(token)}`, { method: 'POST', body: { password } }),
+  use: (token: string, password: string, confirm: string) =>
+    api<void>(`/api/reset/${encodeURIComponent(token)}`, { method: 'POST', body: { password, password_confirm: confirm } }),
 }
 
 export const invitesApi = {
   offer: (token: string) => api<InviteOffer>(`/api/invite/${encodeURIComponent(token)}`),
-  accept: (token: string, body: { display_name: string; email: string; password: string }) =>
+  accept: (token: string, body: { display_name: string; email: string; password: string; password_confirm: string }) =>
     api<Me>(`/api/invite/${encodeURIComponent(token)}`, { method: 'POST', body }),
   list: () => api<Invite[]>('/api/invites'),
   make: (body: { days: number; email: string; role: 'operator' | 'member'; send: boolean; language: string }) =>

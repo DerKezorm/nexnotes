@@ -9,11 +9,13 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 
 import { ApiError, authApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
 import { Logo } from '../components/Logo'
+import { PasswordConfirmField } from '../components/PasswordConfirm'
 import { ProviderButtons } from '../components/ProviderButtons'
 import { ThemeSwitcher } from '../components/ThemeSwitcher'
 import i18n from '../i18n'
 import { errorText, signInErrorText } from '../lib/errors'
 import { bytes } from '../lib/format'
+import { usePasswordConfirm } from '../lib/passwordConfirm'
 import { useTitle } from '../lib/title'
 import { safeNext, useAuth } from '../state/auth'
 
@@ -135,6 +137,7 @@ export function SetupPage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const again = usePasswordConfirm(password)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<Trouble>(null)
@@ -160,10 +163,20 @@ export function SetupPage() {
           event.preventDefault()
           if (!name.trim()) return setProblem({ code: 'name_missing' })
           if (password.length < min) return setProblem({ code: 'password_too_short', values: { minimum: min } })
-          setBusy(true)
           setProblem(null)
+          if (!again.matches()) return
+          setBusy(true)
           try {
-            setMe(await authApi.setup({ display_name: name.trim(), email: email.trim(), password, code: code.trim(), language: i18n.language }))
+            setMe(
+              await authApi.setup({
+                display_name: name.trim(),
+                email: email.trim(),
+                password,
+                password_confirm: again.confirm,
+                code: code.trim(),
+                language: i18n.language,
+              }),
+            )
           } catch (error) {
             setProblem(troubleOf(error))
           } finally {
@@ -177,6 +190,7 @@ export function SetupPage() {
         <AuthField label={t('auth.name')} value={name} onChange={setName} autoComplete="name" maxLength={80} />
         <AuthField label={t('auth.email')} value={email} onChange={setEmail} type="email" autoComplete="email" />
         <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: min })} />
+        <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
         <Primary busy={busy}>{t('setup.submit')}</Primary>
       </form>
     </AuthFrame>
@@ -323,6 +337,7 @@ export function InvitePage() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
+  const again = usePasswordConfirm(password)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<Trouble>(null)
   const [methods, setMethods] = useState<Methods | null>(null)
@@ -365,10 +380,18 @@ export function InvitePage() {
           onSubmit={async (event) => {
             event.preventDefault()
             if (!name.trim()) return setProblem({ code: 'name_missing' })
-            setBusy(true)
             setProblem(null)
+            if (!again.matches()) return
+            setBusy(true)
             try {
-              setMe(await invitesApi.accept(token, { display_name: name.trim(), email: (email ?? offer.email).trim(), password }))
+              setMe(
+                await invitesApi.accept(token, {
+                  display_name: name.trim(),
+                  email: (email ?? offer.email).trim(),
+                  password,
+                  password_confirm: again.confirm,
+                }),
+              )
               navigate('/', { replace: true })
             } catch (error) {
               setProblem(troubleOf(error))
@@ -381,6 +404,7 @@ export function InvitePage() {
           <AuthField label={t('auth.name')} value={name} onChange={setName} autoComplete="name" autoFocus maxLength={80} />
           <AuthField label={t('auth.email')} value={email ?? offer.email} onChange={setEmail} type="email" autoComplete="email" />
           <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: offer.min_password })} />
+          <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
           <Primary busy={busy}>{t('auth.invite.submit')}</Primary>
         </form>
       )}
@@ -396,6 +420,7 @@ export function ResetPage() {
   const [offer, setOffer] = useState<{ name: string; min_password: number } | null>(null)
   const [invalid, setInvalid] = useState<'invalid' | 'expired' | null>(null)
   const [password, setPassword] = useState('')
+  const again = usePasswordConfirm(password)
   const [busy, setBusy] = useState(false)
   const [done, setDone] = useState(false)
   const [problem, setProblem] = useState<Trouble>(null)
@@ -423,10 +448,11 @@ export function ResetPage() {
         onSubmit={async (event) => {
           event.preventDefault()
           if (password.length < offer.min_password) return setProblem({ code: 'password_too_short', values: { minimum: offer.min_password } })
-          setBusy(true)
           setProblem(null)
+          if (!again.matches()) return
+          setBusy(true)
           try {
-            await resetApi.use(token, password)
+            await resetApi.use(token, password, again.confirm)
             setDone(true)
           } catch (error) {
             const found = troubleOf(error)
@@ -439,6 +465,7 @@ export function ResetPage() {
       >
         <Problem problem={problem} />
         <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" autoFocus hint={t('setup.passwordHint', { count: offer.min_password })} />
+        <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
         <Primary busy={busy}>{t('auth.reset.submit')}</Primary>
       </form>
     </AuthFrame>

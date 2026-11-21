@@ -23,7 +23,7 @@ from ..models import Account as AccountRow
 from ..security import MIN_PASSWORD, SESSION_COOKIE, brake, session_account
 from ..services import accounts, mailer, settings_service
 from ..services.accounts import AccountError
-from .auth import check_password, fail, sign_in
+from .auth import check_confirm, check_password, fail, sign_in
 
 logger = logging.getLogger("nexnotes.auth")
 
@@ -48,12 +48,14 @@ class InviteIn(BaseModel):
 
 class ResetIn(BaseModel):
     password: str = Field(max_length=200)
+    password_confirm: str | None = Field(default=None, max_length=200)
 
 
 class AcceptIn(BaseModel):
     display_name: str = Field(max_length=200)
     email: str = Field(default="", max_length=255)
     password: str = Field(max_length=200)
+    password_confirm: str | None = Field(default=None, max_length=200)
 
 
 def _view(invite: Invite, db: DbSession) -> dict[str, Any]:
@@ -162,6 +164,7 @@ def accept(token: Token, payload: AcceptIn, request: Request, response: Response
             headers={"Retry-After": str(wait)},
         )
     check_password(payload.password)
+    check_confirm(payload.password, payload.password_confirm)
     if not settings_service.get(db, "password_login"):
         raise error("password_login_off", "Sign-in with a password is turned off.", 403)
     try:
@@ -200,6 +203,7 @@ def reset_password(token: Token, payload: ResetIn, request: Request, db: DbSessi
             headers={"Retry-After": str(wait)},
         )
     check_password(payload.password)
+    check_confirm(payload.password, payload.password_confirm)
     try:
         accounts.use_reset(db, token, payload.password)
     except AccountError as exc:

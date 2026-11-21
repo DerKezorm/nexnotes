@@ -91,15 +91,16 @@ describe('the setup (NOTES-1)', () => {
     expect(box.textContent).toContain('412 GB')
     const fields = [...box.querySelectorAll('input')]
     expect(fields.map((field) => field.closest('label')?.querySelector('span')?.textContent)).toEqual([
-      i18n.t('setup.code'), i18n.t('auth.name'), i18n.t('auth.email'), i18n.t('auth.password'),
+      i18n.t('setup.code'), i18n.t('auth.name'), i18n.t('auth.email'), i18n.t('auth.password'), i18n.t('auth.passwordConfirm'),
     ])
     type(fields[0], 'AB12-CD34-EF56')
     type(fields[1], 'Robin')
     type(fields[2], 'robin@example.com')
     type(fields[3], 'twelve chars')
+    type(fields[4], 'twelve chars')
     await act(async () => box.querySelector('form')!.requestSubmit())
     await settle()
-    expect(made).toEqual({ display_name: 'Robin', email: 'robin@example.com', password: 'twelve chars', code: 'AB12-CD34-EF56', language: 'en' })
+    expect(made).toEqual({ display_name: 'Robin', email: 'robin@example.com', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34-EF56', language: 'en' })
     expect(box.querySelector('[data-testid="home"]')).not.toBeNull()
   })
 
@@ -267,10 +268,10 @@ describe('the operator never sets another password (NOTES-2 AC-7)', () => {
     const { ResetPage } = await import('./pages/AuthPages')
     await render(<AuthProvider><Routes><Route path="/reset/:token" element={<ResetPage />} /></Routes></AuthProvider>, '/reset/abcdefghijklmnopqrstuvwxyz')
     expect(box.textContent).toContain(i18n.t('auth.reset.text', { name: 'Anna' }))
-    type(box.querySelector<HTMLInputElement>('input[type="password"]')!, 'twelve chars')
+    for (const field of box.querySelectorAll<HTMLInputElement>('input[type="password"]')) type(field, 'twelve chars')
     await act(async () => box.querySelector('form')!.requestSubmit())
     await settle()
-    expect(set).toEqual({ password: 'twelve chars' })
+    expect(set).toEqual({ password: 'twelve chars', password_confirm: 'twelve chars' })
     expect(box.textContent).toContain(i18n.t('auth.reset.doneTitle'))
     expect(box.querySelector('a[href="/login"]')).not.toBeNull()
   })

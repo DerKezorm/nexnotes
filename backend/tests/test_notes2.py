@@ -142,6 +142,50 @@ def test_notes2_ac3_a_password_has_at_least_twelve_characters(client: TestClient
     assert setup.status_code == 422 and _code(setup) == "password_too_short"
 
 
+def test_notes2_ac10_password_confirmation_a_second_password_that_differs_is_refused_everywhere(
+        client: TestClient, operator: Account) -> None:
+    """Every way to a new password takes ``password_confirm``; when it differs, 422
+    ``password_mismatch`` and nothing changes. Without the field the password is taken as before (scripts, an app
+    with one field): only a person typing twice can mistype."""
+    other = GOOD + "!"
+
+    def refused(answer: object) -> bool:
+        return answer.status_code == 422 and _code(answer) == "password_mismatch"  # type: ignore[attr-defined]
+
+    # The invitation: no account comes of it, and the link still holds.
+    token = _invite(client)
+    assert refused(fresh_browser().post(f"/api/invite/{token}",
+                                        json={"display_name": "Lena", "password": GOOD, "password_confirm": other}))
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(Account).where(Account.display_name == "Lena")) == 0
+    lena = fresh_browser()
+    made = lena.post(f"/api/invite/{token}", json={"display_name": "Lena", "password": GOOD, "password_confirm": GOOD})
+    assert made.status_code == 200, made.text
+    # The reset link: the old password stays, and the link is not used up.
+    anna = make_account("anna")
+    link = _reset(client, anna.id)
+    assert refused(fresh_browser().post(f"/api/reset/{link}", json={"password": GOOD, "password_confirm": other}))
+    assert fresh_browser().post("/api/auth/login", json={"name": "anna", "password": PASSWORD}).status_code == 200
+    assert fresh_browser().post(f"/api/reset/{link}", json={"password": GOOD, "password_confirm": GOOD}).status_code == 204
+    assert fresh_browser().post("/api/auth/login", json={"name": "anna", "password": GOOD}).status_code == 200
+    # "My account": the password stays the old one.
+    assert refused(lena.put("/api/auth/password", json={"current": GOOD, "new": other, "password_confirm": GOOD}))
+    assert fresh_browser().post("/api/auth/login", json={"name": "lena", "password": GOOD}).status_code == 200
+    assert lena.put("/api/auth/password",
+                    json={"current": GOOD, "new": other, "password_confirm": other}).status_code == 204
+    assert lena.put("/api/auth/password", json={"current": other, "new": GOOD}).status_code == 204
+    # The setup of the first account: nothing is made.
+    with SessionLocal() as db:
+        db.query(Account).delete()
+        db.commit()
+    from .conftest import SETUP_CODE
+
+    first = {"display_name": "Boss", "password": GOOD, "code": SETUP_CODE}
+    assert refused(fresh_browser().post("/api/setup", json={**first, "password_confirm": other}))
+    assert fresh_browser().get("/api/setup").json()["needs_setup"] is True
+    assert fresh_browser().post("/api/setup", json={**first, "password_confirm": GOOD}).status_code == 200
+
+
 def test_notes2_ec5_an_expired_or_used_invitation_says_so_and_makes_nothing(
     client: TestClient, operator: Account
 ) -> None:

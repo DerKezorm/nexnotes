@@ -165,6 +165,7 @@
     },
     "name": "Name",
     "password": "Password",
+    "passwordConfirm": "Confirm password",
     "reset": {
       "doneText": "Sign in with your new password now.",
       "doneTitle": "Password set",
@@ -350,6 +351,7 @@
     "own_second_factor_first": "Set up your own second factor first, on your account page.",
     "password_login_off": "Signing in with a password is turned off.",
     "password_missing": "Enter the password.",
+    "password_mismatch": "The passwords do not match.",
     "password_too_short": "The password needs at least {{minimum}} characters.",
     "password_unchanged": "The new password is the same as the current one. Choose another.",
     "provider_first": "Set up a sign-in provider first, or nobody but you could sign in.",
@@ -563,12 +565,10 @@
       "title": "Language and appearance"
     },
     "password": {
-      "again": "Password again",
       "change": "Change",
       "changedAt": "last changed on {{day}}",
       "current": "Current password",
       "done": "Password changed. Other browsers have to sign in again.",
-      "mismatch": "The two passwords are not the same.",
       "new": "New password",
       "submit": "Change password"
     },

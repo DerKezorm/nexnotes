@@ -165,6 +165,7 @@
     },
     "name": "Name",
     "password": "Passwort",
+    "passwordConfirm": "Passwort bestätigen",
     "reset": {
       "doneText": "Melde dich jetzt mit dem neuen Passwort an.",
       "doneTitle": "Passwort gesetzt",
@@ -350,6 +351,7 @@
     "own_second_factor_first": "Richte zuerst deinen eigenen zweiten Faktor ein, auf deiner Kontoseite.",
     "password_login_off": "Die Anmeldung mit Passwort ist abgeschaltet.",
     "password_missing": "Gib das Passwort ein.",
+    "password_mismatch": "Die Passwörter stimmen nicht überein.",
     "password_too_short": "Das Passwort braucht mindestens {{minimum}} Zeichen.",
     "password_unchanged": "Das neue Passwort ist dasselbe wie das bisherige. Nimm ein anderes.",
     "provider_first": "Richte zuerst einen Anmeldeanbieter ein, sonst kommt außer dir niemand mehr herein.",
@@ -563,12 +565,10 @@
       "title": "Sprache und Darstellung"
     },
     "password": {
-      "again": "Passwort noch einmal",
       "change": "Ändern",
       "changedAt": "zuletzt geändert am {{day}}",
       "current": "Jetziges Passwort",
       "done": "Passwort geändert. Andere Browser müssen sich neu anmelden.",
-      "mismatch": "Die beiden Passwörter sind nicht gleich.",
       "new": "Neues Passwort",
       "submit": "Passwort ändern"
     },
