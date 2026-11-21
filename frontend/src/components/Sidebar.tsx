@@ -16,12 +16,13 @@ function initial(name: string): string {
   return (Array.from(name.trim())[0] ?? '?').toUpperCase()
 }
 
-export function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+/** `width`: the one set on this device (`lib/columns.ts`); the drawer on a phone keeps the drawing's 260 px. */
+export function Sidebar({ onNavigate, width = 260 }: { onNavigate?: () => void; width?: number }) {
   const { t } = useTranslation()
   const { me } = useAuth()
   const shown = me?.display_name || me?.name || ''
   return (
-    <nav aria-label={t('app.mainMenu')} className="flex h-full w-[260px] flex-col border-r border-ink-700 bg-ink-900">
+    <nav aria-label={t('app.mainMenu')} style={{ width }} className="flex h-full flex-col border-r border-ink-700 bg-ink-900">
       <div className="px-4 pt-4 pb-3">
         <NavLink to="/" onClick={onNavigate} aria-label={t('app.home')} className="inline-flex">
           <Logo size={30} withWordmark />

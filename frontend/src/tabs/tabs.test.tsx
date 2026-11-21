@@ -17,6 +17,7 @@ import * as syncProtocol from 'y-protocols/sync'
 import * as Y from 'yjs'
 
 import { hideNotice } from '../folders/notice'
+import { forgetPrefs, prefKey } from '../lib/devicePref'
 import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
 import type { NoteHead } from '../notes/api'
@@ -31,7 +32,7 @@ import { accountChanged, followAccount, waitingChanges } from '../state/account'
 import { forgetMeta, metaOf, refreshMeta } from './meta'
 import { openNoteBeside, openNoteInNewTab } from './open'
 import * as rules from './state'
-import { forgetTabs, storageKey, tabsNow } from './store'
+import { forgetTabs, storageKey, tabs, tabsNow } from './store'
 import { forgetRestored, rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
@@ -310,6 +311,7 @@ beforeEach(() => {
   me = 1
   width = 1400
   localStorage.clear()
+  forgetPrefs()
   forgetFolders()
   forgetTabs()
   forgetMeta()
@@ -459,6 +461,34 @@ describe('tabs in the page', () => {
     expect(1400 - 300 - 12 - leftWidth()).toBe(340)
     await drag(300)
     expect(leftWidth()).toBe(340)
+  })
+
+  it('NOTES-6 AC-10 the list beside a note is as wide as set on this device, and still gives way to the notes', async () => {
+    await render('/notes/soup')
+    const handle = $('column-handle-list')!
+    const column = () => handle.parentElement!
+    expect(column().style.width).toBe('300px')
+    expect(handle.getAttribute('aria-label')).toBe(i18n.t('columns.list'))
+    await act(async () => handle.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })))
+    expect(column().style.width).toBe('316px')
+    await act(async () => handle.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true, clientX: 316, button: 0 })))
+    await act(async () => handle.dispatchEvent(new MouseEvent('pointermove', { clientX: 2000 })))
+    await act(async () => handle.dispatchEvent(new MouseEvent('pointerup', {})))
+    expect(column().style.width).toBe('560px')
+    expect(localStorage.getItem(prefKey('column.list', 1))).toBe('560')
+    // Two notes beside it would get less than 480 px each: the list gives way, the notes keep their widths (NOTES-8).
+    await act(async () => openNoteBeside('shop'))
+    await idle()
+    expect($('note-list')).toBeNull()
+    expect(pane('right')).not.toBeNull()
+    // One note again: the list comes back as wide as set; a double click on its edge resets it.
+    await act(async () => tabs.endSplit())
+    await idle()
+    const again = $('column-handle-list')!
+    expect(again.parentElement!.style.width).toBe('560px')
+    await act(async () => again.dispatchEvent(new MouseEvent('dblclick', { bubbles: true })))
+    expect(again.parentElement!.style.width).toBe('300px')
+    expect(localStorage.getItem(prefKey('column.list', 1))).toBeNull()
   })
 
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {

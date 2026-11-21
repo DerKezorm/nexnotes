@@ -9,7 +9,9 @@ import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { authApi } from '../api/client'
+import { useColumnWidth } from '../lib/columns'
 import { useAuth } from '../state/auth'
+import { ColumnHandle } from './ColumnHandle'
 import { Dialog } from './Dialog'
 import { Logo } from './Logo'
 import { SessionDialog } from './SessionDialog'
@@ -22,6 +24,7 @@ export function AppShell() {
   const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const location = useLocation()
+  const [sidebarWidth] = useColumnWidth('sidebar')
 
   useEffect(() => {
     if (clockTold) return
@@ -34,8 +37,9 @@ export function AppShell() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      <div className="hidden md:flex">
-        <Sidebar />
+      <div className="relative hidden shrink-0 md:flex">
+        <Sidebar width={sidebarWidth} />
+        <ColumnHandle column="sidebar" />
       </div>
       {open && (
         <div className="fixed inset-0 z-40 flex md:hidden" role="presentation">

@@ -178,6 +178,11 @@
       "title": "Neues Passwort setzen"
     }
   },
+  "columns": {
+    "sidebar": "Breite der Seitenleiste",
+    "list": "Breite der Notizliste",
+    "hint": "Ziehen oder Pfeiltasten ändern die Breite, Doppelklick setzt sie zurück."
+  },
   "common": {
     "cancel": "Abbrechen",
     "close": "Schließen",

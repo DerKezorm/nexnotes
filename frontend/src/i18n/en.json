@@ -178,6 +178,11 @@
       "title": "Set a new password"
     }
   },
+  "columns": {
+    "sidebar": "Width of the sidebar",
+    "list": "Width of the note list",
+    "hint": "Drag or use the arrow keys to change the width; double-click to reset it."
+  },
   "common": {
     "cancel": "Cancel",
     "close": "Close",

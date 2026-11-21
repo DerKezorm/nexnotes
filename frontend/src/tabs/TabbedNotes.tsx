@@ -13,7 +13,9 @@ import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type Poin
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { ColumnHandle } from '../components/ColumnHandle'
 import { draggedNow } from '../folders/actions'
+import { useColumnWidth } from '../lib/columns'
 import { useAuth } from '../state/auth'
 import { listenForTabKeys } from './keys'
 import { installTabLinks } from './links'
@@ -22,7 +24,7 @@ import { refreshMeta, useTabMetas } from './meta'
 import { focusSide as focusSideAction, hrefOf, openNoteBeside, setNavigation } from './open'
 import { focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
 import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './store'
-import { draggedTab, firstVisit, LIST_WIDTH, MIN_PANE, ROOMY_PANE, SEPARATOR } from './layout'
+import { draggedTab, firstVisit, MIN_PANE, ROOMY_PANE, SEPARATOR } from './layout'
 import { TabBar } from './TabBar'
 import { TabPane } from './TabPane'
 
@@ -70,6 +72,8 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
   const area = useRef<HTMLDivElement>(null)
   const [settled, setSettled] = useState(false)
   const [dropping, setDropping] = useState(false)
+  // The list beside an open note, as wide as set on this device; it gives way before a note gets too narrow.
+  const [listWidth] = useColumnWidth('list')
 
   useEffect(() => {
     setNavigation((path, options) => navigate(path, { replace: options?.replace, state: options?.state }), back)
@@ -109,8 +113,8 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
   const open = Boolean(noteId) && settled && Boolean(left)
   const split = open && Boolean(right)
   const both = split && width >= 2 * MIN_PANE + SEPARATOR
-  const showList = open && width - LIST_WIDTH >= (both ? 2 * ROOMY_PANE + SEPARATOR : MIN_PANE)
-  const areaWidth = width - (showList ? LIST_WIDTH : 0)
+  const showList = open && width - listWidth >= (both ? 2 * ROOMY_PANE + SEPARATOR : MIN_PANE)
+  const areaWidth = width - (showList ? listWidth : 0)
   const room = areaWidth - SEPARATOR
   const leftWidth = Math.round(Math.min(Math.max(state.ratio * room, MIN_PANE), room - MIN_PANE))
 
@@ -171,13 +175,15 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
       {state.tabs.length > 0 && <TabBar state={state} metas={metas} split={split} open={open} />}
       <div className="flex min-h-0 flex-1">
         {(!open || showList) && (
-          <div
-            className={
-              'nn-scroll min-h-0 shrink-0 flex-col overflow-y-auto border-ink-700 ' +
-              (open ? 'flex w-[300px] border-r px-3 py-4' : 'flex w-full flex-1 px-8 py-6')
-            }
-          >
-            {list}
+          <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined}>
+            <div
+              className={
+                'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r px-3 py-4' : 'flex w-full px-8 py-6')
+              }
+            >
+              {list}
+            </div>
+            {open && <ColumnHandle column="list" />}
           </div>
         )}
         {open && (

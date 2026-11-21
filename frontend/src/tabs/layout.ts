@@ -27,7 +27,6 @@ export const TAB_DRAG = 'application/x-nexnotes-tab'
 /** The narrowest a side gets: a line of text still reads. */
 export const MIN_PANE = 340
 export const SEPARATOR = 12
-export const LIST_WIDTH = 300
 /** Beside two notes the list stays only while each of them keeps this much. */
 export const ROOMY_PANE = 480
 
