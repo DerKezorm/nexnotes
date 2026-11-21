@@ -6,12 +6,14 @@ from __future__ import annotations
 import io
 import re
 from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import select
 
+from app import security
 from app.db import SessionLocal
 from app.main import app
 from app.models import Note, Setting
@@ -260,7 +262,11 @@ def test_notes13_ec5_an_unknown_link_looks_the_same_as_one_that_ended(client, op
 # --- EC-7: guessing ---------------------------------------------------------------------------------------------------
 
 
-def test_notes13_ec7_a_thousand_wrong_addresses_are_slowed_down_and_links_are_not_to_guess(client, operator, visitor):
+def test_notes13_ec7_a_thousand_wrong_addresses_are_slowed_down_and_links_are_not_to_guess(client, operator, visitor,
+                                                                                          monkeypatch):
+    # The brake's clock stands still: the first wait lasts 5 s, and a thousand requests on a busy machine (a full
+    # parallel run) took longer, so one more miss passed and counted. The test is about the counting, not the speed.
+    monkeypatch.setattr(security, "time", SimpleNamespace(monotonic=lambda: 1000.0))
     note = new_note(client, title="Rezept")
     link = make_link(client, note["id"])
     token = link["path"][3:]
