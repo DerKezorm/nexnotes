@@ -507,8 +507,9 @@ class Rooms:
                 # Text a concurrent deletion took unseen comes back, a shape the schema refuses is mended; both in
                 # one change of the server that goes to everyone after the update.
                 with recording(room.doc) as made:
-                    restored = room.rescuer.after(room.doc, payload, applied, whole_before)
+                    # Mending first: the positions the update reported are still right before text comes back.
                     mended = repair(room.doc, applied.touched) if applied.structural else 0
+                    restored = room.rescuer.after(room.doc, payload, applied, whole_before)
                 if restored or mended:
                     rescue = merged(made)
                 if restored:

@@ -187,12 +187,18 @@ def redundant(update: bytes, state_before: bytes) -> bool:
 
 @dataclass(eq=False)
 class _Deletion:
-    """One transaction that deleted something: the ids, where it happened, and the paragraphs that took back text."""
+    """One transaction that deleted something: the ids, where it happened, and the paragraphs that took back text.
+
+    Places are kept as values (a position and the text of the block that followed), never as pycrdt objects: a
+    branch of the document can be freed once it is deleted, and touching it later crashes the process."""
 
     ids: IdRanges
-    anchor: XmlElement | None
-    at_end: bool
-    rescues: list[XmlText] = field(default_factory=list)
+    #: Top-level position of the deletion (the length of the body when it was at the end).
+    at: int
+    #: The words of the block that followed the deleted one, to find the place again after other changes.
+    anchor: str | None
+    #: The words of each paragraph that took back text for this deletion, as they are now.
+    rescued: list[str] = field(default_factory=list)
 
 
 class Rescuer:
@@ -214,11 +220,10 @@ class Rescuer:
         except DecodeError:
             logger.warning("An update could not be read for concurrent deletions")
             return 0
-        record = _Deletion(ids=applied.deleted, anchor=None, at_end=True)
         body = body_of(doc)
-        if applied.at is not None:
-            record.at_end = applied.at >= len(body.children)
-            record.anchor = None if record.at_end else body.children[applied.at]
+        count = len(body.children)
+        at = count if applied.at is None else min(applied.at, count)
+        record = _Deletion(ids=applied.deleted, at=at, anchor=_words(body.children[at]) if at < count else None)
         collateral = applied.deleted.minus(decoded.deleted)
         if not collateral:
             self.deletions.append(record)
@@ -301,30 +306,43 @@ def _strings_in(index: StructIndex, client: int, start: int, end: int) -> list[t
     return out
 
 
-def _alive(body: XmlFragment, element: XmlElement | None) -> int | None:
-    if element is None:
-        return None
+def _words(node: Any) -> str:
+    """The text of a block, to recognise it again."""
+    if isinstance(node, XmlText):
+        return "".join(chunk for chunk, _ in node.diff() if isinstance(chunk, str))
+    if isinstance(node, (XmlElement, XmlFragment)):
+        return "⁣".join(_words(child) for child in node.children)
+    return ""
+
+
+def _find(body: XmlFragment, words: str, near: int, paragraph: bool = False) -> int | None:
+    """The top-level block with these words closest to ``near``."""
+    best: int | None = None
     for position, child in enumerate(body.children):
-        if child == element:
-            return position
-    return None
+        if not isinstance(child, XmlElement) or (paragraph and child.tag != s.PARAGRAPH):
+            continue
+        if _words(child) == words and (best is None or abs(position - near) < abs(best - near)):
+            best = position
+    return best
 
 
 def _put_back(doc: Doc, deletion: _Deletion, text: str, append: bool = False) -> int:
     if not text:
         return 0
     body = body_of(doc)
-    if append and deletion.rescues:
-        last = deletion.rescues[-1]
-        holder = last.parent
-        if isinstance(holder, XmlElement) and _alive(body, holder) is not None:
-            last.insert(len(last), text)
-            return len(text.encode("utf-16-le")) // 2
-    position = _alive(body, deletion.anchor)
+    if append and deletion.rescued:
+        position = _find(body, deletion.rescued[-1], deletion.at, paragraph=True)
+        if position is not None:
+            paragraph = body.children[position]
+            runs = [child for child in paragraph.children if isinstance(child, XmlText)]
+            run = runs[-1] if runs else paragraph.children.append(XmlText())
+            run.insert(len(run), text)
+            deletion.rescued[-1] += text
+            return utf16_len(text)
+    position = _find(body, deletion.anchor, deletion.at) if deletion.anchor is not None else None
     if position is None:
-        position = len(body.children)
+        position = min(deletion.at, len(body.children)) if deletion.anchor is not None else len(body.children)
     paragraph = body.children.insert(position, XmlElement(s.PARAGRAPH))
-    run = paragraph.children.append(XmlText())
-    run.insert(0, text)
-    deletion.rescues.append(run)
-    return len(text.encode("utf-16-le")) // 2
+    paragraph.children.append(XmlText()).insert(0, text)
+    deletion.rescued.append(text)
+    return utf16_len(text)
