@@ -84,6 +84,8 @@ class Prepared:
     duration_ms: int | None = None
     #: The file drawn anew, to keep in place of what came (pictures).
     redrawn: bytes | None = None
+    #: The same as a file beside the upload's work file, for what is too large for memory (a recording made anew).
+    redrawn_file: str | None = None
     view: bytes | None = None
     thumb: bytes | None = None
     #: The name's ending changed with the format (a BMP kept as PNG).

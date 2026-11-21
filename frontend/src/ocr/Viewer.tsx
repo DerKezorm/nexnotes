@@ -17,7 +17,7 @@ import { copyText } from '../lib/copy'
 import type { Jump } from '../search/api'
 import { ocrApi, pageUrl, stillReading, type AttachmentText, type PageText } from './api'
 import { insertText } from './insert'
-import { ASK_EVERY_MS, marked } from './marks'
+import { ASK_EVERY_MS, askAgainIn, marked } from './marks'
 import type { Opening } from './store'
 
 function useAttachmentText(id: string): AttachmentText | null {
@@ -25,13 +25,15 @@ function useAttachmentText(id: string): AttachmentText | null {
   useEffect(() => {
     let alive = true
     let timer: ReturnType<typeof setTimeout> | null = null
+    let round = 0
     const ask = () => {
       ocrApi
         .text(id)
         .then((answer) => {
           if (!alive) return
           setText(answer)
-          if (stillReading(answer)) timer = setTimeout(ask, ASK_EVERY_MS)
+          round = answer.state === 'device' ? round + 1 : 0
+          if (stillReading(answer)) timer = setTimeout(ask, askAgainIn(answer.state, round - 1))
         })
         .catch(() => {
           if (alive) timer = setTimeout(ask, ASK_EVERY_MS * 3)

@@ -326,8 +326,12 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
             # Uploads at once each checked their own bytes: here, one at a time, against what is taken now.
             owner = db.get(Account, upload.owner_id)
             limit = owner.storage_limit if owner is not None else None
+            written = Path(prepared.redrawn_file) if prepared.redrawn_file else None
+            if written is not None and written.parent != root():
+                raise ValueError("a prepared file outside the attachments folder")
             if limit is not None:
-                coming = len(prepared.redrawn) if prepared.redrawn is not None else work.stat().st_size
+                coming = len(prepared.redrawn) if prepared.redrawn is not None else \
+                    (written or work).stat().st_size
                 coming += sum(len(data) for data in (prepared.view, prepared.thumb) if data is not None)
                 taken = used(db, upload.owner_id)
                 if taken + coming > limit:
@@ -335,6 +339,9 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
             target = path_of(upload.attachment_id)
             if prepared.redrawn is not None:
                 _write(target, prepared.redrawn)
+                work.unlink(missing_ok=True)
+            elif written is not None:
+                os.replace(written, target)
                 work.unlink(missing_ok=True)
             else:
                 os.replace(work, target)
@@ -370,6 +377,7 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
         return row, True
     finally:
         work.unlink(missing_ok=True)
+        work.with_name(work.name + ".m4a").unlink(missing_ok=True)
 
 
 def _prepare(work: Path, role: str | None) -> media.Prepared:

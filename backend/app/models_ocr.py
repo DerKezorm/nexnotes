@@ -42,6 +42,8 @@ class WorkJob(Base):
     run_after: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     #: Failed turns so far.
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+    #: Whose work it is (an attachment's owner): the queue serves the accounts in rounds.
+    account_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 

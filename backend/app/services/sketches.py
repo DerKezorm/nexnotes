@@ -33,7 +33,6 @@ import re
 import shutil
 import struct
 import subprocess
-import tempfile
 import threading
 import unicodedata
 from collections import OrderedDict
@@ -126,20 +125,21 @@ def _probe(path: Path) -> dict[str, Any] | None:
         return {}
 
 
-def _faststart(path: Path) -> bytes | None:
-    """An MP4/M4A with its index at the front, the sound copied as it is, without metadata; ``None`` when ffmpeg is
-    missing or fails (the file stays as it came)."""
+def _faststart(path: Path) -> Path | None:
+    """An MP4/M4A with its index at the front, the sound copied as it is, without metadata, written beside ``path``
+    (a work file of the upload, never read into memory: a recording may be hours); ``None`` when ffmpeg is missing or
+    fails (the file stays as it came)."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         return None
-    with tempfile.TemporaryDirectory(prefix="nexnotes-sound-") as folder:
-        target = Path(folder) / "sound.m4a"
-        subprocess.run([ffmpeg, "-v", "error", "-nostdin", "-y", "-i", str(path), "-map", "0:a", "-c", "copy",
-                        "-map_metadata", "-1", "-map_chapters", "-1", "-movflags", "+faststart", "-f", "mp4",
-                        str(target)], capture_output=True, timeout=SOUND_SECONDS, check=False)
-        if not target.is_file() or target.stat().st_size == 0:
-            return None
-        return target.read_bytes()
+    target = path.with_name(path.name + ".m4a")
+    subprocess.run([ffmpeg, "-v", "error", "-nostdin", "-y", "-threads", "2", "-i", str(path), "-map", "0:a", "-c",
+                    "copy", "-map_metadata", "-1", "-map_chapters", "-1", "-movflags", "+faststart", "-f", "mp4",
+                    str(target)], capture_output=True, timeout=SOUND_SECONDS, check=False)
+    if not target.is_file() or target.stat().st_size == 0:
+        target.unlink(missing_ok=True)
+        return None
+    return target
 
 
 def _sound(path: Path) -> media.Prepared:
@@ -168,7 +168,8 @@ def _sound(path: Path) -> media.Prepared:
         except ValueError:
             prepared.duration_ms = None
     if form in ("m4a", "mp4"):
-        prepared.redrawn = _faststart(path)
+        written = _faststart(path)
+        prepared.redrawn_file = str(written) if written is not None else None
         prepared.mime = "audio/mp4"
     return prepared
 
@@ -202,7 +203,8 @@ def clean_transcript(data: bytes) -> dict[str, Any]:
         raise WrongKind("transcript too large")
     try:
         given = json.loads(data.decode("utf-8-sig"))
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        # Nested too deep for the parser is no transcript either (422, not a 500).
         raise WrongKind("no JSON") from exc
     if not isinstance(given, dict) or given.get("format") != TRANSCRIPT_FORMAT or not isinstance(given.get("words"),
                                                                                                     list):

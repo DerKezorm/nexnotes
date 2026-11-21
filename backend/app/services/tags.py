@@ -243,6 +243,15 @@ SHARED_NOTES: list[Callable[[int], Select[Any]]] = []
 #: Notes whose tags count nowhere: each gives a condition on ``Note`` that is true for such a note. Locked notes
 #: (NOTES-16) add theirs here (EC-6).
 HIDDEN_NOTES: list[Callable[[], ColumnElement[bool]]] = []
+#: Called when a note is locked (``True``) or unlocked (``False``), in the caller's transaction: what was read of it
+#: in plain text goes (the recognised text, NOTES-11). Locked notes (NOTES-16) call ``lock_changed``.
+LOCK_HOOKS: list[Callable[[Session, str, bool], None]] = []
+
+
+def lock_changed(db: Session, note_id: str, locked: bool) -> None:
+    """A note was locked or unlocked: the hooks follow (``LOCK_HOOKS``)."""
+    for hook in LOCK_HOOKS:
+        hook(db, note_id, locked)
 
 
 def visible(account_id: int, *, own_only: bool = False) -> ColumnElement[bool]:

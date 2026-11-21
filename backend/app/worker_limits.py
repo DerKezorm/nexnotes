@@ -2,10 +2,11 @@
 ``ocr_worker.py``), and how many of them run at once. One way for both.
 
 * ``limit_self(memory, cpu_seconds)`` puts the calling process and everything it starts (ffmpeg, Tesseract) under
-  ``memory`` bytes and, if given, ``cpu_seconds`` of CPU time: a job object under Windows (whatever is in it is killed
-  with the process; a crash ends it at once instead of waiting for an error dialog nobody sees), ``RLIMIT_DATA``,
-  ``RLIMIT_AS`` and ``RLIMIT_CPU`` elsewhere. It raises ``OSError`` when it cannot: a worker without limits reads
-  nothing.
+  ``memory`` bytes and, if given, ``cpu_seconds`` of CPU time: a job object under Windows (one limit for the process
+  and all it starts together; whatever is in it is killed with the process; a crash ends it at once instead of
+  waiting for an error dialog nobody sees), ``RLIMIT_DATA``, ``RLIMIT_AS`` and ``RLIMIT_CPU`` elsewhere (a child
+  inherits them, but each process counts on its own: a worker and its ffmpeg or Tesseract may take up to twice the
+  memory together). It raises ``OSError`` when it cannot: a worker without limits reads nothing.
 * ``cpu_for(seconds)`` gives a worker that serves task after task its CPU seconds for the next one (Linux; on
   Windows the server's wall clock stops it).
 * ``slot(wait)`` in the server: at most ``WORKERS`` such processes at once, previews and recognition together.
