@@ -1,5 +1,5 @@
 /**
- * The symbols a folder (NOTES-4 AC-10) or a note (NOTES-3 AC-13) can carry: a fixed list of names, drawn with
+ * The symbols a folder (NOTES-4 AC-10) or a note (NOTES-3 AC-18) can carry: a fixed list of names, drawn with
  * lucide-react (ISC). The server knows the same names (`SYMBOLS` in `backend/app/services/symbols.py`); a test there
  * reads this file and compares. The list and its search words come from nextasks (the same family of apps), the
  * names of the symbols and their groups are in the language files, under "symbols".

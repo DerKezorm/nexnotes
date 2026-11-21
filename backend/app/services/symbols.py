@@ -1,4 +1,4 @@
-"""The symbols a folder (NOTES-4 AC-10) or a note (NOTES-3 AC-13) can carry, by name, in the order the picker shows
+"""The symbols a folder (NOTES-4 AC-10) or a note (NOTES-3 AC-18) can carry, by name, in the order the picker shows
 them. The page draws the same names (``frontend/src/lib/symbols.ts``); a test compares the two lists."""
 
 from __future__ import annotations

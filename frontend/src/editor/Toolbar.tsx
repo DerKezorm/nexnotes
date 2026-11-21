@@ -19,6 +19,8 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  MoveHorizontal,
+  PanelRight,
   Redo2,
   SeparatorHorizontal,
   Strikethrough,
@@ -33,6 +35,8 @@ import { useTranslation } from 'react-i18next'
 
 import { HIGHLIGHT_COLORS } from './extensions'
 import { tableActions } from './table'
+import { useOutlineShown } from './outlineData'
+import { TEXT_WIDTHS, useTextWidth } from './textWidth'
 
 const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 const ALT = MOD === '⌘' ? '⌥' : 'Alt'
@@ -73,7 +77,7 @@ type ButtonSpec = {
   menu?: boolean
 }
 
-function Popover({ label, onClose, children }: { label: string; onClose: () => void; children: ReactNode }) {
+function Popover({ label, onClose, children, end = false }: { label: string; onClose: () => void; children: ReactNode; end?: boolean }) {
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
     box.current?.querySelector<HTMLElement>('button')?.focus()
@@ -88,7 +92,7 @@ function Popover({ label, onClose, children }: { label: string; onClose: () => v
       ref={box}
       role="menu"
       aria-label={label}
-      className="nn-menu absolute top-full left-0 mt-1"
+      className={'nn-menu absolute top-full mt-1 ' + (end ? 'right-0' : 'left-0')}
       onKeyDown={(event) => {
         if (event.key === 'Escape') {
           event.preventDefault()
@@ -114,7 +118,9 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   const state = useEditorState({ editor, selector: ({ editor: current }) => readState(current) })
   const bar = useRef<HTMLDivElement>(null)
   const [focusAt, setFocusAt] = useState(0)
-  const [menu, setMenu] = useState<'highlight' | 'table' | null>(null)
+  const [menu, setMenu] = useState<'highlight' | 'table' | 'width' | null>(null)
+  const [textWidth, setTextWidth] = useTextWidth()
+  const [outline, setOutline] = useOutlineShown()
   const chain = () => editor.chain().focus()
 
   // Alt+F10 in the text moves to the toolbar (EC-11).
@@ -177,6 +183,13 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
     { key: 'redo', label: t('editor.tools.redo'), shortcut: `${MOD}+Shift+Z`, icon: Redo2, disabled: !state.canRedo, run: () => chain().redo().run() },
   ]
   if (compact) buttons.push({ key: 'keyboard', label: t('editor.tools.closeKeyboard'), icon: Keyboard, run: () => editor.commands.blur() })
+  // The width of the text (AC-14): a matter of the screen, so not on a phone, and it works on a note one only reads.
+  else
+    buttons.push(
+      { key: 'width', label: t('editor.tools.width'), icon: MoveHorizontal, menu: true, active: textWidth !== 'narrow', run: () => setMenu(menu === 'width' ? null : 'width') },
+      // The outline beside the text (AC-15): it shows only where there is room, the button says whether it may.
+      { key: 'outline', label: t('editor.tools.outline'), icon: PanelRight, active: outline, run: () => setOutline(!outline) },
+    )
 
   const move = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if ((event.target as HTMLElement).closest('[role="menu"]')) return
@@ -253,7 +266,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
               onFocus={() => setFocusAt(position)}
               onMouseDown={(event) => event.preventDefault()}
               onClick={button.run}
-              disabled={button.disabled || (!state.editable && !['undo', 'redo', 'keyboard'].includes(button.key))}
+              disabled={button.disabled || (!state.editable && !['undo', 'redo', 'keyboard', 'width', 'outline'].includes(button.key))}
               aria-label={button.label}
               aria-pressed={button.menu ? undefined : button.active}
               aria-haspopup={button.menu ? 'menu' : undefined}
@@ -293,6 +306,27 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
                   <span aria-hidden className="nn-swatch nn-swatch-none" />
                   {t('editor.colors.none')}
                 </button>
+              </Popover>
+            )}
+            {button.key === 'width' && menu === 'width' && (
+              <Popover label={t('editor.tools.width')} onClose={() => setMenu(null)} end>
+                {TEXT_WIDTHS.map((width) => (
+                  <button
+                    key={width}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={textWidth === width}
+                    className="nn-menu-item"
+                    data-testid={`width-${width}`}
+                    onClick={() => {
+                      setMenu(null)
+                      setTextWidth(width)
+                    }}
+                  >
+                    <span aria-hidden className="w-4 text-accent-400">{textWidth === width ? '✓' : ''}</span>
+                    {t(`editor.width.${width}`)}
+                  </button>
+                ))}
               </Popover>
             )}
             {button.key === 'table' && menu === 'table' && (

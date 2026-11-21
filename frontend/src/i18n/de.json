@@ -291,7 +291,9 @@
       "table": "Tabelle",
       "task": "Checkliste",
       "underline": "Unterstrichen",
-      "undo": "Rückgängig"
+      "undo": "Rückgängig",
+      "width": "Textbreite",
+      "outline": "Gliederung"
     },
     "style": {
       "h1": "Überschrift",
@@ -300,7 +302,23 @@
       "p": "Fließtext"
     },
     "waiting_one": "{{count}} Änderung wartet",
-    "waiting_other": "{{count}} Änderungen warten"
+    "waiting_other": "{{count}} Änderungen warten",
+    "width": {
+      "narrow": "Schmal",
+      "wide": "Breit",
+      "full": "Ganze Breite"
+    },
+    "outline": {
+      "label": "Gliederung und Infos",
+      "headings": "Gliederung",
+      "none": "Noch keine Überschriften.",
+      "empty": "Überschrift ohne Text",
+      "tags": "Schlagwörter",
+      "info": "Infos",
+      "folder": "Ordner",
+      "created": "Erstellt",
+      "changed": "Geändert"
+    }
   },
   "errors": {
     "folder_not_found": "Diesen Ordner gibt es nicht.",

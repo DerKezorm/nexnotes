@@ -15,6 +15,10 @@ import { NoteProvider } from './provider'
 import { tableActions } from './table'
 import { TitleField } from './TitleField'
 import { Toolbar } from './Toolbar'
+import { forgetPrefs, prefKey } from '../lib/devicePref'
+import { Outline } from './Outline'
+import { headingsOf, OUTLINE_FROM } from './outlineData'
+import { parseTextWidth, TEXT_MAX } from './textWidth'
 
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
 const made: Editor[] = []
@@ -95,10 +99,12 @@ describe('NOTES-3 AC-3 the toolbar, shortcuts and Markdown typing', () => {
       root.render(<Toolbar editor={editor} onLink={() => undefined} />)
     })
     const labels = Array.from(box.querySelectorAll('[data-tool]')).map((tool) => tool.getAttribute('aria-label') ?? tool.id)
-    expect(labels).toEqual(['', 'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Bulleted list', 'Numbered list', 'Checklist', 'Table', 'Link', 'Quote', 'Code', 'Indent', 'Outdent', 'Divider', 'Undo', 'Redo'].map((label, index) => (index === 0 ? 'nn-text-style' : label)))
+    expect(labels).toEqual(['', 'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Bulleted list', 'Numbered list', 'Checklist', 'Table', 'Link', 'Quote', 'Code', 'Indent', 'Outdent', 'Divider', 'Undo', 'Redo', 'Text width', 'Outline'].map((label, index) => (index === 0 ? 'nn-text-style' : label)))
     const options = Array.from(box.querySelectorAll('option')).map((option) => option.textContent)
     expect(options).toEqual(['Heading', 'Subheading', 'Minor heading', 'Body text'])
-    for (const tool of box.querySelectorAll('button[data-tool]')) expect(tool.getAttribute('title')).toMatch(/\(.+\)$/)
+    // Every formatting tool names its shortcut; the two of the screen (width, outline) have none.
+    for (const tool of box.querySelectorAll('button[data-tool]:not([data-testid="tool-width"]):not([data-testid="tool-outline"])'))
+      expect(tool.getAttribute('title')).toMatch(/\(.+\)$/)
     await act(async () => root.unmount())
   })
 
@@ -395,6 +401,87 @@ describe('NOTES-3 AC-13 undo touches one\'s own changes only', () => {
     expect(mine.commands.redo()).toBe(true)
     expect(mine.getText()).toContain('mine')
     expect(mine.getText()).toContain('theirs')
+  })
+})
+
+describe('NOTES-3 AC-14 AC-15 room on a wide screen', () => {
+  async function toolbar(editor: Editor) {
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    const root = createRoot(box)
+    await act(async () => root.render(<Toolbar editor={editor} onLink={() => undefined} />))
+    return { box, root }
+  }
+
+  it('NOTES-3 AC-14 the toolbar chooses narrow, wide or full width, kept on this device for every note', async () => {
+    localStorage.clear()
+    forgetPrefs()
+    const { box, root } = await toolbar(makeEditor())
+    const button = box.querySelector<HTMLButtonElement>('[data-testid="tool-width"]')!
+    expect(button.tabIndex).toBe(-1)
+    expect(button.hasAttribute('data-tool')).toBe(true)
+    await act(async () => button.click())
+    const items = [...box.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+    expect(items.map((item) => [item.textContent?.replace('✓', ''), item.getAttribute('aria-checked')])).toEqual([['Narrow', 'true'], ['Wide', 'false'], ['Full width', 'false']])
+    await act(async () => items[1].click())
+    expect(localStorage.getItem(prefKey('textWidth', 0))).toBe('wide')
+    expect(button.className).toContain('nn-chosen')
+    // Another note's toolbar, and after a reload: the same width.
+    forgetPrefs()
+    const other = await toolbar(makeEditor())
+    await act(async () => other.box.querySelector<HTMLButtonElement>('[data-testid="tool-width"]')!.click())
+    expect(other.box.querySelector('[role="menuitemradio"][aria-checked="true"]')!.textContent).toContain('Wide')
+    expect(parseTextWidth('full')).toBe('full')
+    expect(parseTextWidth('enormous')).toBe('narrow')
+    expect(TEXT_MAX).toEqual({ narrow: 760, wide: 1100, full: null })
+    await act(async () => root.unmount())
+    await act(async () => other.root.unmount())
+  })
+
+  it('NOTES-3 AC-15 the outline lists the headings by level, jumps, folds, and follows changes of others', async () => {
+    localStorage.clear()
+    forgetPrefs()
+    const doc = new Y.Doc()
+    const editor = makeEditor(doc)
+    editor.commands.setContent('<h1>Trip</h1><p>Bring #passport</p><h2>Train</h2><p>at 8</p><h3>Seats</h3><p>12, 13</p><h2>Hotel</h2><p>two nights</p>')
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    const root = createRoot(box)
+    await act(async () => root.render(<Outline editor={editor} info={[{ label: 'Folder', text: 'Inbox' }]} />))
+    const headings = () => [...box.querySelectorAll<HTMLElement>('[data-testid="outline-heading"]')].map((row) => `${row.dataset.level} ${row.textContent}`)
+    expect(headings()).toEqual(['1 Trip', '2 Train', '3 Seats', '2 Hotel'])
+    expect([...box.querySelectorAll('[data-testid="outline-tag"]')].map((tag) => tag.textContent)).toEqual(['#passport'])
+    expect(box.querySelector('[data-testid="outline-info"]')!.textContent).toContain('FolderInbox')
+    // A click goes to the heading.
+    const hotel = [...box.querySelectorAll<HTMLElement>('[data-testid="outline-heading"]')][3]
+    await act(async () => hotel.querySelectorAll('button')[1].click())
+    expect(editor.state.selection.$from.parent.textContent).toBe('Hotel')
+    // The arrow folds the section, through the heading's own `collapsed`.
+    const fold = [...box.querySelectorAll<HTMLButtonElement>('[data-testid="outline-fold"]')][1]
+    await act(async () => fold.click())
+    expect(headingsOf(editor.state.doc)[1]).toMatchObject({ text: 'Train', collapsed: true })
+    expect(fold.getAttribute('aria-expanded')).toBe('false')
+    // Somebody else adds a heading in another window: the outline follows.
+    const theirs = new Y.Doc()
+    Y.applyUpdate(theirs, Y.encodeStateAsUpdate(doc))
+    const other = makeEditor(theirs, 2)
+    other.commands.setContent(other.getHTML() + '<h2>Food</h2><p>pasta</p>')
+    await act(async () => Y.applyUpdate(doc, Y.encodeStateAsUpdate(theirs)))
+    expect(headings()).toEqual(['1 Trip', '2 Train', '3 Seats', '2 Hotel', '2 Food'])
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-15 the outline can be turned off and on in the toolbar, kept on this device', async () => {
+    localStorage.clear()
+    forgetPrefs()
+    const { box, root } = await toolbar(makeEditor())
+    const button = box.querySelector<HTMLButtonElement>('[data-testid="tool-outline"]')!
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    await act(async () => button.click())
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(localStorage.getItem(prefKey('outline', 0))).toBe('off')
+    expect(OUTLINE_FROM).toBe(1800)
+    await act(async () => root.unmount())
   })
 })
 

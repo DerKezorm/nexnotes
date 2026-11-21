@@ -41,6 +41,9 @@ import type { LiveStatus, NoteProvider } from './provider'
 import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
+import { Outline } from './Outline'
+import { OUTLINE_FROM, useOutlineShown } from './outlineData'
+import { TEXT_MAX, useTextWidth } from './textWidth'
 import { Toolbar } from './Toolbar'
 
 type Props = {
@@ -112,6 +115,19 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   const [askLeave, setAskLeave] = useState<null | (() => void)>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [textWidth] = useTextWidth()
+  const [outlineShown] = useOutlineShown()
+  // The free width of this note's side: the outline stands beside the text only where there is room (AC-15).
+  const [paneWidth, setPaneWidth] = useState(0)
+  const paneObserver = useRef<ResizeObserver | null>(null)
+  const measurePane = useCallback((element: HTMLDivElement | null) => {
+    paneObserver.current?.disconnect()
+    paneObserver.current = null
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setPaneWidth(Math.floor(entry.contentRect.width)))
+    observer.observe(element)
+    paneObserver.current = observer
+  }, [])
   const titleField = useRef<TitleFieldHandle>(null)
   const titleRef = useRef(title)
   const deleted = useRef(false)
@@ -456,7 +472,13 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         </div>
       </div>
 
-      <article className="mx-auto flex w-full max-w-[760px] flex-1 flex-col gap-3 px-5 pt-6 pb-28 md:px-10 md:pb-10">
+      <div ref={measurePane} className="flex min-h-0 w-full flex-1 items-start">
+      <article
+        className="mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch px-5 pt-6 pb-28 md:px-10 md:pb-10"
+        style={{ maxWidth: TEXT_MAX[textWidth] ?? 'none' }}
+        data-testid="note-page"
+        data-width={textWidth}
+      >
         <TitleField
           ref={titleField}
           doc={provider.doc}
@@ -509,6 +531,21 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         {problem && <p className="text-sm text-bad-500">{problem}</p>}
         <EditorContent editor={editor} className="nn-editor mt-1 flex-1" />
       </article>
+      {editor && outlineShown && paneWidth >= OUTLINE_FROM && (
+        <Outline
+          editor={editor}
+          info={[
+            ...(path ? [{ label: t('editor.outline.folder'), text: path }] : []),
+            ...(head
+              ? [
+                  { label: t('editor.outline.created'), text: new Date(head.created_at).toLocaleString(lang) },
+                  { label: t('editor.outline.changed'), text: changedBy ? `${new Date(head.updated_at).toLocaleString(lang)} · ${changedBy}` : new Date(head.updated_at).toLocaleString(lang) },
+                ]
+              : []),
+          ]}
+        />
+      )}
+      </div>
 
       {editor && (
         <div className="fixed inset-x-0 z-30 md:hidden" style={{ bottom: inset }}>

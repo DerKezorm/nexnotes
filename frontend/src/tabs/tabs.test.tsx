@@ -491,6 +491,27 @@ describe('tabs in the page', () => {
     expect(localStorage.getItem(prefKey('column.list', 1))).toBeNull()
   })
 
+  it('NOTES-3 AC-14 AC-15 the text runs as wide as chosen, and the outline stands beside it only where there is room', async () => {
+    await render('/notes/soup')
+    const page = () => $('note-page')!
+    expect(page().style.maxWidth).toBe('760px')
+    expect($('outline')).toBeNull()
+    await act(async () => $('tool-width')!.click())
+    await act(async () => $('width-wide')!.click())
+    expect(page().style.maxWidth).toBe('1100px')
+    await act(async () => $('tool-width')!.click())
+    await act(async () => $('width-full')!.click())
+    expect(page().style.maxWidth).toBe('none')
+    // A wide screen: the side has room for the outline.
+    width = 2560
+    await reload('/notes/soup')
+    expect($('outline')).not.toBeNull()
+    expect($('note-page')!.style.maxWidth).toBe('none')
+    // Turned off, it stays off.
+    await act(async () => $('tool-outline')!.click())
+    expect($('outline')).toBeNull()
+  })
+
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {
     await render('/notes/soup')
     await act(async () => {

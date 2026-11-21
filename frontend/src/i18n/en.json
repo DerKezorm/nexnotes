@@ -291,7 +291,9 @@
       "table": "Table",
       "task": "Checklist",
       "underline": "Underline",
-      "undo": "Undo"
+      "undo": "Undo",
+      "width": "Text width",
+      "outline": "Outline"
     },
     "style": {
       "h1": "Heading",
@@ -300,7 +302,23 @@
       "p": "Body text"
     },
     "waiting_one": "{{count}} change waiting",
-    "waiting_other": "{{count}} changes waiting"
+    "waiting_other": "{{count}} changes waiting",
+    "width": {
+      "narrow": "Narrow",
+      "wide": "Wide",
+      "full": "Full width"
+    },
+    "outline": {
+      "label": "Outline and info",
+      "headings": "Outline",
+      "none": "No headings yet.",
+      "empty": "Heading without text",
+      "tags": "Tags",
+      "info": "Info",
+      "folder": "Folder",
+      "created": "Created",
+      "changed": "Changed"
+    }
   },
   "errors": {
     "folder_not_found": "This folder does not exist.",
