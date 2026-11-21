@@ -7,6 +7,7 @@ import App from './App'
 // The note features dock onto the frame before the first render (extensions.ts).
 import './notes/register'
 import './folders'
+import './search'
 import './i18n'
 import { followSystem } from './lib/theme'
 import { bearTranslatedPages } from './lib/translatedPage'
