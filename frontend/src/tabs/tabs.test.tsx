@@ -1701,6 +1701,169 @@ describe('the list beside two notes', () => {
   })
 })
 
+describe('the one toolbar over two notes', () => {
+  /** Two notes side by side with some text each, the right one used last, in a page `px` wide. */
+  async function twoNotes(px = 1400): Promise<void> {
+    withText('soup', 'Lentils and onions')
+    withText('shop', 'Milk and bread')
+    width = px
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('shop'))
+    await idle()
+    await until(() => Boolean(editorOf('left') && editorOf('right') && $('tool-bold', bar())))
+  }
+  const editorOf = (side: 'left' | 'right') => (pane(side)?.querySelector('.ProseMirror') as (HTMLElement & { editor?: Editor }) | null)?.editor ?? null
+  const bar = () => $('shared-toolbar')!
+  const tool = (name: string) => $(`tool-${name}`, bar()) as HTMLButtonElement
+  const label = () => $('toolbar', bar())!.getAttribute('aria-label')
+  const textStyle = () => bar().querySelector<HTMLSelectElement>('#nn-text-style')!.value
+  /** The first four letters of a side's text chosen, as a mouse would. */
+  const chooseWord = async (side: 'left' | 'right') => {
+    await act(async () => void editorOf(side)!.commands.setTextSelection({ from: 1, to: 5 }))
+  }
+  /** A click in a side: it becomes the side used last. */
+  const use = async (side: 'left' | 'right') => {
+    await act(async () => void pane(side)!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+  }
+
+  it('NOTES-8 AC-1 side by side one toolbar over both sides holds the text tools; each sheet keeps only the tools of its note', async () => {
+    await twoNotes()
+    // One bar, above both sides and outside their scroll areas: it stays in sight while either text scrolls. (The
+    // phone's bar above the keyboard is drawn too, hidden from `md` on.)
+    expect($$('toolbar').filter((one) => !one.closest('.md\\:hidden'))).toHaveLength(1)
+    expect(bar().contains($('toolbar'))).toBe(true)
+    for (const side of ['left', 'right'] as const) expect(pane(side)!.contains(bar())).toBe(false)
+    expect(bar().compareDocumentPosition(pane('left')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    for (let at = bar().parentElement; at && at !== document.body; at = at.parentElement) expect(at.className).not.toMatch(/overflow-(y-)?(auto|scroll)/)
+    // Every tool on the text, and none of the note's.
+    const keys = [...bar().querySelectorAll<HTMLElement>('[data-tool]')].map((one) => one.dataset.testid ?? one.id)
+    expect(keys).toEqual([
+      'nn-text-style', 'tool-bold', 'tool-italic', 'tool-underline', 'tool-strike', 'tool-highlight', 'tool-bullet', 'tool-ordered', 'tool-task',
+      'tool-table', 'tool-link', 'tool-quote', 'tool-code', 'tool-indent', 'tool-outdent', 'tool-divider', 'tool-undo', 'tool-redo',
+    ])
+    expect($('tool-width', bar())).toBeNull()
+    expect($('tool-outline', bar())).toBeNull()
+    // It names the note it works on, and the side.
+    expect($('toolbar', bar())!.getAttribute('role')).toBe('toolbar')
+    expect(label()).toBe('Tools for “Saturday shopping” (right)')
+    // Each sheet: a small bar at the top right with the width, the outline, the pin, the others and the note's menu.
+    for (const side of ['left', 'right'] as const) {
+      const head = $('editor-head', pane(side)!)!
+      expect(head.querySelector('[data-tool]')).toBeNull()
+      expect($('toolbar', head)).toBeNull()
+      const own = $('note-tools', head)!
+      expect(own.getAttribute('role')).toBe('group')
+      expect(own.getAttribute('aria-label')).toBe('Tools of the note')
+      for (const one of ['tool-width', 'tool-outline', 'note-menu']) expect($(one, own)).not.toBeNull()
+    }
+  })
+
+  it('NOTES-8 AC-1 the bar works on the side used last; its states follow that side at once when the other is used', async () => {
+    await twoNotes()
+    await chooseWord('right')
+    await act(async () => tool('bold').click())
+    expect(pane('right')!.querySelector('.ProseMirror strong')?.textContent).toBe('Milk')
+    expect(pane('left')!.querySelector('.ProseMirror strong')).toBeNull()
+    expect(tool('bold').getAttribute('aria-pressed')).toBe('true')
+    await until(() => !tool('undo').disabled)
+    // The tool gives the focus back to its editor a frame later.
+    await settle(40)
+    // The left side used: the bar names it and shows its state, nothing bold there and nothing to undo.
+    await use('left')
+    await chooseWord('left')
+    expect(label()).toBe('Tools for “Lentil soup” (left)')
+    expect(bar().dataset.side).toBe('left')
+    expect(tool('bold').getAttribute('aria-pressed')).toBe('false')
+    expect(tool('undo').disabled).toBe(true)
+    // Its tools work there now, on the left text only.
+    await act(async () => tool('italic').click())
+    expect(pane('left')!.querySelector('.ProseMirror em')?.textContent).toBe('Lent')
+    expect(pane('right')!.querySelector('.ProseMirror em')).toBeNull()
+    await settle(40)
+    // The text style shows the side's own: a heading on the right, body text on the left.
+    await use('right')
+    await act(async () => void editorOf('right')!.chain().setTextSelection(2).setHeading({ level: 1 }).run())
+    expect(textStyle()).toBe('h1')
+    await use('left')
+    expect(textStyle()).toBe('p')
+  })
+
+  it('NOTES-8 AC-1 a click in the bar keeps the selection in the editor and the side used last', async () => {
+    await twoNotes()
+    await act(async () => void editorOf('right')!.commands.focus())
+    await chooseWord('right')
+    // The press itself takes no focus from the text (the selection stays where it is).
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    tool('underline').dispatchEvent(press)
+    expect(press.defaultPrevented).toBe(true)
+    // A press anywhere on the bar is no use of a side.
+    await act(async () => void bar().dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    await act(async () => tool('underline').click())
+    expect(pane('right')!.dataset.focused).toBe('true')
+    expect(pane('left')!.dataset.focused).toBe('false')
+    const { from, to } = editorOf('right')!.state.selection
+    expect([from, to]).toEqual([1, 5])
+    expect(pane('right')!.contains(document.activeElement)).toBe(true)
+    expect(pane('right')!.querySelector('.ProseMirror u')?.textContent).toBe('Milk')
+    // The link opens the dialog of the side used last.
+    await act(async () => tool('link').click())
+    expect($('link-input')).not.toBeNull()
+    expect(pane('right')!.dataset.focused).toBe('true')
+  })
+
+  it("NOTES-8 AC-1 a sheet's own tools work on its own note, whichever side was used last", async () => {
+    await twoNotes()
+    expect(pane('right')!.dataset.focused).toBe('true')
+    await act(async () => $('note-menu', pane('left')!)!.click())
+    await act(async () => $('paper-lined')!.click())
+    expect(requests).toContain('PUT /api/notes/soup/paper')
+    expect(requests).not.toContain('PUT /api/notes/shop/paper')
+    expect($('note-paper', pane('left')!)!.dataset.paper).toBe('lined')
+    expect($('note-paper', pane('right')!)!.dataset.paper).toBe('blank')
+    // The text width from the left sheet's bar (a matter of this device, every sheet follows).
+    await act(async () => $('tool-width', pane('left')!)!.click())
+    await act(async () => $('width-wide')!.click())
+    expect($('note-page', pane('left')!)!.style.maxWidth).toBe('1100px')
+  })
+
+  it('NOTES-13 AC-4 NOTES-8 a note one only reads, used last: the text tools stand there but cannot be used', async () => {
+    notes.set('shop', note('shop', 'Saturday shopping', 'garden', { owner: { id: 9, name: 'Lena' }, can_write: false, level: 'read' } as Partial<NoteHead>))
+    await twoNotes()
+    await until(() => Boolean($('shared-toolbar-read')))
+    expect(label()).toBe('Tools for “Saturday shopping” (right)')
+    const tools = [...bar().querySelectorAll<HTMLButtonElement | HTMLSelectElement>('[data-tool]')].filter((one) => one.dataset.testid !== 'tool-more')
+    expect(tools.length).toBeGreaterThan(10)
+    for (const one of tools) expect(one.disabled).toBe(true)
+    expect($('shared-toolbar-read')!.textContent).toBe('Read only')
+    // The note's own tools stay: the reader may still widen the text or hide the outline.
+    expect($('tool-width', pane('right')!)).not.toBeNull()
+    // The left note is the own one: used, its tools can be used again.
+    await use('left')
+    expect($('shared-toolbar-read')).toBeNull()
+    expect(tool('bold').disabled).toBe(false)
+  })
+
+  it('NOTES-8 one note alone and a window with the switcher keep the toolbar of each note as before', async () => {
+    width = 1400
+    await render('/notes/soup')
+    expect($('shared-toolbar')).toBeNull()
+    const head = $('editor-head')!
+    expect(head.contains($('toolbar'))).toBe(true)
+    for (const one of ['tool-bold', 'tool-width', 'tool-outline']) expect($(one, head)).not.toBeNull()
+    expect($('note-view-tools')).toBeNull()
+    // Too narrow for two: one side with the switcher, its own bar.
+    await act(async () => openNoteBeside('shop'))
+    await idle()
+    await act(async () => unmountPage())
+    box.remove()
+    width = 600
+    await render('/notes/shop')
+    expect($('side-switch')).not.toBeNull()
+    expect($('shared-toolbar')).toBeNull()
+    expect($('toolbar', pane('right')!)).not.toBeNull()
+  })
+})
+
 describe('the rules of the tabs', () => {
   it('NOTES-8 AC-7 the tab not used for the longest goes, never one on show', () => {
     // "a" on the left, used first of all; "b" to "f" one after the other on the right.

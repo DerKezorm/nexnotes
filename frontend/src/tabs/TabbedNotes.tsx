@@ -13,14 +13,17 @@
  * - Beside two notes the list is a column while both sides keep their 340 px, else a drawer over the left note
  *   (`ListDrawer.tsx`): a list chosen in the sidebar opens it, a note chosen in it opens on the side used last and
  *   closes it. The button "List" in the row of tabs shows and hides the column (kept on this device) or the drawer.
+ * - Two sides on show: one toolbar over both with the text tools, working on the side used last (`SharedToolbar.tsx`);
+ *   each sheet keeps a small bar of its own for the whole note (21.11.2026). One side, or the switcher: as before.
  * - A note dragged from a list, or a tab, onto the right edge opens beside (AC-1).
  * - On the first visit of a page load at "/", the tabs of last time come back with their split (AC-5).
  */
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { ColumnHandle } from '../components/ColumnHandle'
+import type { ToolsEntry } from '../editor/sharedTools'
 import { draggedNow } from '../folders/actions'
 import { useFolders } from '../folders/store'
 import { useColumnWidth } from '../lib/columns'
@@ -38,6 +41,7 @@ import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './
 import { draggedTab, listStand, MIN_PANE, SEPARATOR } from './layout'
 import { useListDrawer } from './drawerState'
 import { ListDrawer } from './ListDrawer'
+import { SharedToolbar } from './SharedToolbar'
 import { TabBar } from './TabBar'
 import { TabPane } from './TabPane'
 
@@ -88,6 +92,17 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const [listWidth] = useColumnWidth('list')
   // Beside two notes with room for it, the column can be hidden with the button "List"; kept on this device.
   const [columnOn, setColumnOn] = useDevicePref('splitList', (raw) => raw !== 'off')
+  // The editors of the two sides on show, by tab, for the one toolbar over both.
+  const [toolEntries, setToolEntries] = useState<ReadonlyMap<string, ToolsEntry>>(() => new Map())
+  const registerTools = useCallback((key: string, entry: ToolsEntry | null) => {
+    setToolEntries((before) => {
+      if (entry ? before.get(key) === entry : !before.has(key)) return before
+      const next = new Map(before)
+      if (entry) next.set(key, entry)
+      else next.delete(key)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     setNavigation((path, options) => navigate(path, { replace: options?.replace, state: options?.state }))
@@ -193,6 +208,7 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
     openNoteBeside(what.note, what.folder)
   }
 
+  const usedLast = side === 'left' ? left : right
   const shown = [left, right].filter((tab): tab is NonNullable<typeof tab> => Boolean(tab))
   return (
     <div ref={page} className="flex h-full min-h-0 flex-col" data-testid="notes-page" data-tabs="on">
@@ -244,6 +260,13 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
                 })}
               </div>
             )}
+            {both && (
+              <SharedToolbar
+                entry={usedLast ? toolEntries.get(usedLast.key) : undefined}
+                side={side}
+                title={(usedLast && metas.get(usedLast.note)?.title) || t('notes.untitled')}
+              />
+            )}
             <div
               ref={area}
               className="relative flex min-h-0 min-w-0 flex-1"
@@ -269,6 +292,7 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
                     hidden={split && !both && !focused}
                     fresh={fresh && focused && tab.note === noteId}
                     style={style}
+                    registerTools={both ? registerTools : undefined}
                   />
                 )
               })}

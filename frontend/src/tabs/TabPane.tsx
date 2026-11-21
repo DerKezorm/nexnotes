@@ -10,13 +10,16 @@
  *   names who ended it (NOTES-13 AC-5); only on this page, never in what the tabs remember.
  * - Two sides on show: the sheet of the side used last has a honey frame, the other side is dimmed (its sheet on the
  *   page's gray, its toolbar quieter); a click or the focus in it makes it the side used last at once (21.11.2026).
+ * - Two sides on show: the note hands its editor to the one bar over both sides (`SharedToolbar.tsx`) and keeps only the
+ *   tools of the whole note in its own small bar (21.11.2026).
  */
 import { Ban } from 'lucide-react'
-import { useCallback, useState, type CSSProperties } from 'react'
+import { useCallback, useMemo, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { NoteEditor } from '../editor/NoteEditor'
+import { SharedToolsContext, type ToolsEntry, type ToolsSlot } from '../editor/sharedTools'
 import type { LeaveGuard } from '../notes/context'
 import type { TabMeta } from './meta'
 import { closeDeletedTab, closeTab, focusSide, setTabGuard } from './open'
@@ -36,10 +39,18 @@ type Props = {
   hidden: boolean
   fresh: boolean
   style: CSSProperties
+  /** Two sides on show: where the note hands its editor to the bar over both sides. */
+  registerTools?: (key: string, entry: ToolsEntry | null) => void
 }
 
-export function TabPane({ tab, side, meta, focused, line, standing, hidden, fresh, style }: Props) {
+export function TabPane({ tab, side, meta, focused, line, standing, hidden, fresh, style, registerTools }: Props) {
   const { t } = useTranslation()
+  const shared = Boolean(standing && registerTools)
+  const tabKey = tab.key
+  const slot = useMemo<ToolsSlot | null>(
+    () => (shared && registerTools ? { register: (entry) => registerTools(tabKey, entry) } : null),
+    [shared, registerTools, tabKey],
+  )
   const onGuard = useCallback((guard: LeaveGuard | null) => setTabGuard(tab.key, guard), [tab.key])
   const [ended, setEnded] = useState<{ note: string; said: string } | null>(null)
   const note = tab.note
@@ -77,6 +88,7 @@ export function TabPane({ tab, side, meta, focused, line, standing, hidden, fres
           </button>
         </div>
       ) : (
+        <SharedToolsContext.Provider value={slot}>
         <NoteEditor
           noteId={tab.note}
           fresh={fresh}
@@ -101,6 +113,7 @@ export function TabPane({ tab, side, meta, focused, line, standing, hidden, fres
             ) : null
           }
         />
+        </SharedToolsContext.Provider>
       )}
     </section>
   )

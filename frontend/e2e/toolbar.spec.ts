@@ -1,7 +1,9 @@
 /**
  * Two notes side by side at 1280, 1024 and 900 px (second review): each toolbar stands in one row or two, never more,
  * broken only between groups, without a scroll bar; the note's own buttons and "you, other window" at the right are
- * never cut off. "More" comes only where not even two rows hold the tools.
+ * never cut off. "More" comes only where not even two rows hold the tools. With both sides on show the text tools
+ * stand once over both (21.11.2026, `split-toolbar.spec.ts`): that one bar keeps the same rules, each side's head
+ * keeps only the note's own buttons.
  */
 import { expect, test, type Locator } from '@playwright/test'
 
@@ -34,15 +36,22 @@ for (const width of [1280, 1024, 900]) {
     for (const pane of await page.locator('[data-testid="tab-pane"]').all()) {
       if (!(await pane.isVisible())) continue
       const head = pane.getByTestId('editor-head')
-      const bar = pane.getByTestId('toolbar').first()
+      const shared = page.getByTestId('shared-toolbar')
+      const both = (await shared.count()) > 0
+      // Both sides on show: the one bar over both, measured in its own row; the head holds no text tools.
+      if (both) await expect(head.locator('[data-tool]')).toHaveCount(0)
+      const frame = both ? shared : head
+      const bar = (both ? shared : pane).getByTestId('toolbar').first()
       const box = await bar.evaluate((element) => ({ height: element.getBoundingClientRect().height, scroll: element.scrollWidth, client: element.clientWidth, rows: element.getAttribute('data-rows') }))
       // Two rows at most (34 px each and the gap), no scroll bar anywhere in the head.
       expect(box.height).toBeLessThan(2 * 34 + 4 + 4)
       expect(box.scroll).toBeLessThanOrEqual(box.client)
-      const scroll = await head.evaluate((element) => element.scrollWidth - element.clientWidth)
-      expect(scroll).toBeLessThanOrEqual(0)
-      // Every tool on show is whole inside the head; the note's buttons too.
-      for (const tool of await bar.locator('[data-tool]').all()) await inside(head, tool)
+      for (const one of [head, frame]) {
+        const scroll = await one.evaluate((element) => element.scrollWidth - element.clientWidth)
+        expect(scroll).toBeLessThanOrEqual(0)
+      }
+      // Every tool on show is whole inside its bar; the note's buttons inside the head.
+      for (const tool of await bar.locator('[data-tool]').all()) await inside(frame, tool)
       await inside(head, pane.getByTestId('note-menu'))
       const more = await bar.getByTestId('tool-more').count()
       report.push(`${await pane.getAttribute('data-side')}: rows ${box.rows}, more ${more}`)

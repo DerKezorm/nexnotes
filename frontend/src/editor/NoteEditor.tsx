@@ -14,6 +14,8 @@
  * - Beside another note (NOTES-8) only the side used last guards the ways out of the page and names the browser tab;
  *   the other hands its guard to the page (`onGuard`), which asks it before closing that side. The connection comes
  *   from `tabs/live.ts`, which keeps it open while changes still wait and bridges two editors of the same note.
+ * - Two notes side by side (NOTES-8, 21.11.2026): the text tools stand once over both sides (`sharedTools.ts`), so
+ *   the note hands its editor to the page and keeps in its head only what concerns the whole note.
  * - A locked note (NOTES-16) has no live room: the room closes with 4423 or the head says `locked`, and the vault's
  *   view (`LOCKED_VIEW`) takes the place, which opens the note in this browser with the same editor (`LiveNote`,
  *   `sealed`).
@@ -21,7 +23,7 @@
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { Copy, Ellipsis, History, Share2, Trash2, Upload, WifiOff } from 'lucide-react'
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useFileDrag, useJumpToAttachment } from '../attachments/hooks'
@@ -63,6 +65,8 @@ import { PaperPicker } from './PaperPicker'
 import { OutlineToggleContext, outlineFits, useOutlineShown, type OutlineToggle } from './outlineData'
 import { TEXT_MAX, useTextWidth } from './textWidth'
 import { Toolbar } from './Toolbar'
+import { NoteViewTools } from './NoteViewTools'
+import { SharedToolsContext } from './sharedTools'
 
 type Props = {
   noteId: string
@@ -311,6 +315,15 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable)
   }, [editor, editable])
+
+  // Beside a second note the page draws the text tools once over both sides; this note hands it its editor.
+  const toolsSlot = useContext(SharedToolsContext)
+  const openLink = useCallback(() => setLinkOpen(true), [])
+  useEffect(() => {
+    if (!toolsSlot || !editor) return
+    toolsSlot.register({ editor, onLink: openLink, writable })
+    return () => toolsSlot.register(null)
+  }, [toolsSlot, editor, openLink, writable])
 
   const canAttach = editable && Boolean(head?.can_write)
   const dragging = useFileDrag(sheet, canAttach)
@@ -589,8 +602,9 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
         className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:sticky md:top-0 md:z-20 md:bg-ink-950 md:px-5"
         data-testid="editor-head"
       >
-        <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
-        <div className="ml-auto flex shrink-0 items-center gap-3">
+        {!toolsSlot && <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={openLink} />}</div>}
+        <div className="ml-auto flex shrink-0 items-center gap-3" role={toolsSlot ? 'group' : undefined} aria-label={toolsSlot ? t('editor.tools.noteTools') : undefined} data-testid="note-tools">
+          {toolsSlot && <NoteViewTools />}
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
           <NotePinButton noteId={noteId} head={head} />

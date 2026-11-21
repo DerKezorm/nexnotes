@@ -403,7 +403,9 @@
       "undo": "Rückgängig",
       "width": "Textbreite",
       "outline": "Gliederung ein- oder ausblenden",
-      "more": "Mehr Werkzeuge"
+      "more": "Mehr Werkzeuge",
+      "noteTools": "Werkzeuge der Notiz",
+      "readOnly": "Nur lesen"
     },
     "style": {
       "h1": "Überschrift",
@@ -1435,6 +1437,7 @@
     "openTrash": "Papierkorb öffnen",
     "resize": "Breite ändern",
     "right": "rechts",
+    "tools": "Werkzeuge für „{{title}}“ ({{side}})",
     "sides": "Welche Seite",
     "state": {
       "deleted": "im Papierkorb",
