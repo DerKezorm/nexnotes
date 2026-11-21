@@ -16,3 +16,5 @@ pypdfium2==5.15.2
 typst==0.15.0
 # Web Push: the message encrypted for one browser (RFC 8291, aes128gcm), NOTES-14.
 http-ece==1.2.1
+# Time zones by name for "today" and "last 7 days" of smart folders, in the zone of the device (NOTES-7 EC-3).
+tzdata==2026.6

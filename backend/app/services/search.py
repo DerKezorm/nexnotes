@@ -37,21 +37,27 @@ import re
 import unicodedata
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from sqlalchemy import (
     ColumnElement,
+    and_,
     bindparam,
     column,
+    exists,
+    false,
     func,
     inspect,
     literal,
     literal_column,
+    not_,
     or_,
     select,
     table,
     text,
+    true,
     union,
     union_all,
 )
@@ -60,6 +66,8 @@ from sqlalchemy.orm import Session, defer
 from ..db import SessionLocal, engine
 from ..errors import error
 from ..models import FOLDER_INBOX, Account, Folder, Note
+from ..models_attachments import Attachment, AttachmentRef
+from ..models_shares import Share, SharePin
 from ..models_tags import NoteTag
 from . import tags
 
@@ -532,13 +540,11 @@ def _conditions(account: Account, query: Query, filters: Filters | None) -> tupl
         # Tags count only where the tags say they count (not in the trash, not in a locked note).
         extra.extend([tags.visible(account.id), *tagged])
     if filters is not None:
+        # The same pieces as the conditions of a smart folder (NOTES-7): one way to say "in this folder", "since".
         if filters.folder_ids is not None:
-            extra.append(Note.folder_id.in_(filters.folder_ids))
-        column = Note.created_at if filters.date_field == "created" else Note.updated_at
-        if filters.since is not None:
-            extra.append(column >= filters.since)
-        if filters.until is not None:
-            extra.append(column <= filters.until)
+            extra.append(folder_clause(filters.folder_ids))
+        if filters.since is not None or filters.until is not None:
+            extra.append(date_clause(filters.date_field, filters.since, filters.until, until_inclusive=True))
     return " AND ".join(match), extra
 
 
@@ -560,7 +566,8 @@ def _bases(account: Account, match: str, extra: Sequence[ColumnElement[bool]], *
                      .join(Note, Note.id == _ROWS_T.c.note_id)
                      .where(rows_wanted, whose, Note.deleted_at.is_(None), *extra))
         if match:
-            statement = statement.where(_sql("@index MATCH :match").bindparams(match=match))
+            # An anonymous parameter: one statement may hold several of these (the conditions of a smart folder).
+            statement = statement.where(literal_column(INDEX).op("MATCH")(bindparam(None, match)))
         statements.append(statement)
     return statements
 
@@ -876,3 +883,290 @@ def search(db: Session, account: Account, raw: str, filters: Filters | None = No
     if total == 0 and filters is not None and not query.empty:
         unfiltered = _count(db, account, query, None)
     return Result(total=total, items=items, offset=offset, unfiltered=unfiltered, terms=query.terms, tags=query.tags)
+
+
+# --- Conditions (NOTES-7) -----------------------------------------------------------------------------------------
+#
+# A smart folder is a list of conditions, all of which or at least one of which must hold. They are the search's own
+# pieces: "Text enthält" is the search (the same parsing, index and rights), and the search's filters (folder with its
+# subfolders, tag, period) are the clauses below. A condition comes as a dict (stored as JSON):
+#
+#   text        value                      as typed into the search field: words, phrases, tags with "#"
+#   tag         op has|not, key, label     the tag of NOTES-5 ({kind: 'tag', op: 'has', key, label})
+#   folder      op in|tree, id, name       one folder, or with its subfolders
+#   date        field updated|created, period today|week|month|year|custom, from, to (yyyy-mm-dd)
+#   tasks       op open                    open checklist items
+#   attachment  type any|image|pdf|scan|recording|sketch|video|file
+#   shared      op by_me|with_me
+#   pinned
+#   color       color                      a key of FOLDER_COLORS
+#
+# A period is kept as the choice, never as dates: it counts from today in the device's time zone whenever it is asked
+# (EC-3). Conditions on a note's content (tags, checklists, attachments) never hold for a locked note, whose content
+# the server does not know (EC-5); "Text enthält" finds its title only, as the search does.
+
+CONDITIONS_MAX = 20
+MATCHES = ("all", "any")
+PERIODS = ("today", "week", "month", "year", "custom")
+#: The kinds of attachments a condition names, and the kinds of ``attachments.kind`` they stand for.
+ATTACHMENT_TYPES: dict[str, tuple[str, ...]] = {
+    "image": ("image",), "pdf": ("pdf",), "scan": ("scan",), "recording": ("recording",), "sketch": ("drawing",),
+    "video": ("video",), "file": ("file",),
+    "any": ("image", "pdf", "scan", "recording", "drawing", "video", "file"),
+}
+_DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_ZONE_NAME = re.compile(r"^[A-Za-z0-9_+\-/]{1,64}$")
+
+
+def _invalid(why: str) -> Exception:
+    return error("smart_condition_invalid", "A condition of the smart folder is not valid.", 422, reason=why)
+
+
+def _day(value: Any) -> str:
+    if not isinstance(value, str) or not _DAY.fullmatch(value):
+        raise _invalid("date")
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        raise _invalid("date") from None
+    return value
+
+
+def _choice(value: Any, allowed: Iterable[str], why: str) -> str:
+    if not isinstance(value, str) or value not in allowed:
+        raise _invalid(why)
+    return value
+
+
+def read_condition(raw: Any) -> dict[str, Any]:
+    """One condition, checked and cut to what it may hold; ``smart_condition_invalid`` (422) otherwise."""
+    from .folders import FOLDER_COLORS
+
+    if not isinstance(raw, dict):
+        raise _invalid("shape")
+    kind = raw.get("kind")
+    if kind == "text":
+        value = raw.get("value")
+        if not isinstance(value, str) or not value.strip() or len(value) > QUERY_MAX or parse(value).empty:
+            raise _invalid("text")
+        return {"kind": kind, "value": value.strip()}
+    if kind == "tag":
+        op = _choice(raw.get("op", "has"), ("has", "not"), "op")
+        label = str(raw.get("label") or raw.get("key") or "").lstrip("#")
+        key = tag_key(label) if label else ""
+        if not key:
+            raise _invalid("tag")
+        return {"kind": kind, "op": op, "key": key, "label": label[:64]}
+    if kind == "folder":
+        op = _choice(raw.get("op", "tree"), ("in", "tree"), "op")
+        folder_id = raw.get("id")
+        if not isinstance(folder_id, str) or not folder_id or len(folder_id) > 36:
+            raise _invalid("folder")
+        return {"kind": kind, "op": op, "id": folder_id, "name": str(raw.get("name") or "")[:60]}
+    if kind == "date":
+        field_name = _choice(raw.get("field", "updated"), ("updated", "created"), "field")
+        period = _choice(raw.get("period"), PERIODS, "period")
+        out: dict[str, Any] = {"kind": kind, "field": field_name, "period": period}
+        if period == "custom":
+            start, end = raw.get("from") or "", raw.get("to") or ""
+            if not start and not end:
+                raise _invalid("date")
+            if start:
+                out["from"] = _day(start)
+            if end:
+                out["to"] = _day(end)
+            if start and end and out["from"] > out["to"]:
+                raise _invalid("date")
+        return out
+    if kind == "tasks":
+        return {"kind": kind, "op": _choice(raw.get("op", "open"), ("open",), "op")}
+    if kind == "attachment":
+        return {"kind": kind, "type": _choice(raw.get("type", "any"), ATTACHMENT_TYPES, "type")}
+    if kind == "shared":
+        return {"kind": kind, "op": _choice(raw.get("op"), ("by_me", "with_me"), "op")}
+    if kind == "pinned":
+        return {"kind": kind}
+    if kind == "color":
+        return {"kind": kind, "color": _choice(raw.get("color"), FOLDER_COLORS, "color")}
+    raise _invalid("kind")
+
+
+def read_conditions(raw: Any) -> list[dict[str, Any]]:
+    """The conditions of a smart folder: at least one, at most ``CONDITIONS_MAX``."""
+    if not isinstance(raw, list) or not raw:
+        raise _invalid("empty")
+    if len(raw) > CONDITIONS_MAX:
+        raise _invalid("too_many")
+    return [read_condition(item) for item in raw]
+
+
+# --- Time in the device's zone (EC-3) -----------------------------------------------------------------------------
+
+
+def zone(name: str | None) -> tzinfo:
+    """The device's time zone by its IANA name (``Europe/Berlin``); UTC for none or one nobody knows."""
+    if not name or not _ZONE_NAME.fullmatch(name):
+        return UTC
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError, OSError):
+        return UTC
+
+
+def _midnight(day: date, tz: tzinfo) -> datetime:
+    """The first moment of ``day`` in the zone, as a moment in UTC."""
+    return datetime.combine(day, time(0), tzinfo=tz).astimezone(UTC)
+
+
+def period_range(condition: dict[str, Any], tz: tzinfo, now: datetime) -> tuple[datetime | None, datetime | None]:
+    """From when (inclusive) until when (exclusive) a date condition reaches, counted from today in the zone."""
+    today = now.astimezone(tz).date()
+    period = condition.get("period")
+    if period == "today":
+        return _midnight(today, tz), None
+    if period == "week":
+        return _midnight(today - timedelta(days=6), tz), None
+    if period == "month":
+        return _midnight(today - timedelta(days=29), tz), None
+    if period == "year":
+        try:
+            back = today.replace(year=today.year - 1)
+        except ValueError:  # 29 February
+            back = today.replace(year=today.year - 1, day=28)
+        return _midnight(back + timedelta(days=1), tz), None
+    since = until = None
+    if condition.get("from"):
+        since = _midnight(date.fromisoformat(condition["from"]), tz)
+    if condition.get("to"):
+        until = _midnight(date.fromisoformat(condition["to"]) + timedelta(days=1), tz)
+    return since, until
+
+
+# --- The clauses --------------------------------------------------------------------------------------------------
+
+
+def folder_clause(folder_ids: Sequence[str]) -> ColumnElement[bool]:
+    """Notes in one of these folders (the search's folder filter and the condition "Ordner")."""
+    return Note.folder_id.in_(list(folder_ids))
+
+
+def tag_clause(key: str) -> ColumnElement[bool]:
+    """Notes with exactly this tag (the search's tag filter and the condition "Schlagwort hat")."""
+    return _tagged(key, prefix=False)
+
+
+def date_clause(field_name: str, since: datetime | None, until: datetime | None, *,
+                until_inclusive: bool = False) -> ColumnElement[bool]:
+    """Notes changed (or made) in the period (the search's period and the condition "Geändert"/"Erstellt")."""
+    column_ = Note.created_at if field_name == "created" else Note.updated_at
+    parts: list[ColumnElement[bool]] = []
+    if since is not None:
+        parts.append(column_ >= since)
+    if until is not None:
+        parts.append(column_ <= until if until_inclusive else column_ < until)
+    return and_(*parts) if parts else true()
+
+
+def text_clause(account: Account, raw: str) -> ColumnElement[bool]:
+    """Notes the search finds for ``raw``: the same words, phrases and tags, the same index and rights (AC-1)."""
+    match, extra = _conditions(account, parse(raw), None)
+    # Inside another statement over ``Note``: the subquery must not borrow the outer note.
+    statements = [statement.correlate(None) for statement in _bases(account, match, extra, Note.id)]
+    return Note.id.in_(statements[0] if len(statements) == 1 else union_all(*statements))
+
+
+def _locked() -> ColumnElement[bool]:
+    return or_(*(hidden() for hidden in tags.HIDDEN_NOTES)) if tags.HIDDEN_NOTES else false()
+
+
+def _shared_by(account: Account) -> ColumnElement[bool]:
+    """Own notes shared with somebody whose account is there: the note itself, or a folder of it or above it."""
+    alive = select(Account.id).where(Account.deleted_at.is_(None))
+    direct = select(Share.note_id).where(Share.owner_id == account.id, Share.note_id.is_not(None),
+                                         Share.account_id.in_(alive))
+    top = (select(Folder.id.label("id"))
+           .join(Share, Share.folder_id == Folder.id)
+           .where(Share.owner_id == account.id, Folder.owner_id == account.id, Share.account_id.in_(alive))
+           .cte("shared_by_tree", recursive=True))
+    tree = top.union(select(Folder.id).join(top, Folder.parent_id == top.c.id).where(Folder.owner_id == account.id))
+    return and_(Note.owner_id == account.id, or_(Note.id.in_(direct), Note.folder_id.in_(select(tree.c.id))))
+
+
+def _pinned(account: Account) -> ColumnElement[bool]:
+    """Pinned by the account: its own notes by their pin, notes of others by its own pin of them (NOTES-13)."""
+    return or_(and_(Note.owner_id == account.id, Note.pinned_at.is_not(None)),
+               and_(Note.owner_id != account.id,
+                    Note.id.in_(select(SharePin.note_id).where(SharePin.account_id == account.id))))
+
+
+@dataclass
+class Asked:
+    """What the conditions are asked with: the account, the device's zone, the moment, and what was found to point
+    nowhere on the way (EC-1)."""
+
+    account: Account
+    tz: tzinfo = UTC
+    now: datetime = field(default_factory=lambda: datetime.now(UTC))
+    broken: list[dict[str, Any]] = field(default_factory=list)
+
+
+def _folder_ids(db: Session, asked: Asked, index: int, condition: dict[str, Any]) -> list[str] | None:
+    folder = db.get(Folder, condition["id"])
+    if folder is None or folder.owner_id != asked.account.id or folder.deleted_at is not None:
+        asked.broken.append({"index": index, "kind": "folder", "name": condition.get("name") or ""})
+        return None
+    if condition["op"] == "in":
+        return [folder.id]
+    return folder_tree(db, asked.account, folder.id)
+
+
+def condition_clause(db: Session, asked: Asked, index: int, condition: dict[str, Any]) -> ColumnElement[bool]:
+    """One condition as SQL on ``Note``. A folder that is gone holds for no note; a tag nobody has any more is noted
+    as pointing nowhere and keeps its meaning ("has" holds for none, "has not" for every note)."""
+    kind = condition["kind"]
+    account = asked.account
+    if kind == "text":
+        return text_clause(account, condition["value"])
+    if kind == "tag":
+        known = db.scalar(select(func.count()).select_from(NoteTag).join(Note, Note.id == NoteTag.note_id)
+                          .where(NoteTag.key == condition["key"], tags.visible(account.id)))
+        if not known:
+            asked.broken.append({"index": index, "kind": "tag", "name": condition.get("label") or condition["key"]})
+        has = tag_clause(condition["key"])
+        return and_(not_(_locked()), has if condition["op"] == "has" else not_(has))
+    if kind == "folder":
+        ids = _folder_ids(db, asked, index, condition)
+        return false() if ids is None else folder_clause(ids)
+    if kind == "date":
+        since, until = period_range(condition, asked.tz, asked.now)
+        return date_clause(condition["field"], since, until)
+    if kind == "tasks":
+        return and_(not_(_locked()), Note.tasks_total > func.coalesce(Note.tasks_done, 0))
+    if kind == "attachment":
+        found = exists().where(AttachmentRef.note_id == Note.id, Attachment.id == AttachmentRef.attachment_id,
+                               Attachment.owner_id == Note.owner_id,
+                               Attachment.kind.in_(ATTACHMENT_TYPES[condition["type"]]))
+        return and_(not_(_locked()), found)
+    if kind == "shared":
+        return _shared_by(account) if condition["op"] == "by_me" else Note.owner_id != account.id
+    if kind == "pinned":
+        return _pinned(account)
+    if kind == "color":
+        return Note.color == condition["color"]
+    raise _invalid("kind")
+
+
+def readable(account: Account) -> ColumnElement[bool]:
+    """The notes a smart folder looks at: the account's own and those shared with it (``tags.SHARED_NOTES``), alive."""
+    whose: ColumnElement[bool] = Note.owner_id == account.id
+    shared = _shared(account)
+    if shared:
+        whose = or_(whose, Note.id.in_(shared[0] if len(shared) == 1 else union(*shared)))
+    return and_(Note.deleted_at.is_(None), whose)
+
+
+def matching(db: Session, asked: Asked, conditions: Sequence[dict[str, Any]], match: str) -> ColumnElement[bool]:
+    """All conditions (``all``) or at least one (``any``, AC-2), over the notes the account may read."""
+    parts = [condition_clause(db, asked, index, condition) for index, condition in enumerate(conditions)]
+    joined = or_(*parts) if match == "any" else and_(*parts)
+    return and_(readable(asked.account), joined)

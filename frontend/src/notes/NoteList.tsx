@@ -8,7 +8,7 @@
  * fixed-height layout and the window over it (`layout.ts`, `Window.tsx`), rows, tiles, the menu and the bar.
  */
 import { FileText, Plus } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
@@ -28,7 +28,7 @@ import './list/list.css'
 import { NoteRow, type RowFolder } from './list/NoteRow'
 import { NoteTile } from './list/NoteTile'
 import { arrange, sectionLabel } from './list/order'
-import { useNoteList } from './list/useNoteList'
+import { useNoteList, type ListSource } from './list/useNoteList'
 import { useNow } from './list/useNow'
 import { Window } from './list/Window'
 
@@ -43,6 +43,10 @@ export type NoteListProps = {
   hrefFor?: (id: string) => string
   /** A heading above the list. */
   heading?: string
+  /** Another list than a folder's (a smart folder, NOTES-7): where its notes come from. Rows show their folders. */
+  source?: ListSource
+  /** What an empty list says instead of the folder's empty state (a smart folder names its conditions, EC-2). */
+  empty?: ReactNode
 }
 
 /** The width of the list, followed as it changes; unknown (a test without layout) counts as a wide screen. */
@@ -61,7 +65,7 @@ function useWidth(box: React.RefObject<HTMLElement | null>): number {
   return width
 }
 
-export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading }: NoteListProps) {
+export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, source, empty }: NoteListProps) {
   const href = hrefFor ?? ((id: string) => noteHref(id, folderId))
   const location = useLocation()
   const selectedId = chosenId ?? noteOf(location.pathname, location.search) ?? undefined
@@ -70,7 +74,7 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
   const navigate = useNavigate()
   const tree = useFolders()
   const { newNote } = useNoteActions()
-  const { answer, failed, view, setView, pin, color } = useNoteList(folderId)
+  const { answer, failed, view, setView, pin, color } = useNoteList(folderId, source)
   const now = useNow()
   const box = useRef<HTMLElement>(null)
   const width = useWidth(box)
@@ -187,7 +191,8 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
         </span>
       </div>
       {failed && <p className="px-2 text-sm text-bad-500">{t('notes.list.failed')}</p>}
-      {answer && answer.items.length === 0 && (
+      {answer && answer.items.length === 0 && empty}
+      {answer && answer.items.length === 0 && !empty && (
         <div
           data-testid="list-empty"
           onDragOver={takeNotes}

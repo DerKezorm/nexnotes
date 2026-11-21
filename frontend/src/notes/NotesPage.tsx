@@ -19,7 +19,7 @@ import { TabbedNotes } from '../tabs/TabbedNotes'
 import { useListPadding, useListTitle } from './listPlace'
 import { NoteList } from './NoteList'
 import { useNewNote } from './newNote'
-import { folderOfList, hrefIn, listOf, noteOf, setCurrentList } from './workspace'
+import { folderOfList, hrefIn, listNameOf, listOf, noteOf, setCurrentList } from './workspace'
 
 /** The list of all notes, at `/` and beside `/notes/<id>`. */
 export function AllNotesList() {
@@ -58,7 +58,7 @@ function useListName(list: string): string {
   if (path === '/search') return t('search.title')
   const tag = /^\/tags\/([^/]+)$/.exec(path)
   if (tag) return `#${decodeURIComponent(tag[1])}`
-  return t('notes.all')
+  return listNameOf(path) ?? t('notes.all')
 }
 
 /** On a phone, the open note alone with the way back to its list. */

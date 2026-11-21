@@ -23,6 +23,7 @@ fetched by the package managers alone: files that lie in this repository or go i
 | Package | What it does here | Licence |
 |---|---|---|
 | http-ece 1.2.1 | encrypts a notification for one browser (Web Push, RFC 8291, aes128gcm; NOTES-14) | MIT |
+| tzdata 2026.6 | the time zones by name, so that "today" and "last 7 days" of a smart folder count in the device's zone (NOTES-7) | Apache-2.0 |
 
 ## Programs in the image
 

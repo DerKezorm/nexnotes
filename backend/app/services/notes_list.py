@@ -188,6 +188,9 @@ _COLUMNS = (Note.id, Note.owner_id, Note.folder_id, Note.title, Note.title_check
             Note.pinned_at.is_not(None).label("pinned"), Note.color, Note.tasks_done, Note.tasks_total,
             Note.icon)
 _NEWEST_FIRST = (Note.updated_at.desc(), Note.id.desc())
+#: For other lists of notes built the same way (a smart folder, NOTES-7).
+LIST_COLUMNS = _COLUMNS
+NEWEST_FIRST = _NEWEST_FIRST
 
 
 def _notes(db: Session, account: Account, key: str) -> tuple[list[Any], list[Any]]:
@@ -320,7 +323,12 @@ def view_of(db: Session, account: Account, key: str) -> dict[str, Any]:
 
 def save_view(db: Session, account: Account, folder_id: str | None, wanted: dict[str, Any]) -> dict[str, Any]:
     """Keeps how the account looks at a folder (or "All notes"); only what is given changes."""
-    key = folder_key(db, account, folder_id)
+    return save_view_of(db, account, folder_key(db, account, folder_id), wanted)
+
+
+def save_view_of(db: Session, account: Account, key: str, wanted: dict[str, Any]) -> dict[str, Any]:
+    """Keeps how the account looks at the list ``key`` (a folder, "All notes", a smart folder); only what is given
+    changes."""
     for attempt in range(2):
         row = db.scalar(select(NoteListView).where(NoteListView.account_id == account.id, NoteListView.key == key))
         if row is None:
