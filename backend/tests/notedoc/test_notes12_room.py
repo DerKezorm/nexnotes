@@ -99,8 +99,8 @@ def test_notes12_ac3_two_writing_at_the_same_place_keep_both_texts():
         _type(a, " AAA")
         _type(b, " BBB")
         await world.settle()
-        assert _plain(a.doc) == _plain(b.doc)
-        assert sorted([_plain(a.doc)]) and "AAA" in _plain(a.doc) and "BBB" in _plain(a.doc)
+        # Both texts, one after the other (never mixed, never one replacing the other), the same everywhere.
+        assert _plain(a.doc) == _plain(b.doc) == _plain(_stored(world))
         assert _plain(a.doc) in ("hello AAA BBB", "hello BBB AAA")
         await world.rooms.shutdown()
 
@@ -169,7 +169,9 @@ def test_notes12_a_resent_update_is_neither_stored_nor_passed_on():
     async def scenario():
         world = World()
         a, b = await _pair(world)
-        _type(a, "1")
+        _type(a, "12")
+        run = a.doc.get("body", type=XmlFragment).children[0].children[0]
+        del run[0:1]  # a deletion, so every resend carries a delete set
         await world.settle()
         stored = len(world.store.updates)
         a.disconnect()
@@ -363,7 +365,7 @@ def test_notes12_too_large_update_closes_with_413(monkeypatch):
         _type(b, "y" * 200)
         await world.settle()
         assert b.closed == [CLOSE_TOO_LARGE]
-        assert _plain(world.rooms.room_of("note").doc) == "hello" if world.rooms.room_of("note") else True
+        assert world.rooms.room_of("note") is None or _plain(world.rooms.room_of("note").doc) == "hello"
         assert _plain(_stored(world)) == "hello"
         await world.rooms.shutdown()
 
@@ -415,6 +417,35 @@ def test_notes12_server_change_without_an_open_room_goes_to_the_store():
         a.connect()
         await world.settle()
         assert [t.text for t in edit.list_tasks(a.doc)] == ["done"]
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_notes12_concurrent_deletions_leave_a_shape_the_browser_reads():
+    async def scenario():
+        world = World()
+        doc = notedoc.new_doc("x", {"type": "doc", "content": [
+            {"type": "taskList", "content": [
+                {"type": "taskItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "a"}]}]},
+                {"type": "taskItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "b"}]}]},
+            ]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "end"}]},
+        ]})
+        world.store.state = doc.get_update()
+        a = world.client("a", 1, client_id=1)
+        b = world.client("b", 2, client_id=2)
+        a.connect()
+        b.connect()
+        await world.settle()
+        # Each deletes the other item at the same time: together they leave a checklist without items.
+        del a.doc.get("body", type=XmlFragment).children[0].children[0]
+        del b.doc.get("body", type=XmlFragment).children[0].children[1]
+        await world.settle()
+        for current in (a.doc, b.doc, _stored(world)):
+            shape = notedoc.to_json(current)
+            assert notedoc.clean_doc(shape) == shape
+            assert shape["content"][0]["type"] == "taskList" and len(shape["content"][0]["content"]) == 1
         await world.rooms.shutdown()
 
     asyncio.run(scenario())
