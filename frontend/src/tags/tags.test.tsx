@@ -1,8 +1,9 @@
 /**
  * NOTES-5 on the pages: the tags in the sidebar by frequency (AC-2) with the first twenty and "Show all" (EC-5), the
  * page of a tag with count, own and shared notes, folder and date (AC-2, AC-3, EC-4), renaming with what changes and
- * what stays (AC-4), merging (AC-7), deleting (AC-5), "Save as smart folder" (AC-6). A small stand-in for the server
- * answers the tag routes.
+ * what stays (AC-4), merging (AC-7), deleting (AC-5), "Save as smart folder" (AC-6), all in the head and "…" every list
+ * has, the notes in the four looks with a view kept for the tag (NOTES-6). A small stand-in for the server answers the
+ * tag routes.
  */
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -10,7 +11,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import i18n from '../i18n'
 import { registerSmartFolderSaver } from './actions'
-import type { TagInfo, TagPage as Page } from './api'
+import { forgetFolders } from '../folders/store'
+import type { ListItem, ListView } from '../notes/list/api'
+import { forgetListLook, saveListLook } from '../notes/list/look'
+import type { TagInfo, TagList as Page } from './api'
 import { forgetTags } from './store'
 import { TagSection } from './TagSection'
 import { AllTagsPage, TagPage } from './TagPage'
@@ -35,10 +39,22 @@ function serve(): void {
       const path = decodeURIComponent(url.pathname)
       calls.push({ method, path, body })
       if (path === '/api/tags') return reply(200, { tags, total: tags.length })
-      const one = /^\/api\/tags\/(.+)$/.exec(path)
+      if (path === '/api/folders') return reply(200, { inbox: { id: 'in', count: 1 }, folders: [{ id: 'f1', parent_id: null, name: 'Shopping', icon: '', color: 'teal', position: 0, count: 1 }] })
+      if (path === '/api/me/list-look') return reply(200, { list_style: body?.style ?? 'list', list_hints: body?.hints ?? true })
+      const part = /^\/api\/tags\/([^/]+)\/(notes|stamp|view)$/.exec(path)
+      if (part) {
+        const name = part[1].replace(/^#/, '').toLowerCase()
+        const page = pages[name] ?? empty(name)
+        if (part[2] === 'stamp') return reply(200, { stamp: String(page.count) })
+        if (part[2] === 'view') {
+          views[name] = { ...(views[name] ?? page.view), ...(body as Partial<ListView>) }
+          return reply(200, views[name])
+        }
+        return reply(200, { ...page, view: views[name] ?? page.view })
+      }
+      const one = /^\/api\/tags\/([^/]+)$/.exec(path)
       if (one) {
         const name = one[1].replace(/^#/, '').toLowerCase()
-        if (method === 'GET') return reply(200, pages[name] ?? { key: name, label: name, count: 0, mine: 0, others: [], notes: [] })
         if (method === 'PUT') {
           const [status, answer] = renameAnswer(body ?? {})
           return reply(status, answer)
@@ -52,17 +68,31 @@ function serve(): void {
 
 const TODAY = new Date().toISOString()
 
+const VIEW: ListView = { mode: 'list', sort: 'updated', direction: 'desc', grouped: false }
+let views: Record<string, ListView> = {}
+
+function note(id: string, title: string, preview: string, updated: string, folder: string, owner?: { id: number; name: string }): ListItem {
+  return { id, folder_id: folder, title, title_check: false, origin: '', preview, created_at: updated, updated_at: updated, pinned: false, color: '', icon: '', tasks: null, ...(owner ? { owner } : {}) }
+}
+
+function empty(name: string): Page {
+  return { key: `tag:${name}`, view: VIEW, counts: { own: 0, shared: 0 }, items: [], tag: name, label: name, count: 0, mine: 0, others: [] }
+}
+
 const EINKAUF: Page = {
-  key: 'einkauf',
+  key: 'tag:einkauf',
+  view: VIEW,
+  counts: { own: 2, shared: 1 },
+  items: [
+    note('n1', 'Saturday', 'Milk, tomatoes', TODAY, 'f1'),
+    note('n2', 'Quick one', '', TODAY, 'in'),
+    note('n3', 'Barbecue', 'Halloumi', '2026-11-09T10:00:00Z', 'lena-f', { id: 2, name: 'Lena' }),
+  ],
+  tag: 'einkauf',
   label: 'einkauf',
   count: 3,
   mine: 2,
   others: [{ id: 2, name: 'Lena', count: 1 }],
-  notes: [
-    { id: 'n1', title: 'Saturday', preview: 'Milk, tomatoes', updated_at: TODAY, mine: true, folder: { id: 'f1', name: 'Shopping', inbox: false }, owner: null },
-    { id: 'n2', title: 'Quick one', preview: '', updated_at: TODAY, mine: true, folder: { id: 'in', name: '', inbox: true }, owner: null },
-    { id: 'n3', title: 'Barbecue', preview: 'Halloumi', updated_at: '2026-11-09T10:00:00Z', mine: false, folder: null, owner: { id: 2, name: 'Lena' } },
-  ],
 }
 
 let root: Root | null = null
@@ -119,6 +149,11 @@ function button(text: string): HTMLButtonElement {
   return found
 }
 
+/** Opens the head's "…" of the tag. */
+async function more(): Promise<void> {
+  await click(q('[data-testid="tag-more"]')!)
+}
+
 async function click(element: Element): Promise<void> {
   await act(async () => {
     ;(element as HTMLElement).click()
@@ -145,7 +180,10 @@ beforeAll(async () => {
 
 beforeEach(() => {
   calls = []
+  views = {}
   forgetTags()
+  forgetFolders()
+  forgetListLook()
   tags = [
     { key: 'einkauf', label: 'einkauf', count: 3 },
     { key: 'bad', label: 'Bad', count: 2 },
@@ -196,21 +234,43 @@ describe('tags on the pages', () => {
 
   it('NOTES-5 AC-2 AC-3 EC-4 the page of a tag names the count and shows own and shared notes with folder and date', async () => {
     await show('/tags/einkauf')
-    expect(q('h1')?.textContent).toBe('#einkauf')
-    expect(q('[data-testid="tag-count"]')?.textContent).toBe('3 notes, 1 of them from Lena')
-    const rows = all('[data-testid="tag-note"]')
+    expect(q('[data-testid="list-head"] h1')?.textContent).toBe('#einkauf')
+    expect(q('[data-testid="list-counts"]')?.textContent).toBe('3 notes, 1 of them from Lena')
+    const rows = all('[data-testid="note-row"]')
     expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/notes/n1', '/notes/n2', '/notes/n3'])
-    const places = all('[data-testid="tag-note-where"]').map((cell) => cell.textContent ?? '')
-    expect(places[0]).toMatch(/^Shopping · \d/)
-    expect(places[1]).toMatch(/^Inbox · \d/)
-    expect(places[2]).toMatch(/^from Lena · /)
+    expect(all('[data-testid="note-folder"]').map((cell) => cell.textContent)).toEqual(['Shopping', 'Inbox', 'from Lena'])
+    // Every note says when it last changed; an own one shows its folder's stripe, a shared one only whose it is.
+    expect(rows.every((row) => /\d/.test(row.textContent ?? ''))).toBe(true)
+    const boxes = all('[data-testid="note-row-box"]')
+    expect(boxes.map((box) => box.querySelector(':scope > span[aria-hidden][style]') !== null)).toEqual([true, true, false])
     expect(rows[0].textContent).toContain('Milk, tomatoes')
     await click(rows[2])
     expect(where).toBe('/notes/n3')
   })
 
+  it('NOTES-5 AC-3 NOTES-6 AC-1 AC-4 the page of a tag has the head, the menu "View" and the looks of every list', async () => {
+    await show('/tags/einkauf')
+    const head = q('[data-testid="list-head"]')!
+    expect(head.querySelector('[data-testid="list-view"]')).not.toBeNull()
+    expect(head.querySelector('[data-testid="tag-more"]')).not.toBeNull()
+    // Sorting is kept for this tag on the server.
+    await click(q('[data-testid="list-view"]')!)
+    await click(q('[data-testid="list-sort-title"]')!)
+    expect(calls.filter((call) => call.method === 'PUT' && call.path === '/api/tags/einkauf/view').map((call) => call.body)).toEqual([{ sort: 'title', direction: 'asc' }])
+    expect(all('[data-testid="note-row"]').map((row) => row.getAttribute('href'))).toEqual(['/notes/n3', '/notes/n2', '/notes/n1'])
+    // The look is the account's, for every list: cards here as anywhere.
+    await act(async () => {
+      await saveListLook({ style: 'cards' })
+    })
+    await settle()
+    expect(q('[data-testid="note-list"]')?.getAttribute('data-style')).toBe('cards')
+    expect(all('[data-testid="note-card"]')).toHaveLength(3)
+    expect(all('[data-testid="note-folder"]').map((cell) => cell.textContent)).toEqual(['from Lena', 'Inbox', 'Shopping'])
+  })
+
   it('NOTES-5 AC-4 the rename dialog says beforehand what changes and what stays, then renames', async () => {
     await show('/tags/einkauf')
+    await more()
     await click(button('Rename'))
     expect(q('[data-testid="tag-rename-says"]')?.textContent).toBe('Changes 2 of your notes. In the note from Lena, #einkauf stays as it is.')
     const input = q<HTMLInputElement>('[data-testid="tag-rename"] input')!
@@ -233,6 +293,7 @@ describe('tags on the pages', () => {
         ? [200, { label: 'Bad', key: 'bad', changed: 2, kept: 1 }]
         : [409, { detail: { code: 'tag_exists', message: 'This tag exists already.', label: 'Bad', count: 2 } }]
     await show('/tags/einkauf')
+    await more()
     await click(button('Rename'))
     await typeInto(q<HTMLInputElement>('[data-testid="tag-rename"] input')!, 'bad')
     await click(submit())
@@ -249,6 +310,7 @@ describe('tags on the pages', () => {
 
   it('NOTES-5 AC-5 deleting asks with the numbers, then takes the tag out of the own notes', async () => {
     await show('/tags/einkauf')
+    await more()
     await click(button('Delete'))
     expect(q('[data-testid="tag-delete-says"]')?.textContent).toBe(
       '#einkauf goes from 2 of your notes; the rest of the text stays. In the note from Lena, #einkauf stays as it is.',
@@ -260,14 +322,16 @@ describe('tags on the pages', () => {
   })
 
   it('NOTES-5 AC-4 a tag only in notes of others cannot be renamed or deleted from here', async () => {
-    pages = { grill: { key: 'grill', label: 'grill', count: 1, mine: 0, others: [{ id: 2, name: 'Lena', count: 1 }], notes: [EINKAUF.notes[2]] } }
+    pages = { grill: { ...empty('grill'), counts: { own: 0, shared: 1 }, count: 1, others: [{ id: 2, name: 'Lena', count: 1 }], items: [EINKAUF.items[2]] } }
     await show('/tags/grill')
+    await more()
     expect(button('Rename').disabled).toBe(true)
     expect(button('Delete').disabled).toBe(true)
   })
 
   it('NOTES-5 AC-6 "Save as smart folder" hands over the condition "tag has …" and opens the new folder', async () => {
     await show('/tags/einkauf')
+    await more()
     expect(q('[data-testid="tag-smart"]')).toBeNull()
     act(() => root?.unmount())
     document.body.innerHTML = ''
@@ -276,6 +340,7 @@ describe('tags on the pages', () => {
     // Shown in another spelling than its key (EC-2): the condition carries the key.
     pages = { einkauf: { ...EINKAUF, label: 'Einkauf' } }
     await show('/tags/einkauf')
+    await more()
     const save = q('[data-testid="tag-smart"]')!
     expect(save.textContent).toBe('Save as smart folder')
     await click(save)

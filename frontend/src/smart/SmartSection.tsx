@@ -31,7 +31,7 @@ function keep(ids: string[]): void {
     .finally(() => void refreshSmartFolders())
 }
 
-function SmartIcon({ preset, className }: { preset: Preset; className: string }) {
+export function SmartIcon({ preset, className }: { preset: Preset; className: string }) {
   const Icon = PRESET_ICONS[preset]
   return Icon ? (
     <Icon className={className} strokeWidth={2} aria-hidden data-testid={`smart-icon-${preset}`} />

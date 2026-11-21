@@ -1,15 +1,30 @@
 /**
- * Where everything of a list stands, before anything is drawn: headings, rows and rows of tiles, each with a fixed
- * height. With fixed heights only the part on screen needs to be in the page (EC-2, 10,000 notes), and a long title or
- * text is cut instead of stretching its row (EC-4). When the list loads anew, the note at the top of the screen keeps
- * its place (EC-6, `anchorOf` and `shiftFor`).
+ * Where everything of a list stands, before anything is drawn: group headings, rows and rows of cards or tiles, each
+ * with a fixed height. With fixed heights only the part on screen needs to be in the page (EC-2, 10,000 notes), and a
+ * long title or text is cut instead of stretching its row (EC-4). When the list loads anew, the note at the top of the
+ * screen keeps its place (EC-6, `anchorOf` and `shiftFor`).
+ *
+ * The heights follow the account's look (`look.ts`): a row of the list is taller when it carries hints, a compact row
+ * is one line (a finger's height on a touch screen), cards and tiles stand in a grid. A group folded shut keeps its
+ * heading only.
  */
-import type { ListItem, ListMode } from './api'
+import type { ListItem, ListStyle } from './api'
 import type { Section } from './order'
 
 export const SIZES = {
-  header: 38,
-  row: 64,
+  header: 36,
+  /** A group heading on a touch screen: a finger's height to fold it. */
+  headerTouch: 44,
+  /** A row of the list: title, preview; with hints a third line. */
+  row: 62,
+  rowHints: 86,
+  /** One line per note; on a touch screen a finger's height. */
+  compact: 34,
+  compactTouch: 44,
+  card: 122,
+  /** The narrowest a card gets beside others. */
+  cardMin: 300,
+  cardGap: 8,
   tile: 184,
   /** Tiles on a narrow screen (the phone). */
   smallTile: 168,
@@ -23,11 +38,20 @@ export const SIZES = {
 } as const
 
 export type Entry =
-  | { kind: 'header'; key: string; section: Section['key']; top: number; height: number }
-  | { kind: 'row'; key: string; item: ListItem; top: number; height: number }
-  | { kind: 'tiles'; key: string; items: ListItem[]; top: number; height: number }
+  | { kind: 'header'; key: string; section: Section['key']; count: number; collapsed: boolean; top: number; height: number }
+  | { kind: 'row'; key: string; item: ListItem; first: boolean; top: number; height: number }
+  | { kind: 'grid'; key: string; items: ListItem[]; top: number; height: number }
 
 export type Layout = { entries: Entry[]; height: number; columns: number }
+
+export type LayoutOptions = {
+  /** Rows carry their hints (checklists, attachments, tags): a row with any is taller. */
+  hints?: boolean
+  /** The keys of the groups folded shut. */
+  collapsed?: ReadonlySet<string>
+  /** A touch screen: compact rows and group headings a finger high. */
+  touch?: boolean
+}
 
 /** How many tiles fit side by side. */
 export function tileColumns(width: number): number {
@@ -37,29 +61,52 @@ export function tileColumns(width: number): number {
   return Math.max(1, Math.floor((width + gap) / (min + gap)))
 }
 
-/** The entries of a list: a heading per section (none for a list without groups), then its rows or rows of tiles. */
-export function layout(sections: Section[], mode: ListMode, width: number): Layout {
+/** How many cards fit side by side: one in a narrow list, more on a wide page. */
+export function cardColumns(width: number): number {
+  return Math.max(1, Math.floor((width + SIZES.cardGap) / (SIZES.cardMin + SIZES.cardGap)))
+}
+
+/** Whether a note has anything for the hint line: checklists, attachments or tags (a locked one never). */
+export function hasHints(item: ListItem): boolean {
+  if (item.locked) return false
+  return Boolean((item.tasks && item.tasks.total > 0) || (item.attachments ?? 0) > 0 || (item.tags && item.tags.length > 0))
+}
+
+/** The height of a row of the list or of a compact row. */
+export function rowHeight(item: ListItem, style: ListStyle, options: LayoutOptions = {}): number {
+  if (style === 'compact') return options.touch ? SIZES.compactTouch : SIZES.compact
+  return options.hints && hasHints(item) ? SIZES.rowHints : SIZES.row
+}
+
+/** The entries of a list: a heading per section (none for a list without groups), then its rows or rows of cards or
+ * tiles; a section folded shut only its heading. */
+export function layout(sections: Section[], style: ListStyle, width: number, options: LayoutOptions = {}): Layout {
   const entries: Entry[] = []
   let top = 0
   const small = width < SIZES.narrow
-  const columns = mode === 'tiles' ? tileColumns(width) : 1
-  const tileHeight = (small ? SIZES.smallTile : SIZES.tile) + (small ? SIZES.smallGap : SIZES.gap)
+  const grid = style === 'tiles' || style === 'cards'
+  const columns = style === 'tiles' ? tileColumns(width) : style === 'cards' ? cardColumns(width) : 1
+  const headerHeight = options.touch ? SIZES.headerTouch : SIZES.header
+  const gridHeight =
+    style === 'cards' ? SIZES.card + SIZES.cardGap : (small ? SIZES.smallTile : SIZES.tile) + (small ? SIZES.smallGap : SIZES.gap)
   for (const section of sections) {
+    const collapsed = section.key !== 'all' && Boolean(options.collapsed?.has(section.key))
     if (section.key !== 'all') {
-      entries.push({ kind: 'header', key: `h:${section.key}`, section: section.key, top, height: SIZES.header })
-      top += SIZES.header
+      entries.push({ kind: 'header', key: `h:${section.key}`, section: section.key, count: section.items.length, collapsed, top, height: headerHeight })
+      top += headerHeight
     }
-    // The gallery draws no rows; laid out as a list, the window is ready when switching back.
-    if (mode !== 'tiles') {
-      for (const item of section.items) {
-        entries.push({ kind: 'row', key: item.id, item, top, height: SIZES.row })
-        top += SIZES.row
-      }
+    if (collapsed) continue
+    if (!grid) {
+      section.items.forEach((item, index) => {
+        const height = rowHeight(item, style, options)
+        entries.push({ kind: 'row', key: item.id, item, first: index === 0, top, height })
+        top += height
+      })
     } else {
       for (let start = 0; start < section.items.length; start += columns) {
         const items = section.items.slice(start, start + columns)
-        entries.push({ kind: 'tiles', key: `t:${section.key}:${items[0].id}`, items, top, height: tileHeight })
-        top += tileHeight
+        entries.push({ kind: 'grid', key: `g:${section.key}:${items[0].id}`, items, top, height: gridHeight })
+        top += gridHeight
       }
     }
   }
@@ -92,7 +139,7 @@ export type Anchor = { id: string; delta: number }
 
 function firstId(entry: Entry): string {
   if (entry.kind === 'row') return entry.item.id
-  if (entry.kind === 'tiles') return entry.items[0].id
+  if (entry.kind === 'grid') return entry.items[0].id
   return entry.key
 }
 
@@ -107,7 +154,7 @@ export function anchorOf(entries: Entry[], from: number): Anchor | null {
 function topOf(entries: Entry[], id: string): number | null {
   for (const entry of entries) {
     if (entry.kind === 'row' && entry.item.id === id) return entry.top
-    if (entry.kind === 'tiles' && entry.items.some((item) => item.id === id)) return entry.top
+    if (entry.kind === 'grid' && entry.items.some((item) => item.id === id)) return entry.top
     if (entry.kind === 'header' && entry.key === id) return entry.top
   }
   return null

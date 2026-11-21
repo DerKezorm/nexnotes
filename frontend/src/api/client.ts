@@ -142,6 +142,10 @@ export type Me = {
   language: string
   /** The paper new notes start on (NOTES-3 AC-17). */
   paper?: string
+  /** How every list of notes looks, on every device: list, cards, compact or tiles (`notes/list/look.ts`). */
+  list_style?: string
+  /** Whether rows carry their hints: checklist progress, attachments, tags. */
+  list_hints?: boolean
   /** When the profile picture was set (NOTES-2 AC-11); none without one. */
   avatar?: string | null
   two_factor: boolean
@@ -357,6 +361,7 @@ export const authApi = {
   me: () => api<Me>('/api/auth/me'),
   language: (language: string) => api<Me>('/api/me/language', { method: 'PUT', body: { language } }),
   paper: (paper: string) => api<Me>('/api/me/paper', { method: 'PUT', body: { paper } }),
+  listLook: (change: { style?: string; hints?: boolean }) => api<Me>('/api/me/list-look', { method: 'PUT', body: change }),
   avatar: (picture: Blob) => api<Me>('/api/auth/avatar', { method: 'PUT', raw: picture }),
   removeAvatar: () => api<Me>('/api/auth/avatar', { method: 'DELETE' }),
   profile: (change: { display_name?: string; email?: string }) => api<Me>('/api/me/profile', { method: 'PUT', body: change }),

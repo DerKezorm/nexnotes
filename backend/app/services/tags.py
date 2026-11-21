@@ -23,6 +23,7 @@ Sharing (NOTES-13) and locked notes (NOTES-16) come later; they dock on through 
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import unicodedata
 from collections import Counter
@@ -360,6 +361,68 @@ def tag_page(db: Session, account: Account, name: str) -> dict[str, Any]:
         "others": [{**_person(db, owner), "count": count} for owner, count in sorted(others.items())],
         "notes": out,
     }
+
+
+# --- The page of a tag as a list (NOTES-6) --------------------------------------------------------------------------
+
+
+def tag_view_key(key: str) -> str:
+    """The key of a tag's list among the views (``note_list_views.key``, at most 40 characters): ``tag:`` and the tag,
+    a long one by its hash."""
+    return f"tag:{key}" if len(key) <= 36 else "tag:" + hashlib.sha1(key.encode("utf-8")).hexdigest()[:36]
+
+
+def _tagged(account: Account, name: str) -> tuple[str, str, ColumnElement[bool]]:
+    """The label and key of the tag ``name`` and which notes the account sees with it."""
+    label = clean_name(name)
+    if not label:
+        raise error("tag_name_invalid", "This is not a tag.", 422)
+    key = key_of(label)
+    return label, key, and_(visible(account.id), Note.id.in_(select(NoteTag.note_id).where(NoteTag.key == key)))
+
+
+def tag_list(db: Session, account: Account, name: str) -> dict[str, Any]:
+    """The notes with a tag in the shape of every list (``/api/note-list``): the view kept for this tag, how many are
+    own and shared, the items with their hints; with the tag's label and whose the notes are (AC-2, AC-3)."""
+    from . import notes_list
+
+    label, key, where = _tagged(account, name)
+    rows = list(db.execute(select(*notes_list.LIST_COLUMNS).where(where).order_by(*notes_list.NEWEST_FIRST)))
+    others: dict[int, int] = {}
+    for row in rows:
+        if row.owner_id != account.id:
+            others[row.owner_id] = others.get(row.owner_id, 0) + 1
+    shown = summary(db, account, [key]).get(key)
+    mine = len(rows) - sum(others.values())
+    view_key = tag_view_key(key)
+    return {
+        "key": view_key,
+        "view": notes_list.view_of(db, account, view_key),
+        "counts": {"own": mine, "shared": len(rows) - mine},
+        "items": notes_list.items(db, account, rows),
+        "tag": key,
+        "label": shown["label"] if shown else label,
+        "count": len(rows),
+        "mine": mine,
+        "others": [{**_person(db, owner), "count": count} for owner, count in sorted(others.items())],
+    }
+
+
+def tag_stamp(db: Session, account: Account, name: str) -> str:
+    """Changes whenever the list of a tag would show something else: how many, the newest change, the newest listed
+    change."""
+    _label, _key, where = _tagged(account, name)
+    count, updated, listed = db.execute(select(func.count(), func.max(Note.updated_at), func.max(Note.listed_at))
+                                        .where(where)).one()
+    return "|".join([str(count), updated.isoformat() if updated else "", listed.isoformat() if listed else ""])
+
+
+def save_tag_view(db: Session, account: Account, name: str, wanted: dict[str, Any]) -> dict[str, Any]:
+    """Keeps how the account sorts and groups the notes of a tag, on every device."""
+    from . import notes_list
+
+    _label, key, _where = _tagged(account, name)
+    return notes_list.save_view_of(db, account, tag_view_key(key), wanted)
 
 
 # --- Renaming and deleting ----------------------------------------------------------------------------------------

@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ApiError, authApi, SIGNED_OUT_EVENT, type Me } from '../api/client'
 import { showNotice } from '../folders/notice'
 import i18n, { changeLanguage } from '../i18n'
+import { takeListLook } from '../notes/list/look'
 import { followAccount } from './account'
 
 type Status = 'loading' | 'setup' | 'signedOut' | 'signedIn' | 'offline'
@@ -66,6 +67,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const lost = followAccount(next.id)
     if (lost > 0) showNotice({ text: i18n.t('session.lostChanges', { count: lost, name: next.display_name || next.name }) }, 15_000)
     setMeState(next)
+    // How the lists look, the same on every device of the account.
+    takeListLook(next)
     setInterrupted(null)
     setEnded(false)
     setStatus('signedIn')

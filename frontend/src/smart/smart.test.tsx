@@ -79,8 +79,13 @@ function answer(call: Call): Response {
   const { method, path, body } = call
   if (path === '/api/folders') return reply(200, { inbox: { id: INBOX, count: 0 }, folders: [{ id: 'f1', parent_id: null, name: 'Rezepte', icon: '', color: '', position: 0, count: 2 }] })
   if (path === '/api/tags') return reply(200, { tags: [{ key: 'einkauf', label: 'einkauf', count: 3 }], total: 1 })
-  if (path === '/api/tags/einkauf')
-    return reply(200, { key: 'einkauf', label: 'einkauf', count: 1, mine: 1, others: [], notes: [{ id: 'n1', title: 'Samstag', preview: '', updated_at: new Date().toISOString(), mine: true, folder: null, owner: null }] })
+  if (path === '/api/tags/einkauf/notes') {
+    const at = new Date().toISOString()
+    const items = [{ id: 'n1', folder_id: 'f1', title: 'Samstag', title_check: false, origin: '', preview: '', created_at: at, updated_at: at, pinned: false, color: '', icon: '', tasks: null }]
+    const view = { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }
+    return reply(200, { key: 'tag:einkauf', view, counts: { own: 1, shared: 0 }, items, tag: 'einkauf', label: 'einkauf', count: 1, mine: 1, others: [] })
+  }
+  if (path === '/api/tags/einkauf/stamp') return reply(200, { stamp: '1' })
   if (path === '/api/search') return reply(200, { total: 1, offset: 0, items: [], unfiltered: null, terms: [], tags: [] })
   if (path === '/api/smart-folders' && method === 'GET') return reply(200, { items: smart })
   if (path === '/api/smart-folders' && method === 'POST') {
@@ -181,6 +186,12 @@ async function render(path: string): Promise<void> {
 const $ = (testId: string) => box.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
 const $$ = (testId: string) => Array.from(box.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`))
 const anywhere = (testId: string) => document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+
+/** An entry of the menu "Ansicht", opened when it is not. */
+async function viewEntry(testId: string): Promise<HTMLElement | null> {
+  if (!document.querySelector('[data-testid="list-view-menu"]')) await click($('list-view'))
+  return document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+}
 
 async function click(element: Element | null): Promise<void> {
   expect(element).not.toBeNull()
@@ -352,17 +363,18 @@ describe('NOTES-7 smart folders', () => {
     expect(asked.at(-1)!.body).toEqual({ match: 'any', conditions: [{ kind: 'tasks', op: 'open' }, { kind: 'pinned' }], tz: expect.any(String) })
   })
 
-  it('NOTES-7 AC-4 opened it shows its notes as a list or as tiles, and the view is kept on the server', async () => {
+  it('NOTES-7 AC-4 opened it shows its notes like any list, and the view is kept on the server', async () => {
     items = [item('Einkauf', { folder_id: 'f1' }), item('Packliste', { folder_id: INBOX })]
     await render('/smart/p1')
     expect(anywhere('smart-page')).not.toBeNull()
     expect($$('note-row').map((row) => row.querySelector('.truncate')!.textContent)).toEqual(['Einkauf', 'Packliste'])
     expect(box.querySelector('h1')!.textContent).toBe('Offene Checklisten')
-    await click($('list-mode-tiles'))
-    expect(posted('/api/smart-folders/p1/view', 'PUT')[0].body).toEqual({ mode: 'tiles' })
-    expect($('note-list')!.getAttribute('data-mode')).toBe('tiles')
+    // The sort is the smart folder's, on the server; how notes look is the account's, as in every list.
+    await click(await viewEntry('list-sort-title'))
+    expect(posted('/api/smart-folders/p1/view', 'PUT')[0].body).toEqual({ sort: 'title', direction: 'asc' })
+    expect(await viewEntry('list-mode-tiles')).toBeNull()
     // A note opens beside the list, in the workspace of the lists (NOTES-8 AC-9).
-    expect($$('note-tile')[0].getAttribute('href')).toBe('/smart/p1?note=Einkauf')
+    expect($$('note-row')[0].getAttribute('href')).toBe('/smart/p1?note=Einkauf')
   })
 
   it('NOTES-7 AC-5 NOTES-9 AC-6 from the search: "Als intelligenten Ordner sichern" makes one with exactly these conditions', async () => {
@@ -406,7 +418,9 @@ describe('NOTES-7 smart folders', () => {
   it('NOTES-7 AC-5 NOTES-5 AC-6 from a tag page: the button is there and makes "#tag" with "tag has …"', async () => {
     await render('/tags/einkauf')
     await settle(100)
-    await click($('tag-smart'))
+    // In the head's "…" of the tag.
+    await click($('tag-more'))
+    await click(anywhere('tag-smart'))
     await settle(60)
     expect(posted('/api/smart-folders')[0].body).toEqual({ name: '#einkauf', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'einkauf', label: 'einkauf' }] })
     expect(where).toBe('/smart/s1')
@@ -416,7 +430,9 @@ describe('NOTES-7 smart folders', () => {
     smart = [...smart, { id: 'x', name: '#einkauf', preset: '', match: 'all', conditions: [], position: 2 }]
     await render('/tags/einkauf')
     await settle(100)
-    await click($('tag-smart'))
+    // In the head's "…" of the tag.
+    await click($('tag-more'))
+    await click(anywhere('tag-smart'))
     await settle(60)
     expect(box.textContent).toContain('Einen intelligenten Ordner „#einkauf“ gibt es schon. Wähle einen anderen Namen.')
     expect(where).toBe('/tags/einkauf')
@@ -441,7 +457,8 @@ describe('NOTES-7 smart folders', () => {
     expect(posted('/api/smart-folders/s7', 'PUT')[0].body).toEqual({ name: 'Rezepte zum Ausprobieren', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }] })
     expect(where).toBe('/smart/s7')
     await settle(60)
-    await click($('smart-delete-open'))
+    await click($('smart-more'))
+    await click(anywhere('smart-delete-open'))
     const dialog = anywhere('smart-delete')!
     expect(dialog.textContent).toContain('Nur der intelligente Ordner geht, ohne Papierkorb. Die Notizen darin bleiben, wo sie sind.')
     expect(posted('/api/smart-folders/s7', 'DELETE')).toHaveLength(0)
@@ -514,11 +531,13 @@ describe('NOTES-7 smart folders', () => {
     gallery = [attachment('a1', 'image', 'Urlaub'), attachment('a2', 'pdf', 'Vertrag')]
     await render('/smart/p4')
     expect($('note-list')!.getAttribute('data-mode')).toBe('gallery')
-    expect($('list-mode-gallery')!.getAttribute('aria-checked')).toBe('true')
-    expect($('list-mode-gallery')!.textContent).toBe('Anhänge')
-    // The gallery sorts itself: no sorting or grouping of notes above it, no second heading.
-    expect($('list-sort')).toBeNull()
-    expect($('list-group')).toBeNull()
+    expect((await viewEntry('list-mode-gallery'))!.getAttribute('aria-checked')).toBe('true')
+    expect(anywhere('list-mode-gallery')!.textContent).toBe('Anhänge')
+    expect(anywhere('list-mode-list')!.textContent).toBe('Notizen')
+    // The gallery sorts itself: no sorting or grouping of notes in the menu, no second heading.
+    expect(anywhere('list-sort-updated')).toBeNull()
+    expect(anywhere('list-group-on')).toBeNull()
+    expect($('list-state')!.textContent).toBe('Anhänge')
     expect(box.querySelectorAll('h1')).toHaveLength(1)
     expect($$('gallery-item').map((tile) => tile.getAttribute('data-kind'))).toEqual(['image', 'pdf'])
     expect($$('note-row')).toHaveLength(0)
@@ -529,8 +548,9 @@ describe('NOTES-7 smart folders', () => {
     await click($$('gallery-item')[0])
     expect(where).toBe('/smart/p4?kind=pdf&attachment=a2&note=Vertrag')
     // Back to the notes: a list, kept on the server.
-    await click($('list-mode-list'))
+    await click(await viewEntry('list-mode-list'))
     expect(posted('/api/smart-folders/p4/view', 'PUT')[0].body).toEqual({ mode: 'list' })
+    expect(anywhere('list-sort-updated')).not.toBeNull()
     expect($('gallery')).toBeNull()
     expect($$('note-row')).toHaveLength(2)
   })
@@ -552,7 +572,8 @@ describe('NOTES-7 smart folders', () => {
     items = [item('Einkauf')]
     views = { p1: 'gallery' }
     await render('/smart/p1')
-    expect($('list-mode-gallery')).toBeNull()
+    expect(await viewEntry('list-mode-gallery')).toBeNull()
+    expect(anywhere('list-sort-updated')).not.toBeNull()
     expect($('gallery')).toBeNull()
     expect($('note-list')!.getAttribute('data-mode')).toBe('list')
     expect($$('note-row')).toHaveLength(1)
@@ -564,7 +585,7 @@ describe('NOTES-7 smart folders', () => {
     await render('/smart/p3')
     expect($('smart-shared-page')!.getAttribute('href')).toBe('/shared')
     expect($('smart-shared-page')!.textContent).toBe('Freigaben verwalten')
-    expect($('list-mode-gallery')).toBeNull()
+    expect(await viewEntry('list-mode-gallery')).toBeNull()
   })
 
   it('NOTES-7 AC-8 the section "Intelligent" stands after the folders, with the filter symbol, in the order dragged', async () => {

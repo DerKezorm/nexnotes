@@ -11,7 +11,7 @@
  * its notes' attachments (`attachments/GalleryPage.tsx`); the preset "Anhänge" opens in it. One with "Geteilt: mit
  * mir geteilt" leads to the page "Mit mir geteilt" (`/shared`: owners, rights, leaving, what went).
  */
-import { Filter, Pencil, Trash2, Users } from 'lucide-react'
+import { Filter, MoreHorizontal, Pencil, Trash2, Users } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
@@ -20,6 +20,7 @@ import { ApiError } from '../api/client'
 import { Gallery, type GalleryLoad } from '../attachments/GalleryPage'
 import type { GalleryItem } from '../attachments/api'
 import { Dialog } from '../components/Dialog'
+import { Menu } from '../components/Menu'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { NoteList } from '../notes/NoteList'
@@ -29,6 +30,7 @@ import type { ListSource } from '../notes/list/useNoteList'
 import { smartApi, type Broken, type SmartAnswer, type SmartFolder } from './api'
 import { asksAttachments, asksSharedWithMe, describe, smartName } from './conditions'
 import { useFolderName } from './folderName'
+import { SmartIcon } from './SmartSection'
 import { refreshSmartFolders, useSmartFolders } from './store'
 
 /** The conditions as sentences, joined by "and" or "or" (the empty state, EC-2). */
@@ -49,7 +51,7 @@ export function ConditionList({ folder }: { folder: SmartFolder }) {
   )
 }
 
-const WITH_GALLERY: readonly ListMode[] = ['list', 'tiles', 'gallery']
+const WITH_GALLERY: readonly ListMode[] = ['list', 'gallery']
 
 /** The attachments of the smart folder's notes; an entry opens its note beside the list, at the attachment. Read anew
  * with every new answer of the list (`read`): a note that came in with its attachment shows it at once. */
@@ -132,6 +134,7 @@ export function SmartFolderPage() {
   const [reads, setReads] = useState(0)
   const [missing, setMissing] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [more, setMore] = useState<HTMLElement | null>(null)
   const known = folders.find((folder) => folder.id === id) ?? null
   const folder = answer?.folder.id === id ? answer.folder : known
   const name = folder ? smartName(folder, t) : ''
@@ -179,33 +182,58 @@ export function SmartFolderPage() {
     </div>
   )
 
+  // The head every list has: "Ansicht", then the smart folder's own buttons ("…": edit, delete).
+  const actions = (
+    <>
+      {folder && asksSharedWithMe(folder) && (
+        <Link to="/shared" className="nn-btn nn-btn-ghost h-8 gap-1.5 px-2.5 text-[13px] font-normal" data-testid="smart-shared-page">
+          <Users aria-hidden className="h-3.5 w-3.5" />
+          {t('smart.sharedPage')}
+        </Link>
+      )}
+      <button
+        type="button"
+        aria-label={t('smart.menu', { name: name || t('smart.heading') })}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(more)}
+        onClick={(event) => setMore(more ? null : event.currentTarget)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mist-500 hover:bg-ink-800 hover:text-mist-100"
+        data-testid="smart-more"
+      >
+        <MoreHorizontal aria-hidden className="h-4 w-4" />
+      </button>
+      {more && (
+        <Menu anchor={more} onClose={() => setMore(null)} label={t('smart.menu', { name: name || t('smart.heading') })} testId="smart-menu">
+          <Link to={`/smart/${encodeURIComponent(id)}/edit`} role="menuitem" className="nn-menu-item" data-testid="smart-edit" onClick={() => setMore(null)}>
+            <Pencil aria-hidden className="h-4 w-4" />
+            {t('smart.edit')}
+          </Link>
+          <button
+            type="button"
+            role="menuitem"
+            className="nn-menu-item"
+            onClick={() => {
+              setMore(null)
+              setDeleting(true)
+            }}
+            disabled={!folder}
+            data-testid="smart-delete-open"
+          >
+            <Trash2 aria-hidden className="h-4 w-4" />
+            {t('smart.delete')}
+          </button>
+        </Menu>
+      )}
+    </>
+  )
+
   return (
     <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="smart-page">
-      <div className="flex flex-wrap items-center justify-end gap-2">
-        {folder && asksSharedWithMe(folder) && (
-          <Link to="/shared" className="nn-btn nn-btn-ghost h-8 gap-1.5 px-2.5 text-[13px] font-normal" data-testid="smart-shared-page">
-            <Users aria-hidden className="h-3.5 w-3.5" />
-            {t('smart.sharedPage')}
-          </Link>
-        )}
-        <Link to={`/smart/${encodeURIComponent(id)}/edit`} className="nn-btn nn-btn-ghost h-8 gap-1.5 px-2.5 text-[13px] font-normal" data-testid="smart-edit">
-          <Pencil aria-hidden className="h-3.5 w-3.5" />
-          {t('smart.edit')}
-        </Link>
-        <button
-          type="button"
-          className="nn-btn nn-btn-ghost h-8 gap-1.5 px-2.5 text-[13px] font-normal"
-          onClick={() => setDeleting(true)}
-          disabled={!folder}
-          data-testid="smart-delete-open"
-        >
-          <Trash2 aria-hidden className="h-3.5 w-3.5" />
-          {t('smart.delete')}
-        </button>
-      </div>
       {answer && answer.folder.id === id && answer.broken.length > 0 && <BrokenNote broken={answer.broken} folderId={id} />}
       <NoteList
         heading={name || ' '}
+        icon={folder ? <SmartIcon preset={folder.preset} className="h-[18px] w-[18px] shrink-0 text-accent-400" /> : undefined}
+        actions={actions}
         source={source}
         empty={empty || undefined}
         hrefFor={(noteId) => hrefIn(`/smart/${encodeURIComponent(id)}`, noteId)}

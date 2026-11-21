@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { ApiError } from '../api/client'
 import { Dialog } from '../components/Dialog'
 import { problemText } from '../lib/errors'
-import { tagsApi, type RenameResult, type TagPage } from './api'
+import { tagsApi, type RenameResult, type TagHead } from './api'
 import { cleanName } from './rules'
 
 function Problem({ text }: { text: string }) {
@@ -22,7 +22,7 @@ function Problem({ text }: { text: string }) {
 }
 
 /** "In der Notiz von Lena bleibt #einkauf stehen." */
-function KeptLine({ page }: { page: TagPage }) {
+function KeptLine({ page }: { page: TagHead }) {
   const { t } = useTranslation()
   const kept = page.others.reduce((sum, other) => sum + other.count, 0)
   if (kept === 0) return null
@@ -36,7 +36,7 @@ function KeptLine({ page }: { page: TagPage }) {
   )
 }
 
-export function RenameDialog({ page, onDone, onClose }: { page: TagPage; onDone: (result: RenameResult) => void; onClose: () => void }) {
+export function RenameDialog({ page, onDone, onClose }: { page: TagHead; onDone: (result: RenameResult) => void; onClose: () => void }) {
   const { t } = useTranslation()
   const [name, setName] = useState(page.label)
   const [problem, setProblem] = useState('')
@@ -109,7 +109,7 @@ export function RenameDialog({ page, onDone, onClose }: { page: TagPage; onDone:
   )
 }
 
-export function DeleteDialog({ page, onDone, onClose }: { page: TagPage; onDone: () => void; onClose: () => void }) {
+export function DeleteDialog({ page, onDone, onClose }: { page: TagHead; onDone: () => void; onClose: () => void }) {
   const { t } = useTranslation()
   const [problem, setProblem] = useState('')
   const [busy, setBusy] = useState(false)

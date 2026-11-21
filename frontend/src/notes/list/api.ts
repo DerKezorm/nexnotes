@@ -5,12 +5,16 @@
 import { api } from '../../api/client'
 import type { NoteItem } from '../api'
 
-/** `gallery`: the attachments of the list's notes instead of the notes (a smart folder with "Anhang", NOTES-7). */
-export type ListMode = 'list' | 'tiles' | 'gallery'
+/** What a list shows: its notes, or `gallery`, the attachments of its notes (a smart folder with "Anhang", NOTES-7).
+ * How the notes look is not the folder's but the account's (`ListStyle`, `look.ts`). */
+export type ListMode = 'list' | 'gallery'
 export type ListSort = 'updated' | 'created' | 'title'
 export type ListDirection = 'asc' | 'desc'
+/** How every list of the account draws its notes: rows with a preview line, cards, one line each, or tiles. */
+export type ListStyle = 'list' | 'cards' | 'compact' | 'tiles'
+export const LIST_STYLES: readonly ListStyle[] = ['list', 'cards', 'compact', 'tiles']
 
-/** How an account looks at one folder's notes (or "All notes"), the same on every device (AC-1, AC-4, AC-5). */
+/** How an account looks at one folder's notes (or "All notes"), the same on every device (AC-4, AC-5). */
 export type ListView = { mode: ListMode; sort: ListSort; direction: ListDirection; grouped: boolean }
 
 export const DEFAULT_VIEW: ListView = { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }
@@ -40,6 +44,8 @@ export type ListItem = NoteItem & {
   tags?: ListTag[]
   shared?: ListShared
   media?: ListMedia | null
+  /** How many attachments of every kind the note holds (the hint "Anhänge"); missing for none. */
+  attachments?: number
 }
 
 export type ListAnswer = {

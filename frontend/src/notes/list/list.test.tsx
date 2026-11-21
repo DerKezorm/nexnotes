@@ -1,10 +1,10 @@
 /**
- * NOTES-6 in the interface: list and tiles per folder from the server (AC-1), sorting and its direction (AC-4), the date
+ * NOTES-6 in the interface: how lists look from the account (AC-1), sorting and its direction (AC-4), the date
  * groups (AC-5), pinned notes on top (AC-6), "All notes" with own and shared notes, folders and stripes (AC-7), colors
  * (AC-8), the marks of rows and tiles (AC-2, AC-3, AC-9), 10,000 notes (EC-2), locked notes (EC-3), text never as HTML
  * (EC-5), changes from another device without a reload (EC-6) and midnight (EC-7).
  *
- * A small stand-in for the server keeps the notes, the views per folder and the stamp.
+ * A small stand-in for the server keeps the notes, the views per folder, the account's look and the stamp.
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -18,10 +18,12 @@ import { forgetFolders } from '../../folders/store'
 import i18n from '../../i18n'
 import { accountChanged } from '../../state/account'
 import { NoteList } from '../NoteList'
-import { DEFAULT_VIEW, type ListItem, type ListView } from './api'
+import { DEFAULT_VIEW, type ListItem, type ListStyle, type ListView } from './api'
+import { forgetCollapsed } from './collapsed'
 import { NotePinButton } from './EditorMarks'
-import { anchorOf, layout, shiftFor, visibleRange } from './layout'
+import { anchorOf, layout, shiftFor, SIZES, visibleRange } from './layout'
 import { arrange, dayGroup, sectionLabel, sortItems } from './order'
+import { forgetListLook, takeListLook } from './look'
 import { listKeyOf, preloadList, takeEarly } from './preload'
 import { STAMP_EVERY_MS } from './useNoteList'
 import { Window } from './Window'
@@ -35,6 +37,7 @@ let views: Map<string, ListView>
 let shared = 0
 let stampValue = 1
 let folders: Folder[] = []
+let look: { list_style: string; list_hints: boolean } = { list_style: 'list', list_hints: true }
 const INBOX = 'inbox-1'
 const DAY = 86_400_000
 
@@ -57,6 +60,11 @@ function answer(call: Call): { status: number; body: unknown } {
     return { status: 200, body: { key, view: views.get(key) ?? DEFAULT_VIEW, counts: { own, shared: key === 'all' ? shared : 0 }, items: found } }
   }
   if (method === 'GET' && path === '/api/note-list/stamp') return { status: 200, body: { stamp: String(stampValue) } }
+  if (method === 'PUT' && path === '/api/me/list-look') {
+    if (body?.style !== undefined) look = { ...look, list_style: String(body.style) }
+    if (body?.hints !== undefined) look = { ...look, list_hints: Boolean(body.hints) }
+    return { status: 200, body: { id: 1, name: 'tester', ...look } }
+  }
   if (method === 'PUT' && path === '/api/note-list/view') {
     const where = (body?.folder_id as string | undefined) ?? 'all'
     const next = { ...(views.get(where) ?? DEFAULT_VIEW) }
@@ -94,7 +102,7 @@ async function render(folderId?: string, heading = 'Notes'): Promise<void> {
   await settle()
 }
 
-const $ = (testId: string) => box.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+const $ = (testId: string) => box.querySelector<HTMLElement>(`[data-testid="${testId}"]`) ?? document.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
 const $$ = (testId: string) => [...box.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
 const rowTitles = () => $$('note-row').map((row) => row.querySelector('.truncate')!.textContent)
 const headings = () => $$('list-group-heading').map((heading) => heading.textContent)
@@ -108,6 +116,18 @@ async function click(element: HTMLElement): Promise<void> {
   await settle()
 }
 
+/** The menu "Ansicht", opened when it is not. */
+async function viewMenu(): Promise<HTMLElement> {
+  if (!document.querySelector('[data-testid="list-view-menu"]')) await click($('list-view')!)
+  return document.querySelector<HTMLElement>('[data-testid="list-view-menu"]')!
+}
+
+/** The look of every list, as the account brings it. */
+function lookIs(style: ListStyle, hints = true): void {
+  look = { list_style: style, list_hints: hints }
+  act(() => takeListLook(look))
+}
+
 beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   calls = []
@@ -116,6 +136,9 @@ beforeEach(async () => {
   stampValue = 1
   views = new Map()
   folders = [folder('h', 'Haushalt', 'honey'), folder('r', 'Rezepte', 'red')]
+  look = { list_style: 'list', list_hints: true }
+  forgetListLook()
+  forgetCollapsed()
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -163,26 +186,28 @@ function fifty(): ListItem[] {
 // ---- AC-1 -------------------------------------------------------------------------------------------------------------
 
 describe('NOTES-6 list and tiles', () => {
-  it('NOTES-6 AC-1 list or tiles comes from the server per folder and a switch is saved there', async () => {
+  it('NOTES-6 AC-1 list or tiles comes from the account for every list and a switch is saved there', async () => {
     items = [item('a', { title: 'Einkauf' }), item('b', { title: 'Werkzeug', folder_id: 'r' })]
-    views.set('h', { ...DEFAULT_VIEW, mode: 'tiles' })
+    lookIs('tiles')
     await render('h')
-    expect($('note-list')!.dataset.mode).toBe('tiles')
+    expect($('note-list')!.dataset.style).toBe('tiles')
     expect($$('note-tile').map((tile) => tile.textContent)).toEqual([expect.stringContaining('Einkauf')])
-    await click(byText('List'))
-    expect(calls.filter((call) => call.method === 'PUT' && call.path === '/api/note-list/view').map((call) => call.body)).toEqual([{ folder_id: 'h', mode: 'list' }])
-    expect($('note-list')!.dataset.mode).toBe('list')
+    await click((await viewMenu()).querySelector<HTMLElement>('[data-testid="list-style-list"]')!)
+    expect(calls.filter((call) => call.method === 'PUT' && call.path === '/api/me/list-look').map((call) => call.body)).toEqual([{ style: 'list' }])
+    expect(calls.some((call) => call.path === '/api/note-list/view')).toBe(false)
+    expect($('note-list')!.dataset.style).toBe('list')
     expect(rowTitles()).toEqual(['Einkauf'])
-    // Another folder has its own view; coming back, the server's saved one counts (another device sees the same).
+    // Another folder looks the same: the look is the account's, not the folder's.
     act(() => root.unmount())
     root = createRoot(box)
     await render('r')
-    expect($('note-list')!.dataset.mode).toBe('list')
-    views.set('h', { ...DEFAULT_VIEW, mode: 'tiles' })
-    act(() => root.unmount())
-    root = createRoot(box)
-    await render('h')
-    expect($('note-list')!.dataset.mode).toBe('tiles')
+    expect($('note-list')!.dataset.style).toBe('list')
+    expect(rowTitles()).toEqual(['Werkzeug'])
+    // Another device chose tiles: the next account answer brings them to every list here.
+    lookIs('tiles')
+    await settle()
+    expect($('note-list')!.dataset.style).toBe('tiles')
+    expect($$('note-tile')).toHaveLength(1)
   })
 
   // ---- AC-4 -----------------------------------------------------------------------------------------------------------
@@ -210,24 +235,26 @@ describe('NOTES-6 list and tiles', () => {
     expect(sortItems(untitled, { sort: 'title', direction: 'desc' }).at(-1)!.id).toBe('z')
   })
 
-  it('NOTES-6 AC-4 the sort menu offers last changed, created and title, and the direction', async () => {
+  it('NOTES-6 AC-4 the menu "Ansicht" offers last changed, created and title, and the direction', async () => {
     items = fifty()
     await render('h')
     expect(rowTitles()[0]).toBe('Ärger 0')
-    await click($('list-sort')!)
-    const menu = box.querySelector<HTMLElement>('[role="menu"]')!
-    expect([...menu.querySelectorAll('[role="menuitemradio"]')].map((entry) => entry.textContent)).toEqual(['Last changed', 'Created', 'Title A to Z', 'Newest first', 'Oldest first'])
+    let menu = await viewMenu()
+    const sorting = menu.querySelector<HTMLElement>('[role="group"][aria-label="Sort"]')!
+    expect([...sorting.querySelectorAll('[role="menuitemradio"]')].map((entry) => entry.textContent)).toEqual(['Last changed', 'Created', 'Title A to Z', 'Newest first', 'Oldest first'])
     await click(byText('Title A to Z', menu))
     expect(calls.at(-1)!.body).toEqual({ folder_id: 'h', sort: 'title', direction: 'asc' })
     expect(rowTitles().slice(0, 2)).toEqual(['Ärger 0', 'Ärger 10'])
-    await click($('list-sort')!)
-    await click(byText('Z to A', box.querySelector<HTMLElement>('[role="menu"]')!))
+    expect($('list-state')!.textContent).toBe('Title A to Z')
+    // The menu stays open for the next choice.
+    menu = await viewMenu()
+    await click(byText('Z to A', menu))
     expect(calls.at(-1)!.body).toEqual({ folder_id: 'h', direction: 'desc' })
     expect(rowTitles()[0]).toBe('Topic 49')
-    await click($('list-sort')!)
-    await click(byText('Created', box.querySelector<HTMLElement>('[role="menu"]')!))
+    await click(byText('Created', await viewMenu()))
     expect(calls.at(-1)!.body).toEqual({ folder_id: 'h', sort: 'created', direction: 'desc' })
     expect(rowTitles()[0]).toBe('Topic 49')
+    expect($('list-state')!.textContent).toBe('Created · grouped by date')
   })
 
   // ---- AC-5 -----------------------------------------------------------------------------------------------------------
@@ -263,20 +290,26 @@ describe('NOTES-6 list and tiles', () => {
     await render('h')
     expect(headings()[0]).toBe('Today')
     expect(headings()).toHaveLength(2)
-    const toggle = $('list-group')!
-    expect(toggle.getAttribute('aria-checked')).toBe('true')
-    await click(toggle)
+    await viewMenu()
+    expect($('list-group-on')!.getAttribute('aria-checked')).toBe('true')
+    await click($('list-group-off')!)
     expect(calls.at(-1)!.body).toEqual({ folder_id: 'h', grouped: false })
     expect(headings()).toEqual([])
-    await click(toggle)
+    expect($('list-group-off')!.getAttribute('aria-checked')).toBe('true')
+    await click($('list-group-on')!)
     expect(headings()).toHaveLength(2)
     views.set('h', { ...DEFAULT_VIEW, sort: 'title', direction: 'asc' })
     act(() => root.unmount())
     root = createRoot(box)
+    for (const leftover of document.querySelectorAll('[role="menu"]')) leftover.remove()
     await render('h')
     expect(headings()).toEqual([])
-    expect($('list-group')!.getAttribute('aria-checked')).toBe('false')
-    expect(($('list-group') as HTMLButtonElement).disabled).toBe(true)
+    await viewMenu()
+    expect($('list-group-on')!.getAttribute('aria-checked')).toBe('false')
+    expect($('list-group-on')!.getAttribute('aria-disabled')).toBe('true')
+    const before = calls.length
+    await click($('list-group-on')!)
+    expect(calls.length).toBe(before)
   })
 
   // ---- AC-6, AC-8 -------------------------------------------------------------------------------------------------------
@@ -294,7 +327,8 @@ describe('NOTES-6 list and tiles', () => {
     expect(box.querySelector('[data-note="a"] [aria-label="pinned"]')).toBeNull()
     // Also in tiles, and also when grouping is off: then the others stand under a heading of their own, apart from the
     // pinned ones.
-    views.set('h', { ...DEFAULT_VIEW, mode: 'tiles', grouped: false })
+    views.set('h', { ...DEFAULT_VIEW, grouped: false })
+    lookIs('tiles')
     act(() => root.unmount())
     root = createRoot(box)
     await render('h')
@@ -314,7 +348,7 @@ describe('NOTES-6 list and tiles', () => {
     expect(headings()).toEqual(['Pinned', 'Notes'])
     expect(rowTitles()).toEqual(['Abfall', 'Baumarkt', 'Zettel'])
     // The heading stands between the pinned note and the others.
-    const topOf = (element: HTMLElement) => parseFloat(element.parentElement!.style.top)
+    const topOf = (element: HTMLElement) => parseFloat(element.closest<HTMLElement>('[style*="top"]')!.style.top)
     const [pinnedHeading, notesHeading] = $$('list-group-heading').map(topOf)
     const top = (id: string) => topOf(box.querySelector<HTMLElement>(`[data-note="${id}"]`)!)
     expect(pinnedHeading).toBeLessThan(top('b'))
@@ -340,8 +374,8 @@ describe('NOTES-6 list and tiles', () => {
     await click(byText('Green', menu))
     expect(calls.find((call) => call.path === '/api/notes/a/color')!.body).toEqual({ color: 'green' })
     expect($('note-color')!.style.background).toBe('rgb(74, 222, 128)')
-    await click(byText('Tiles'))
-    expect($('note-tile')!.style.borderTop).toBe('4px solid rgb(74, 222, 128)')
+    await click(byText('Tiles', await viewMenu()))
+    expect($('note-tile')!.querySelector<HTMLElement>('[data-testid="note-color"]')!.style.background).toBe('rgb(74, 222, 128)')
   })
 
   // ---- AC-7 -----------------------------------------------------------------------------------------------------------
@@ -415,7 +449,7 @@ describe('NOTES-6 list and tiles', () => {
     expect(row.textContent).not.toContain(made)
     // Sorted and grouped by creation all the same.
     expect(headings()).toEqual(['March 2025'])
-    await click(byText('Tiles'))
+    await click(byText('Tiles', await viewMenu()))
     const tile = box.querySelector<HTMLElement>('[data-note="a"]')!
     expect(tile.textContent).toContain(changed)
     expect(tile.textContent).not.toContain(made)
@@ -445,7 +479,7 @@ describe('NOTES-6 list and tiles', () => {
     expect(box.querySelector('[data-note="b"]')!.textContent).toContain('Check title')
     expect(box.querySelector('[data-note="b"] [aria-label="Scan · text recognized"]')).not.toBeNull()
     expect(box.querySelector('[data-note="c"]')!.textContent).not.toContain('#')
-    await click(byText('Tiles'))
+    await click(byText('Tiles', await viewMenu()))
     const tile = box.querySelector<HTMLElement>('[data-note="a"]')!
     expect(tile.querySelector('[data-testid="note-media"]')!.textContent).toBe('2 photos')
     expect(tile.querySelector('[role="progressbar"]')!.getAttribute('aria-valuenow')).toBe('38')
@@ -560,7 +594,7 @@ describe('NOTES-6 list and tiles', () => {
     expect(row.textContent).toContain('WLAN-Gäste und Codes')
     expect(row.querySelector('[aria-label="locked"]')).not.toBeNull()
     for (const hidden of ['geheim', '1 of 2', '#wlan', 'photo']) expect(row.textContent).not.toContain(hidden)
-    await click(byText('Tiles'))
+    await click(byText('Tiles', await viewMenu()))
     const tile = box.querySelector<HTMLElement>('[data-note="a"]')!
     expect(tile.textContent).toContain('Locked')
     expect(tile.querySelector('[role="progressbar"]')).toBeNull()
@@ -577,7 +611,7 @@ describe('NOTES-6 list and tiles', () => {
     expect(row.textContent).toContain(preview)
     expect(row.textContent).toContain('from <em>Lena</em>')
     expect(row.querySelector('script, b, img, i, u, em')).toBeNull()
-    await click(byText('Tiles'))
+    await click(byText('Tiles', await viewMenu()))
     expect(box.querySelector('[data-note="a"] script, [data-note="a"] img')).toBeNull()
     expect((window as { ran?: boolean }).ran).toBeUndefined()
   })
@@ -687,7 +721,7 @@ describe('NOTES-6 list and tiles', () => {
     const more = [...fifty(), ...['x1', 'x2', 'x3'].map((id) => item(id, { updated_at: NOW.toISOString() }))]
     const second = layout(arrange(more, DEFAULT_VIEW, NOW), 'list', 1024)
     await show(second)
-    expect(scrolled).toBe(1000 + 3 * 64)
+    expect(scrolled).toBe(1000 + 3 * SIZES.row)
     expect(onScreen()).toBe(before)
     // At the very top nothing is held: the new notes simply show.
     scrolled = 0

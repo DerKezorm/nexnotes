@@ -64,7 +64,10 @@ test('NOTES-6 AC-1 EC-6 the view of a folder and a change on another device arri
   }
   await page.goto(`/folder/${folderId}`)
   await expect(page.getByTestId('note-row')).toHaveCount(3)
-  await page.getByRole('radio', { name: 'Tiles' }).click()
+  // Tiles for every list of the account (menu "Ansicht"); the end of the test puts the list back for the other files.
+  await page.getByTestId('list-view').click()
+  await page.getByTestId('list-style-tiles').click()
+  await page.keyboard.press('Escape')
   await expect(page.getByTestId('note-tile')).toHaveCount(3)
   await expect(page.getByTestId('note-tile').first()).toContainText('1 of 2')
 
@@ -82,6 +85,7 @@ test('NOTES-6 AC-1 EC-6 the view of a folder and a change on another device arri
   await expect(page.getByTestId('note-tile').filter({ hasText: 'Sofa ausgemessen' })).toHaveCount(1, { timeout: 10_000 })
   expect(await page.evaluate(() => (window as { stayed?: boolean }).stayed)).toBe(true)
   await phone.context().close()
+  expect((await page.request.put('/api/me/list-look', { data: { style: 'list' }, headers: TAB })).ok()).toBe(true)
 })
 
 test('NOTES-6 EC-2 EC-6 many notes (10,000 in the full run) open quickly, scroll smoothly and keep their place', async ({ page, browser }) => {
@@ -138,13 +142,14 @@ test('NOTES-6 EC-2 EC-6 many notes (10,000 in the full run) open quickly, scroll
     return { p95: gaps[Math.floor(gaps.length * 0.95)], most, top: scroller.scrollTop }
   })
   console.log(`scrolling: 95th percentile frame ${frames.p95.toFixed(1)} ms, at most ${frames.most} rows in the page`)
-  expect(frames.top).toBeGreaterThan(Math.min(100_000, count * 64 - 2000))
+  expect(frames.top).toBeGreaterThan(Math.min(100_000, count * 62 - 2000))
   expect(frames.p95).toBeLessThan(50)
   expect(frames.most).toBeLessThan(120)
 
-  // Sorted by title at once, from the bar.
-  await many.getByTestId('list-sort').click()
+  // Sorted by title at once, from the menu "Ansicht".
+  await many.getByTestId('list-view').click()
   await many.getByRole('menuitemradio', { name: 'Title A to Z' }).click()
+  await many.keyboard.press('Escape')
   await many.evaluate(() => {
     const list = document.querySelector('[data-testid="note-window"]')!
     let scroller = list.parentElement!
@@ -154,8 +159,9 @@ test('NOTES-6 EC-2 EC-6 many notes (10,000 in the full run) open quickly, scroll
   await expect(many.getByTestId('note-row').first()).toContainText('Notiz 00000')
 
   // Down the list, a note made on another device lands on top: the rows on screen stay where they are.
-  await many.getByTestId('list-sort').click()
+  await many.getByTestId('list-view').click()
   await many.getByRole('menuitemradio', { name: 'Last changed' }).click()
+  await many.keyboard.press('Escape')
   // Far down the list: 50,000 px with 10,000 notes, the middle of a shorter list.
   const down = await many.evaluate(() => {
     const list = document.querySelector('[data-testid="note-window"]')!

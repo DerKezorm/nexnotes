@@ -1,83 +1,90 @@
 /**
  * The page of one tag (drawing "N5-Schlagwort", NOTES-5 AC-2, AC-3): the tag with how many notes have it and whose,
  * every such note, own and shared, with its folder (or who shared it) and its date; renaming, deleting, and "Als
- * intelligenten Ordner sichern" once smart folders are there (AC-6).
+ * intelligenten Ordner sichern" once smart folders are there (AC-6), in the head's "…".
  *
- * Its own list, not the general `NoteList`: the rows say where a note lies or who shared it, which only this page
- * knows (`GET /api/tags/<tag>`).
+ * A list like every other (`NoteList`: the same head, "Ansicht", the four looks), its notes from
+ * `GET /api/tags/<tag>/notes`, sorted and grouped as the account keeps it for this tag. Where a note lies says its
+ * folder (in the folder's colour) or who shared it.
  *
  * `/tags` lists every tag, for when the sidebar shows only the first twenty (EC-5).
  */
-import { useCallback, useEffect, useState } from 'react'
+import { Hash, MoreHorizontal, Pencil, Save, Trash2 } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { NoteIcon } from '../components/NoteIcon'
+import { Menu } from '../components/Menu'
+import { colorOf } from '../folders/palette'
+import { useFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
-import { NOTES_CHANGED_EVENT } from '../notes/api'
-import { tryLeave } from '../notes/context'
-import { listDate } from '../notes/listDate'
-import { noteHref } from '../notes/newNote'
-import { tagsApi, type TagNote, type TagPage as Page } from './api'
+import type { ListItem } from '../notes/list/api'
+import type { ItemDecor } from '../notes/list/ItemParts'
+import type { ListSource } from '../notes/list/useNoteList'
+import { NoteList } from '../notes/NoteList'
+import { tagsApi, type TagHead } from './api'
 import { smartFolderSaver, tagCondition } from './actions'
 import { DeleteDialog, RenameDialog } from './dialogs'
 import { tagHref } from './rules'
-import { refreshTags, TAGS_CHANGED_EVENT, tagsChanged, useTags } from './store'
+import { refreshTags, tagsChanged, useTags } from './store'
 
-function useTagPage(name: string) {
-  const [page, setPage] = useState<Page | null>(null)
-  const [problem, setProblem] = useState('')
-  const load = useCallback(() => {
-    tagsApi
-      .page(name)
-      .then((found) => {
-        setPage(found)
-        setProblem('')
-      })
-      .catch((error) => setProblem(problemText(error)))
-  }, [name])
-  useEffect(() => {
-    load()
-    window.addEventListener(NOTES_CHANGED_EVENT, load)
-    window.addEventListener(TAGS_CHANGED_EVENT, load)
-    window.addEventListener('focus', load)
-    return () => {
-      window.removeEventListener(NOTES_CHANGED_EVENT, load)
-      window.removeEventListener(TAGS_CHANGED_EVENT, load)
-      window.removeEventListener('focus', load)
-    }
-  }, [load])
-  return { page, problem, load }
-}
+type T = (key: string, values?: Record<string, unknown>) => string
 
-function where(note: TagNote, t: (key: string, values?: Record<string, unknown>) => string): string {
-  if (!note.mine) return t('tags.from', { name: note.owner?.name ?? '' })
-  if (!note.folder || note.folder.inbox) return t('notes.inbox')
-  return note.folder.name
+/** "3 Notizen, davon 1 von Lena". */
+function countOf(head: TagHead, t: T): string {
+  const shared = head.others.reduce((sum, other) => sum + other.count, 0)
+  const whose = shared > 0 ? t('tags.ofWhich', { count: shared, names: head.others.map((other) => other.name).join(', ') }) : ''
+  return t('tags.countNotes', { count: head.count }) + whose
 }
 
 export function TagPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const { tag = '' } = useParams()
   const navigate = useNavigate()
-  const { page, problem } = useTagPage(tag)
+  const tree = useFolders()
+  const [head, setHead] = useState<(TagHead & { asked: string }) | null>(null)
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null)
+  const [more, setMore] = useState<HTMLElement | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveProblem, setSaveProblem] = useState('')
+  // What the server said about this tag, never about the tag shown before.
+  const page = head?.asked === tag ? head : null
   const label = page?.label ?? tag
   const padding = useListPadding()
   useListTitle(`#${label}`)
   const saver = smartFolderSaver()
 
-  const others = page?.others ?? []
-  const shared = others.reduce((sum, other) => sum + other.count, 0)
+  const source = useMemo<ListSource>(
+    () => ({
+      key: `tag:${tag}`,
+      read: () =>
+        tagsApi.notes(tag).then((found) => {
+          setHead({ asked: tag, tag: found.tag, label: found.label, count: found.count, mine: found.mine, others: found.others })
+          return found
+        }),
+      stamp: () => tagsApi.stamp(tag),
+      saveView: (view) => tagsApi.saveView(tag, view),
+    }),
+    [tag],
+  )
+
+  // Own notes name their folder in its colour, shared ones who shared them.
+  const decorate = useCallback(
+    (item: ListItem): ItemDecor => {
+      if (item.owner) return { folder: { name: t('tags.from', { name: item.owner.name }) } }
+      if (tree.inbox?.id === item.folder_id) return { folder: { name: t('notes.inbox'), color: 'var(--color-mist-500)' } }
+      const folder = tree.byId.get(item.folder_id)
+      return { folder: folder ? { name: folder.name, color: colorOf(folder.color) } : null }
+    },
+    [t, tree],
+  )
 
   const saveSmart = async () => {
     if (!saver || !page || saving) return
     setSaving(true)
     try {
-      const href = await saver(tagCondition(page.key, page.label), `#${page.label}`)
+      const href = await saver(tagCondition(page.tag, page.label), `#${page.label}`)
       navigate(href)
     } catch (error) {
       setSaveProblem(problemText(error))
@@ -86,64 +93,71 @@ export function TagPage() {
     }
   }
 
-  return (
-    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="tag-page">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="m-0 min-w-0 truncate text-2xl font-bold text-accent-400">#{label}</h1>
-        {page && (
-          <span className="text-[13px] text-mist-500" data-testid="tag-count">
-            {t('tags.countNotes', { count: page.count })}
-            {shared > 0 && t('tags.ofWhich', { count: shared, names: others.map((other) => other.name).join(', ') })}
-          </span>
-        )}
-        {page && page.count > 0 && (
-          <span className="flex flex-wrap gap-2 md:ml-auto">
-            <button type="button" className="nn-btn h-9 border border-accent-500 bg-accent-wash px-3 text-[13px] text-accent-400 hover:bg-accent-500/25" onClick={() => setDialog('rename')} disabled={page.mine === 0}>
-              {t('tags.rename')}
-            </button>
-            <button type="button" className="nn-btn nn-btn-ghost h-9 px-3 text-[13px] font-normal" onClick={() => setDialog('delete')} disabled={page.mine === 0}>
-              {t('tags.delete')}
-            </button>
-            {saver && (
-              <button type="button" className="nn-btn nn-btn-ghost h-9 px-3 text-[13px] font-normal" onClick={() => void saveSmart()} disabled={saving} data-testid="tag-smart">
-                {t('tags.saveSmart')}
-              </button>
-            )}
-          </span>
-        )}
-      </div>
-      {problem && <p className="text-sm text-bad-500">{problem}</p>}
-      {saveProblem && <p className="text-sm text-bad-500">{saveProblem}</p>}
-      {page && page.count === 0 && <p className="py-6 text-sm text-mist-500">{t('tags.empty')}</p>}
-      <ul className="flex max-w-[880px] flex-col">
-        {(page?.notes ?? []).map((note) => (
-          <li key={note.id}>
-            <Link
-              to={noteHref(note.id)}
-              onClick={(event) => {
-                if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return
-                event.preventDefault()
-                const to = noteHref(note.id)
-                tryLeave(() => navigate(to), to)
+  const menuLabel = t('tags.menu', { tag: `#${label}` })
+  const pick = (what: 'rename' | 'delete') => () => {
+    setMore(null)
+    setDialog(what)
+  }
+  const actions = page && page.count > 0 && (
+    <>
+      <button
+        type="button"
+        aria-label={menuLabel}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(more)}
+        onClick={(event) => setMore(more ? null : event.currentTarget)}
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mist-500 hover:bg-ink-800 hover:text-mist-100"
+        data-testid="tag-more"
+      >
+        <MoreHorizontal aria-hidden className="h-4 w-4" />
+      </button>
+      {more && (
+        <Menu anchor={more} onClose={() => setMore(null)} label={menuLabel} testId="tag-menu">
+          <button type="button" role="menuitem" className="nn-menu-item" disabled={page.mine === 0} onClick={pick('rename')} data-testid="tag-rename-open">
+            <Pencil aria-hidden className="h-4 w-4" />
+            {t('tags.rename')}
+          </button>
+          <button type="button" role="menuitem" className="nn-menu-item" disabled={page.mine === 0} onClick={pick('delete')} data-testid="tag-delete-open">
+            <Trash2 aria-hidden className="h-4 w-4" />
+            {t('tags.delete')}
+          </button>
+          {saver && (
+            <button
+              type="button"
+              role="menuitem"
+              className="nn-menu-item"
+              disabled={saving}
+              data-testid="tag-smart"
+              onClick={() => {
+                setMore(null)
+                void saveSmart()
               }}
-              data-testid="tag-note"
-              className="flex justify-between gap-3.5 border-b border-ink-800 px-2.5 py-3 hover:bg-ink-850"
             >
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex min-w-0 items-center gap-1.5 text-[14.5px] font-semibold text-mist-100">
-                  <NoteIcon icon={note.icon} color={note.color} />
-                  <span className="truncate">{note.title || t('notes.untitled')}</span>
-                </span>
-                {note.preview && <span className="truncate text-[12.5px] text-mist-500">{note.preview}</span>}
-              </span>
-              <span className="shrink-0 text-[12.5px] whitespace-nowrap text-mist-500" data-testid="tag-note-where">
-                {where(note, t)}
-                {note.updated_at && ` · ${listDate(note.updated_at, i18n.language)}`}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+              <Save aria-hidden className="h-4 w-4" />
+              {t('tags.saveSmart')}
+            </button>
+          )}
+        </Menu>
+      )}
+    </>
+  )
+
+  return (
+    <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="tag-page">
+      {saveProblem && <p className="text-sm text-bad-500">{saveProblem}</p>}
+      <NoteList
+        heading={`#${label}`}
+        icon={<Hash aria-hidden className="h-[18px] w-[18px] shrink-0 text-accent-400" strokeWidth={2.2} />}
+        count={page ? countOf(page, t) : ''}
+        actions={actions || undefined}
+        source={source}
+        decorate={decorate}
+        empty={
+          <p className="py-6 text-sm text-mist-500" data-testid="tag-empty">
+            {t('tags.empty')}
+          </p>
+        }
+      />
       {page && dialog === 'rename' && (
         <RenameDialog
           page={page}

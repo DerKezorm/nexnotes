@@ -18,6 +18,7 @@ import type { Folder, InboxNote } from './api'
 import { FolderTree, InboxEntry } from './FolderTree'
 import { FolderPage, InboxPage } from './pages'
 import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder, useShownFolder } from './store'
+import { forgetListLook, saveListLook } from '../notes/list/look'
 import { hideNotice } from './notice'
 
 // ---- The stand-in server ---------------------------------------------------------------------------------------------
@@ -43,6 +44,18 @@ function answer(call: Call): { status: number; body: unknown } {
   const { method, path, body } = call
   if (method === 'GET' && path === '/api/folders') return { status: 200, body: { inbox: { id: INBOX, count: inboxNotes.length }, folders: ordered() } }
   if (method === 'GET' && path === '/api/folders/inbox') return { status: 200, body: { id: INBOX, notes: inboxNotes } }
+  if (method === 'PUT' && path === '/api/me/list-look') return { status: 200, body: { list_style: body?.style ?? 'list', list_hints: body?.hints ?? true } }
+  // The inbox is a list like every other (`/api/note-list` with its id).
+  if (method === 'GET' && path.startsWith('/api/note-list/stamp')) return { status: 200, body: { stamp: inboxNotes.map((note) => note.id + note.title_check).join() } }
+  if (method === 'GET' && path.startsWith(`/api/note-list?folder_id=${INBOX}`)) {
+    const items = inboxNotes.map((note) => ({ icon: '', color: '', ...note, folder_id: INBOX, pinned: false, tasks: null }))
+    return { status: 200, body: { key: INBOX, view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: false }, counts: { own: items.length, shared: 0 }, items } }
+  }
+  const titleOk = /^\/api\/notes\/([^/]+)\/title\/ok$/.exec(path)
+  if (method === 'POST' && titleOk) {
+    inboxNotes = inboxNotes.map((note) => (note.id === titleOk[1] ? { ...note, title_check: false } : note))
+    return { status: 200, body: { id: titleOk[1] } }
+  }
   if (method === 'POST' && path === '/api/folders') {
     const made = folder(`new-${folders.length}`, String(body?.name), (body?.parent_id as string) ?? null)
     folders.push(made)
@@ -176,6 +189,7 @@ beforeEach(async () => {
   calls = []
   refuse = null
   inboxNotes = []
+  forgetListLook()
   folders = [
     folder('a', 'Arbeit', null, { color: 'orange', count: 57 }),
     folder('p', 'Projekte', 'a', { color: 'orange', count: 21 }),
@@ -591,11 +605,11 @@ describe('the pages (NOTES-4 AC-7, AC-9, AC-13, AC-14, EC-5, EC-6)', () => {
   })
 
   it('NOTES-4 AC-7 AC-14 the inbox says where each note came from and files it into a folder', async () => {
-    const now = new Date().toISOString()
+    const at = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString()
     inboxNotes = [
-      { id: 'n1', title: 'Kompost', preview: 'Schichten', origin: 'share:Safari', title_check: true, created_at: now, updated_at: now },
-      { id: 'n2', title: 'Zahnarzt', preview: '', origin: 'dictation', title_check: false, created_at: now, updated_at: now },
-      { id: 'n3', title: '', preview: 'Nudeln', origin: 'mcp:Desktop', title_check: false, created_at: now, updated_at: now },
+      { id: 'n1', title: 'Kompost', preview: 'Schichten', origin: 'share:Safari', title_check: true, created_at: at(1), updated_at: at(1) },
+      { id: 'n2', title: 'Zahnarzt', preview: '', origin: 'dictation', title_check: false, created_at: at(2), updated_at: at(2) },
+      { id: 'n3', title: '', preview: 'Nudeln', origin: 'mcp:Desktop', title_check: false, created_at: at(3), updated_at: at(3) },
     ]
     await render('/inbox')
     expect(where().target).toBe(INBOX)
@@ -620,9 +634,12 @@ describe('the pages (NOTES-4 AC-7, AC-9, AC-13, AC-14, EC-5, EC-6)', () => {
     expect(box.querySelectorAll('[data-note]')).toHaveLength(2)
   })
 
-  it('NOTES-4 AC-7 NOTES-3 AC-18 an inbox card shows the note\'s symbol in its colour; without one, where it came from', async () => {
-    const now = new Date().toISOString()
-    const card = (id: string, origin: string, look: { icon?: string; color?: string } = {}): InboxNote => ({ id, title: id, preview: '', origin, title_check: false, created_at: now, updated_at: now, icon: '', color: '', ...look })
+  it('NOTES-4 AC-7 NOTES-3 AC-18 a note of the inbox shows its symbol in its colour; without one, where it came from', async () => {
+    let minutes = 0
+    const card = (id: string, origin: string, look: { icon?: string; color?: string } = {}): InboxNote => {
+      const at = new Date(Date.now() - ++minutes * 60_000).toISOString()
+      return { id, title: id, preview: '', origin, title_check: false, created_at: at, updated_at: at, icon: '', color: '', ...look }
+    }
     inboxNotes = [
       card('Trip', 'share:Safari', { icon: 'plane', color: 'teal' }),
       card('Shared', 'share:Safari'),
@@ -633,27 +650,57 @@ describe('the pages (NOTES-4 AC-7, AC-9, AC-13, AC-14, EC-5, EC-6)', () => {
       card('Typed', '', { color: 'rose' }),
     ]
     await render('/inbox')
-    const marks = [...box.querySelectorAll<HTMLElement>('[data-testid="inbox-card"]')].map((element) => element.querySelector<HTMLElement>('[data-testid="inbox-mark"]')!)
-    expect(marks).toHaveLength(7)
-    // With a symbol: the symbol in the note's colour on a tint of it, no sign of the origin.
-    const symbol = marks[0].querySelector<HTMLElement>('[data-testid="note-icon"]')!
+    const notes = [...box.querySelectorAll<HTMLElement>('[data-note]')]
+    expect(notes).toHaveLength(7)
+    // With a symbol: the symbol in the note's colour, no sign of the origin.
+    const symbol = notes[0].querySelector<HTMLElement>('[data-testid="note-icon"]')!
     expect(symbol.dataset.icon).toBe('plane')
     expect((symbol.firstElementChild as HTMLElement).style.color).not.toBe('currentcolor')
-    expect(marks[0].style.background).toContain('color-mix')
-    expect(marks[0].querySelector('[data-testid="inbox-origin-icon"]')).toBeNull()
+    expect(notes[0].querySelector('[data-testid="inbox-origin-icon"]')).toBeNull()
     // Without: a quiet sign of the origin, never the inbox's tray again.
-    expect(marks.slice(1).map((mark) => mark.querySelector<HTMLElement>('[data-testid="inbox-origin-icon"]')?.dataset.origin)).toEqual(['share', 'dictation', 'mcp', 'shortcut', 'nexdeck', 'here'])
-    expect(box.querySelector('[data-testid="inbox-card"] .lucide-inbox')).toBeNull()
-    expect(marks[6].style.background).toContain('color-mix')
-    const texts = [...box.querySelectorAll('[data-testid="inbox-card"]')].map((element) => element.textContent)
+    expect(notes.slice(1).map((note) => note.querySelector<HTMLElement>('[data-testid="inbox-origin-icon"]')?.dataset.origin)).toEqual(['share', 'dictation', 'mcp', 'shortcut', 'nexdeck', 'here'])
+    expect(box.querySelector('[data-note] .lucide-inbox')).toBeNull()
+    const texts = notes.map((element) => element.textContent)
     expect(texts[4]).toContain('Via a shortcut')
     expect(texts[5]).toContain('From nexdeck')
     expect(texts[6]).toContain('Created here')
     // "File" names the note with its symbol too.
-    click(button('File', box.querySelector('[data-testid="inbox-card"]')!))
+    click(button('File', notes[0]))
     await settle()
     const dialog = document.querySelector('[role="dialog"]')!
     expect(dialog.querySelector('h2 [data-testid="note-icon"]')?.getAttribute('data-icon')).toBe('plane')
+  })
+
+  it('NOTES-4 AC-7 AC-14 NOTES-6 AC-1 the inbox has the head and the menu "View" of every list, its looks keep "File"', async () => {
+    const at = new Date(Date.now() - 60_000).toISOString()
+    inboxNotes = [{ id: 'n1', title: 'Kompost', preview: 'Schichten', origin: 'dictation', title_check: true, created_at: at, updated_at: at }]
+    await render('/inbox')
+    const head = box.querySelector('[data-testid="list-head"]')!
+    expect(head.querySelector('h1')!.textContent).toBe('Inbox')
+    expect(head.querySelector('[data-testid="list-counts"]')!.textContent).toBe('1 note')
+    expect(head.querySelector('[data-testid="list-view"]')).not.toBeNull()
+    expect(box.querySelector('[data-testid="note-list"]')!.getAttribute('data-folder')).toBe(INBOX)
+    // A row shows "Title OK" and "File" with their words; "Title OK" is asked of the server and the list loads anew.
+    expect(box.querySelector('[data-testid="inbox-sort-in"]')!.textContent).toBe('File')
+    click(box.querySelector('[data-testid="inbox-title-ok"]')!)
+    await settle()
+    expect(calls.some((call) => call.method === 'POST' && call.path === '/api/notes/n1/title/ok')).toBe(true)
+    expect(box.querySelector('[data-testid="inbox-title-ok"]')).toBeNull()
+    expect(box.querySelector('[data-note]')!.textContent).not.toContain('Check title')
+    // Tiles, cards and compact rows keep "File" as a sign with its name, and where the note came from.
+    for (const style of ['tiles', 'cards', 'compact'] as const) {
+      await act(async () => {
+        await saveListLook({ style })
+      })
+      await settle()
+      expect(box.querySelector('[data-testid="note-list"]')!.getAttribute('data-style')).toBe(style)
+      const sortIn = box.querySelector<HTMLElement>('[data-testid="inbox-sort-in"]')!
+      expect(sortIn.getAttribute('aria-label')).toBe('File')
+      expect(box.querySelector('[data-note] [data-testid="inbox-origin-icon"]')!.getAttribute('data-origin')).toBe('dictation')
+    }
+    click(button('File', box.querySelector('[data-note]')!))
+    await settle()
+    expect(document.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('File “Kompost”')
   })
 
   it('NOTES-4 EC-6 an empty inbox explains what it is for', async () => {

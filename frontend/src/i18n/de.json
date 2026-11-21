@@ -612,7 +612,8 @@
     "nextasks_list_unknown": "Diese Liste gibt es in nextasks nicht mehr, oder der Schlüssel darf dort nicht schreiben.",
     "nextasks_slow_down": "nextasks bittet um weniger Anfragen. Versuch es in {{seconds}} Sekunden noch einmal.",
     "nextasks_not_found": "nextasks kennt das nicht.",
-    "nextasks_task_gone": "Diese Aufgabe gibt es in nextasks nicht mehr."
+    "nextasks_task_gone": "Diese Aufgabe gibt es in nextasks nicht mehr.",
+    "list_style_unknown": "Wähl Liste, Karten, Kompakt oder Kacheln."
   },
   "folders": {
     "section": "Ordner",
@@ -710,8 +711,6 @@
       "emptyTitle": "Der Eingang ist leer",
       "emptyText": "Hier landet, was du schnell festhältst: aus einer anderen App geteilt, diktiert oder über MCP geschickt. Von hier sortierst du es in deine Ordner ein.",
       "tip": "Tipp: Notizen lassen sich auch direkt auf einen Ordner in der Seitenleiste ziehen.",
-      "titleCheck": "Titel prüfen",
-      "untitled": "Ohne Titel",
       "sortIn": "Einsortieren",
       "origin": {
         "share": "Geteilt aus {{source}}",
@@ -809,6 +808,12 @@
       "remove": "Bild entfernen",
       "saved": "Profilbild gespeichert.",
       "removed": "Profilbild entfernt."
+    },
+    "lists": {
+      "title": "Notizlisten",
+      "style": "Darstellung der Notizlisten",
+      "styleHint": "gilt für alle Listen, auf allen Geräten",
+      "hints": "Hinweise in Listen"
     }
   },
   "nav": {
@@ -828,7 +833,7 @@
     "emptyAll": "Noch keine Notizen",
     "emptyAllText": "Was du schreibst, steht hier: alle Notizen aus allen Ordnern und die, die andere mit dir teilen.",
     "group": "Nach Datum",
-    "groupLabel": "Nach Datum gruppieren",
+    "groupLabel": "Gruppieren",
     "groupOffByTitle": "Nach Titel sortiert gibt es keine Gruppen.",
     "groups": {
       "month": "Letzte 30 Tage",
@@ -870,7 +875,7 @@
       "created": "Erstellt",
       "desc": "Neueste zuerst",
       "descTitle": "Z bis A",
-      "label": "Sortierung",
+      "label": "Sortieren",
       "title": "Titel A bis Z",
       "titleDesc": "Titel Z bis A",
       "updated": "Zuletzt geändert"
@@ -878,9 +883,26 @@
     "tasks": "{{done}} von {{total}}",
     "view": {
       "label": "Ansicht",
+      "gallery": "Anhänge",
+      "show": "Zeigen",
+      "notes": "Notizen"
+    },
+    "groupNone": "Keine Gruppen",
+    "state": {
+      "grouped": "nach Datum gruppiert"
+    },
+    "style": {
+      "label": "Darstellung",
       "list": "Liste",
-      "tiles": "Kacheln",
-      "gallery": "Anhänge"
+      "cards": "Karten",
+      "compact": "Kompakt",
+      "tiles": "Kacheln"
+    },
+    "hints": {
+      "label": "Hinweise",
+      "text": "Checklisten, Anhänge, Schlagwörter",
+      "attachments_one": "{{count}} Anhang",
+      "attachments_other": "{{count}} Anhänge"
     }
   },
   "notes": {
@@ -1545,7 +1567,8 @@
     "deleteSays_one": "{{tag}} verschwindet aus einer deiner Notizen, der übrige Text bleibt.",
     "deleteSays_other": "{{tag}} verschwindet aus {{count}} deiner Notizen, der übrige Text bleibt.",
     "suggestions": "Vorschläge für Schlagwörter",
-    "openTag": "Alle Notizen mit {{tag}}"
+    "openTag": "Alle Notizen mit {{tag}}",
+    "menu": "Aktionen für {{tag}}"
   },
   "theme": {
     "dark": "Dunkel",
@@ -1718,7 +1741,11 @@
       "through": "{{name}} über den Ordner „{{folder}}“ ({{level}})",
       "onlyYouNote": "Nur du entscheidest, wer die Notiz sieht. Andere können sie nicht weiterteilen.",
       "onlyYouFolder": "Nur du entscheidest, wer den Ordner sieht. Andere können ihn nicht weiterteilen.",
-      "done": "Fertig"
+      "done": "Fertig",
+      "nobody": "Niemand auf diesem Server heißt so. Teilen geht nur mit Konten hier.",
+      "invite": "Person einladen",
+      "noneChosen": "Noch niemand ausgewählt.",
+      "clear": "Eingabe leeren"
     },
     "level": {
       "read": "lesen",
@@ -2022,7 +2049,8 @@
       "unnamed": "ohne Namen",
       "gone": "Gelöscht: {{name}}"
     },
-    "sharedPage": "Freigaben verwalten"
+    "sharedPage": "Freigaben verwalten",
+    "menu": "Aktionen für „{{name}}“"
   },
   "pwa": {
     "update": "Es gibt eine neue Version von nexnotes.",

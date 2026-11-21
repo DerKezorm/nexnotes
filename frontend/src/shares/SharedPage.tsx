@@ -1,7 +1,8 @@
 /**
  * "Mit mir geteilt" (NOTES-13 AC-3, drawing "N13-Mit-mir-geteilt"): what others shared with the member, per owner,
  * each with its right and "Verlassen" (AC-6); above it what is not there any more and why (AC-5, EC-4). A shared
- * folder opens as a list of its own (`SharedFolderPage`), its notes in the editor as any note.
+ * folder opens as a list like every other (`SharedFolderPage`: the same head, "Ansicht", the four looks), its notes in
+ * the editor as any note.
  */
 import { FileText, Folder as FolderIcon } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -16,6 +17,7 @@ import { notesChanged } from '../notes/api'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { noteHref } from '../notes/newNote'
 import { NoteList } from '../notes/NoteList'
+import { hrefIn } from '../notes/workspace'
 import { FolderBell } from '../notify/NotifyBell'
 import { sharesApi, sharesChanged, type SharedFolder, type ShareNotice, type WithMeItem } from './api'
 import { noticeText, useWithMe } from './withMe'
@@ -137,39 +139,51 @@ export function SharedFolderPage() {
       </div>
     )
   if (!folder) return null
+  // The head every list has: "Mit mir geteilt" as the path, the folder's name and count, whose it is and the right,
+  // the bell; its folders between the head and the notes.
+  const crumb = (
+    <nav aria-label={t('shares.page.title')} className="flex min-w-0 items-center gap-1">
+      <Link to="/shared" className="text-mist-500 hover:text-accent-400 hover:underline">
+        {t('shares.page.title')}
+      </Link>
+      <span aria-hidden>›</span>
+      <span aria-current="page" className="sr-only">
+        {folder.name}
+      </span>
+    </nav>
+  )
+  const actions = (
+    <>
+      <span className="hidden max-w-[22ch] truncate text-[12.5px] text-mist-500 sm:inline" data-testid="shared-folder-whose">
+        {t('shares.page.from', { name: folder.owner.name })} · {t(`shares.level.${folder.level}`)}
+      </span>
+      <FolderBell id={folder.id} name={folder.name} />
+    </>
+  )
+  const intro =
+    folder.folders.length > 0 ? (
+      <ul className="flex flex-wrap gap-2">
+        {folder.folders.map((child) => (
+          <li key={child.id}>
+            <Link to={`/shared/folder/${encodeURIComponent(child.id)}`} className="nn-btn nn-btn-ghost h-8 text-[13px]">
+              <FolderIcon aria-hidden className="h-4 w-4" />
+              {child.name}
+            </Link>
+          </li>
+        ))}
+      </ul>
+    ) : undefined
   return (
-    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="shared-folder-page">
-      <nav className="flex items-center gap-1.5 text-[13px] text-mist-500">
-        <Link to="/shared" className="text-mist-300 hover:text-accent-400 hover:underline">
-          {t('shares.page.title')}
-        </Link>
-        <span aria-hidden>›</span>
-        <span aria-current="page" className="truncate">
-          {folder.name}
-        </span>
-      </nav>
-      <div className="flex min-w-0 flex-wrap items-center gap-3">
-        <h1 className="min-w-0 truncate text-2xl font-bold">{folder.name}</h1>
-        <span className="text-[13px] text-mist-500">
-          {t('shares.page.from', { name: folder.owner.name })} · {t(`shares.level.${folder.level}`)}
-        </span>
-        <span className="ml-auto">
-          <FolderBell id={folder.id} name={folder.name} />
-        </span>
-      </div>
-      {folder.folders.length > 0 && (
-        <ul className="flex flex-wrap gap-2">
-          {folder.folders.map((child) => (
-            <li key={child.id}>
-              <Link to={`/shared/folder/${encodeURIComponent(child.id)}`} className="nn-btn nn-btn-ghost h-8 text-[13px]">
-                <FolderIcon aria-hidden className="h-4 w-4" />
-                {child.name}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      )}
-      <NoteList folderId={folder.id} />
+    <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="shared-folder-page">
+      <NoteList
+        folderId={folder.id}
+        heading={folder.name}
+        crumb={crumb}
+        icon={<FolderIcon aria-hidden className="h-[18px] w-[18px] shrink-0 text-mist-300" strokeWidth={1.8} />}
+        actions={actions}
+        intro={intro}
+        hrefFor={(noteId) => hrefIn(`/shared/folder/${encodeURIComponent(folder.id)}`, noteId)}
+      />
     </div>
   )
 }
