@@ -1,0 +1,74 @@
+/**
+ * "Neue Notiz": a note with an id made here, so that a second click (or a request sent twice) gives the same note
+ * (NOTES-3 EC-9). It goes into the folder that is open, or the inbox (NOTES-4 AC-9, `useCurrentFolder`).
+ */
+import { useCallback, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+import { refreshFolders, useCurrentFolder } from '../folders/store'
+import { notesApi, notesChanged, type NoteHead } from './api'
+import { goTo, tryLeave } from './context'
+
+let making: Promise<NoteHead> | null = null
+
+export function newNoteId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6] & 0x0f) | 0x40
+  bytes[8] = (bytes[8] & 0x3f) | 0x80
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+/** Makes one note, however often it is asked while the first request runs. Without a folder: the inbox. */
+export function createNote(folderId?: string | null): Promise<NoteHead> {
+  if (making) return making
+  making = notesApi
+    .create({ id: newNoteId(), folder_id: folderId ?? undefined })
+    .then((note) => {
+      notesChanged()
+      void refreshFolders()
+      return note
+    })
+    .finally(() => {
+      making = null
+    })
+  return making
+}
+
+/** Where an open note lives in the address; with the folder whose list stands beside it. */
+export function noteHref(id: string, folderId?: string | null): string {
+  const path = `/notes/${encodeURIComponent(id)}`
+  return folderId ? `${path}?folder=${encodeURIComponent(folderId)}` : path
+}
+
+/** The note just made, opened with the cursor in the title (AC-1). */
+export function openNew(note: NoteHead, folderId: string | null | undefined, go: (path: string, state: unknown) => void): void {
+  go(noteHref(note.id, folderId), { fresh: true })
+}
+
+/** "Neue Notiz" from outside React's tree (the folder pages' button): asks the open note first, then makes and opens. */
+export function startNewNote(folderId?: string | null): void {
+  tryLeave(() => {
+    createNote(folderId)
+      .then((note) => openNew(note, folderId, goTo))
+      .catch(() => undefined)
+  })
+}
+
+/** "Neue Notiz" for a button: into the open folder, or the inbox. */
+export function useNewNote(): { start: () => void; busy: boolean } {
+  const navigate = useNavigate()
+  const { openFolderId, targetFolderId } = useCurrentFolder()
+  const [busy, setBusy] = useState(false)
+  const start = useCallback(() => {
+    tryLeave(() => {
+      setBusy(true)
+      createNote(targetFolderId)
+        .then((note) => openNew(note, openFolderId, (path, state) => navigate(path, { state })))
+        .catch(() => undefined)
+        .finally(() => setBusy(false))
+    })
+  }, [navigate, openFolderId, targetFolderId])
+  return { start, busy }
+}

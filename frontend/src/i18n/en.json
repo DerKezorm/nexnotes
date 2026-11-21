@@ -174,6 +174,112 @@
   "connections": {
     "empty": "This is where you will connect iPhone and iPad, nextasks and AI tools (MCP), and manage the vault password."
   },
+  "editor": {
+    "colors": {
+      "blue": "Blue",
+      "green": "Green",
+      "honey": "Honey",
+      "none": "No highlight",
+      "rose": "Rose",
+      "violet": "Violet"
+    },
+    "connecting": "connecting …",
+    "delete": "Delete",
+    "duplicate": "Duplicate",
+    "fold": {
+      "close": "Fold section",
+      "folded_one": "folded · {{count}} paragraph",
+      "folded_other": "folded · {{count}} paragraphs",
+      "open": "Unfold section"
+    },
+    "leave": {
+      "fallback": "Note of {{date}}",
+      "hint": "If the tab is closed anyway, the suggestion is used. Nothing is lost.",
+      "suggestion": "Suggested from the first words",
+      "take": "Use suggestion",
+      "text": "You are leaving the note. Give it a title, or use the suggestion; it is marked “Check title” until you confirm it once.",
+      "title": "This note needs a title",
+      "type": "Enter a title"
+    },
+    "link": {
+      "address": "Address",
+      "invalid": "Only addresses with http, https or mailto become links.",
+      "save": "Apply",
+      "title": "Link"
+    },
+    "meta": {
+      "changed": "changed {{when}}",
+      "changedBy": "changed {{when}} by {{name}}",
+      "created": "created {{date}}",
+      "justNow": "just now",
+      "today": "today, {{time}}",
+      "yesterday": "yesterday, {{time}}"
+    },
+    "more": "More actions",
+    "offline": "Connection lost. What you write stays in this window and is sent as soon as the server is back.",
+    "placeholder": "Start writing …",
+    "restore": "Restore from the trash",
+    "saved": "saved",
+    "saving": "saving …",
+    "stopped": {
+      "broken": "The server did not accept this change. Reload the page.",
+      "forbidden": "You no longer have access to this note. What has not arrived is not saved.",
+      "gone": "This note was deleted and is in the trash.",
+      "tooLarge": "This note has grown too large. The last change was not saved."
+    },
+    "table": {
+      "addColumnAfter": "Insert column right",
+      "addColumnBefore": "Insert column left",
+      "addRowAfter": "Insert row below",
+      "addRowBefore": "Insert row above",
+      "columnLeft": "Move column left",
+      "columnRight": "Move column right",
+      "deleteColumn": "Delete column",
+      "deleteRow": "Delete row",
+      "deleteTable": "Delete table",
+      "label": "Edit table",
+      "rowDown": "Move row down",
+      "rowUp": "Move row up"
+    },
+    "tasks": {
+      "count": "{{done}} of {{count}}",
+      "doneToBottom": "Done to the bottom"
+    },
+    "textLabel": "Text of the note",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Title",
+    "titleRequired": "The note cannot be closed without a title.",
+    "tools": {
+      "bold": "Bold",
+      "bullet": "Bulleted list",
+      "closeKeyboard": "Close keyboard",
+      "code": "Code",
+      "divider": "Divider",
+      "highlight": "Highlighter",
+      "indent": "Indent",
+      "italic": "Italic",
+      "label": "Formatting",
+      "link": "Link",
+      "ordered": "Numbered list",
+      "outdent": "Outdent",
+      "quote": "Quote",
+      "redo": "Redo",
+      "strike": "Strikethrough",
+      "style": "Text style",
+      "table": "Table",
+      "task": "Checklist",
+      "underline": "Underline",
+      "undo": "Undo"
+    },
+    "style": {
+      "h1": "Heading",
+      "h2": "Subheading",
+      "h3": "Minor heading",
+      "p": "Body text"
+    },
+    "waiting_one": "{{count}} change waiting",
+    "waiting_other": "{{count}} changes waiting"
+  },
   "errors": {
     "folder_not_found": "This folder does not exist.",
     "internal_error": "That did not work.",
@@ -434,6 +540,28 @@
   "notFound": {
     "home": "To the start",
     "page": "There is no such page."
+  },
+  "notes": {
+    "all": "All notes",
+    "deleted": "Note moved to the trash.",
+    "inbox": "Inbox",
+    "list": {
+      "empty": "No notes here yet.",
+      "failed": "The notes could not be loaded.",
+      "title": "Notes"
+    },
+    "new": "New note",
+    "pick": "Pick a note on the left or start a new one.",
+    "titleCheck": "Check title",
+    "titleOk": "Title OK",
+    "untitled": "Untitled"
+  },
+  "presence": {
+    "many_one": "{{first}}, {{second}} and {{count}} other are here too",
+    "many_other": "{{first}}, {{second}} and {{count}} others are here too",
+    "one": "{{name}} is here too",
+    "otherWindow": "you, other window",
+    "two": "{{first}} and {{second}} are here too"
   },
   "roles": {
     "member": "Member",

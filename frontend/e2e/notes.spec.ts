@@ -1,0 +1,190 @@
+/**
+ * NOTES-3 and NOTES-12 in real browsers against the real server: a new note, typing and "saved", two sessions on one
+ * note (time to arrive), a broken connection (bar, waiting changes, the browser's question when the tab closes), a
+ * note of 30,000 words, deleting with "Undo", leaving without a title. The page is the operator of global-setup.ts.
+ */
+import { expect, test, type Browser, type Page, type WebSocketRoute } from '@playwright/test'
+
+const TAB = { 'X-Nexnotes-Client': 'tab-e2e-notes000' }
+const LIVE = /\/api\/notes\/[^/]+\/live$/
+
+type Head = { id: string; title: string; title_check: boolean; preview: string; folder_id: string }
+
+async function makeNote(page: Page, data: Record<string, unknown> = {}): Promise<Head> {
+  const answer = await page.request.post('/api/notes', { data, headers: TAB })
+  expect(answer.status()).toBe(201)
+  return (await answer.json()) as Head
+}
+
+async function head(page: Page, id: string): Promise<Head> {
+  return (await (await page.request.get(`/api/notes/${id}`)).json()) as Head
+}
+
+function watchProblems(page: Page): string[] {
+  const problems: string[] = []
+  page.on('pageerror', (error) => problems.push(error.message))
+  return problems
+}
+
+async function secondWindow(browser: Browser): Promise<Page> {
+  const context = await browser.newContext({ storageState: process.env.NEXNOTES_E2E_STATE })
+  return context.newPage()
+}
+
+const body = (page: Page) => page.getByTestId('note-body')
+
+test('NOTES-3 AC-1 AC-2 AC-8 a new note opens with the cursor in the title, Enter goes into the text, typing is saved', async ({ page }) => {
+  const problems = watchProblems(page)
+  await page.goto('/')
+  await page.getByTestId('new-note').click()
+  await expect(page).toHaveURL(/\/notes\//)
+  const title = page.getByTestId('note-title')
+  await expect(title).toBeFocused()
+  await title.fill('Shopping Saturday')
+  await page.keyboard.press('Enter')
+  await expect(body(page)).toBeFocused()
+  await page.keyboard.type('Milk, tomatoes, bread')
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  const id = page.url().split('/notes/')[1].split('?')[0]
+  await expect.poll(async () => (await head(page, id)).preview, { timeout: 5000 }).toBe('Milk, tomatoes, bread')
+  await expect(page.getByTestId('note-meta')).toContainText('Inbox')
+  await expect(page.getByTestId('note-meta')).toContainText('created')
+  await expect(page.getByTestId('note-row').filter({ hasText: 'Shopping Saturday' })).toBeVisible()
+  expect(problems).toEqual([])
+})
+
+test('NOTES-12 AC-1 what one session types shows in the other within a second', async ({ page, browser }) => {
+  const note = await makeNote(page, { title: 'Together' })
+  const other = await secondWindow(browser)
+  await page.goto(`/notes/${note.id}`)
+  await other.goto(`/notes/${note.id}`)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  await expect(other.getByTestId('note-saved')).toHaveText('saved')
+  // The same account in two windows: the other window is "you, other window" (EC-8).
+  await expect(page.getByTestId('presence-own')).toHaveText('you, other window')
+  await body(page).click()
+  const started = Date.now()
+  await page.keyboard.type('hello there')
+  await expect(body(other)).toContainText('hello there', { timeout: 1000 })
+  expect(Date.now() - started).toBeLessThan(1000)
+  await other.context().close()
+})
+
+test('NOTES-12 AC-8 EC-4 a broken connection shows the bar and the waiting changes, the tab asks before closing, nothing is lost', async ({ page }) => {
+  const note = await makeNote(page, { title: 'Train' })
+  let offline = false
+  const sockets: WebSocketRoute[] = []
+  await page.routeWebSocket(LIVE, (ws) => {
+    if (offline) {
+      ws.close({ code: 4000, reason: 'tunnel' })
+      return
+    }
+    sockets.push(ws)
+    ws.connectToServer()
+  })
+  await page.goto(`/notes/${note.id}`)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  offline = true
+  for (const ws of sockets) await ws.close({ code: 4000, reason: 'tunnel' })
+  await expect(page.getByTestId('offline-bar')).toBeVisible()
+  await body(page).click()
+  await page.keyboard.type('written in the tunnel')
+  await expect(page.getByTestId('note-saved')).toHaveText(/changes? waiting/)
+  await expect(page.getByTestId('note-saved')).toHaveClass(/text-warn-500/)
+
+  // Closing the tab now: the browser asks first.
+  let asked = false
+  page.once('dialog', async (dialog) => {
+    asked = dialog.type() === 'beforeunload'
+    await dialog.dismiss()
+  })
+  await page.close({ runBeforeUnload: true })
+  await expect.poll(() => asked).toBe(true)
+  expect(page.isClosed()).toBe(false)
+
+  offline = false
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.getByTestId('offline-bar')).toBeHidden({ timeout: 10_000 })
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  await expect.poll(async () => (await head(page, note.id)).preview, { timeout: 5000 }).toBe('written in the tunnel')
+})
+
+test('NOTES-3 EC-2 a note of 30,000 words opens and typing stays quick', async ({ page }) => {
+  const words = Array.from({ length: 30_000 }, (_, i) => `word${i % 997}`)
+  const paragraphs: string[] = []
+  for (let i = 0; i < words.length; i += 15) paragraphs.push(words.slice(i, i + 15).join(' '))
+  const note = await makeNote(page, { title: 'Dictation of two hours', markdown: paragraphs.join('\n\n') })
+  await page.goto(`/notes/${note.id}`)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved', { timeout: 20_000 })
+  await expect(body(page).locator('p').nth(1999)).toBeAttached()
+  await body(page).locator('p').nth(1000).click()
+  await page.keyboard.press('End')
+  // Time per keystroke inside the page: from the key event to the text in the document.
+  const times = await page.evaluate(async () => {
+    const editor = document.querySelector('[data-testid="note-body"]') as HTMLElement
+    const measured: number[] = []
+    for (let i = 0; i < 30; i++) {
+      const started = performance.now()
+      document.execCommand('insertText', false, 'x')
+      await new Promise((resolve) => requestAnimationFrame(() => resolve(null)))
+      measured.push(performance.now() - started)
+      void editor
+    }
+    return measured
+  })
+  const sorted = [...times].sort((a, b) => a - b)
+  const median = sorted[Math.floor(sorted.length / 2)]
+  console.log(`30,000 words: median ${median.toFixed(1)} ms, slowest ${sorted[sorted.length - 1].toFixed(1)} ms per keystroke`)
+  expect(median).toBeLessThan(50)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved', { timeout: 10_000 })
+})
+
+test('NOTES-3 AC-6 deleting moves the note to the trash, "Undo" within ten seconds brings it back', async ({ page }) => {
+  const note = await makeNote(page, { title: `Throw away ${Date.now()}`, markdown: 'not for long' })
+  await page.goto(`/notes/${note.id}`)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  await page.getByTestId('note-menu').click()
+  await page.getByTestId('note-delete').click()
+  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect(page.getByTestId('note-row').filter({ hasText: note.title })).toHaveCount(0)
+  const notice = page.getByTestId('folder-notice')
+  await expect(notice).toContainText('Note moved to the trash.')
+  await notice.getByRole('button', { name: 'Undo' }).click()
+  await expect(page).toHaveURL(new RegExp(`/notes/${note.id}`))
+  await expect(page.getByTestId('note-title')).toHaveValue(note.title)
+  await expect(page.getByTestId('note-row').filter({ hasText: note.title })).toBeVisible()
+})
+
+test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which is marked for checking', async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('new-note').click()
+  await expect(page.getByTestId('note-title')).toBeFocused()
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('Dentist Tuesday 15:30 confirm, bring the booklet')
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  const id = page.url().split('/notes/')[1].split('?')[0]
+  await page.getByRole('link', { name: 'All notes' }).click()
+  const dialog = page.getByTestId('leave-dialog')
+  await expect(dialog).toBeVisible()
+  await expect(page.getByTestId('leave-suggestion')).toHaveText('Dentist Tuesday 15:30 confirm')
+  await page.getByTestId('leave-take').click()
+  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect.poll(async () => (await head(page, id)).title_check).toBe(true)
+  const row = page.getByTestId('note-row').filter({ hasText: 'Dentist Tuesday 15:30 confirm' })
+  await expect(row).toContainText('Check title')
+  // "Title OK" takes the mark away (AC-10).
+  await row.click()
+  await page.getByTestId('title-ok').click()
+  await expect(page.getByTestId('title-check')).toHaveCount(0)
+  expect((await head(page, id)).title_check).toBe(false)
+})
+
+test('NOTES-3 EC-4 a new note left without title and text leaves nothing behind', async ({ page }) => {
+  await page.goto('/')
+  const before = ((await (await page.request.get('/api/notes')).json()) as Head[]).length
+  await page.getByTestId('new-note').click()
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  await page.getByRole('link', { name: 'All notes' }).click()
+  await expect(page.getByTestId('leave-dialog')).toHaveCount(0)
+  await expect.poll(async () => ((await (await page.request.get('/api/notes')).json()) as Head[]).length).toBe(before)
+})

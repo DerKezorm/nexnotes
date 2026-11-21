@@ -370,3 +370,20 @@ def test_notes3_the_body_of_a_new_note_is_one_empty_paragraph(client, operator):
     note = new_note(client)
     body = stored_doc(note["id"]).get("body", type=XmlFragment)
     assert [child.tag for child in body.children] == ["paragraph"]
+
+
+def test_notes3_ac6_a_note_deleted_alone_stays_in_the_trash_when_its_folder_comes_back(client, operator):
+    kitchen = folder(operator, "Kitchen")
+    alone = new_note(client, folder_id=kitchen, title="Deleted alone")
+    stays = new_note(client, folder_id=kitchen, title="Goes with the folder")
+    client.delete(f"/api/notes/{alone['id']}")
+    assert stored(alone["id"]).deleted_batch is not None
+    assert client.delete(f"/api/folders/{kitchen}").status_code in (200, 204)
+    assert client.post(f"/api/folders/{kitchen}/restore").status_code == 200
+    assert {item["id"] for item in client.get("/api/notes").json()} == {stays["id"]}
+    # Brought back alone while its folder is in the trash: into the inbox.
+    client.delete(f"/api/folders/{kitchen}")
+    back = client.post(f"/api/notes/{alone['id']}/restore").json()
+    with SessionLocal() as db:
+        assert back["folder_id"] == inbox_for(db, operator.id).id
+    assert stored(alone["id"]).deleted_batch is None

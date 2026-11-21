@@ -1,0 +1,219 @@
+/* The text of a note. Colours come from the theme (styles/index.css); the highlighter has its fixed row of five. */
+
+:root {
+  --nn-mark-honey: rgb(242 193 78 / 0.3);
+  --nn-mark-green: rgb(74 222 128 / 0.26);
+  --nn-mark-blue: rgb(96 165 250 / 0.3);
+  --nn-mark-rose: rgb(251 113 133 / 0.28);
+  --nn-mark-violet: rgb(167 139 250 / 0.3);
+}
+
+:root[data-theme='light'] {
+  --nn-mark-honey: rgb(242 193 78 / 0.5);
+  --nn-mark-green: rgb(74 222 128 / 0.42);
+  --nn-mark-blue: rgb(96 165 250 / 0.4);
+  --nn-mark-rose: rgb(251 113 133 / 0.36);
+  --nn-mark-violet: rgb(167 139 250 / 0.4);
+}
+
+.nn-editor .ProseMirror {
+  min-height: 40vh;
+  outline: none;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--color-mist-100);
+  /* One's own caret is honey (NOTES-12 AC-6). */
+  caret-color: var(--color-accent-500);
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+
+.nn-editor .ProseMirror > * + * {
+  margin-top: 0.55em;
+}
+
+.nn-editor .ProseMirror p.is-editor-empty:first-child::before,
+.nn-editor .ProseMirror .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--color-mist-600);
+}
+
+.nn-editor h1,
+.nn-editor h2,
+.nn-editor h3 {
+  font-weight: 700;
+  line-height: 1.3;
+  margin-top: 0.9em;
+}
+.nn-editor h1 { font-size: 22px; }
+.nn-editor h2 { font-size: 19px; }
+.nn-editor h3 { font-size: 16.5px; }
+
+.nn-editor a {
+  color: var(--color-accent-400);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: text;
+}
+
+.nn-editor ul:not([data-type='taskList']) { list-style: disc; padding-left: 1.4em; }
+.nn-editor ol { list-style: decimal; padding-left: 1.6em; }
+.nn-editor li > p { margin: 0; }
+
+.nn-editor blockquote {
+  border-left: 3px solid var(--color-ink-600);
+  padding-left: 0.9em;
+  color: var(--color-mist-300);
+}
+
+.nn-editor code {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+  background: var(--color-ink-800);
+  border-radius: 5px;
+  padding: 0.1em 0.35em;
+}
+
+.nn-editor pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--color-ink-850);
+  border: 1px solid var(--color-ink-700);
+  border-radius: 10px;
+  padding: 0.8em 1em;
+  overflow-x: auto;
+}
+.nn-editor pre code { background: none; padding: 0; }
+
+.nn-editor hr {
+  border: none;
+  border-top: 1px solid var(--color-ink-700);
+  margin: 1.2em 0;
+}
+
+/* Highlighter: a fixed row of colours, the default is honey (AC-11). */
+.nn-editor mark { background: var(--nn-mark-honey); color: inherit; border-radius: 3px; padding: 0 2px; }
+.nn-editor mark[data-color='green'] { background: var(--nn-mark-green); }
+.nn-editor mark[data-color='blue'] { background: var(--nn-mark-blue); }
+.nn-editor mark[data-color='rose'] { background: var(--nn-mark-rose); }
+.nn-editor mark[data-color='violet'] { background: var(--nn-mark-violet); }
+.nn-swatch { width: 14px; height: 14px; border-radius: 4px; background: var(--nn-mark-honey); flex-shrink: 0; }
+.nn-swatch[data-color='green'] { background: var(--nn-mark-green); }
+.nn-swatch[data-color='blue'] { background: var(--nn-mark-blue); }
+.nn-swatch[data-color='rose'] { background: var(--nn-mark-rose); }
+.nn-swatch[data-color='violet'] { background: var(--nn-mark-violet); }
+.nn-swatch-none { background: none; border: 1px solid var(--color-edge); }
+
+/* Checklists: ticked is struck through (AC-4); "Erledigtes nach unten" moves the ticked items down in the view, the
+   document keeps its order. */
+.nn-editor ul[data-type='taskList'] { list-style: none; padding-left: 0.1em; display: flex; flex-direction: column; gap: 0.3em; }
+.nn-editor ul[data-type='taskList'] li { display: flex; align-items: flex-start; gap: 0.6em; }
+.nn-editor ul[data-type='taskList'] li > label { flex-shrink: 0; margin-top: 0.25em; display: flex; }
+.nn-editor ul[data-type='taskList'] li > label input {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid var(--color-edge);
+  cursor: pointer;
+  display: grid;
+  place-content: center;
+}
+.nn-editor ul[data-type='taskList'] li > label input:checked {
+  background: var(--color-accent-500);
+  border-color: var(--color-accent-500);
+}
+.nn-editor ul[data-type='taskList'] li > label input:checked::after {
+  content: '';
+  width: 8px;
+  height: 4px;
+  border-left: 2px solid var(--color-on-accent);
+  border-bottom: 2px solid var(--color-on-accent);
+  transform: rotate(-45deg) translate(1px, -1px);
+}
+.nn-editor ul[data-type='taskList'] li > div { flex: 1; min-width: 0; }
+.nn-editor ul[data-type='taskList'] li[data-checked='true'] > div { text-decoration: line-through; color: var(--color-mist-500); }
+.nn-editor ul[data-type='taskList'][data-done-to-bottom='true'] > li[data-checked='true'] { order: 1; }
+
+.nn-task-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.3em;
+  margin-top: 0.3em;
+  font-size: 12.5px;
+  color: var(--color-mist-500);
+  user-select: none;
+}
+.nn-task-toggle {
+  font: inherit;
+  color: var(--color-mist-500);
+  border-radius: 6px;
+  padding: 0 0.3em;
+  cursor: pointer;
+}
+.nn-task-toggle:hover { color: var(--color-mist-200); }
+.nn-task-toggle[aria-pressed='true'] { color: var(--color-accent-400); }
+
+/* Tables in a box that scrolls sideways (AC-5). */
+.nn-editor .tableWrapper {
+  overflow-x: auto;
+  border: 1px solid var(--color-ink-700);
+  border-radius: 10px;
+}
+.nn-editor table { border-collapse: collapse; width: 100%; min-width: 420px; font-size: 14px; }
+.nn-editor th,
+.nn-editor td {
+  border-top: 1px solid var(--color-ink-700);
+  padding: 7px 11px;
+  vertical-align: top;
+  text-align: left;
+  min-width: 80px;
+}
+.nn-editor th { background: var(--color-ink-850); font-weight: 600; border-top: none; }
+.nn-editor td + td,
+.nn-editor th + th,
+.nn-editor th + td,
+.nn-editor td + th { border-left: 1px solid var(--color-ink-700); }
+.nn-editor .selectedCell { background: var(--color-accent-wash); }
+
+/* Folding headings (AC-12). */
+.nn-fold {
+  display: inline-flex;
+  width: 1em;
+  margin-left: -1.25em;
+  margin-right: 0.25em;
+  justify-content: center;
+  color: var(--color-mist-500);
+  font-size: 0.75em;
+  cursor: pointer;
+  user-select: none;
+}
+.nn-fold:hover { color: var(--color-mist-100); }
+.nn-folded-count { margin-left: 0.6em; font-size: 12.5px; font-weight: 400; color: var(--color-mist-500); user-select: none; }
+.nn-editor .nn-hidden { display: none; }
+
+/* The others' carets, with their names (NOTES-12 AC-5). */
+.collaboration-carets__caret {
+  border-left: 2px solid;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+  position: relative;
+  word-break: normal;
+}
+.collaboration-carets__label {
+  position: absolute;
+  top: -1.45em;
+  left: -2px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: normal;
+  white-space: nowrap;
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: #06122e;
+  user-select: none;
+}

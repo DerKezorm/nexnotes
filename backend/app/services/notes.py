@@ -412,6 +412,8 @@ async def delete_note(account: Account, note_id: str) -> None:
         if note.owner_id != account.id:
             raise error("not_found", "Not found.", 404)
         note.deleted_at = utcnow()
+        # A mark of its own: bringing its folder back (NOTES-4) does not bring back a note deleted alone before.
+        note.deleted_batch = str(uuid.uuid4())
         db.commit()
     await rooms().close_note(note_id)
     logger.info("Note deleted note=%s", note_id)
@@ -423,6 +425,11 @@ def restore(db: Session, account: Account, note_id: str) -> Note:
     if note.owner_id != account.id:
         raise error("not_found", "Not found.", 404)
     note.deleted_at = None
+    note.deleted_batch = None
+    folder = db.get(Folder, note.folder_id)
+    if folder is None or folder.deleted_at is not None:
+        # Its folder went to the trash meanwhile: the note comes back into the inbox.
+        note.folder_id = inbox_for(db, account.id).id
     db.commit()
     logger.info("Note restored note=%s", note_id)
     return note

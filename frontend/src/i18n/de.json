@@ -174,6 +174,112 @@
   "connections": {
     "empty": "Hier verbindest du später iPhone und iPad, nextasks und KI-Werkzeuge (MCP) und verwaltest das Tresor-Passwort."
   },
+  "editor": {
+    "colors": {
+      "blue": "Blau",
+      "green": "Grün",
+      "honey": "Honig",
+      "none": "Ohne Markierung",
+      "rose": "Rosa",
+      "violet": "Violett"
+    },
+    "connecting": "verbindet …",
+    "delete": "Löschen",
+    "duplicate": "Duplizieren",
+    "fold": {
+      "close": "Abschnitt zuklappen",
+      "folded_one": "zugeklappt · {{count}} Absatz",
+      "folded_other": "zugeklappt · {{count}} Absätze",
+      "open": "Abschnitt aufklappen"
+    },
+    "leave": {
+      "fallback": "Notiz vom {{date}}",
+      "hint": "Wird der Tab trotzdem geschlossen, gilt der Vorschlag. Nichts geht verloren.",
+      "suggestion": "Vorschlag aus den ersten Worten",
+      "take": "Vorschlag nehmen",
+      "text": "Du willst die Notiz verlassen. Gib ihr einen Titel, oder nimm den Vorschlag; er bekommt das Zeichen „Titel prüfen“, bis du ihn einmal bestätigst.",
+      "title": "Diese Notiz braucht einen Titel",
+      "type": "Titel eingeben"
+    },
+    "link": {
+      "address": "Adresse",
+      "invalid": "Nur Adressen mit http, https oder mailto werden zum Link.",
+      "save": "Übernehmen",
+      "title": "Link"
+    },
+    "meta": {
+      "changed": "geändert {{when}}",
+      "changedBy": "geändert {{when}} von {{name}}",
+      "created": "erstellt {{date}}",
+      "justNow": "gerade eben",
+      "today": "heute, {{time}}",
+      "yesterday": "gestern, {{time}}"
+    },
+    "more": "Weitere Aktionen",
+    "offline": "Verbindung unterbrochen. Was du schreibst, bleibt in diesem Fenster und wird nachgereicht, sobald der Server wieder da ist.",
+    "placeholder": "Schreib los …",
+    "restore": "Aus dem Papierkorb holen",
+    "saved": "gespeichert",
+    "saving": "speichert …",
+    "stopped": {
+      "broken": "Diese Änderung hat der Server nicht angenommen. Lade die Seite neu.",
+      "forbidden": "Du hast keinen Zugriff mehr auf diese Notiz. Was noch nicht angekommen ist, wird nicht gespeichert.",
+      "gone": "Diese Notiz wurde gelöscht und liegt im Papierkorb.",
+      "tooLarge": "Diese Notiz ist zu groß geworden. Die letzte Änderung wurde nicht gespeichert."
+    },
+    "table": {
+      "addColumnAfter": "Spalte rechts einfügen",
+      "addColumnBefore": "Spalte links einfügen",
+      "addRowAfter": "Zeile darunter einfügen",
+      "addRowBefore": "Zeile darüber einfügen",
+      "columnLeft": "Spalte nach links",
+      "columnRight": "Spalte nach rechts",
+      "deleteColumn": "Spalte löschen",
+      "deleteRow": "Zeile löschen",
+      "deleteTable": "Tabelle löschen",
+      "label": "Tabelle bearbeiten",
+      "rowDown": "Zeile nach unten",
+      "rowUp": "Zeile nach oben"
+    },
+    "tasks": {
+      "count": "{{done}} von {{count}}",
+      "doneToBottom": "Erledigtes nach unten"
+    },
+    "textLabel": "Text der Notiz",
+    "titleLabel": "Titel",
+    "titlePlaceholder": "Titel",
+    "titleRequired": "Ohne Titel lässt sich die Notiz nicht schließen.",
+    "tools": {
+      "bold": "Fett",
+      "bullet": "Aufzählung",
+      "closeKeyboard": "Tastatur schließen",
+      "code": "Code",
+      "divider": "Trennlinie",
+      "highlight": "Textmarker",
+      "indent": "Einrücken",
+      "italic": "Kursiv",
+      "label": "Formatierung",
+      "link": "Link",
+      "ordered": "Nummerierung",
+      "outdent": "Ausrücken",
+      "quote": "Zitat",
+      "redo": "Wiederholen",
+      "strike": "Durchgestrichen",
+      "style": "Textstil",
+      "table": "Tabelle",
+      "task": "Checkliste",
+      "underline": "Unterstrichen",
+      "undo": "Rückgängig"
+    },
+    "style": {
+      "h1": "Überschrift",
+      "h2": "Zwischenüberschrift",
+      "h3": "Unterüberschrift",
+      "p": "Fließtext"
+    },
+    "waiting_one": "{{count}} Änderung wartet",
+    "waiting_other": "{{count}} Änderungen warten"
+  },
   "errors": {
     "folder_not_found": "Diesen Ordner gibt es nicht.",
     "internal_error": "Das hat nicht geklappt.",
@@ -434,6 +540,28 @@
   "notFound": {
     "home": "Zur Startseite",
     "page": "Diese Seite gibt es nicht."
+  },
+  "notes": {
+    "all": "Alle Notizen",
+    "deleted": "Notiz in den Papierkorb gelegt.",
+    "inbox": "Eingang",
+    "list": {
+      "empty": "Hier ist noch keine Notiz.",
+      "failed": "Die Notizen ließen sich nicht laden.",
+      "title": "Notizen"
+    },
+    "new": "Neue Notiz",
+    "pick": "Wähle links eine Notiz oder fang eine neue an.",
+    "titleCheck": "Titel prüfen",
+    "titleOk": "Titel ok",
+    "untitled": "Ohne Titel"
+  },
+  "presence": {
+    "many_one": "{{first}}, {{second}} und {{count}} weitere Person sind auch hier",
+    "many_other": "{{first}}, {{second}} und {{count}} weitere sind auch hier",
+    "one": "{{name}} ist auch hier",
+    "otherWindow": "du, anderes Fenster",
+    "two": "{{first}} und {{second}} sind auch hier"
   },
   "roles": {
     "member": "Mitglied",

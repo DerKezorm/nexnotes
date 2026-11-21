@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useParams } from 'react-router-dom'
 
 import { LogoMark } from '../components/Logo'
+import { notesApi } from '../notes/api'
 import { NoteList } from '../notes/NoteList'
 import { ago } from '../lib/time'
 import { problemText } from '../lib/errors'
@@ -213,6 +214,21 @@ export function InboxPage() {
                         <span className="truncate text-[15px] font-semibold">{title}</span>
                       )}
                       {note.title_check && <span className="rounded-md bg-warn-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-warn-500">{t('folders.inbox.titleCheck')}</span>}
+                      {note.title_check && (
+                        <button
+                          type="button"
+                          data-testid="inbox-title-ok"
+                          className="nn-btn nn-btn-quiet text-[12px]"
+                          onClick={() =>
+                            void notesApi
+                              .titleOk(note.id)
+                              .then(() => load())
+                              .catch((error) => setProblem(problemText(error)))
+                          }
+                        >
+                          {t('notes.titleOk')}
+                        </button>
+                      )}
                     </span>
                     {note.preview && <span className="truncate text-[13px] text-mist-500">{note.preview}</span>}
                     <span className="text-xs text-mist-500">
