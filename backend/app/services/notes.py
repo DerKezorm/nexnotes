@@ -284,8 +284,9 @@ async def shutdown() -> None:
 # --- Changes through the room -------------------------------------------------------------------------------------
 
 
-async def change(note_id: str, edit: Callable[[Any], Any], account_id: int | None = None) -> Any:
-    return await rooms().change(note_id, edit, account_id=account_id)
+async def change(note_id: str, edit: Callable[[Any], Any], account_id: int | None = None,
+                 rescue: Callable[[Any, Any], None] | None = None) -> Any:
+    return await rooms().change(note_id, edit, account_id=account_id, rescue=rescue)
 
 
 async def read_live(note_id: str) -> tuple[str, str]:

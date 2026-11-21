@@ -24,6 +24,8 @@ const VALUES: Record<string, Record<string, unknown>> = {
   folder_name_taken: { name: 'Arbeit' },
   folder_name_too_long: { maximum: 60 },
   tag_exists: { label: 'einkauf', count: 2 },
+  search_too_many_terms: { maximum: 16 },
+  search_term_too_long: { maximum: 100 },
 }
 const WITH_PLACEHOLDER = Object.entries({ ...en.errors, ...de.errors })
   .filter(([, text]) => /\{\{/.test(String(text)))

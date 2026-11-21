@@ -763,3 +763,159 @@ def test_notes15_ac5_a_copy_of_a_version_is_found_by_the_search(client, operator
     found = client.get("/api/search", params={"q": "Kohlrabi"}).json()
     ids = {hit["id"] for hit in found.get("notes", found.get("results", found.get("items", [])))}
     assert copy["id"] in ids, found
+
+
+# --- Findings of the review ---------------------------------------------------------------------------------------
+
+
+def _paragraphs(live: Live) -> list[str]:
+    return [str(child.children[0]) if child.children else "" for child in live.doc.get("body", type=XmlFragment).children
+            if isinstance(child, XmlElement)]
+
+
+def test_notes15_ac4_a_word_typed_while_restoring_stays_one_word(client, operator):
+    """Somebody types into a paragraph the restore replaces; the keystroke that was on its way when the restore came
+    joins the paragraph that took its place, where the cursor lands, so the word is not torn into a paragraph "w" and
+    the rest. Nothing is lost."""
+    note = new_note(client, title="Plan", markdown="first session\n\nsecond")
+    history.clock.set(T0)
+    write(note["id"], operator.id, "third")
+    history.clock.advance(minutes=10)
+    history.take_due()
+    target = history_of(client, note["id"])["versions"][0]
+    # A second window keeps the note open meanwhile, so the room that restores is the one the keystroke reaches.
+    keeper = Live(client, note["id"], token_for(operator))
+    live = Live(client, note["id"], token_for(operator))
+    for each in (keeper, live):
+        assert each.pump(lambda each=each: each.synced)
+    run = live.doc.get("body", type=XmlFragment).children[0].children[0]
+    for word in (" w6", " w7"):
+        run.insert(len(str(run)), word)
+    live.settle(0.2)
+    # The next word is being typed while the restore happens: its first letters reach the room only after it.
+    live.disconnect()
+    run.insert(len(str(run)), " w")
+    assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
+    live.connect()
+    assert live.pump(lambda: _paragraphs(live)[:1] == ["first session w"]), _paragraphs(live)
+    # The restore has reached the editor; the cursor stands at the end of the paragraph that took the place of the
+    # one typed into, and the word goes on there.
+    run = live.doc.get("body", type=XmlFragment).children[0].children[0]
+    run.insert(len(str(run)), "8 w9")
+    live.settle(0.3)
+    keeper.settle(0.3)
+    assert _paragraphs(live) == _paragraphs(keeper) == ["first session w8 w9", "second", "third"]
+    live.close()
+    keeper.close()
+    assert to_plain(stored_doc(note["id"])) == "first session w8 w9\nsecond\nthird"
+    # What was typed before the restore is in the history.
+    assert "first session w6 w7" in text_of(versions(note["id"])[1])
+
+
+@pytest.mark.parametrize("round_", range(8))
+def test_notes15_ac4_a_restored_first_paragraph_stays_first(client, operator, round_):
+    """The Yjs engine of the server puts a block written at the very start of a list it got from another client by
+    client number, half the time at the end: the restore never writes there."""
+    from app.notedoc.doc import body_of
+
+    def change_first(doc) -> None:
+        body_of(doc).children[0].children[0].insert(0, "changed ")
+
+    def drop_first(doc) -> None:
+        del body_of(doc).children[0:1]
+
+    for edit_first, expected in ((change_first, "alpha\nbeta\ngamma"), (drop_first, "alpha\nbeta\ngamma")):
+        note = new_note(client, title="Order", markdown="alpha\n\nbeta")
+        history.clock.set(T0)
+        write(note["id"], operator.id, "gamma")
+        history.clock.advance(minutes=10)
+        history.take_due()
+        target = history_of(client, note["id"])["versions"][0]
+        asyncio.run(notes.change(note["id"], edit_first, account_id=operator.id))
+        assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
+        assert to_plain(stored_doc(note["id"])) == expected
+
+
+def test_notes15_ac4_restoring_what_the_note_is_already_makes_no_new_version(client, operator):
+    note = new_note(client, title="Plan", markdown="first idea")
+    session(note["id"], operator.id, ["second thought"], T0)
+    target = history_of(client, note["id"])["versions"][0]
+    history.clock.set(T0 + timedelta(hours=1))
+    write(note["id"], operator.id, "a mistake")
+    assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
+    count = len(versions(note["id"]))
+    for _ in range(5):
+        answer = client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore")
+        assert answer.status_code == 200
+        assert answer.json()["id"] == versions(note["id"])[0].id
+    assert len(versions(note["id"])) == count
+    assert to_plain(stored_doc(note["id"])) == "first idea\nsecond thought"
+
+
+def test_notes15_ac6_only_the_top_of_a_deleted_folder_goes_for_good_on_its_own(client, operator):
+    top = folder(operator, "Top")
+    inner = folder(operator, "Inner", top)
+    note = new_note(client, title="Inside", folder_id=inner)
+    client.delete(f"/api/folders/{top}")
+    assert client.delete(f"/api/trash/folders/{inner}").status_code == 404
+    assert exists(note["id"])
+    with SessionLocal() as db:
+        assert db.get(Folder, top) is not None and db.get(Folder, inner) is not None
+    assert client.delete(f"/api/trash/folders/{top}").json() == {"notes": 1, "folders": 2}
+
+
+def test_notes15_ec3_emptying_never_reaches_past_the_server_s_clock(client, operator):
+    first = new_note(client, title="first")
+    client.delete(f"/api/notes/{first['id']}")
+    listed = trash_of(client)
+    # Deleted after the list was shown; the request names a moment far ahead.
+    history.clock.set(datetime.fromisoformat(listed["now"]) + timedelta(minutes=1))
+    later = new_note(client, title="later")
+    with SessionLocal() as db:
+        row = db.get(Note, later["id"])
+        row.deleted_at = history.clock.now() + timedelta(minutes=5)
+        row.deleted_batch = "later-batch"
+        db.commit()
+    future = (datetime.fromisoformat(listed["now"]) + timedelta(days=365)).isoformat()
+    assert client.post("/api/trash/empty", json={"until": future}).json() == {"notes": 1, "folders": 0}
+    assert exists(later["id"])
+
+
+def test_notes15_ec3_what_comes_back_and_goes_again_while_emptying_stays(client, operator, monkeypatch):
+    """The trash is looked at again under the write lock: a note brought back and deleted anew between the first look
+    and the lock was deleted after the question and stays."""
+    note = new_note(client, title="Twice")
+    client.delete(f"/api/notes/{note['id']}")
+    listed = trash_of(client)
+    from app.notedoc.room import Rooms
+
+    original = Rooms.close_note
+
+    async def meanwhile(self, note_id: str) -> None:
+        await original(self, note_id)
+        history.clock.set(datetime.fromisoformat(listed["now"]) + timedelta(minutes=2))
+        with SessionLocal() as db:
+            row = db.get(Note, note_id)
+            row.deleted_at = history.clock.now()
+            row.deleted_batch = "again"
+            db.commit()
+
+    monkeypatch.setattr(Rooms, "close_note", meanwhile)
+    assert client.post("/api/trash/empty", json={"until": listed["now"]}).json() == {"notes": 0, "folders": 0}
+    assert exists(note["id"])
+
+
+def test_notes15_ec1_a_note_whose_folder_is_in_the_trash_comes_back_into_the_inbox(client, operator):
+    crafts = folder(operator, "Crafts")
+    note = new_note(client, title="Advent ideas", folder_id=crafts)
+    client.delete(f"/api/notes/{note['id']}")
+    client.delete(f"/api/folders/{crafts}")
+    lands = {item["id"]: item["lands"] for item in trash_of(client)["items"]}
+    assert lands[note["id"]] == "inbox"
+    answer = client.post(f"/api/trash/notes/{note['id']}/restore")
+    assert answer.status_code == 200
+    with SessionLocal() as db:
+        inbox = inbox_for(db, operator.id).id
+        assert answer.json()["folder_id"] == inbox
+        assert db.get(Note, note["id"]).folder_id == inbox
+        assert db.get(Folder, crafts).deleted_at is not None

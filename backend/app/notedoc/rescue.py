@@ -12,6 +12,11 @@ that land in the same deleted paragraph go to the end of that new paragraph, so 
 back as one word.
 
 What comes back is plain text: its formatting went with the deleted paragraph.
+
+A change of the server that puts other blocks in place of the ones somebody types into (restoring a version, NOTES-15
+AC-4) names, for each block it replaced, the block that took its place (``Rescuer.remember``). Text typed late into a
+replaced block goes to the end of that block instead of a paragraph of its own: that is where the writer's cursor lands
+once the change reaches the editor, so what was typed before and after the change stays one word.
 """
 
 from __future__ import annotations
@@ -199,6 +204,8 @@ class _Deletion:
     anchor: str | None
     #: The words of each paragraph that took back text for this deletion, as they are now.
     rescued: list[str] = field(default_factory=list)
+    #: The words of the paragraph a change of the server put in place of the deleted block: late text goes to its end.
+    home: str | None = None
 
 
 class Rescuer:
@@ -274,6 +281,13 @@ class Rescuer:
             restored += _put_back(doc, target, text, append=True)
         return restored
 
+    def remember(self, ids: IdRanges, at: int, home: str | None) -> None:
+        """A change of the server deleted ``ids`` at the top-level position ``at`` and put the paragraph with the words
+        ``home`` in its place (``None``: nothing took its place). Text typed into what it deleted, arriving later, goes
+        to the end of that paragraph."""
+        if ids:
+            self.deletions.append(_Deletion(ids=ids, at=at, anchor=None, home=home))
+
     def _deletion_of(self, struct: Struct) -> _Deletion | None:
         """The deletion that took the paragraph this late text was typed into: the newest one that deleted what the
         text was typed next to (or the text typed just before it)."""
@@ -339,9 +353,22 @@ def _put_back(doc: Doc, deletion: _Deletion, text: str, append: bool = False) ->
             run.insert(len(run), text)
             deletion.rescued[-1] += text
             return utf16_len(text)
+    if append and deletion.home is not None:
+        position = _find(body, deletion.home, deletion.at, paragraph=True)
+        if position is not None:
+            paragraph = body.children[position]
+            runs = [child for child in paragraph.children if isinstance(child, XmlText)]
+            run = runs[-1] if runs else paragraph.children.append(XmlText())
+            # A blank between the paragraph's last word and the text typed after it, as there was before the change.
+            words = _words(paragraph)
+            joined = text if not words or words[-1].isspace() or text[0].isspace() else " " + text
+            run.insert(len(run), joined)
+            deletion.rescued.append(words + joined)
+            return utf16_len(joined)
     position = _find(body, deletion.anchor, deletion.at) if deletion.anchor is not None else None
     if position is None:
-        position = min(deletion.at, len(body.children)) if deletion.anchor is not None else len(body.children)
+        known = deletion.anchor is not None or deletion.home is not None
+        position = min(deletion.at, len(body.children)) if known else len(body.children)
     paragraph = body.children.insert(position, XmlElement(s.PARAGRAPH))
     paragraph.children.append(XmlText()).insert(0, text)
     deletion.rescued.append(text)

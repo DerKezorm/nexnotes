@@ -10,7 +10,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-// Other ports through NEXNOTES_E2E_PORT and NEXNOTES_E2E_PROVIDER_PORT, for a second run beside this one.
+// Other ports when 8571/8572 are taken (another checkout running its own tests): NEXNOTES_E2E_PORT, ..._PROVIDER_PORT.
 const PORT = Number(process.env.NEXNOTES_E2E_PORT ?? 8571)
 const PROVIDER_PORT = Number(process.env.NEXNOTES_E2E_PROVIDER_PORT ?? 8572)
 

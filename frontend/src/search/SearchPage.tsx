@@ -7,7 +7,9 @@
  *   drop them, and says that locked notes are not searched (EC-2).
  * - 50 hits at a time, the next ones when the end of the list comes into view (EC-4).
  * - The list asks again every few seconds while the page is in front and when the window comes back, so a note
- *   changed meanwhile is right within seconds (EC-6).
+ *   changed meanwhile is right within seconds (EC-6). Only the first page and the count are asked again, however many
+ *   pages are loaded; the pages further down stay as they came.
+ * - A search the server refuses (no tag in the tag filter, too many words, a phrase too long) says why.
  * - Keys: arrow down from the field into the list, Enter opens the first hit, Escape empties the field and then leaves.
  */
 import { Search, SearchX } from 'lucide-react'
@@ -15,8 +17,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
+import { ApiError } from '../api/client'
+import { problemText } from '../lib/errors'
 import { useTitle } from '../lib/title'
-import { PAGE, PAGE_MAX, searchApi, type Hit, type SearchAnswer } from './api'
+import { PAGE, searchApi, type Hit } from './api'
 import { askable, hasFilters, readConditions, toQuery, withoutFilters, writeConditions, type SearchConditions } from './conditions'
 import { Filters } from './Filters'
 import { useFolderName } from './folderName'
@@ -31,6 +35,15 @@ export const REFRESH_MS = 5000
 
 type Shown = { key: string; total: number; items: Hit[]; unfiltered: number | null }
 
+/** The first page asked again, laid over what is loaded: the first page as it is now, then what was loaded after its
+ * last hit, as it came; no hit twice, never more than there are. */
+function refreshed(before: Hit[], first: Hit[], total: number): Hit[] {
+  const known = new Set(first.map((hit) => hit.id))
+  const last = first.length ? before.findIndex((hit) => hit.id === first[first.length - 1].id) : -1
+  const rest = before.slice(last >= 0 ? last + 1 : first.length)
+  return [...first, ...rest.filter((hit) => !known.has(hit.id))].slice(0, Math.max(total, first.length))
+}
+
 function keyOf(conditions: SearchConditions): string {
   return JSON.stringify(conditions)
 }
@@ -42,7 +55,8 @@ export function SearchPage() {
   const conditions = useMemo(() => readConditions(params), [params])
   const key = keyOf(conditions)
   const [shown, setShown] = useState<Shown | null>(null)
-  const [failed, setFailed] = useState(false)
+  /** Why the last question got no answer: `null` while all is well. */
+  const [failed, setFailed] = useState<unknown>(null)
   const [more, setMore] = useState(false)
   const field = useRef<HTMLInputElement>(null)
   const results = useRef<ResultsHandle>(null)
@@ -57,26 +71,12 @@ export function SearchPage() {
     [setParams],
   )
 
-  /** The first `count` hits of the current search, in pages the server takes. */
-  const ask = useCallback(
-    async (count: number): Promise<SearchAnswer> => {
-      const query = toQuery(conditions)
-      const pages: Promise<SearchAnswer>[] = []
-      for (let offset = 0; offset < Math.max(count, PAGE); offset += PAGE_MAX) {
-        pages.push(searchApi.find({ ...query, offset, limit: Math.min(PAGE_MAX, Math.max(count, PAGE) - offset) }))
-      }
-      const answers = await Promise.all(pages)
-      return { ...answers[0], items: answers.flatMap((answer) => answer.items) }
-    },
-    [conditions],
-  )
-
   // A new question: after a short pause in typing.
   useEffect(() => {
     if (!askable(conditions)) {
       asked.current++
       setShown(null)
-      setFailed(false)
+      setFailed(null)
       return
     }
     const ticket = ++asked.current
@@ -85,11 +85,13 @@ export function SearchPage() {
         .find({ ...toQuery(conditions), offset: 0, limit: PAGE })
         .then((answer) => {
           if (ticket !== asked.current) return
-          setFailed(false)
+          setFailed(null)
           setShown({ key, total: answer.total, items: answer.items, unfiltered: answer.unfiltered })
         })
-        .catch(() => {
-          if (ticket === asked.current) setFailed(true)
+        .catch((error: unknown) => {
+          if (ticket !== asked.current) return
+          setFailed(error)
+          setShown(null)
         })
     }, TYPE_DELAY_MS)
     return () => window.clearTimeout(timer)
@@ -98,18 +100,24 @@ export function SearchPage() {
   }, [key])
 
   const current = shown && shown.key === key ? shown : null
-  const loaded = current?.items.length ?? 0
 
-  // The same question again: every few seconds while in front, and when the window comes back (EC-6).
+  // The same question again: every few seconds while in front, and when the window comes back (EC-6). A page loaded
+  // further down needs no new timer.
+  const live = current !== null
   useEffect(() => {
-    if (!current) return
+    if (!live) return
     const again = () => {
       if (document.visibilityState === 'hidden') return
       const ticket = asked.current
-      ask(loaded)
+      searchApi
+        .find({ ...toQuery(conditions), offset: 0, limit: PAGE })
         .then((answer) => {
           if (ticket !== asked.current) return
-          setShown({ key, total: answer.total, items: answer.items, unfiltered: answer.unfiltered })
+          setShown((before) =>
+            before && before.key === key
+              ? { key, total: answer.total, items: refreshed(before.items, answer.items, answer.total), unfiltered: answer.unfiltered }
+              : before,
+          )
         })
         .catch(() => undefined)
     }
@@ -119,7 +127,7 @@ export function SearchPage() {
       window.clearInterval(timer)
       window.removeEventListener('focus', again)
     }
-  }, [ask, current, key, loaded])
+  }, [live, key, conditions])
 
   const loadMore = useCallback(() => {
     if (!current || more || current.items.length >= current.total) return
@@ -241,10 +249,17 @@ export function SearchPage() {
             {t('search.hint')}
           </p>
         )}
-        {failed && (
-          <p className="py-6 text-sm text-bad-500" role="alert">
-            {t('search.failed')}
-          </p>
+        {failed !== null && (
+          <div className="flex flex-wrap items-center gap-3 py-6" data-testid="search-failed">
+            <p className="text-sm text-bad-500" role="alert">
+              {failed instanceof ApiError && failed.status === 422 ? problemText(failed) : t('search.failed')}
+            </p>
+            {failed instanceof ApiError && failed.code === 'search_tag_invalid' && conditions.tag && (
+              <button type="button" className="nn-btn nn-btn-ghost" onClick={() => change({ ...conditions, tag: '' })} data-testid="search-drop-tag">
+                {t('search.filter.anyTag')}
+              </button>
+            )}
+          </div>
         )}
         {nothing && (
           <div className="flex min-h-[320px] flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-ink-600 p-6 text-center md:min-h-[420px]" data-testid="search-empty">

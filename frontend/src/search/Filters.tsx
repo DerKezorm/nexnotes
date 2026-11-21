@@ -7,7 +7,9 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useFolders } from '../folders/store'
+import { errorText } from '../lib/errors'
 import { tagsApi, type TagInfo } from '../tags/api'
+import { cleanName } from '../tags/rules'
 import type { Period, SearchConditions } from './conditions'
 
 type Props = {
@@ -118,6 +120,7 @@ function TagChoice({ conditions, onChange }: Props) {
   const { t } = useTranslation()
   const [tags, setTags] = useState<TagInfo[] | null>(null)
   const [typed, setTyped] = useState('')
+  const [wrong, setWrong] = useState(false)
   return (
     <Chip label={conditions.tag ? `#${conditions.tag}` : t('search.filter.tag')} active={Boolean(conditions.tag)} testId="filter-tag">
       {(close) => {
@@ -140,7 +143,11 @@ function TagChoice({ conditions, onChange }: Props) {
               className="p-1"
               onSubmit={(event) => {
                 event.preventDefault()
-                if (typed.trim()) pick(typed)
+                if (!typed.trim()) return
+                // Only a tag filters: `#2026` or `!!!` would leave every hit under a chip that says otherwise.
+                const name = cleanName(typed)
+                if (name) pick(name)
+                else setWrong(true)
               }}
             >
               <input
@@ -150,9 +157,18 @@ function TagChoice({ conditions, onChange }: Props) {
                 maxLength={100}
                 placeholder={t('search.filter.tagPlaceholder')}
                 aria-label={t('search.filter.tag')}
-                onChange={(event) => setTyped(event.target.value)}
+                onChange={(event) => {
+                  setTyped(event.target.value)
+                  setWrong(false)
+                }}
+                aria-invalid={wrong}
                 data-testid="filter-tag-input"
               />
+              {wrong && (
+                <p className="max-w-[260px] px-1.5 pt-1.5 text-xs text-bad-500" role="alert" data-testid="filter-tag-wrong">
+                  {errorText('search_tag_invalid')}
+                </p>
+              )}
             </form>
             {conditions.tag && (
               <button type="button" role="menuitem" className="nn-menu-item" onClick={() => pick('')}>

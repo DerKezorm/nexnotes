@@ -376,7 +376,10 @@
     "wrong_credentials": "Email or password is wrong.",
     "wrong_password": "The password is wrong.",
     "tag_name_invalid": "A tag is made of letters, digits, hyphens, underscores or emoji, without spaces, with at least one letter and at most 64 characters.",
-    "tag_exists": "The tag #{{label}} exists already."
+    "tag_exists": "The tag #{{label}} exists already.",
+    "search_tag_invalid": "This is no tag: a tag needs at least one letter or emoji, like #invoice.",
+    "search_too_many_terms": "A search takes at most {{maximum}} words, phrases and tags. Leave some out.",
+    "search_term_too_long": "A word or a phrase in quotes may have at most {{maximum}} characters. Shorten it."
   },
   "folders": {
     "section": "Folders",
@@ -988,6 +991,7 @@
     "emptied": "The trash is empty.",
     "failed": "The trash could not be loaded.",
     "final": "This cannot be undone.",
+    "folderTitle_zero": "{{name}} · empty folder",
     "folderTitle_one": "{{name}} · folder with {{count}} note",
     "folderTitle_other": "{{name}} · folder with {{count}} notes",
     "from": "from {{name}}",

@@ -71,6 +71,9 @@ function answerSearch(params: URLSearchParams): Response {
   const words = (params.get('q') ?? '').toLowerCase().split(/\s+/).filter(Boolean)
   const folder = params.get('folder_id')
   const tag = params.get('tag')
+  // The server's refusals (backend `services/search.py`): no tag in the filter, more than sixteen words.
+  if (tag && !/[\p{L}\p{Extended_Pictographic}]/u.test(tag)) return reply(422, { detail: { code: 'search_tag_invalid', message: 'This is not a tag.' } })
+  if (words.length > 16) return reply(422, { detail: { code: 'search_too_many_terms', message: 'Too many.', maximum: 16 } })
   const since = params.get('since')
   const match = (note: Stored, filtered: boolean) => {
     const all = `${note.title} ${note.text}`.toLowerCase()
@@ -456,6 +459,70 @@ describe('NOTES-9 search page', () => {
     await answered()
     expect($$('search-hit')).toHaveLength(2)
     expect($('search-count')!.textContent).toBe('2 Treffer')
+  })
+
+  it('NOTES-9 EC-6 EC-4 asking again takes the first page and the count only, however many pages are loaded', async () => {
+    stored = Array.from({ length: 400 }, (_, index) => ({
+      id: `m${index}`, title: `Rechnung ${index}`, text: 'Strom', folder: INBOX, updated: '2026-11-01T10:00:00Z',
+    }))
+    await render('/search?q=rechnung')
+    await click($('search-more'))
+    await answered()
+    await click($('search-more'))
+    await answered()
+    expect($$('search-hit')).toHaveLength(150)
+    // Meanwhile a new note comes first, and one from further down was changed and comes second.
+    const moved = stored.find((note) => note.id === 'm100')!
+    stored = [{ id: 'new', title: 'Rechnung neu', text: 'Gas', folder: INBOX, updated: '2026-11-19T10:00:00Z' }, moved, ...stored.filter((note) => note !== moved)]
+    calls = []
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'))
+    })
+    await answered()
+    expect(searches().map((call) => [call.params.get('offset'), call.params.get('limit')])).toEqual([['0', '50']])
+    const ids = $$('search-hit').map((hit) => hit.getAttribute('data-hit'))
+    expect(ids.slice(0, 3)).toEqual(['new', 'm100', 'm0'])
+    // Nothing lost at the seam of the first page, nothing twice.
+    expect(ids.slice(49, 52)).toEqual(['m47', 'm48', 'm49'])
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids).toHaveLength(151)
+    expect($('search-count')!.textContent).toBe('401 Treffer')
+  })
+
+  it('NOTES-9 AC-4 a tag filter the server refuses says why, and the tag can be dropped', async () => {
+    await render('/search?q=rechnung&tag=2026')
+    expect($('search-failed')!.textContent).toContain('Das ist kein Schlagwort')
+    expect($$('search-hit')).toHaveLength(0)
+    await click($('search-drop-tag'))
+    await answered()
+    expect(where).toBe('/search?q=rechnung')
+    expect($('search-failed')).toBeNull()
+    expect($$('search-hit').length).toBeGreaterThan(0)
+  })
+
+  it('NOTES-9 AC-4 the tag field takes only a tag', async () => {
+    await render('/search?q=rechnung')
+    await click($('filter-tag'))
+    const input = $('filter-tag-input') as HTMLInputElement
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    await act(async () => {
+      setter.call(input, '#2026')
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+    await act(async () => {
+      input.form!.requestSubmit()
+    })
+    await answered()
+    expect($('filter-tag-wrong')!.textContent).toContain('Das ist kein Schlagwort')
+    expect(where).toBe('/search?q=rechnung')
+  })
+
+  it('NOTES-9 AC-7 more than sixteen words: the server says so with its number, nothing is cut', async () => {
+    await render('/search')
+    await type(Array.from({ length: 17 }, (_, index) => `wort${index}`).join(' '))
+    await answered()
+    expect($('search-failed')!.textContent).toContain('höchstens 16 Wörter')
+    expect($('search-failed')!.textContent).not.toContain('{{')
   })
 
   // ---- Keys and phone ------------------------------------------------------------------------------------------

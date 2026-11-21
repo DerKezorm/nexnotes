@@ -49,6 +49,9 @@ from ..models import Account, Note, NoteUpdate, utcnow
 from ..models_history import NoteEdit, NoteVersion
 from ..notedoc import doc as notedoc
 from ..notedoc.doc import _read_element, body_of, write_blocks
+from ..notedoc.rescue import Rescuer, _words
+from ..notedoc.schema import PARAGRAPH
+from ..notedoc.yupdate import IdRanges, decode_update
 from ..notedoc.markdown import to_plain
 from . import content, notes, settings_service
 
@@ -147,10 +150,11 @@ def _current_state(db: Session, note_id: str) -> bytes | None:
 
 
 def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, force: bool = False,
-          author: int | None = None, state: bytes | None = None, until: datetime | None = None
-          ) -> NoteVersion | None:
+          author: int | None = None, state: bytes | None = None, until: datetime | None = None,
+          skip_same: bool = False) -> NoteVersion | None:
     """A version of the note as it is now (or ``state``, the note as it was at ``until``), named after who wrote since
-    the last one. Nothing when it would be the same as the last version (unless ``force``)."""
+    the last one. Nothing when it would be the same as the last version (unless ``force``; with ``skip_same`` not
+    even then)."""
     query = select(NoteEdit).where(NoteEdit.note_id == note_id)
     if until is not None:
         query = query.where(NoteEdit.first_at <= until)
@@ -163,7 +167,7 @@ def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, f
         return None
     last = db.execute(select(NoteVersion.state).where(NoteVersion.note_id == note_id)
                       .order_by(NoteVersion.created_at.desc(), NoteVersion.id.desc()).limit(1)).first()
-    if not force and last is not None and last.state == state:
+    if (not force or skip_same) and last is not None and last.state == state:
         return None
     if last is None and not edits and not force:
         return None
@@ -185,13 +189,14 @@ def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, f
 
 
 def take_now(note_id: str, *, restored_from: datetime | None = None, force: bool = False,
-             author: int | None = None, state: bytes | None = None, until: datetime | None = None) -> int | None:
+             author: int | None = None, state: bytes | None = None, until: datetime | None = None,
+             skip_same: bool = False) -> int | None:
     """A version of the note right now (after a restore), or of ``state`` as it was at ``until`` (right before one);
     returns its id, or ``None`` when nothing was new."""
     with SessionLocal() as db:
         _write_lock(db)
         version = _take(db, note_id, restored_from=restored_from, force=force, author=author, state=state,
-                        until=until)
+                        until=until, skip_same=skip_same)
         db.commit()
         return version.id if version is not None else None
 
@@ -410,13 +415,25 @@ def _block_key(child: Any) -> str | None:
     return _key(cleaned[0]) if len(cleaned) == 1 else None
 
 
-def replace_content(doc: Doc, title: str, blocks: list[dict[str, Any]]) -> None:
+#: What a restore replaced: the ids it deleted, where, and the words of the paragraph that took their place.
+Replaced = tuple[IdRanges, int, str | None]
+
+
+def _deleted_now(doc: Doc) -> IdRanges:
+    return decode_update(doc.get_update()).deleted
+
+
+def replace_content(doc: Doc, title: str, blocks: list[dict[str, Any]]) -> list[Replaced]:
     """The note becomes ``title`` and ``blocks``, changing only what differs: the title's changed part, and of the text
     only the blocks that are not in both, in order (the longest common run of equal blocks stays untouched, so
-    whoever types in one of them at the same moment keeps their place)."""
+    whoever types in one of them at the same moment keeps their place).
+
+    Returns, for each stretch of blocks it replaced, what it deleted and the paragraph that took its place, so that
+    text typed into a replaced block at the same moment joins that paragraph (``Rescuer.remember``)."""
     notedoc.set_title(doc, title)
     wanted = notedoc.clean_doc({"type": "doc", "content": blocks})["content"]
     body = body_of(doc)
+    replaced: list[Replaced] = []
     with doc.transaction():
         have = [_block_key(child) for child in body.children]
         matcher = SequenceMatcher(a=have, b=[_key(block) for block in wanted], autojunk=False)
@@ -424,9 +441,22 @@ def replace_content(doc: Doc, title: str, blocks: list[dict[str, Any]]) -> None:
         for tag, a_start, a_end, b_start, b_end in reversed(matcher.get_opcodes()):
             if tag == "equal":
                 continue
+            new = wanted[b_start:b_end]
+            if a_start == a_end == 0 and have and b_end < len(wanted):
+                # Before the first block. The Yjs engine places a block put at the very start of a list it got from
+                # another client by client number, often at the end; so the first block is written again after the
+                # new ones and the old one goes (what somebody types into it meanwhile joins the copy).
+                new, a_end = new + [wanted[b_end]], 1
+            # The new blocks go after the ones they replace (each right behind a block, never at the very start), then
+            # the old ones go.
+            made = write_blocks(body, a_end, new)
             if a_end > a_start:
+                before = _deleted_now(doc)
                 del body.children[a_start:a_end]
-            write_blocks(body, a_start, wanted[b_start:b_end])
+                gone = _deleted_now(doc).minus(before)
+                home = next((block for block in reversed(made) if block.tag == PARAGRAPH), None)
+                replaced.append((gone, a_start, _words(home) if home is not None else None))
+    return replaced
 
 
 async def restore(account: Account, note_id: str, version_id: int) -> dict[str, Any]:
@@ -438,17 +468,26 @@ async def restore(account: Account, note_id: str, version_id: int) -> dict[str, 
         state, at = version.state, version.created_at
     title, blocks = await asyncio.to_thread(content_of, state)
 
-    def edit(doc: Doc) -> bytes:
+    def edit(doc: Doc) -> tuple[bytes, list[Replaced]]:
         # The note exactly as the restore found it, read under the room's lock: what anybody's update brought in
         # until this moment is in it, and it stays in the history.
         before = doc.get_update()
-        replace_content(doc, title, blocks)
-        return before
+        return before, replace_content(doc, title, blocks)
+
+    def remember(rescuer: Rescuer, done: tuple[bytes, list[Replaced]]) -> None:
+        for ids, at, home in done[1]:
+            rescuer.remember(ids, at, home)
 
     started = clock.now()
-    before = await notes.change(note_id, edit, account_id=account.id)
+    before, _ = await notes.change(note_id, edit, account_id=account.id, rescue=remember)
     await asyncio.to_thread(take_now, note_id, state=before, until=started)
-    made = await asyncio.to_thread(take_now, note_id, restored_from=at, force=True, author=account.id)
+    # A restore that changes nothing (the note is the version already) makes no version of its own: each one is the
+    # whole note and counts towards the account's storage.
+    made = await asyncio.to_thread(take_now, note_id, restored_from=at, force=True, author=account.id, skip_same=True)
+    if made is None:
+        with SessionLocal() as db:
+            made = db.scalar(select(NoteVersion.id).where(NoteVersion.note_id == note_id)
+                             .order_by(NoteVersion.created_at.desc(), NoteVersion.id.desc()).limit(1))
     logger.info("Version restored note=%s version=%s", note_id, version_id)
     return {"id": made, "restored_from": at.isoformat()}
 
