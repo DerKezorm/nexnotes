@@ -711,8 +711,6 @@
       "emptyTitle": "Der Eingang ist leer",
       "emptyText": "Hier landet, was du schnell festhältst: aus einer anderen App geteilt, diktiert oder über MCP geschickt. Von hier sortierst du es in deine Ordner ein.",
       "tip": "Tipp: Notizen lassen sich auch direkt auf einen Ordner in der Seitenleiste ziehen.",
-      "titleCheck": "Titel prüfen",
-      "untitled": "Ohne Titel",
       "sortIn": "Einsortieren",
       "origin": {
         "share": "Geteilt aus {{source}}",
@@ -810,6 +808,12 @@
       "remove": "Bild entfernen",
       "saved": "Profilbild gespeichert.",
       "removed": "Profilbild entfernt."
+    },
+    "lists": {
+      "title": "Notizlisten",
+      "style": "Darstellung der Notizlisten",
+      "styleHint": "gilt für alle Listen, auf allen Geräten",
+      "hints": "Hinweise in Listen"
     }
   },
   "nav": {
@@ -829,7 +833,7 @@
     "emptyAll": "Noch keine Notizen",
     "emptyAllText": "Was du schreibst, steht hier: alle Notizen aus allen Ordnern und die, die andere mit dir teilen.",
     "group": "Nach Datum",
-    "groupLabel": "Nach Datum gruppieren",
+    "groupLabel": "Gruppieren",
     "groupOffByTitle": "Nach Titel sortiert gibt es keine Gruppen.",
     "groups": {
       "month": "Letzte 30 Tage",
@@ -871,7 +875,7 @@
       "created": "Erstellt",
       "desc": "Neueste zuerst",
       "descTitle": "Z bis A",
-      "label": "Sortierung",
+      "label": "Sortieren",
       "title": "Titel A bis Z",
       "titleDesc": "Titel Z bis A",
       "updated": "Zuletzt geändert"
@@ -879,8 +883,6 @@
     "tasks": "{{done}} von {{total}}",
     "view": {
       "label": "Ansicht",
-      "list": "Liste",
-      "tiles": "Kacheln",
       "gallery": "Anhänge",
       "show": "Zeigen",
       "notes": "Notizen"
@@ -1199,14 +1201,7 @@
     "jump": "Seite der Einstellungen",
     "ownPassword": "Dein Passwort",
     "saved": "Gespeichert.",
-    "title": "Einstellungen",
-    "tabs": {
-      "account": "Mein Konto",
-      "accounts": "Konten",
-      "connections": "Verbindungen",
-      "log": "Log",
-      "server": "Server"
-    }
+    "title": "Einstellungen"
   },
   "setup": {
     "code": "Einrichtungscode",
@@ -1572,7 +1567,8 @@
     "deleteSays_one": "{{tag}} verschwindet aus einer deiner Notizen, der übrige Text bleibt.",
     "deleteSays_other": "{{tag}} verschwindet aus {{count}} deiner Notizen, der übrige Text bleibt.",
     "suggestions": "Vorschläge für Schlagwörter",
-    "openTag": "Alle Notizen mit {{tag}}"
+    "openTag": "Alle Notizen mit {{tag}}",
+    "menu": "Aktionen für {{tag}}"
   },
   "theme": {
     "dark": "Dunkel",
@@ -1745,7 +1741,11 @@
       "through": "{{name}} über den Ordner „{{folder}}“ ({{level}})",
       "onlyYouNote": "Nur du entscheidest, wer die Notiz sieht. Andere können sie nicht weiterteilen.",
       "onlyYouFolder": "Nur du entscheidest, wer den Ordner sieht. Andere können ihn nicht weiterteilen.",
-      "done": "Fertig"
+      "done": "Fertig",
+      "nobody": "Niemand auf diesem Server heißt so. Teilen geht nur mit Konten hier.",
+      "invite": "Person einladen",
+      "noneChosen": "Noch niemand ausgewählt.",
+      "clear": "Eingabe leeren"
     },
     "level": {
       "read": "lesen",

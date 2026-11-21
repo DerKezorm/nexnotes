@@ -6,9 +6,10 @@
  */
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import { hideNotice } from '../folders/notice'
+import { AuthProvider } from '../state/auth'
 import i18n from '../i18n'
 import { dayFrom, endOfDay, type Sharing, type WithMe } from './api'
 import { askMoveOut } from './moveAsk'
@@ -28,6 +29,11 @@ let box: HTMLDivElement
 
 const anna = { id: 2, name: 'Anna', email: 'anna@example.com', avatar: null }
 const lena = { id: 3, name: 'Lena', email: 'lena@example.com', avatar: null }
+let role: 'member' | 'operator' = 'member'
+const ME = {
+  id: 1, name: 'tester', display_name: 'Tester', email: 'tester@example.com', sign_in: 'password', language: 'en',
+  two_factor: false, two_factor_recovery_left: 0, version: '0.1.0', whats_new_seen: '0.1.0',
+}
 
 function reply(status: number, body: unknown): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -35,6 +41,8 @@ function reply(status: number, body: unknown): Response {
 
 function answer(call: Call): Response {
   const { method, path, body } = call
+  if (method === 'GET' && path === '/api/setup') return reply(200, { needs_setup: false, signed_in: true, code_required: true, version: '0.1.0', min_password: 12 })
+  if (method === 'GET' && path === '/api/auth/me') return reply(200, { ...ME, role })
   if (method === 'GET' && path === '/api/shares/note/n1') return reply(200, sharing)
   if (method === 'GET' && path === '/api/shares/people') return reply(200, [anna, lena].filter((person) => person.name.toLowerCase().includes(new URLSearchParams(call.query).get('q')!.toLowerCase())))
   const person = /^\/api\/shares\/note\/n1\/people\/(\d+)$/.exec(path)
@@ -100,6 +108,7 @@ beforeAll(async () => {
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   calls = []
+  role = 'member'
   sharing = { kind: 'note', id: 'n1', title: 'Lentil soup', people: [], through_folder: [], links: true, link: null }
   withMe = {
     count: 3,
@@ -137,6 +146,102 @@ afterEach(async () => {
   for (const leftover of document.querySelectorAll('[role="dialog"]')) leftover.closest('.fixed')?.remove()
   act(() => hideNotice())
   vi.unstubAllGlobals()
+})
+
+/** Where the address went (the dialog's link to the accounts). */
+function Place() {
+  const location = useLocation()
+  return <output data-testid="place">{location.pathname + location.search}</output>
+}
+
+/** The dialog for a signed-in account, as the app shows it; `closed` counts how often it was closed. */
+async function signedIn(closed: { count: number }): Promise<void> {
+  await act(async () =>
+    root.render(
+      <MemoryRouter initialEntries={['/notes/n1']}>
+        <AuthProvider>
+          <Place />
+          <Routes>
+            <Route path="*" element={<ShareDialog kind="note" id="n1" title="Lentil soup" onClose={() => void closed.count++} />} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    ),
+  )
+  await settle()
+}
+
+describe('the share dialog when nobody fits', () => {
+  it('NOTES-13 AC-1 a name nobody on the server goes by is said right below the field, without "Invite" for a member', async () => {
+    await signedIn({ count: 0 })
+    const search = $('share-search') as HTMLInputElement
+    expect(search.type).toBe('text')
+    await act(async () => type(search, 'zoe'))
+    await settle(10, 30)
+    expect($$('share-found')).toHaveLength(0)
+    const says = $('share-nobody')!
+    expect(says.textContent).toBe('Nobody on this server goes by that. You can only share with accounts here.')
+    expect(says.closest('[aria-live="polite"]')).not.toBeNull()
+    expect(search.getAttribute('aria-describedby')).toBe(says.closest('[aria-live]')!.id)
+    expect($('share-invite')).toBeNull()
+    // A name that fits: no such sentence.
+    await act(async () => type(search, 'len'))
+    await settle(10, 30)
+    expect($$('share-found')).toHaveLength(1)
+    expect($('share-nobody')).toBeNull()
+    // One letter is no search yet: nothing said either.
+    await act(async () => type(search, 'z'))
+    await settle(10, 30)
+    expect($('share-nobody')).toBeNull()
+  })
+
+  it('NOTES-13 AC-1 the operator gets "Invite a person", which leads to the accounts with the invitation open', async () => {
+    role = 'operator'
+    const closed = { count: 0 }
+    await signedIn(closed)
+    await act(async () => type($('share-search') as HTMLInputElement, 'zoe'))
+    await settle(10, 30)
+    const invite = $('share-invite')!
+    expect(invite.textContent).toBe('Invite a person')
+    expect(invite.getAttribute('href')).toBe('/settings/accounts?invite=1')
+    await act(async () => invite.click())
+    await settle()
+    expect($('place')!.textContent).toBe('/settings/accounts?invite=1')
+    expect(closed.count).toBe(1)
+  })
+
+  it('NOTES-13 AC-1 "Done" with a name typed and nobody chosen stays open once and says so; the second "Done" closes', async () => {
+    const closed = { count: 0 }
+    await signedIn(closed)
+    // Nothing typed: "Done" closes at once.
+    await act(async () => $('share-done')!.click())
+    expect(closed.count).toBe(1)
+    await act(async () => type($('share-search') as HTMLInputElement, 'zoe'))
+    await settle(10, 30)
+    await act(async () => $('share-done')!.click())
+    expect(closed.count).toBe(1)
+    const warned = $('share-none-chosen')!
+    expect(warned.textContent).toBe('Nobody chosen yet.')
+    expect(warned.closest('[aria-live="polite"]')).not.toBeNull()
+    await act(async () => $('share-done')!.click())
+    expect(closed.count).toBe(2)
+  })
+
+  it('NOTES-13 AC-1 the field clears with an ✕ of its own, named, and gives the focus back', async () => {
+    await signedIn({ count: 0 })
+    const search = $('share-search') as HTMLInputElement
+    expect($('share-search-clear')).toBeNull()
+    await act(async () => type(search, 'ann'))
+    await settle(10, 30)
+    const clear = $('share-search-clear')!
+    expect(clear.getAttribute('aria-label')).toBe('Clear')
+    await act(async () => clear.click())
+    await settle(10, 30)
+    expect(search.value).toBe('')
+    expect(document.activeElement).toBe(search)
+    expect($$('share-found')).toHaveLength(0)
+    expect($('share-search-clear')).toBeNull()
+  })
 })
 
 describe('the share dialog', () => {

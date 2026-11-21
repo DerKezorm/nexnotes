@@ -189,7 +189,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it.each([
     ['profile', ['profile']],
     ['security', ['security']],
-    ['appearance', ['looks']],
+    ['appearance', ['looks', 'lists']],
     ['general', ['limits', 'features', 'languages']],
     ['sign-in', ['sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
@@ -215,5 +215,15 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it('NOTES-2 AC-9 Accounts holds the table of the accounts', async () => {
     await open('/settings/accounts')
     expect(cards()).toContain('accounts')
+  })
+
+  it('NOTES-13 AC-1 Accounts with ?invite opens "Invite a person" at once (the share dialog leads there); closing drops it', async () => {
+    await open('/settings/accounts?invite=1')
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.getAttribute('aria-label')).toBe(i18n.t('accounts.invite'))
+    await act(async () => dialog.querySelector<HTMLButtonElement>('button[aria-label]')!.click())
+    await settle()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(where()).toBe('/settings/accounts')
   })
 })

@@ -385,3 +385,38 @@ def test_notes5_ec6_the_note_list_shows_no_tags_of_a_locked_note(client, account
     items = {item["id"]: item for item in client.get("/api/notes").json()}
     assert items[secret["id"]]["tags"] == []
     assert items[open_note["id"]]["tags"] == ["offen"]
+
+
+def test_notes5_ac3_the_page_of_a_tag_is_a_list_with_its_own_view_and_stamp(client, account, sharing):
+    """The page of a tag draws its notes like every list (NOTES-6): the items of ``/api/note-list`` with their hints,
+    whose they are, a view kept for the tag and a stamp that changes with its notes."""
+    lena = make_account("lena")
+    kitchen = folder(account, "Kitchen")
+    mine = new_note(client, title="Saturday", markdown="Milk #einkauf\n\n- [ ] eggs", folder_id=kitchen)
+    with new_client(lena) as theirs_client:
+        theirs = new_note(theirs_client, title="Barbecue", markdown="#Einkauf #grill")
+    sharing[account.id] = {theirs["id"]}
+    answer = client.get("/api/tags/%23Einkauf/notes").json()
+    assert answer["key"] == "tag:einkauf" and answer["tag"] == "einkauf"
+    assert answer["counts"] == {"own": 1, "shared": 1} and answer["count"] == 2 and answer["mine"] == 1
+    assert answer["others"] == [{"id": lena.id, "name": "Lena", "count": 1}]
+    assert answer["view"] == {"mode": "list", "sort": "updated", "direction": "desc", "grouped": True}
+    items = {item["id"]: item for item in answer["items"]}
+    assert items[mine["id"]]["folder_id"] == kitchen and items[mine["id"]]["created_at"]
+    assert "einkauf" in [tag if isinstance(tag, str) else tag["name"] for tag in items[mine["id"]]["tags"]]
+    assert items[theirs["id"]]["owner"] == {"id": lena.id, "name": "Lena"}
+    # The view is the tag's own, on every device; another tag keeps the default.
+    saved = client.put("/api/tags/einkauf/view", json={"sort": "title", "direction": "asc", "grouped": False}).json()
+    assert saved["sort"] == "title" and saved["grouped"] is False
+    assert client.get("/api/tags/EINKAUF/notes").json()["view"]["sort"] == "title"
+    new_note(client, title="Other", markdown="#bad")
+    assert client.get("/api/tags/bad/notes").json()["view"]["sort"] == "updated"
+    # The stamp follows the notes with the tag.
+    before = client.get("/api/tags/einkauf/stamp").json()["stamp"]
+    assert client.get("/api/tags/einkauf/stamp").json()["stamp"] == before
+    new_note(client, title="Sunday", markdown="Bread #einkauf")
+    assert client.get("/api/tags/einkauf/stamp").json()["stamp"] != before
+    assert client.get("/api/tags/no%20tag/notes").status_code == 422
+    assert client.put("/api/tags/einkauf/view", json={"sort": "size"}).status_code == 422
+    # A long tag keeps its view under a key that fits the table (40 characters).
+    assert len(tags.tag_view_key("x" * 100)) == 40 and tags.tag_view_key("x" * 100) != tags.tag_view_key("x" * 101)

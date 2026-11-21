@@ -9,22 +9,16 @@
  * Keyboard: the arrow keys go through the entries, Escape closes it and gives the focus back to the button
  * (`components/Menu.tsx`). A choice keeps the menu open, so several can be made in one go.
  */
-import { AlignJustify, ArrowDown, ArrowUp, Check, GalleryVerticalEnd, LayoutGrid, LayoutList, SlidersHorizontal, type LucideIcon } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, SlidersHorizontal, type LucideIcon } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Menu } from '../../components/Menu'
-import { LIST_STYLES, type ListMode, type ListSort, type ListStyle, type ListView } from './api'
+import { LIST_STYLES, type ListMode, type ListSort, type ListView } from './api'
 import type { ListLook } from './look'
+import { STYLE_ICONS } from './styleIcons'
 
 const SORTS: ListSort[] = ['updated', 'created', 'title']
-
-const STYLE_ICONS: Record<ListStyle, LucideIcon> = {
-  list: LayoutList,
-  cards: GalleryVerticalEnd,
-  compact: AlignJustify,
-  tiles: LayoutGrid,
-}
 
 type Props = {
   view: ListView

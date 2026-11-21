@@ -78,8 +78,13 @@ function answer(call: Call): Response {
   const { method, path, body } = call
   if (path === '/api/folders') return reply(200, { inbox: { id: INBOX, count: 0 }, folders: [{ id: 'f1', parent_id: null, name: 'Rezepte', icon: '', color: '', position: 0, count: 2 }] })
   if (path === '/api/tags') return reply(200, { tags: [{ key: 'einkauf', label: 'einkauf', count: 3 }], total: 1 })
-  if (path === '/api/tags/einkauf')
-    return reply(200, { key: 'einkauf', label: 'einkauf', count: 1, mine: 1, others: [], notes: [{ id: 'n1', title: 'Samstag', preview: '', updated_at: new Date().toISOString(), mine: true, folder: null, owner: null }] })
+  if (path === '/api/tags/einkauf/notes') {
+    const at = new Date().toISOString()
+    const items = [{ id: 'n1', folder_id: 'f1', title: 'Samstag', title_check: false, origin: '', preview: '', created_at: at, updated_at: at, pinned: false, color: '', icon: '', tasks: null }]
+    const view = { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }
+    return reply(200, { key: 'tag:einkauf', view, counts: { own: 1, shared: 0 }, items, tag: 'einkauf', label: 'einkauf', count: 1, mine: 1, others: [] })
+  }
+  if (path === '/api/tags/einkauf/stamp') return reply(200, { stamp: '1' })
   if (path === '/api/search') return reply(200, { total: 1, offset: 0, items: [], unfiltered: null, terms: [], tags: [] })
   if (path === '/api/smart-folders' && method === 'GET') return reply(200, { items: smart })
   if (path === '/api/smart-folders' && method === 'POST') {
@@ -412,7 +417,9 @@ describe('NOTES-7 smart folders', () => {
   it('NOTES-7 AC-5 NOTES-5 AC-6 from a tag page: the button is there and makes "#tag" with "tag has …"', async () => {
     await render('/tags/einkauf')
     await settle(100)
-    await click($('tag-smart'))
+    // In the head's "…" of the tag.
+    await click($('tag-more'))
+    await click(anywhere('tag-smart'))
     await settle(60)
     expect(posted('/api/smart-folders')[0].body).toEqual({ name: '#einkauf', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'einkauf', label: 'einkauf' }] })
     expect(where).toBe('/smart/s1')
@@ -422,7 +429,9 @@ describe('NOTES-7 smart folders', () => {
     smart = [...smart, { id: 'x', name: '#einkauf', preset: '', match: 'all', conditions: [], position: 2 }]
     await render('/tags/einkauf')
     await settle(100)
-    await click($('tag-smart'))
+    // In the head's "…" of the tag.
+    await click($('tag-more'))
+    await click(anywhere('tag-smart'))
     await settle(60)
     expect(box.textContent).toContain('Einen intelligenten Ordner „#einkauf“ gibt es schon. Wähle einen anderen Namen.')
     expect(where).toBe('/tags/einkauf')

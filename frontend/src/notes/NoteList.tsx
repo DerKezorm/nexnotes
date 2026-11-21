@@ -9,6 +9,10 @@
  * own "…", and a line saying how it is sorted and grouped. Without `heading` (a page with a head of its own) only that
  * line and "Ansicht".
  *
+ * Every list of notes uses it: a folder, "All notes", a smart folder, the inbox (where a note came from, "Einsortieren"),
+ * the page of a tag (whose a note is), a folder somebody shared. What such a list adds to its notes comes in through
+ * `decorate`; the search alone keeps its own list of hits.
+ *
  * The pieces live in `notes/list/`: the server's routes (`api.ts`), the order and the date groups (`order.ts`), the
  * fixed-height layout and the window over it (`layout.ts`, `Window.tsx`), rows, cards, compact rows, tiles, the menus.
  */
@@ -27,7 +31,7 @@ import { noteHref } from './newNote'
 import { noteOf } from './workspace'
 import type { ListItem, ListMode } from './list/api'
 import { useCollapsed } from './list/collapsed'
-import type { ItemProps, RowFolder } from './list/ItemParts'
+import type { ItemDecor, ItemProps, RowFolder } from './list/ItemParts'
 import { ItemMenu } from './list/ItemMenu'
 import { layout, SIZES, type Entry } from './list/layout'
 import { ListHead } from './list/ListHead'
@@ -69,6 +73,12 @@ export type NoteListProps = {
   /** What the list can show besides its notes: `gallery` shows `gallery` in the place of the notes. */
   modes?: readonly ListMode[]
   gallery?: ReactNode
+  /** The count in the head instead of "12 Notizen" (the page of a tag: "3 Notizen, davon 1 von Lena"). */
+  count?: string
+  /** What stands between the head and the notes: a sentence about the list, a shared folder's folders. */
+  intro?: ReactNode
+  /** What the list adds to each note: a sign, another place than its folder, buttons (`ItemDecor`). */
+  decorate?: (item: ListItem) => ItemDecor | undefined
 }
 
 /** The width of the list, followed as it changes; unknown (a test without layout) counts as a wide screen. */
@@ -87,7 +97,7 @@ function useWidth(box: React.RefObject<HTMLElement | null>): number {
   return width
 }
 
-export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, crumb, icon, actions, source, empty, modes, gallery }: NoteListProps) {
+export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, crumb, icon, actions, source, empty, modes, gallery, count, intro, decorate }: NoteListProps) {
   const href = hrefFor ?? ((id: string) => noteHref(id, folderId))
   const location = useLocation()
   const selectedId = chosenId ?? noteOf(location.pathname, location.search) ?? undefined
@@ -140,19 +150,24 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
   const dragOf = (item: ListItem) => (item.owner ? undefined : (event: DragEvent) => startNoteDrag(event, [item.id]))
 
   // Every look shows when a note last changed (AC-2), whatever the list is sorted by.
-  const propsOf = (item: ListItem, first = false): ItemProps => ({
-    item,
-    href: href(item.id),
-    chosen: item.id === selectedId,
-    date: listDate(item.updated_at, lang, now),
-    folder: folderOf(item),
-    hints: look.hints,
-    first,
-    onOpen: opener(item.id),
-    onMenu: item.owner ? undefined : openMenu,
-    onDragStart: dragOf(item),
-    onDragEnd: endDrag,
-  })
+  const propsOf = (item: ListItem, first = false): ItemProps => {
+    const decor = decorate?.(item)
+    return {
+      item,
+      href: href(item.id),
+      chosen: item.id === selectedId,
+      date: listDate(item.updated_at, lang, now),
+      folder: decor && 'folder' in decor ? decor.folder : folderOf(item),
+      hints: look.hints,
+      first,
+      onOpen: opener(item.id),
+      onMenu: item.owner ? undefined : openMenu,
+      onDragStart: dragOf(item),
+      onDragEnd: endDrag,
+      mark: decor?.mark,
+      actions: decor?.actions,
+    }
+  }
   const render = (entry: Entry) => {
     if (entry.kind === 'header') {
       const Chevron = entry.collapsed ? ChevronRight : ChevronDown
@@ -192,13 +207,16 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
 
   const folderName = folderId ? (tree.inbox?.id === folderId ? t('notes.inbox') : (tree.byId.get(folderId)?.name ?? '')) : ''
   const counts = answer?.counts
-  const countText = !counts
-    ? ''
-    : all
-      ? counts.shared > 0
-        ? t('noteList.countsShared', { own: counts.own, shared: counts.shared })
-        : t('noteList.count', { count: counts.own })
-      : t('noteList.count', { count: counts.own })
+  // A folder somebody shared holds only notes of others: they count for it as its own do.
+  const countText =
+    count ??
+    (!counts
+      ? ''
+      : all
+        ? counts.shared > 0
+          ? t('noteList.countsShared', { own: counts.own, shared: counts.shared })
+          : t('noteList.count', { count: counts.own })
+        : t('noteList.count', { count: counts.own + counts.shared }))
 
   const viewMenu = <ViewMenu view={view} onChange={setView} look={look} onLook={(change) => void saveListLook(change)} modes={modes} />
   const summary = viewSummary(view, look, t, showsGallery)
@@ -230,6 +248,7 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
           {viewMenu}
         </div>
       )}
+      {intro}
       {failed && <p className="px-2 text-sm text-bad-500">{t('notes.list.failed')}</p>}
       {showsGallery && gallery}
       {!showsGallery && answer && answer.items.length === 0 && empty}

@@ -9,11 +9,11 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { HintLine } from './Hints'
-import { boxProps, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
+import { boxProps, ItemActions, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
 import { noteColor } from './marks'
 
 export function NoteCard(props: ItemProps) {
-  const { item, href, chosen, date, folder, hints, onOpen, onMenu } = props
+  const { item, href, chosen, date, folder, hints, onOpen, onMenu, mark, actions } = props
   const { t } = useTranslation()
   const locked = Boolean(item.locked)
   const band = noteColor(item)
@@ -33,9 +33,10 @@ export function NoteCard(props: ItemProps) {
         }
       >
         {band && <span aria-label={t('noteList.colorMark')} role="img" className="absolute top-0 left-3.5 h-[3px] w-9 rounded-b-[3px]" style={{ background: band }} data-testid="note-color" />}
-        <span className="flex min-w-0 items-center gap-[7px] pr-7">
-          {folder && <span aria-hidden className="h-3.5 w-1 shrink-0 rounded-sm" style={{ background: folder.color }} />}
+        <span className="flex min-w-0 items-center gap-[7px]" style={{ paddingRight: 28 * (1 + (actions?.length ?? 0)) }}>
+          {folder?.color && <span aria-hidden className="h-3.5 w-1 shrink-0 rounded-sm" style={{ background: folder.color }} />}
           <NoteIcon icon={item.icon} color={item.color} />
+          {!item.icon && mark}
           <span className="min-w-0 truncate text-[14px] font-semibold text-mist-100" title={item.title || undefined}>
             {title}
           </span>
@@ -56,7 +57,10 @@ export function NoteCard(props: ItemProps) {
           {hints ? <HintLine item={item} end={time} className="w-full" /> : <span className="ml-auto">{time}</span>}
         </span>
       </Link>
-      <MoreButton item={item} onMenu={onMenu} className="absolute top-2 right-2 h-7 w-7 bg-ink-850" />
+      <span className="absolute top-2 right-2 flex items-center gap-0.5 rounded-lg bg-ink-850">
+        <ItemActions item={item} actions={actions} small />
+        <MoreButton item={item} onMenu={onMenu} className="h-7 w-7" />
+      </span>
     </div>
   )
 }

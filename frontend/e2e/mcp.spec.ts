@@ -65,7 +65,8 @@ test('NOTES-20 AC-4 AC-6 a note an AI tool makes lands in the inbox, says where 
   const token = await makeKey(page, name, 'write')
   const made = await tool(page.request, token, 'create_note', { text: 'Shopping list from the chat\n\n- [ ] pasta\n- [ ] basil' })
   await page.goto('/inbox')
-  const card = page.getByTestId('inbox-card').filter({ hasText: 'Shopping list from the chat' })
+  // The inbox is a list like every other: each note a box with its id.
+  const card = page.locator('[data-testid="note-list"] [data-note]').filter({ hasText: 'Shopping list from the chat' })
   await expect(card).toBeVisible()
   await expect(card).toContainText(name)
   await expect(card.getByTestId('inbox-origin-icon')).toHaveAttribute('data-origin', 'mcp')

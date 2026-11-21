@@ -4,15 +4,24 @@
  * locked, "Titel prüfen", shared, a scan). The note itself is always a link (`noteHref`), so a middle click, Ctrl
  * click and Alt click on it open it in a new tab or beside the open note like every note link (`tabs/links.ts`).
  */
-import { Image, Lock, MoreHorizontal, PenLine, Pin, ScanText, Users, Video } from 'lucide-react'
-import type { DragEvent, HTMLAttributes, MouseEvent } from 'react'
+import { Image, Lock, MoreHorizontal, PenLine, Pin, ScanText, Users, Video, type LucideIcon } from 'lucide-react'
+import type { DragEvent, HTMLAttributes, MouseEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ListItem, ListMedia } from './api'
 import { mediaText, sharedText } from './marks'
 
-/** "All notes": the folder a note lies in, with its color. */
-export type RowFolder = { name: string; color: string }
+/** "All notes": the folder a note lies in, with its color (a stripe). Without a color only the words: where a note of
+ * the inbox came from. */
+export type RowFolder = { name: string; color?: string }
+
+/** A button a list gives each of its notes besides the "…" (the inbox: "Einsortieren", "Titel ok"). A row shows it
+ * with its words, the other looks as its sign with the words as label and tooltip. */
+export type ItemAction = { key: string; label: string; icon: LucideIcon; onAct: (item: ListItem) => void; testId?: string }
+
+/** What a list adds to the notes it shows (the inbox, the page of a tag): the sign before the title of a note without
+ * a symbol of its own, the place shown instead of its folder, buttons. */
+export type ItemDecor = { mark?: ReactNode; folder?: RowFolder | null; actions?: ItemAction[] }
 
 /** What a list hands each of its notes, whatever the look. */
 export type ItemProps = {
@@ -33,6 +42,10 @@ export type ItemProps = {
   onMenu?: (item: ListItem, point: { x: number; y: number }) => void
   onDragStart?: (event: DragEvent) => void
   onDragEnd?: () => void
+  /** The sign before the title when the note has no symbol (the inbox: where it came from). */
+  mark?: ReactNode
+  /** Buttons besides the "…". */
+  actions?: ItemAction[]
 }
 
 /** The outer box of a note: dragged as a whole, the right click opens its menu. */
@@ -69,6 +82,32 @@ export function MoreButton({ item, onMenu, className = '' }: { item: ListItem; o
     >
       <MoreHorizontal aria-hidden className="h-4 w-4" />
     </button>
+  )
+}
+
+/** The list's own buttons of a note: with words in a row, as signs in the other looks. */
+export function ItemActions({ item, actions, small = false }: { item: ListItem; actions?: ItemAction[]; small?: boolean }) {
+  if (!actions?.length) return null
+  return (
+    <>
+      {actions.map(({ key, label, icon: Icon, onAct, testId }) => (
+        <button
+          key={key}
+          type="button"
+          aria-label={small ? label : undefined}
+          title={small ? label : undefined}
+          data-testid={testId}
+          onClick={() => onAct(item)}
+          className={
+            'flex shrink-0 items-center justify-center gap-1.5 rounded-lg text-mist-400 hover:bg-ink-700 hover:text-mist-100 ' +
+            (small ? 'h-7 w-7' : 'h-8 border border-ink-700 px-2.5 text-[12.5px] font-medium')
+          }
+        >
+          <Icon aria-hidden className="h-3.5 w-3.5 shrink-0" strokeWidth={2.1} />
+          {!small && label}
+        </button>
+      ))}
+    </>
   )
 }
 

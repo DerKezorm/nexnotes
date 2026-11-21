@@ -11,14 +11,14 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { HintLine } from './Hints'
-import { boxProps, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
+import { boxProps, ItemActions, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
 import { noteColor } from './marks'
 
 export { MediaIcon, type RowFolder } from './ItemParts'
 export type NoteRowProps = ItemProps
 
 export function NoteRow(props: ItemProps) {
-  const { item, href, chosen, date, folder, hints, first, onOpen, onMenu } = props
+  const { item, href, chosen, date, folder, hints, first, onOpen, onMenu, mark, actions } = props
   const { t } = useTranslation()
   const locked = Boolean(item.locked)
   const dot = noteColor(item)
@@ -35,7 +35,7 @@ export function NoteRow(props: ItemProps) {
       }
       data-testid="note-row-box"
     >
-      {folder && <span aria-hidden className="my-3 w-1 self-stretch rounded-sm" style={{ background: folder.color }} />}
+      {folder?.color && <span aria-hidden className="my-3 w-1 self-stretch rounded-sm" style={{ background: folder.color }} />}
       {!first && !chosen && <span aria-hidden className="absolute top-0 right-3 left-3 h-px bg-ink-700 group-hover:opacity-0" />}
       {chosen && <span aria-hidden className="absolute top-2 bottom-2 left-0 w-[3px] rounded-r-[3px] bg-accent-500" data-testid="note-chosen-bar" />}
       <Link
@@ -48,6 +48,7 @@ export function NoteRow(props: ItemProps) {
         <span className="flex min-w-0 items-center gap-[7px]">
           {dot && <span aria-label={t('noteList.colorMark')} role="img" className="h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} data-testid="note-color" />}
           <NoteIcon icon={item.icon} color={item.color} />
+          {!item.icon && mark}
           <span className="min-w-0 truncate text-[14px] font-semibold text-mist-100" title={item.title || undefined}>
             {title}
           </span>
@@ -76,6 +77,7 @@ export function NoteRow(props: ItemProps) {
         {hints && <HintLine item={item} className="mt-1.5" />}
       </Link>
       {media?.url && <img src={media.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />}
+      <ItemActions item={item} actions={actions} />
       <MoreButton item={item} onMenu={onMenu} />
     </div>
   )

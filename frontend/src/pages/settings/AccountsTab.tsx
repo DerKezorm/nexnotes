@@ -2,13 +2,15 @@
  * Settings, "Accounts" (drawing N2-Konten): every account with its address, way of signing in, role, storage with its
  * limit and last use (NOTES-1 AC-7, NOTES-2 AC-7); never a title or a word of a note. Invite a person, block, delete
  * (30 days to bring it back), give a role, set a limit, a reset link (the person sets the new password, NOTES-2 AC-7),
- * sign out everywhere, take a provider's link.
+ * sign out everywhere, take a provider's link. `?invite` in the address opens "Person einladen" at once (the share
+ * dialog's link when nobody on the server goes by the name typed).
  */
 import { Menu } from '../../components/Menu'
 import { Avatar } from '../../components/Avatar'
 import { MoreHorizontal, UserPlus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useSearchParams } from 'react-router-dom'
 
 import { accountsApi, invitesApi, oidcAdminApi, type AccountRow, type Invite, type LinkedProvider } from '../../api/client'
 import { Dialog } from '../../components/Dialog'
@@ -35,7 +37,8 @@ export function AccountsTab() {
   const { me } = useAuth()
   const [rows, setRows] = useState<AccountRow[] | null>(null)
   const [invites, setInvites] = useState<Invite[]>([])
-  const [inviting, setInviting] = useState(false)
+  const [params, setParams] = useSearchParams()
+  const [inviting, setInviting] = useState(() => params.has('invite'))
   const [menu, setMenu] = useState<{ id: number; anchor: HTMLElement } | null>(null)
   const [asking, setAsking] = useState<Asking | null>(null)
   const [limitFor, setLimitFor] = useState<AccountRow | null>(null)
@@ -194,7 +197,18 @@ export function AccountsTab() {
         </Card>
       )}
 
-      {inviting && <InviteDialog onClose={() => setInviting(false)} onMade={load} />}
+      {inviting && (
+        <InviteDialog
+          onClose={() => {
+            setInviting(false)
+            if (params.has('invite')) {
+              params.delete('invite')
+              setParams(params, { replace: true })
+            }
+          }}
+          onMade={load}
+        />
+      )}
       {limitFor && <LimitDialog row={limitFor} onClose={() => setLimitFor(null)} onSaved={load} />}
       {resetFor && <ResetLinkDialog row={resetFor} askOwn={operatorPassword} onClose={() => setResetFor(null)} />}
       {asking && (

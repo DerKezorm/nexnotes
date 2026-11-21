@@ -1,25 +1,27 @@
 /**
  * The pages of the folders (NOTES-4): a folder with its path at the top (every step a link, AC-13) and its notes below,
- * or the empty state of NOTES-6 EC-1 (EC-5); the inbox with where each note came from (AC-7), "File" (AC-14) and its
- * own empty state (EC-6); and on the phone the list of all folders (drawing "Handy-Ordner").
+ * or the empty state of NOTES-6 EC-1 (EC-5); the inbox, a list like the folders, with where each note came from
+ * (AC-7), "File" (AC-14) and its own empty state (EC-6); and on the phone the list of all folders (drawing
+ * "Handy-Ordner").
  */
-import { ChevronDown, ChevronRight, FileText, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
+import { CheckCheck, ChevronDown, ChevronRight, FileText, FolderInput, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
+import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { LogoMark } from '../components/Logo'
 import { PHONE_FOLDER_SECTIONS } from '../extensions'
-import { NoteIcon } from '../components/NoteIcon'
-import { notesApi } from '../notes/api'
+import { notesApi, notesChanged } from '../notes/api'
 import { NoteList } from '../notes/NoteList'
+import type { ListItem } from '../notes/list/api'
+import type { ItemAction, ItemDecor } from '../notes/list/ItemParts'
 import { ListHead } from '../notes/list/ListHead'
-import { ago } from '../lib/time'
+import { hrefIn } from '../notes/workspace'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { PhoneBack, PhoneNewNote } from '../pwa/phone'
-import { foldersApi, type Folder, type InboxNote } from './api'
-import { draggedNow, droppedFrom, endDrag, NOTES_MOVED_EVENT, startNoteDrag, useNoteActions } from './actions'
+import type { Folder } from './api'
+import { draggedNow, droppedFrom, endDrag, useNoteActions } from './actions'
 import { useFolderActions } from './useFolderActions'
 import { drop } from './drop'
 import { FolderMark } from './FolderMark'
@@ -166,131 +168,81 @@ export function OriginIcon({ origin }: { origin: string }) {
   return <Icon aria-hidden className="h-4 w-4 text-mist-500" strokeWidth={2} data-testid="inbox-origin-icon" data-origin={origin ? kind : 'here'} />
 }
 
-/** The sign before a card's title: the note's symbol in its colour (NOTES-3 AC-18), as in the lists; without one,
- * where it came from. */
-export function InboxMark({ note }: { note: Pick<InboxNote, 'icon' | 'color' | 'origin'> }) {
-  const tint = note.color ? `color-mix(in srgb, ${colorOf(note.color)} 16%, transparent)` : undefined
-  return (
-    <span className={'flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ' + (tint ? '' : 'bg-ink-800')} style={tint ? { background: tint } : undefined} data-testid="inbox-mark">
-      {note.icon ? <NoteIcon icon={note.icon} color={note.color} size={18} /> : <OriginIcon origin={note.origin} />}
-    </span>
-  )
-}
-
+/**
+ * The inbox: a list like every other (`NoteList`: the same head, "Ansicht", the four looks), whose notes say where they
+ * came from (AC-7: a quiet sign before a title without a symbol, the words where other lists name the folder) and
+ * carry "Einsortieren" (AC-14) and, while the title wants a look, "Titel ok". Its own empty state (EC-6).
+ */
 export function InboxPage() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const tree = useFolders()
   const actions = useFolderActions()
-  const { noteHref, newNote } = useNoteActions()
-  const [notes, setNotes] = useState<InboxNote[] | null>(null)
+  const { newNote } = useNoteActions()
   const [problem, setProblem] = useState('')
-  const asked = useRef(0)
   const padding = useListPadding()
   useListTitle(t('folders.inbox.name'))
+  const inboxId = tree.inbox?.id ?? ''
 
-  const load = useCallback(async () => {
-    const mine = ++asked.current
-    try {
-      const found = await foldersApi.inbox()
-      if (mine === asked.current) {
-        setNotes(found.notes)
-        setProblem('')
+  const decorate = useCallback(
+    (item: ListItem): ItemDecor => {
+      const sortIn: ItemAction = {
+        key: 'sort-in',
+        label: t('folders.inbox.sortIn'),
+        icon: FolderInput,
+        testId: 'inbox-sort-in',
+        onAct: (note) =>
+          actions.moveNotes([note.id], inboxId || null, { title: note.title || t('notes.untitled'), icon: note.icon, color: note.color, sortIn: true }),
       }
-    } catch (error) {
-      if (mine === asked.current) setProblem(problemText(error))
-    }
-  }, [])
+      const titleOk: ItemAction = {
+        key: 'title-ok',
+        label: t('notes.titleOk'),
+        icon: CheckCheck,
+        testId: 'inbox-title-ok',
+        onAct: (note) =>
+          void notesApi
+            .titleOk(note.id)
+            .then(() => notesChanged())
+            .catch((error) => setProblem(problemText(error))),
+      }
+      return {
+        mark: <OriginIcon origin={item.origin ?? ''} />,
+        folder: { name: originText(item.origin ?? '', t) },
+        actions: item.title_check && !item.locked ? [titleOk, sortIn] : [sortIn],
+      }
+    },
+    [actions, inboxId, t],
+  )
 
-  // Again whenever the inbox's count changes (a note captured on another device, one filed by dragging).
-  const count = tree.inbox?.count
-  useEffect(() => {
-    void load()
-  }, [load, count])
-  useEffect(() => {
-    const again = () => void load()
-    window.addEventListener(NOTES_MOVED_EVENT, again)
-    return () => window.removeEventListener(NOTES_MOVED_EVENT, again)
-  }, [load])
+  const icon = (
+    <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px] bg-ink-800">
+      <Inbox aria-hidden className="h-[17px] w-[17px] text-mist-300" strokeWidth={2} />
+    </span>
+  )
+  const empty = (
+    <div data-testid="inbox-empty" className="flex min-h-[360px] flex-col items-center justify-center gap-3 rounded-[16px] border border-dashed border-ink-600 p-6 text-center">
+      <LogoMark size={44} />
+      <p className="text-lg font-semibold">{t('folders.inbox.emptyTitle')}</p>
+      <p className="max-w-md text-sm leading-relaxed text-mist-500">{t('folders.inbox.emptyText')}</p>
+    </div>
+  )
 
   return (
-    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="inbox-page">
+    <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="inbox-page">
       <PhoneBack to="/folders" label={t('folders.section')} />
       {newNote && tree.inbox && <PhoneNewNote onClick={() => newNote(tree.inbox!.id)} label={t('folders.page.newNote', { name: t('folders.inbox.name') })} />}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold">{t('folders.inbox.name')}</h1>
-        <p className="text-[13.5px] text-mist-400">{t('folders.inbox.text')}</p>
-      </div>
       {problem && <p className="text-sm text-bad-500">{problem}</p>}
-      {notes && notes.length === 0 && (
-        <div data-testid="inbox-empty" className="flex min-h-[360px] flex-col items-center justify-center gap-3 rounded-[16px] border border-dashed border-ink-600 p-6 text-center">
-          <LogoMark size={44} />
-          <p className="text-lg font-semibold">{t('folders.inbox.emptyTitle')}</p>
-          <p className="max-w-md text-sm leading-relaxed text-mist-500">{t('folders.inbox.emptyText')}</p>
-        </div>
+      {inboxId && (
+        <NoteList
+          folderId={inboxId}
+          heading={t('folders.inbox.name')}
+          icon={icon}
+          intro={<p className="px-1 text-[13px] text-mist-400">{t('folders.inbox.text')}</p>}
+          empty={empty}
+          hrefFor={(id) => hrefIn('/inbox', id)}
+          decorate={decorate}
+        />
       )}
-      {notes && notes.length > 0 && (
-        <>
-          <ul className="flex max-w-[860px] flex-col gap-2.5">
-            {notes.map((note) => {
-              const title = note.title || t('folders.inbox.untitled')
-              const href = noteHref?.(note.id)
-              return (
-                <li
-                  key={note.id}
-                  draggable
-                  onDragStart={(event) => startNoteDrag(event, [note.id])}
-                  onDragEnd={endDrag}
-                  data-note={note.id}
-                  className="nn-card flex flex-wrap items-center gap-3.5 px-4 py-3.5"
-                  data-testid="inbox-card"
-                >
-                  <InboxMark note={note} />
-                  <span className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
-                    <span className="flex flex-wrap items-center gap-2">
-                      {href ? (
-                        <Link to={href} className="truncate text-[15px] font-semibold hover:underline">
-                          {title}
-                        </Link>
-                      ) : (
-                        <span className="truncate text-[15px] font-semibold">{title}</span>
-                      )}
-                      {note.title_check && <span className="rounded-md bg-warn-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-warn-500">{t('folders.inbox.titleCheck')}</span>}
-                      {note.title_check && (
-                        <button
-                          type="button"
-                          data-testid="inbox-title-ok"
-                          className="nn-btn nn-btn-quiet text-[12px]"
-                          onClick={() =>
-                            void notesApi
-                              .titleOk(note.id)
-                              .then(() => load())
-                              .catch((error) => setProblem(problemText(error)))
-                          }
-                        >
-                          {t('notes.titleOk')}
-                        </button>
-                      )}
-                    </span>
-                    {note.preview && <span className="truncate text-[13px] text-mist-500">{note.preview}</span>}
-                    <span className="text-xs text-mist-500">
-                      {originText(note.origin, t)} · {ago(new Date(note.created_at).getTime(), i18n.language)}
-                    </span>
-                  </span>
-                  <button
-                    type="button"
-                    className="nn-btn nn-btn-ghost h-9 px-3 text-[13px]"
-                    onClick={() => actions.moveNotes([note.id], tree.inbox?.id ?? null, { title, icon: note.icon, color: note.color, sortIn: true, onMoved: () => void load() })}
-                  >
-                    {t('folders.inbox.sortIn')}
-                    <ChevronDown aria-hidden className="h-3 w-3 text-mist-500" strokeWidth={2.6} />
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
-          <p className="text-[12.5px] text-mist-500">{t('folders.inbox.tip')}</p>
-        </>
-      )}
+      {(tree.inbox?.count ?? 0) > 0 && <p className="px-1 text-[12.5px] text-mist-500">{t('folders.inbox.tip')}</p>}
       {actions.node}
     </div>
   )

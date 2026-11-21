@@ -17,8 +17,8 @@ test('NOTES-3 AC-1 EC-4 "New note" beside an empty new note: nothing flickers, t
   const newNote = member.getByRole('navigation', { name: 'Main menu' }).getByRole('button', { name: 'New note' })
   await newNote.click()
   await expect(member.getByTestId('note-title')).toBeFocused()
-  // The inbox stays the list in the middle (NOTES-8 AC-9), with its cards.
-  const rows = member.locator('[data-testid="inbox-page"] li[data-note]')
+  // The inbox stays the list in the middle (NOTES-8 AC-9), with its notes.
+  const rows = member.locator('[data-testid="inbox-page"] [data-note]')
   await expect(rows).toHaveCount(1)
   const first = member.url()
   // The list is watched for 2 s after the second click: always one row.

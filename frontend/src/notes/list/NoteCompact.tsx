@@ -9,11 +9,11 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { MiniHints } from './Hints'
-import { boxProps, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
+import { boxProps, ItemActions, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
 import { noteColor } from './marks'
 
 export function NoteCompact(props: ItemProps) {
-  const { item, href, chosen, date, folder, hints, onOpen, onMenu } = props
+  const { item, href, chosen, date, folder, hints, onOpen, onMenu, mark, actions } = props
   const { t } = useTranslation()
   const locked = Boolean(item.locked)
   const dot = noteColor(item)
@@ -28,7 +28,7 @@ export function NoteCompact(props: ItemProps) {
       }
       data-testid="note-compact-box"
     >
-      {folder && <span aria-hidden className="h-4 w-1 shrink-0 rounded-sm" style={{ background: folder.color }} />}
+      {folder?.color && <span aria-hidden className="h-4 w-1 shrink-0 rounded-sm" style={{ background: folder.color }} />}
       {chosen && <span aria-hidden className="absolute top-1.5 bottom-1.5 left-0 w-[3px] rounded-r-[3px] bg-accent-500" />}
       <Link
         to={href}
@@ -38,7 +38,7 @@ export function NoteCompact(props: ItemProps) {
         className="flex min-w-0 flex-1 items-center gap-2 self-stretch focus-visible:outline-none"
       >
         {dot && <span aria-label={t('noteList.colorMark')} role="img" className="h-2 w-2 shrink-0 rounded-full" style={{ background: dot }} data-testid="note-color" />}
-        {item.icon ? <NoteIcon icon={item.icon} color={item.color} size={14} /> : <span aria-hidden className="w-3.5 shrink-0" />}
+        {item.icon ? <NoteIcon icon={item.icon} color={item.color} size={14} /> : (mark ?? <span aria-hidden className="w-3.5 shrink-0" />)}
         <span className="min-w-0 flex-1 truncate text-[13.5px]" title={item.title || undefined}>
           <span className="font-medium text-mist-100" data-testid="note-title">
             {title}
@@ -54,6 +54,7 @@ export function NoteCompact(props: ItemProps) {
         {hints && <MiniHints item={item} />}
         {date && <span className="shrink-0 text-[12px] text-mist-600 tabular-nums">{date}</span>}
       </Link>
+      <ItemActions item={item} actions={actions} small />
       <MoreButton item={item} onMenu={onMenu} className="h-7 w-7" />
     </div>
   )

@@ -4,7 +4,7 @@
  * everywhere, then the cards of the features in `ACCOUNT_SECTIONS`), Appearance (stays on this device, and the paper of
  * new notes; NOTES-22 AC-2 and AC-7). Each area of the settings shows its `part`; without one, all of it.
  */
-import { KeyRound, Lock, Palette, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, LayoutList, Lock, Palette, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -18,6 +18,7 @@ import { ThemeSwitcher } from '../../components/ThemeSwitcher'
 import { paperOf } from '../../editor/paper'
 import { PaperPicker } from '../../editor/PaperPicker'
 import { browserLanguage, changeLanguage, languageOptions, type LanguageOption } from '../../i18n'
+import { LookSettings } from '../../notes/list/LookSettings'
 import { copyText } from '../../lib/copy'
 import { errorText, problemText, signInErrorText } from '../../lib/errors'
 import { day } from '../../lib/format'
@@ -310,6 +311,11 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
               <PaperPicker value={paperOf(me.paper)} onChange={(paper) => void run(async () => setMe(await authApi.paper(paper)), '')} />
             </div>
           </div>
+        </Card>
+      )}
+      {shows('appearance') && (
+        <Card id="lists" icon={LayoutList} title={t('me.lists.title')}>
+          <LookSettings />
         </Card>
       )}
       {shows('security') &&

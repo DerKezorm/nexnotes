@@ -711,8 +711,6 @@
       "emptyTitle": "The inbox is empty",
       "emptyText": "Whatever you capture quickly lands here: shared from another app, dictated or sent over MCP. From here you file it into your folders.",
       "tip": "Tip: you can also drag notes straight onto a folder in the sidebar.",
-      "titleCheck": "Check title",
-      "untitled": "Untitled",
       "sortIn": "File",
       "origin": {
         "share": "Shared from {{source}}",
@@ -810,6 +808,12 @@
       "remove": "Remove picture",
       "saved": "Profile picture saved.",
       "removed": "Profile picture removed."
+    },
+    "lists": {
+      "title": "Note lists",
+      "style": "How note lists look",
+      "styleHint": "for every list, on every device",
+      "hints": "Hints in lists"
     }
   },
   "nav": {
@@ -829,7 +833,7 @@
     "emptyAll": "No notes yet",
     "emptyAllText": "What you write shows up here: every note from every folder, and the ones others share with you.",
     "group": "By date",
-    "groupLabel": "Group by date",
+    "groupLabel": "Group",
     "groupOffByTitle": "Sorted by title, there are no groups.",
     "groups": {
       "month": "Last 30 days",
@@ -879,8 +883,6 @@
     "tasks": "{{done}} of {{total}}",
     "view": {
       "label": "View",
-      "list": "List",
-      "tiles": "Tiles",
       "gallery": "Attachments",
       "show": "Show",
       "notes": "Notes"
@@ -1199,14 +1201,7 @@
     "jump": "Settings page",
     "ownPassword": "Your password",
     "saved": "Saved.",
-    "title": "Settings",
-    "tabs": {
-      "account": "My account",
-      "accounts": "Accounts",
-      "connections": "Connections",
-      "log": "Log",
-      "server": "Server"
-    }
+    "title": "Settings"
   },
   "setup": {
     "code": "Setup code",
@@ -1572,7 +1567,8 @@
     "deleteSays_one": "{{tag}} goes from one of your notes; the rest of the text stays.",
     "deleteSays_other": "{{tag}} goes from {{count}} of your notes; the rest of the text stays.",
     "suggestions": "Tag suggestions",
-    "openTag": "All notes with {{tag}}"
+    "openTag": "All notes with {{tag}}",
+    "menu": "Actions for {{tag}}"
   },
   "theme": {
     "dark": "Dark",
@@ -1745,7 +1741,11 @@
       "through": "{{name}} through the folder “{{folder}}” ({{level}})",
       "onlyYouNote": "Only you decide who sees the note. Others cannot share it further.",
       "onlyYouFolder": "Only you decide who sees the folder. Others cannot share it further.",
-      "done": "Done"
+      "done": "Done",
+      "nobody": "Nobody on this server goes by that. You can only share with accounts here.",
+      "invite": "Invite a person",
+      "noneChosen": "Nobody chosen yet.",
+      "clear": "Clear"
     },
     "level": {
       "read": "read",

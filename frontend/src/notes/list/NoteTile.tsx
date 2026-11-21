@@ -11,11 +11,11 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { AttachmentsHint } from './Hints'
-import { boxProps, MediaIcon, MoreButton, type ItemProps } from './ItemParts'
+import { boxProps, ItemActions, MediaIcon, MoreButton, type ItemProps } from './ItemParts'
 import { mediaText, noteColor, sharedText, tagsText, tasksText } from './marks'
 
 export function NoteTile(props: ItemProps) {
-  const { item, href, chosen, date, hints = true, onOpen, onMenu } = props
+  const { item, href, chosen, date, hints = true, onOpen, onMenu, mark, actions } = props
   const { t } = useTranslation()
   const locked = Boolean(item.locked)
   const band = noteColor(item)
@@ -40,9 +40,10 @@ export function NoteTile(props: ItemProps) {
         }
       >
         {band && <span aria-label={t('noteList.colorMark')} role="img" className="absolute top-0 left-3 h-[3px] w-9 rounded-b-[3px]" style={{ background: band }} data-testid="note-color" />}
-        <span className="flex min-w-0 items-start justify-between gap-2 pr-6">
+        <span className="flex min-w-0 items-start justify-between gap-2" style={{ paddingRight: 24 + 28 * (actions?.length ?? 0) }}>
           <span className="flex min-w-0 items-start gap-1.5">
             <NoteIcon icon={item.icon} color={item.color} className="mt-[3px]" />
+            {!item.icon && mark && <span className="mt-[2px] shrink-0">{mark}</span>}
             <span className="line-clamp-2 min-w-0 text-[14px] leading-[1.3] font-semibold break-words text-mist-100" title={item.title || undefined}>
               {title}
             </span>
@@ -88,7 +89,10 @@ export function NoteTile(props: ItemProps) {
           </span>
         </span>
       </Link>
-      <MoreButton item={item} onMenu={onMenu} className="absolute top-2 right-2 h-7 w-7 bg-ink-850" />
+      <span className="absolute top-2 right-2 flex items-center gap-0.5 rounded-lg bg-ink-850">
+        <ItemActions item={item} actions={actions} small />
+        <MoreButton item={item} onMenu={onMenu} className="h-7 w-7" />
+      </span>
     </div>
   )
 }

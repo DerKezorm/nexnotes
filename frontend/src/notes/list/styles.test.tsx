@@ -16,6 +16,7 @@ import { NoteList } from '../NoteList'
 import { DEFAULT_VIEW, LIST_STYLES, type ListItem, type ListStyle, type ListView } from './api'
 import { forgetCollapsed } from './collapsed'
 import { layout, SIZES } from './layout'
+import { LookSettings } from './LookSettings'
 import { currentListLook, forgetListLook, takeListLook } from './look'
 import { arrange } from './order'
 import { takeEarly } from './preload'
@@ -236,6 +237,48 @@ describe('the looks of the lists', () => {
     lookIs(look.list_style as ListStyle, look.list_hints)
     await again('h')
     expect($('list-state')!.textContent).toBe('Erstellt · Kompakt')
+  })
+
+  it('Einstellungen › Darstellung chooses the same look and hints as the menu "Ansicht", each shows the other at once', async () => {
+    await act(async () =>
+      root.render(
+        <MemoryRouter>
+          <LookSettings />
+          <NoteList folderId="h" heading="Haushalt" />
+        </MemoryRouter>,
+      ),
+    )
+    await settle()
+    const radios = [...$('settings-list-style')!.querySelectorAll<HTMLElement>('[role="radio"]')]
+    expect(radios.map((radio) => radio.textContent)).toEqual(['Liste', 'Karten', 'Kompakt', 'Kacheln'])
+    // Each with the small picture of the menu "Ansicht".
+    expect(radios.map((radio) => radio.querySelector('svg')?.getAttribute('class'))).toEqual([
+      expect.stringContaining('lucide-layout-list'),
+      expect.stringContaining('lucide-gallery-vertical-end'),
+      expect.stringContaining('align-justify'),
+      expect.stringContaining('lucide-layout-grid'),
+    ])
+    expect($('settings-list-style-list')!.getAttribute('aria-checked')).toBe('true')
+    // Chosen in the settings: the list follows at once, the menu shows it, the server keeps it for the account.
+    await click($('settings-list-style-tiles')!)
+    expect($('note-list')!.dataset.style).toBe('tiles')
+    expect((await viewEntry('list-style-tiles')).getAttribute('aria-checked')).toBe('true')
+    // Chosen in the menu: the settings follow.
+    await click($('list-style-compact')!)
+    expect($('settings-list-style-compact')!.getAttribute('aria-checked')).toBe('true')
+    expect($('settings-list-style-tiles')!.getAttribute('aria-checked')).toBe('false')
+    // The hints the same way, both directions.
+    expect($('settings-list-hints')!.getAttribute('aria-checked')).toBe('true')
+    await click($('settings-list-hints')!)
+    expect($('list-hints')!.getAttribute('aria-checked')).toBe('false')
+    await click($('list-hints')!)
+    expect($('settings-list-hints')!.getAttribute('aria-checked')).toBe('true')
+    expect(calls.filter((call) => call.path === '/api/me/list-look').map((call) => call.body)).toEqual([
+      { style: 'tiles' },
+      { style: 'compact' },
+      { hints: false },
+      { hints: true },
+    ])
   })
 
   it('the menu "Ansicht" is worked by keyboard: arrows, Escape closes it and the focus goes back', async () => {
