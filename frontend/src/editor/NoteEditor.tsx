@@ -472,9 +472,11 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         </div>
       </div>
 
-      <div ref={measurePane} className="flex min-h-0 w-full flex-1 items-start">
+      {/* The sheet: the note's own surface on the page (white on nex gray in light, a step lighter in dark), as wide as
+          the text width says; a paper pattern is its background. */}
+      <div ref={measurePane} className="flex min-h-0 w-full flex-1 items-start md:gap-6 md:px-6 md:pt-5 md:pb-8">
       <article
-        className="mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch px-5 pt-6 pb-28 md:px-10 md:pb-10"
+        className="nn-sheet mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch bg-ink-850 px-5 pt-6 pb-28 md:rounded-[14px] md:border md:border-ink-700 md:px-10 md:pb-10 md:shadow-[0_1px_3px_rgb(0_0_0/0.08),0_8px_24px_-12px_rgb(0_0_0/0.18)]"
         style={{ maxWidth: TEXT_MAX[textWidth] ?? 'none' }}
         data-testid="note-page"
         data-width={textWidth}

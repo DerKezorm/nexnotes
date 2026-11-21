@@ -98,8 +98,10 @@ export const TitleField = forwardRef<TitleFieldHandle, Props>(function TitleFiel
         }
       }}
       className={
-        'w-full rounded-lg border bg-transparent px-2 py-1 -mx-2 text-[26px] leading-tight font-bold tracking-[-0.02em] text-mist-100 placeholder:text-mist-600 focus:outline-none md:text-[28px] ' +
-        (invalid ? 'border-bad-500' : 'border-transparent focus:border-ink-700')
+        // A large field without a box on the sheet (drawing "N3-Editor"); focus shows as a line under the title, a
+        // missing title as a red one.
+        'w-full border-0 border-b-2 bg-transparent px-0 pt-1 pb-1 text-[26px] leading-tight font-bold tracking-[-0.02em] text-mist-100 placeholder:text-mist-600 focus:outline-none md:text-[28px] ' +
+        (invalid ? 'border-bad-500' : 'border-transparent focus-visible:border-accent-500/70 focus:border-accent-500/40')
       }
     />
   )
