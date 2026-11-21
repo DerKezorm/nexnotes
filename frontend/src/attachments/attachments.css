@@ -1,0 +1,11 @@
+/* Attachments (NOTES-10): pictures, cards and players stand between the lines as blocks of their own. */
+.nn-editor .ProseMirror .nn-attachment-node { margin: 0.5em 0; }
+.nn-attachment-node .nn-attachment { border-radius: 12px; }
+.nn-attachment-selected .nn-attachment { outline: 2px solid var(--color-accent-500); outline-offset: 2px; }
+.nn-attachment .nn-attachment-remove { opacity: 0; transition: opacity 120ms; }
+.nn-attachment:hover .nn-attachment-remove,
+.nn-attachment:focus-within .nn-attachment-remove,
+.nn-attachment-selected .nn-attachment-remove { opacity: 1; }
+@media (hover: none) { .nn-attachment .nn-attachment-remove { opacity: 1; } }
+.nn-attachment-found .nn-attachment, .nn-attachment.nn-attachment-found { outline: 3px solid var(--color-accent-500); outline-offset: 3px; transition: outline-color 400ms; }
+.nn-picture img { border-radius: 10px; }

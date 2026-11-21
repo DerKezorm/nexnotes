@@ -301,6 +301,8 @@ def test_notes10_ec3_heic_shows_as_webp_and_stays_heic_to_download(client, opera
         assert image.format == "WEBP" and image.size == (80, 60)
     original = client.get(f"/api/attachments/{row['id']}/file")
     assert original.headers["content-disposition"].startswith("attachment;")
+    # Only to download: given out as bytes, never as a type the browser would try to show.
+    assert original.headers["content-type"] == "application/octet-stream"
     assert "Wohnzimmer.heic" in original.headers["content-disposition"]
     assert media.kind_of(original.content[:64]) == ("image", "heic")
     assert b"SecretCam" not in original.content

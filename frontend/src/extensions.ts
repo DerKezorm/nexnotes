@@ -7,6 +7,7 @@
  * - `SIDEBAR_SECTIONS`: entries of the sidebar between the name and the account (new note, search, inbox, folders,
  *   smart folders, tags, trash), in the order of the drawing "Seitenleiste".
  * - `CONNECTION_SECTIONS`: cards of Settings, Connections (devices, nextasks, MCP keys, vault password).
+ * - `SHELL_BANNERS`: bars over every page of the signed-in shell (the full storage of the attachments, NOTES-10).
  */
 import type { ReactNode } from 'react'
 
@@ -16,3 +17,4 @@ export type Section = { key: string; render: () => ReactNode }
 export const FEATURE_ROUTES: FeatureRoute[] = []
 export const SIDEBAR_SECTIONS: Section[] = []
 export const CONNECTION_SECTIONS: Section[] = []
+export const SHELL_BANNERS: Section[] = []

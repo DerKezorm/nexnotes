@@ -9,6 +9,8 @@
  *   text goes (EC-4); one left otherwise without a title (a closed tab) gets the suggestion with "Titel prüfen"
  *   (AC-10).
  * - Deleting moves the note to the trash and offers "Rückgängig" for ten seconds (AC-6).
+ * - Attachments (NOTES-10): "Anhängen" in the head, the area for dropped files, files refused for their size or a full
+ *   storage, and the way from the gallery to one of them (`attachments/NoteParts.tsx`).
  * - Beside another note (NOTES-8) only the side used last guards the ways out of the page and names the browser tab;
  *   the other hands its guard to the page (`onGuard`), which asks it before closing that side. The connection comes
  *   from `tabs/live.ts`, which keeps it open while changes still wait and bridges two editors of the same note.
@@ -19,6 +21,8 @@ import { Copy, Ellipsis, History, Trash2, WifiOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useFileDrag, useJumpToAttachment } from '../attachments/hooks'
+import { AttachButton, DropHint, RefusalList } from '../attachments/NoteParts'
 import { Dialog } from '../components/Dialog'
 import { Menu } from '../components/Menu'
 import { showNotice } from '../folders/notice'
@@ -212,6 +216,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         t,
         placeholder: t('editor.placeholder'),
         hooks: { onLink: () => setLinkOpen(true) },
+        noteId,
       }),
     // The editor is made once per note; the language of its few words follows on the next note.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -222,6 +227,10 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable)
   }, [editor, editable])
+
+  const canAttach = editable && Boolean(head?.can_write)
+  const dragging = useFileDrag(sheet, canAttach)
+  useJumpToAttachment(Boolean(editor) && provider.synced)
 
   useEffect(() => {
     if (provider.synced && titleAtSync.current === null) titleAtSync.current = provider.doc.getText('title').toString()
@@ -462,6 +471,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
       <div className="@container flex items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
         <div className="hidden min-w-0 flex-1 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
+          {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
           <NotePinButton noteId={noteId} head={head} disabled={!head?.can_write} />
           <span className="relative">
@@ -594,6 +604,8 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         <div className="nn-paper mt-1 flex flex-1 flex-col" data-paper={paperOf(head?.paper)} data-testid="note-paper">
           <EditorContent editor={editor} className="nn-editor flex-1" />
         </div>
+        {editor && dragging && <DropHint editor={editor} noteId={noteId} />}
+        <RefusalList noteId={noteId} />
         {editor && <TableControls editor={editor} frame={sheet} />}
       </article>
       {editor && outlineShown && paneWidth >= OUTLINE_FROM && (

@@ -2,9 +2,14 @@
  * An old version as it was, read only (NOTES-15 AC-3): the note's ProseMirror JSON drawn as React elements, with the
  * editor's look (`nn-editor`). Nothing is put into the page as HTML; links keep only http, https and mailto and open
  * in a new tab without a way back to this page. A block this version of nexnotes does not know shows its words.
+ * Attachments (NOTES-10) stand as they stood then, also when the note let them go since (NOTES-15 AC-3): they stay
+ * as long as the version.
  */
 import type { ReactNode } from 'react'
 
+import { AttachmentBlock, LinkCardBlock } from '../attachments/blocks'
+import type { LinkCard } from '../attachments/api'
+import type { ImageSize } from '../attachments/open'
 import { safeHref } from '../editor/extensions'
 import '../editor/editor.css'
 import type { ProseNode } from './api'
@@ -53,12 +58,14 @@ function withMarks(text: ReactNode, marks: ProseNode['marks'], key: string): Rea
   return out
 }
 
-function children(node: ProseNode, key: string): ReactNode[] {
-  return (node.content ?? []).map((child, index) => draw(child, `${key}.${index}`))
+function children(node: ProseNode, key: string, noteId: string): ReactNode[] {
+  return (node.content ?? []).map((child, index) => draw(child, `${key}.${index}`, noteId))
 }
 
-function draw(node: ProseNode, key: string): ReactNode {
-  const inner = () => children(node, key)
+const READ_ONLY = { editable: false }
+
+function draw(node: ProseNode, key: string, noteId: string): ReactNode {
+  const inner = () => children(node, key, noteId)
   switch (node.type) {
     case 'text':
       return <span key={key}>{withMarks(node.text ?? '', node.marks, key)}</span>
@@ -119,6 +126,21 @@ function draw(node: ProseNode, key: string): ReactNode {
       return <th key={key}>{inner()}</th>
     case 'tableCell':
       return <td key={key}>{inner()}</td>
+    case 'image':
+    case 'attachment': {
+      const attrs = (node.attrs ?? {}) as Record<string, string | null>
+      return (
+        <div key={key} className="nn-attachment-node">
+          <AttachmentBlock noteId={noteId} id={attrs.id ?? null} name={attrs.name ?? null} size={(attrs.size as ImageSize | null) ?? undefined} nodeType={node.type} actions={READ_ONLY} />
+        </div>
+      )
+    }
+    case 'linkPreview':
+      return typeof node.attrs?.href === 'string' && /^https?:\/\//i.test(node.attrs.href) ? (
+        <div key={key} className="nn-attachment-node">
+          <LinkCardBlock attrs={node.attrs as unknown as LinkCard} actions={READ_ONLY} />
+        </div>
+      ) : null
     default:
       return (
         <div key={key} data-unknown={node.type}>
@@ -128,10 +150,10 @@ function draw(node: ProseNode, key: string): ReactNode {
   }
 }
 
-export function VersionView({ doc }: { doc: ProseNode }) {
+export function VersionView({ doc, noteId = '' }: { doc: ProseNode; noteId?: string }) {
   return (
     <div className="nn-editor" data-testid="version-body">
-      <div className="ProseMirror nn-prose">{children(doc, 'v')}</div>
+      <div className="ProseMirror nn-prose">{children(doc, 'v', noteId)}</div>
     </div>
   )
 }

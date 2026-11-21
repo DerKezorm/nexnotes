@@ -7,6 +7,8 @@ import App from './App'
 // The note features dock onto the frame before the first render (extensions.ts).
 import './notes/register'
 import './folders'
+// "Anhänge" right after the inbox among the places (drawing "Seitenleiste").
+import './attachments'
 import './search'
 import './tags'
 import './history'
