@@ -676,15 +676,18 @@ describe('NOTES-3 AC-14 AC-15 room on a wide screen', () => {
     await act(async () => root.unmount())
   })
 
-  it('NOTES-3 AC-15 the outline stands beside the text as soon as the sheet at 560 px and the column fit (third review)', () => {
-    // The sheet at its narrowest (560), the column (240), the gap (24) and the side's padding (2 × 24).
-    expect(OUTLINE_COLUMN_FROM).toBe(872)
+  it('NOTES-3 AC-15 the outline stands beside the text as soon as the sheet at 560 px, the gap and the column fit (third and fourth review)', () => {
+    // The sheet at its narrowest (560), the gap (24) and the column (240); the side is measured inside its padding,
+    // which therefore does not count again (fourth review: it did, 872).
+    expect(OUTLINE_COLUMN_FROM).toBe(824)
     // The reviewed window: about 2000 px, the sidebar 390 and the list 445 leave a side of about 1170 px.
     expect(outlineFits(1170)).toBe(true)
-    expect(outlineFits(872)).toBe(true)
+    // A window of 1440 px with the sidebar (260) and the list (300) at their defaults: 880 px less the padding.
+    expect(outlineFits(1440 - 260 - 300 - 2 * 24)).toBe(true)
+    expect(outlineFits(824)).toBe(true)
+    expect(outlineFits(823)).toBe(false)
     // Two notes side by side in that window (1170 less the separator, halved): a panel instead.
     expect(outlineFits(Math.floor((1170 - 12) / 2))).toBe(false)
-    expect(outlineFits(871)).toBe(false)
   })
 })
 

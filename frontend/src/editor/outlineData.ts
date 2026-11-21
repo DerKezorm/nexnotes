@@ -8,14 +8,15 @@ import { useDevicePref } from '../lib/devicePref'
 export const TEXT_MIN = 560
 /** The outline's column. */
 export const OUTLINE_WIDTH = 240
-/** What stands around them on a side: the gap between sheet and column and the side's padding (`md:gap-6`,
- * `md:px-6`). */
-const AROUND = 24 + 2 * 24
+/** The gap between sheet and column (`md:gap-6`). */
+export const OUTLINE_GAP = 24
 /** The free width of a note's side from which the outline stands beside the text as a column: the sheet at its
- * narrowest, the column and the room around them. Below it the outline opens as a panel over the text's right edge. */
-export const OUTLINE_COLUMN_FROM = TEXT_MIN + OUTLINE_WIDTH + AROUND
+ * narrowest, the gap and the column. The side is measured inside its padding (`md:px-6`, the content box a
+ * ResizeObserver reports), so the padding is not counted again (fourth review). Below it the outline opens as a
+ * panel over the text's right edge. */
+export const OUTLINE_COLUMN_FROM = TEXT_MIN + OUTLINE_GAP + OUTLINE_WIDTH
 
-/** Whether a side of `width` free pixels holds the outline as a column beside the text. */
+/** Whether a side of `width` free pixels (inside its padding) holds the outline as a column beside the text. */
 export function outlineFits(width: number): boolean {
   return width >= OUTLINE_COLUMN_FROM
 }

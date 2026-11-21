@@ -36,15 +36,15 @@ for (const width of [1920, 1440]) {
     await page.setViewportSize({ width, height: 1000 })
     await page.goto(`/notes/${id}`)
     await expect(page.getByTestId('note-title')).toHaveValue(`Outline beside ${width}`)
-    if (width === 1440) {
-      // With the sidebar and the list at their defaults the side keeps too little room for the column at 1440 px (a
-      // panel over the text instead, NOTES-3 AC-15); both a little narrower by keyboard, and it fits.
-      for (const handle of ['column-handle-sidebar', 'column-handle-list']) {
-        await page.getByTestId(handle).focus()
-        for (let step = 0; step < 4; step++) await page.keyboard.press('ArrowLeft')
-      }
-    }
+    // The sidebar (260) and the list (300) at their defaults: at 1440 px the side keeps about 880 px, inside its
+    // padding about 830, enough for the sheet at 560, the gap and the column (824, fourth review).
     const outline = page.getByTestId('outline')
+    const room = await page.getByTestId('note-pane').evaluate((pane) => {
+      const style = getComputedStyle(pane)
+      return pane.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)
+    })
+    test.info().annotations.push({ type: 'room', description: `${room} px inside the side's padding` })
+    expect(room, 'the side inside its padding').toBeGreaterThanOrEqual(824)
     await expect(outline).toHaveAttribute('data-mode', 'column')
     await expect(page.getByTestId('outline-heading')).toHaveCount(3)
     const shown = await layout(page)
