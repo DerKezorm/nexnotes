@@ -24,7 +24,7 @@ import { linesToSend, marksKey, marksPlugin, showMarks } from './marks'
 import './marks.css'
 
 /** Codes that mean: the connection itself is wrong, fix it in Connections (EC-1). */
-const FIX_IN_CONNECTIONS = new Set(['nextasks_token_invalid', 'nextasks_api_off', 'nextasks_read_only', 'nextasks_too_old', 'nextasks_not_connected', 'nextasks_address_local', 'nextasks_address_refused'])
+const FIX_IN_CONNECTIONS = new Set(['nextasks_token_invalid', 'nextasks_api_off', 'nextasks_read_only', 'nextasks_too_old', 'nextasks_not_connected', 'nextasks_address_local', 'nextasks_address_refused', 'nextasks_address_port'])
 
 export function SendToNextasks({ noteId, editor, head, sealed }: NoteHeadPartProps) {
   const { t, i18n } = useTranslation()

@@ -39,7 +39,8 @@ PER_MINUTE = 600
 MAX_PINNED = 50
 #: Notes the choice of a card lists at most.
 MAX_CHOICE = 200
-#: Lines of text a card of a note without a checklist gets, and the most characters of one line or item.
+#: Lines of text a card of a note without a checklist gets, and the most characters of one line. An item is shortened
+#: as for MCP (``edit.shown_task_text``), so that ticking with the text shown finds it.
 MAX_LINES = 30
 MAX_LINE = 500
 #: Checklist items one answer holds at most.
@@ -256,7 +257,8 @@ def card_of(note: Note, access: Access, caller: Caller, base: str, read: tuple[s
         "updated_at": _iso(note.updated_at),
         "can_check": caller.writes and access == Access.WRITE,
         "tasks": {"done": done, "total": len(items)} if items else None,
-        "items": [{"index": item.index, "text": item.text[:MAX_LINE], "checked": item.checked, "depth": item.depth}
+        "items": [{"index": item.index, "text": edit.shown_task_text(item.text), "checked": item.checked,
+                   "depth": item.depth}
                   for item in items[:MAX_ITEMS]],
         "more_items": max(0, len(items) - MAX_ITEMS),
         "lines": lines,

@@ -378,13 +378,22 @@ def _notice(db: Session, account_id: int, reason: str, kind: str, title: str, ow
                        owner_name=((owner.display_name or owner.name) if owner is not None else "")[:80]))
 
 
+def _drop_pins(db: Session, account_id: int) -> None:
+    """The member's pins of notes no longer shared with it go: none waits for a sharing that may come back."""
+    db.execute(delete(SharePin).where(SharePin.account_id == account_id,
+                                      SharePin.note_id.not_in(shared_select(account_id))))
+
+
 def remove_person(db: Session, account: Account, kind: str, item_id: str, person_id: int) -> dict[str, Any]:
-    """Ends sharing with a member at once (AC-5): its open editors close, "Mit mir geteilt" says so."""
+    """Ends sharing with a member at once (AC-5): its open editors close, "Mit mir geteilt" says so, its pins of what
+    it no longer sees go."""
     item = _own(db, account, kind, item_id)
     row = db.scalar(select(Share).where(Share.account_id == person_id, _where(kind, item.id)))
     if row is not None:
         db.delete(row)
         _notice(db, person_id, "ended", kind, _title_of(item), account)
+        db.commit()
+        _drop_pins(db, person_id)
         db.commit()
         notes.nudge_all()
         logger.info("Sharing ended kind=%s id=%s with=%s", kind, item.id, person_id)
@@ -400,8 +409,7 @@ def leave(db: Session, account: Account, kind: str, item_id: str) -> None:
         raise _not_found()
     db.delete(row)
     db.commit()
-    db.execute(delete(SharePin).where(SharePin.account_id == account.id,
-                                      SharePin.note_id.not_in(shared_select(account.id))))
+    _drop_pins(db, account.id)
     db.commit()
     notes.nudge_all()
     logger.info("Share left kind=%s id=%s", kind, item_id)

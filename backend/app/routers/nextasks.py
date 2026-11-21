@@ -1,5 +1,6 @@
 """A member's own nextasks over HTTP (NOTES-19): connect, change the key, disconnect, the lists, send lines as tasks,
-and the member's own marks beside the lines (``services/nextasks.py``)."""
+and the member's own marks beside the lines (``services/nextasks.py``). Every route that asks nextasks goes through
+the account's brake (``nextasks.outgoing``)."""
 
 from __future__ import annotations
 
@@ -50,7 +51,8 @@ def status(account: Account, db: DbSession) -> dict[str, Any]:
 @router.put("", summary="Connect nextasks or change its key: address and key are checked at once")
 def connect(body: ConnectIn, account: Account, db: DbSession) -> dict[str, Any]:
     try:
-        row = nextasks.connect(db, account.id, body.url, body.token)
+        with nextasks.outgoing(account.id, connecting=True):
+            row = nextasks.connect(db, account.id, body.url, body.token)
     except NextasksError as exc:
         raise _fail(exc) from exc
     return nextasks.connection_out(db, row)
@@ -66,7 +68,8 @@ def disconnect(account: Account, db: DbSession) -> Response:
 def lists(account: Account, db: DbSession) -> dict[str, Any]:
     try:
         access = nextasks.connected_access(db, account.id)
-        found = nextasks.lists(access)
+        with nextasks.outgoing(account.id):
+            found = nextasks.lists(access)
     except NextasksError as exc:
         raise _fail(exc) from exc
     row = nextasks.connection_of(db, account.id)
@@ -90,9 +93,10 @@ def send(body: SendIn, request: Request, account: Account, db: DbSession) -> dic
         raise error("invalid_input", "The input is not valid.", 422, fields=["lines"])
     note_url = f"{oauth.base_url(request, db)}/notes/{note.id}"
     try:
-        made = nextasks.send(db, account.id, note_id=note.id, note_title=note.title, note_url=note_url,
-                             request_id=body.request_id, list_id=body.list_id, list_name=body.list_name,
-                             due=body.due_date, lines=lines)
+        with nextasks.outgoing(account.id):
+            made = nextasks.send(db, account.id, note_id=note.id, note_title=note.title, note_url=note_url,
+                                 request_id=body.request_id, list_id=body.list_id, list_name=body.list_name,
+                                 due=body.due_date, lines=lines)
     except NextasksError as exc:
         raise _fail(exc) from exc
     return {"sent": len(made), "links": [nextasks.link_out(row) for row in made]}
@@ -117,7 +121,8 @@ def open_link(link_id: Annotated[int, Path(ge=1, le=2**62)], account: Account, d
     row = _own_link(db, account.id, link_id)
     try:
         access = nextasks.connected_access(db, account.id)
-        state = nextasks.task_state(access, row.task_id)
+        with nextasks.outgoing(account.id):
+            state = nextasks.task_state(access, row.task_id)
     except NextasksError as exc:
         raise _fail(exc) from exc
     if state["gone"]:

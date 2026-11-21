@@ -15,7 +15,11 @@ nexnotes speaks nextasks' ``/api/v1`` (``nextasks/docs/api.md``) with the member
   to a size and within a deadline.
 * **The token is stored sealed** with the server's key (``security.encrypt_secret``), never logged, never answered.
   No body of nextasks' answers reaches the log, only status and code: task texts stand in them.
-* **Errors are codes, never 401** (that means "signed out" in the interface).
+* **Errors are codes, never 401** (that means "signed out" in the interface). Whatever goes wrong on the way (no
+  answer, too late, a redirect, an answer nexnotes cannot use) is one code for the caller, ``nextasks_unreachable``;
+  the details go to the log only. Otherwise a member could map ports and services from the server's place.
+* **Ports below 1024 only 80 and 443**, and **a brake per account**: few connects a minute, a few dozen other
+  requests, at most ``AT_ONCE`` running at the same time. A request to a slow address holds a worker of the server.
 """
 
 from __future__ import annotations
@@ -24,18 +28,23 @@ import ipaddress
 import json as jsonlib
 import logging
 import re
+import threading
 import time
+from collections import defaultdict, deque
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import date
 from typing import Any, NoReturn
 from urllib.parse import urlsplit
 
 import httpx
+from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ..errors import error
+from ..errors import detail
 from ..models import utcnow
 from ..models_nextasks import NextasksConnection, NextasksLink
 from ..security import decrypt_secret, encrypt_secret
@@ -61,6 +70,13 @@ FEATURES = ("tasks", "external_ref")
 #: Between list and section in a list choice (nextasks' ids are UUIDs, without a slash).
 SECTION = "/"
 AGENT = "nexnotes"
+#: Ports below 1024 that may be asked: the web's own. Others there are mail, SSH, databases, never nextasks.
+LOW_PORTS = (80, 443)
+#: Requests to nextasks an account may start in a minute: connecting (a new address each time) is the rarer one.
+CONNECTS_PER_MINUTE = 5
+REQUESTS_PER_MINUTE = 30
+#: Requests to nextasks of one account running at the same time.
+AT_ONCE = 2
 #: The operator's switch for addresses in the own network.
 LOCAL_SWITCH = "connections_local_network"
 
@@ -83,15 +99,68 @@ TRANSPORT: httpx.BaseTransport | None = None
 class NextasksError(Exception):
     """A refusal with its code, its HTTP status for the interface and values for the sentence."""
 
-    def __init__(self, code: str, message: str, status: int = 502, **values: Any) -> None:
+    def __init__(self, code: str, message: str, status: int = 502, *, headers: dict[str, str] | None = None,
+                 **values: Any) -> None:
         super().__init__(code)
         self.code = code
         self.message = message
         self.status = status
+        self.headers = headers
         self.values = values
 
     def http(self, **more: Any) -> Exception:
-        return error(self.code, self.message, self.status, **self.values, **more)
+        return HTTPException(status_code=self.status, detail=detail(self.code, self.message, **self.values, **more),
+                             headers=self.headers)
+
+
+def _unreachable(reason: str, *args: Any) -> NextasksError:
+    """Every way a request goes wrong, as the caller hears it: one code. Which way it was goes to the log only, so
+    that nobody maps ports or services from the server's place (open, closed, slow, something else answering)."""
+    logger.info("nextasks gave no usable answer: " + reason, *args)
+    return NextasksError("nextasks_unreachable", "nextasks cannot be reached or gave no usable answer.", 502)
+
+
+# --- The brake ------------------------------------------------------------------------------------------------------
+
+_gate_lock = threading.Lock()
+_started: dict[tuple[int, bool], deque[float]] = defaultdict(deque)
+_running: dict[int, int] = defaultdict(int)
+
+
+@contextmanager
+def outgoing(account_id: int, *, connecting: bool = False, now: float | None = None) -> Iterator[None]:
+    """Room for one request of an account to nextasks (or one sending, which asks once per line): under the brake of a
+    minute (``CONNECTS_PER_MINUTE`` for connecting, ``REQUESTS_PER_MINUTE`` else) and ``AT_ONCE`` at the same time.
+    Refused with 429 ``slow_down`` or ``nextasks_busy``."""
+    now = time.monotonic() if now is None else now
+    limit = CONNECTS_PER_MINUTE if connecting else REQUESTS_PER_MINUTE
+    with _gate_lock:
+        seen = _started[(account_id, connecting)]
+        while seen and now - seen[0] > 60:
+            seen.popleft()
+        if len(seen) >= limit:
+            wait = max(1, int(60 - (now - seen[0])) + 1)
+            logger.info("nextasks brake account_id=%s connecting=%s", account_id, connecting)
+            raise NextasksError("slow_down", "Too many requests to nextasks. Wait a minute.", 429,
+                                headers={"Retry-After": str(wait)})
+        if _running[account_id] >= AT_ONCE:
+            raise NextasksError("nextasks_busy", "Requests to nextasks are running already. Wait a moment.", 429,
+                                headers={"Retry-After": "2"})
+        seen.append(now)
+        _running[account_id] += 1
+    try:
+        yield
+    finally:
+        with _gate_lock:
+            _running[account_id] -= 1
+            if _running[account_id] <= 0:
+                del _running[account_id]
+
+
+def forget() -> None:
+    with _gate_lock:
+        _started.clear()
+        _running.clear()
 
 
 # --- The address ----------------------------------------------------------------------------------------------------
@@ -109,6 +178,8 @@ def clean_url(raw: str) -> str:
     if (len(url) > MAX_URL or parts.scheme not in ("http", "https") or not parts.hostname or parts.query
             or parts.fragment or parts.username or parts.password or (port is not None and not 0 < port < 65536)):
         raise NextasksError("nextasks_address_invalid", "This is not an address of nextasks.", 422)
+    if port is not None and port < 1024 and port not in LOW_PORTS:
+        raise NextasksError("nextasks_address_port", "nexnotes asks nextasks on port 80, 443 or from 1024 on.", 422)
     host = parts.hostname.lower().rstrip(".")
     if host in OWN_NAMES or host.endswith(".localhost"):
         raise NextasksError("nextasks_address_refused", "nexnotes never asks this address.", 422)
@@ -184,7 +255,7 @@ def _refusal(answer: httpx.Response, method: str, path: str) -> NoReturn:
         wait = answer.headers.get("retry-after", "")
         seconds = int(wait) if wait.isdigit() and 0 < int(wait) < 86_400 else 60
         raise NextasksError("nextasks_slow_down", "nextasks asks for fewer requests.", 429, seconds=seconds)
-    raise NextasksError("nextasks_failed", "nextasks could not do this.", 502, upstream=status)
+    raise _unreachable("an answer nexnotes cannot use (HTTP %s)", status)
 
 
 def request(access: Access, method: str, path: str, *, params: dict[str, str] | None = None,
@@ -201,7 +272,7 @@ def request(access: Access, method: str, path: str, *, params: dict[str, str] | 
                                 "This address is in the own network; the operator has not allowed that.", 422) from exc
         raise NextasksError("nextasks_address_refused", "nexnotes never asks this address.", 422) from exc
     except outbound.Unreachable as exc:
-        raise NextasksError("nextasks_unreachable", "nextasks cannot be reached.", 502) from exc
+        raise _unreachable("the name does not resolve") from exc
     headers = {"Authorization": f"Bearer {access.token}", "User-Agent": AGENT, "Accept": "application/json"}
     sent: dict[str, Any] = {}
     if params:
@@ -214,20 +285,18 @@ def request(access: Access, method: str, path: str, *, params: dict[str, str] | 
             answer = outbound.send(session, method, place, headers, deadline=time.monotonic() + SECONDS,
                                    ticks=time.monotonic, limit=MAX_ANSWER, connect_seconds=CONNECT_SECONDS, **sent)
     except (outbound.Late, httpx.TimeoutException) as exc:
-        logger.info("nextasks did not answer in time")
-        raise NextasksError("nextasks_timeout", "nextasks did not answer in time.", 504) from exc
+        raise _unreachable("no answer in time") from exc
     except outbound.TooLarge as exc:
-        raise NextasksError("nextasks_failed", "nextasks answered with too much.", 502, upstream=0) from exc
+        raise _unreachable("an answer larger than %s bytes", MAX_ANSWER) from exc
     except (outbound.Refused, httpx.HTTPError, OSError) as exc:
-        logger.info("nextasks was unreachable: %s", type(exc).__name__)
-        raise NextasksError("nextasks_unreachable", "nextasks cannot be reached.", 502) from exc
+        raise _unreachable("no connection (%s)", type(exc).__name__) from exc
     if answer.status_code >= 300:
         # A redirect counts as a refusal: nexnotes follows none.
         _refusal(answer, method, path)
     try:
         return answer.json()
     except ValueError as exc:
-        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0) from exc
+        raise _unreachable("an answer that is no JSON") from exc
 
 
 def check(access: Access) -> str:
@@ -253,7 +322,7 @@ def lists(access: Access) -> list[dict[str, Any]]:
     data = request(access, "GET", "lists")
     rows = data.get("lists") if isinstance(data, dict) else None
     if not isinstance(rows, list):
-        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0)
+        raise _unreachable("an answer of another form")
     found: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not LIST_ID.match(row["id"]):
@@ -298,7 +367,7 @@ def create_task(access: Access, *, title: str, note_url: str, note_title: str, l
             raise NextasksError("nextasks_list_unknown", "nextasks does not know the list.", 409) from exc
         raise
     if not isinstance(task, dict) or not isinstance(task.get("id"), str) or not task["id"]:
-        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0)
+        raise _unreachable("an answer of another form")
     return {"id": task["id"][:100], "link": _link_of(task.get("link"))}
 
 
@@ -318,7 +387,7 @@ def task_state(access: Access, task_id: str) -> dict[str, Any]:
             return {"gone": True, "trashed": False, "link": ""}
         raise
     if not isinstance(task, dict):
-        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0)
+        raise _unreachable("an answer of another form")
     trashed = task.get("trashed") is True
     return {"gone": trashed, "trashed": trashed, "link": _link_of(task.get("link"))}
 
