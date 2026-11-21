@@ -10,19 +10,23 @@ Nothing the member types reaches ``MATCH`` as syntax: the query is cut into word
 brackets and a quote left open are plain text (EC-5). Words shorter than three characters, which a trigram index cannot
 find, are looked for with ``instr`` in the folded columns.
 
+Tags are not in this index: ``#word`` and the tag filter ask the table of the tags (``note_tags``, NOTES-5), which
+knows what is a tag and what is not (code, links, addresses, numbers). ``#wo`` while typing finds the tags that start
+so, the filter one tag exactly.
+
 The index follows the note in the same transaction: ``services/notes.py`` calls ``index_note`` wherever it writes a
 title or a text (``notes.on_text_written``). Notes in the trash stay in the index and are left out when searching, so
 they come back with "Zurückholen" without a new pass. Rows of notes gone for good go in the cleanup round.
 
-Other features dock on here:
+Other features dock on here, mostly through the hooks the tags already have:
 
-- ``SCOPES``: further notes an account may read (sharing, NOTES-13), asked at every search, so a right taken away
-  counts at once (EC-7).
+- ``tags.SHARED_NOTES``: further notes an account may read (sharing, NOTES-13), asked at every search, so a right taken
+  away counts at once (EC-7).
+- ``tags.HIDDEN_NOTES``: locked notes (NOTES-16). Only their title goes into the index; locking and unlocking call
+  ``reindex``.
 - ``register_text_source``: text that is not in the note's body, such as text recognised in pictures and PDFs
   (NOTES-11). A hit only there names the attachment and its page (AC-3); ``reindex`` after a recognition finished
   (EC-3).
-- ``set_tag_source``: the tags of a note (NOTES-5). Until that feature brings its own, they are read from the text.
-- ``CONTENT_HIDDEN``: notes whose content may not be searched (locked notes, NOTES-16); only their title is indexed.
 """
 
 from __future__ import annotations
@@ -41,12 +45,14 @@ from sqlalchemy.orm import Session, defer
 from ..db import SessionLocal, engine
 from ..errors import error
 from ..models import FOLDER_INBOX, Account, Folder, Note
+from ..models_tags import NoteTag
+from . import tags
 
 logger = logging.getLogger("nexnotes.search")
 
 #: Changes whenever the folding or the columns change: the tables carry it in their names, and a start with a new
 #: version builds the index anew and drops the old tables.
-INDEX_VERSION = 1
+INDEX_VERSION = 2
 INDEX = f"search_index_v{INDEX_VERSION}"
 ROWS = f"search_rows_v{INDEX_VERSION}"
 
@@ -57,8 +63,8 @@ PAGE_MAX = 100
 QUERY_MAX = 500
 #: Terms and tags a query holds at most; the rest is ignored.
 TERMS_MAX = 16
-#: Weights of bm25 per column: title, body, extra, tags.
-WEIGHTS = (10.0, 1.0, 0.5, 0.0)
+#: Weights of bm25 per column: title, body, extra.
+WEIGHTS = (10.0, 1.0, 0.5)
 #: Characters of text an excerpt shows before the first hit and in total.
 EXCERPT_BEFORE = 60
 EXCERPT_CHARS = 220
@@ -130,45 +136,19 @@ def fold(value: str) -> str:
 
 # --- Tags ---------------------------------------------------------------------------------------------------------
 
-#: A ``#`` at the start of the text, after a blank or an opening bracket or quote; a hash inside a word or an address
-#: (``page#part``) is no tag.
-_TAG = re.compile(r"(?<![^\s(\[{\"'„“‚])#([^\s#]+)")
-_TAG_END = ".,;:!?)]}\"'“”‘’»«…"
-TAG_MAX = 100
+
+def tag_key(raw: str) -> str:
+    """The key of a tag as typed (with or without ``#``, a sign after it falls away as in the text: ``#bad,``), the way
+    ``note_tags`` compares; empty when it is no tag (``#1``, ``#``, a sign)."""
+    value = (raw or "").strip()
+    found = tags.find_tags(value if value.startswith("#") else f"#{value}")
+    return tags.key_of(found[0].label) if found and found[0].start == 0 else ""
 
 
-def clean_tag(raw: str) -> str:
-    """A tag without its ``#`` and without punctuation at its end; empty when nothing is left or it is only a number
-    (``#1``)."""
-    tag = raw.lstrip("#").rstrip(_TAG_END)
-    if not tag or tag.isdigit():
-        return ""
-    return tag[:TAG_MAX]
-
-
-def tags_in_text(value: str) -> list[str]:
-    """The tags written in a text, as written (NOTES-5 decides the finer rules; this is the stand-in until then)."""
-    found: list[str] = []
-    for match in _TAG.finditer(value or ""):
-        tag = clean_tag(match.group(1))
-        if tag:
-            found.append(tag)
-    return found
-
-
-def _tags_from_text(_db: Session, note: Note) -> list[str]:
-    return tags_in_text(note.text or "")
-
-
-TagSource = Callable[[Session, Note], Iterable[str]]
-_tag_source: TagSource = _tags_from_text
-
-
-def set_tag_source(source: TagSource | None) -> None:
-    """Where the tags of a note come from (NOTES-5 puts its table here); ``None`` goes back to reading the text. The
-    index must be built again afterwards (``reindex_all``) or note by note (``reindex``)."""
-    global _tag_source
-    _tag_source = source or _tags_from_text
+def _tagged(key: str, *, prefix: bool) -> ColumnElement[bool]:
+    """Notes with the tag ``key`` (or one that starts so, while typing), among the notes whose tags count."""
+    wanted = NoteTag.key.startswith(key, autoescape=True) if prefix else NoteTag.key == key
+    return Note.id.in_(select(NoteTag.note_id).where(wanted))
 
 
 # --- Further text of a note ---------------------------------------------------------------------------------------
@@ -209,22 +189,21 @@ def _parts(db: Session, note: Note) -> list[TextPart]:
     return parts
 
 
-#: Notes whose content may not be searched (locked notes, NOTES-16): only their title goes into the index.
-CONTENT_HIDDEN: list[Callable[[Session, Note], bool]] = []
-
-
 def _hidden(db: Session, note: Note) -> bool:
-    return any(check(db, note) for check in CONTENT_HIDDEN)
+    """A locked note (``tags.HIDDEN_NOTES``, NOTES-16): its content is not searched, its title is."""
+    if not tags.HIDDEN_NOTES or note.id is None:
+        return False
+    found = db.scalar(select(func.count()).select_from(Note)
+                      .where(Note.id == note.id, or_(*(hidden() for hidden in tags.HIDDEN_NOTES))))
+    return bool(found)
 
 
 # --- Who may find what --------------------------------------------------------------------------------------------
 
-#: Further notes an account may read besides its own (sharing, NOTES-13): each gives a condition on ``Note``.
-SCOPES: list[Callable[[Account], ColumnElement[bool]]] = []
-
 
 def _scope(account: Account) -> ColumnElement[bool]:
-    return or_(Note.owner_id == account.id, *(rule(account) for rule in SCOPES))
+    """The account's own notes and those shared with it (``tags.SHARED_NOTES``, the one hook of NOTES-13)."""
+    return or_(Note.owner_id == account.id, *(Note.id.in_(rule(account.id)) for rule in tags.SHARED_NOTES))
 
 
 # --- The index ----------------------------------------------------------------------------------------------------
@@ -232,7 +211,7 @@ def _scope(account: Account) -> ColumnElement[bool]:
 _ready = False
 
 
-_INDEX_T = table(INDEX, column("rowid"), column("title"), column("body"), column("extra"), column("tags"))
+_INDEX_T = table(INDEX, column("rowid"), column("title"), column("body"), column("extra"))
 _ROWS_T = table(ROWS, column("id"), column("note_id"))
 
 
@@ -243,7 +222,7 @@ def _sql(template: str) -> Any:
 
 def _create(run: Callable[[Any], Any]) -> None:
     run(_sql("CREATE TABLE IF NOT EXISTS @rows (id INTEGER PRIMARY KEY, note_id TEXT NOT NULL UNIQUE)"))
-    run(_sql("CREATE VIRTUAL TABLE IF NOT EXISTS @index USING fts5(title, body, extra, tags, tokenize='trigram')"))
+    run(_sql("CREATE VIRTUAL TABLE IF NOT EXISTS @index USING fts5(title, body, extra, tokenize='trigram')"))
 
 
 def ensure_schema(db: Session | None = None) -> None:
@@ -268,11 +247,9 @@ def ensure_schema(db: Session | None = None) -> None:
 def _row_values(db: Session, note: Note) -> dict[str, str]:
     title = fold(note.title or "")
     if _hidden(db, note):
-        return {"title": title, "body": "", "extra": "", "tags": ""}
-    tags = sorted({fold(tag) for tag in _tag_source(db, note) if tag})
+        return {"title": title, "body": "", "extra": ""}
     extra = " ".join(fold(part.text) for part in _parts(db, note))
-    return {"title": title, "body": fold(note.text or ""), "extra": extra,
-            "tags": (" " + " ".join(f"#{tag}" for tag in tags) + " ") if tags else ""}
+    return {"title": title, "body": fold(note.text or ""), "extra": extra}
 
 
 def _write(db: Session, note: Note) -> None:
@@ -282,7 +259,7 @@ def _write(db: Session, note: Note) -> None:
         row = db.execute(_sql("INSERT INTO @rows (note_id) VALUES (:id) RETURNING id"), {"id": note.id}).scalar()
     else:
         db.execute(_sql("DELETE FROM @index WHERE rowid = :row"), {"row": row})
-    db.execute(_sql("INSERT INTO @index (rowid, title, body, extra, tags) VALUES (:row, :title, :body, :extra, :tags)"),
+    db.execute(_sql("INSERT INTO @index (rowid, title, body, extra) VALUES (:row, :title, :body, :extra)"),
                {"row": row, **values})
 
 
@@ -380,7 +357,7 @@ class Query:
 
     #: Words and phrases (in quotes), each a string that must occur.
     terms: list[str] = field(default_factory=list)
-    #: Tags written as ``#word``: notes with a tag that starts so.
+    #: Tags written as ``#word`` (their keys): notes with a tag that starts so.
     tags: list[str] = field(default_factory=list)
 
     @property
@@ -405,7 +382,7 @@ def parse(raw: str) -> Query:
             continue
         piece = match.group(0)
         if piece.startswith("#") and len(piece) > 1:
-            tag = fold(clean_tag(piece))
+            tag = tag_key(piece)
             if tag and tag not in query.tags:
                 query.tags.append(tag)
                 continue
@@ -435,7 +412,7 @@ class Filters:
         return self.folder_ids is not None or bool(self.tag) or self.since is not None or self.until is not None
 
 
-def _conditions(query: Query, filters: Filters | None) -> tuple[str, list[ColumnElement[bool]]]:
+def _conditions(account: Account, query: Query, filters: Filters | None) -> tuple[str, list[ColumnElement[bool]]]:
     """The ``MATCH`` expression (empty when nothing long enough) and further conditions."""
     match: list[str] = []
     extra: list[ColumnElement[bool]] = []
@@ -445,11 +422,13 @@ def _conditions(query: Query, filters: Filters | None) -> tuple[str, list[Column
         else:
             # Too short for trigrams: looked for in the folded columns of the same row.
             extra.append(or_(*(func.instr(_INDEX_T.c[name], term) > 0 for name in ("title", "body", "extra"))))
-    for tag in query.tags:
-        match.append("tags : " + _quoted(f" #{tag}"))
+    tagged = [_tagged(tag, prefix=True) for tag in query.tags]
+    if filters is not None and filters.tag:
+        tagged.append(_tagged(filters.tag, prefix=False))
+    if tagged:
+        # Tags count only where the tags say they count (not in the trash, not in a locked note).
+        extra.extend([tags.visible(account.id), *tagged])
     if filters is not None:
-        if filters.tag:
-            match.append("tags : " + _quoted(f" #{filters.tag} "))
         if filters.folder_ids is not None:
             extra.append(Note.folder_id.in_(filters.folder_ids))
         column = Note.created_at if filters.date_field == "created" else Note.updated_at
@@ -472,7 +451,7 @@ def _base(account: Account, match: str, extra: Sequence[ColumnElement[bool]], *c
 
 
 def _count(db: Session, account: Account, query: Query, filters: Filters | None) -> int:
-    match, extra = _conditions(query, filters)
+    match, extra = _conditions(account, query, filters)
     return int(db.scalar(_base(account, match, extra, func.count())) or 0)
 
 
@@ -588,7 +567,7 @@ def _jump(value: str, span: tuple[int, int]) -> dict[str, Any]:
 
 
 def _hit(db: Session, note: Note, query: Query, folders: dict[str, Folder]) -> dict[str, Any]:
-    needles = query.terms + [f"#{tag}" for tag in query.tags]
+    needles = query.terms + [fold(f"#{tag}") for tag in query.tags]
     title_spans, _, _ = _spans(note.title or "", query.terms)
     hidden = _hidden(db, note)
     body = "" if hidden else (note.text or "")
@@ -648,7 +627,7 @@ def search(db: Session, account: Account, raw: str, filters: Filters | None = No
     filters = filters if filters is not None and filters.any else None
     if query.empty and filters is None:
         return Result(total=0, items=[], offset=offset, unfiltered=None, terms=[], tags=[])
-    match, extra = _conditions(query, filters)
+    match, extra = _conditions(account, query, filters)
     total = _count(db, account, query, filters)
     ids: list[str]
     if match and not query.empty:
@@ -669,23 +648,3 @@ def search(db: Session, account: Account, raw: str, filters: Filters | None = No
     if total == 0 and filters is not None and not query.empty:
         unfiltered = _count(db, account, query, None)
     return Result(total=total, items=items, offset=offset, unfiltered=unfiltered, terms=query.terms, tags=query.tags)
-
-
-def tags(db: Session, account: Account, limit: int = 200) -> list[dict[str, Any]]:
-    """The tags of the account's notes for the filter, most used first; shown as most often written."""
-    counts: dict[str, int] = {}
-    spelled: dict[str, dict[str, int]] = {}
-    notes = db.scalars(select(Note).options(defer(Note.ydoc)).where(Note.deleted_at.is_(None), _scope(account)))
-    for note in notes:
-        if _hidden(db, note):
-            continue
-        seen: set[str] = set()
-        for tag in _tag_source(db, note):
-            key = fold(tag)
-            spelled.setdefault(key, {})[tag] = spelled.setdefault(key, {}).get(tag, 0) + 1
-            if key not in seen:
-                counts[key] = counts.get(key, 0) + 1
-                seen.add(key)
-    ordered = sorted(counts, key=lambda key: (-counts[key], key))[:limit]
-    return [{"tag": max(spelled[key], key=lambda name: (spelled[key][name], name)), "key": key, "count": counts[key]}
-            for key in ordered]

@@ -26,7 +26,7 @@ type Call = { path: string; params: URLSearchParams }
 
 let calls: Call[] = []
 let stored: Stored[] = []
-let tags = [{ tag: 'urlaub', key: 'urlaub', count: 3 }, { tag: 'bad', key: 'bad', count: 1 }]
+let tags = [{ label: 'urlaub', key: 'urlaub', count: 3 }, { label: 'bad', key: 'bad', count: 1 }]
 /** Answers held back until released: to send an old answer after a newer one. */
 let holdNext: ((release: () => void) => void) | null = null
 const INBOX = 'inbox-1'
@@ -112,7 +112,7 @@ async function serve(url: string): Promise<Response> {
   const parsed = new URL(url, 'http://localhost')
   calls.push({ path: parsed.pathname, params: parsed.searchParams })
   if (parsed.pathname === '/api/folders') return reply(200, { inbox: { id: INBOX, count: 0 }, folders: FOLDERS })
-  if (parsed.pathname === '/api/search/tags') return reply(200, tags)
+  if (parsed.pathname === '/api/tags') return reply(200, { tags, total: tags.length })
   if (parsed.pathname === '/api/search') {
     const hold = holdNext
     holdNext = null
@@ -217,7 +217,7 @@ beforeEach(async () => {
     { id: 'n3', title: 'Einkauf', text: 'Milch und Brot', folder: INBOX, updated: '2026-11-15T10:00:00Z' },
     { id: 'n4', title: 'Kostenübersicht Q4', text: 'Hotelrechnungen nachreichen #urlaub', folder: 'work', updated: '2025-01-01T10:00:00Z' },
   ]
-  tags = [{ tag: 'urlaub', key: 'urlaub', count: 3 }, { tag: 'bad', key: 'bad', count: 1 }]
+  tags = [{ label: 'urlaub', key: 'urlaub', count: 3 }, { label: 'bad', key: 'bad', count: 1 }]
   forgetFolders()
   vi.stubGlobal('fetch', vi.fn((url: string) => serve(url)))
   await i18n.changeLanguage('de')

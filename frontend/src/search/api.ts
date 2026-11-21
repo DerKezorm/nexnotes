@@ -34,8 +34,6 @@ export type SearchAnswer = {
   tags: string[]
 }
 
-export type TagCount = { tag: string; key: string; count: number }
-
 export type SearchQuery = {
   q: string
   folder_id?: string
@@ -53,5 +51,4 @@ export const PAGE_MAX = 100
 
 export const searchApi = {
   find: (query: SearchQuery) => api<SearchAnswer>('/api/search', { query }),
-  tags: () => api<TagCount[]>('/api/search/tags'),
 }

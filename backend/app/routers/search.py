@@ -1,5 +1,5 @@
-"""Search over notes (NOTES-9): hits with excerpts and marks, filters, and the tags to filter by. The rules are in
-``services/search.py``."""
+"""Search over notes (NOTES-9): hits with excerpts and marks, and filters. The rules are in ``services/search.py``;
+the tags to filter by come from ``/api/tags`` (NOTES-5)."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ FolderId = Annotated[str | None, Query(max_length=36, pattern=r"^[0-9a-fA-F-]+$"
 def find(db: DbSession, account: Account,
          q: Annotated[str, Query(max_length=search.QUERY_MAX)] = "",
          folder_id: FolderId = None,
-         tag: Annotated[str, Query(max_length=search.TAG_MAX + 1)] = "",
+         tag: Annotated[str, Query(max_length=300)] = "",
          since: datetime | None = None,
          until: datetime | None = None,
          date_field: Literal["updated", "created"] = "updated",
@@ -42,7 +42,7 @@ def find(db: DbSession, account: Account,
          limit: Annotated[int, Query(ge=1, le=search.PAGE_MAX)] = search.PAGE) -> dict[str, Any]:
     filters = search.Filters(
         folder_ids=search.folder_tree(db, account, folder_id) if folder_id else None,
-        tag=search.fold(search.clean_tag(tag)) if tag else "",
+        tag=search.tag_key(tag) if tag else "",
         since=since,
         until=until,
         date_field=date_field,
@@ -56,8 +56,3 @@ def find(db: DbSession, account: Account,
         "terms": result.terms,
         "tags": result.tags,
     }
-
-
-@router.get("/tags")
-def tags(db: DbSession, account: Account) -> list[dict[str, Any]]:
-    return search.tags(db, account)

@@ -7,12 +7,12 @@ import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import insert, text
+from sqlalchemy import insert, select, text
 
 from app.db import SessionLocal
 from app.models import FOLDER_NORMAL, Account, Folder, Note
 from app.notedoc import edit
-from app.services import notes, search
+from app.services import notes, search, tags
 from app.services.inbox import inbox_for
 from app.services.notes import SqlNoteStore
 
@@ -45,6 +45,14 @@ def new_note(client, title: str = "", body: str = "", folder_id: str | None = No
     if body:
         put_text(note_id, title, body)
     return note_id
+
+
+def tagged_note(client, title: str, markdown: str, folder_id: str | None = None) -> str:
+    """A note whose text is in its document: tags are read from there (``note_tags``, NOTES-5)."""
+    answer = client.post("/api/notes", json={"title": title, "markdown": markdown,
+                                             **({"folder_id": folder_id} if folder_id else {})})
+    assert answer.status_code == 201, answer.text
+    return answer.json()["id"]
 
 
 def put_text(note_id: str, title: str, body: str) -> None:
@@ -160,14 +168,16 @@ def test_notes9_ac4_folder_filter_only_on_own_living_folders(client, operator):
 
 
 def test_notes9_ac4_tag_filter_is_exact_and_ignores_case(client, operator):
-    new_note(client, "Urlaub", "Packliste #Urlaub und #reise")
-    new_note(client, "Urlaubsplanung", "nur #urlaubsplanung")
+    tagged_note(client, "Urlaub", "Packliste #Urlaub und #reise")
+    tagged_note(client, "Urlaubsplanung", "nur #urlaubsplanung")
+    tagged_note(client, "Im Code", "Beispiel `#urlaub` im Code")
     new_note(client, "Ohne", "Urlaub ohne Schlagwort")
     assert titles(find(client, "", tag="urlaub")) == ["Urlaub"]
     assert titles(find(client, "packliste", tag="#URLAUB")) == ["Urlaub"]
     assert find(client, "ohne", tag="urlaub")["total"] == 0
-    tags = client.get("/api/search/tags").json()
-    assert {entry["key"] for entry in tags} == {"urlaub", "reise", "urlaubsplanung"}
+    # Code holds no tags (NOTES-5 EC-1): the note is no hit for the tag, but its text is still found.
+    assert titles(find(client, "beispiel", tag="urlaub")) == []
+    assert titles(find(client, "beispiel")) == ["Im Code"]
 
 
 def test_notes9_ac4_time_range_by_change_or_creation(client, operator):
@@ -187,10 +197,10 @@ def test_notes9_ac4_time_range_by_change_or_creation(client, operator):
 
 def test_notes9_ac4_filters_combine(client, operator):
     home = folder(operator, "Haushalt")
-    hit = new_note(client, "Treffer", "Rechnung #bad", home)
-    new_note(client, "Falscher Ordner", "Rechnung #bad")
-    new_note(client, "Falsches Schlagwort", "Rechnung #garten", home)
-    old = new_note(client, "Zu alt", "Rechnung #bad", home)
+    hit = tagged_note(client, "Treffer", "Rechnung #bad", home)
+    tagged_note(client, "Falscher Ordner", "Rechnung #bad")
+    tagged_note(client, "Falsches Schlagwort", "Rechnung #garten", home)
+    old = tagged_note(client, "Zu alt", "Rechnung #bad", home)
     set_dates(old, datetime.now(UTC) - timedelta(days=60))
     since = (datetime.now(UTC) - timedelta(days=30)).isoformat()
     result = find(client, "rechnung", folder_id=home, tag="bad", since=since)
@@ -354,10 +364,11 @@ def test_notes9_ec5_special_characters_are_found_as_text(client, operator):
 
 
 def test_notes9_ec5_hash_word_finds_the_tag(client, operator):
-    new_note(client, "Bad", "Fliesen aussuchen #bad")
-    new_note(client, "Wort", "Das Bad ist klein")
-    new_note(client, "Adresse", "siehe example.com/seite#bad")
-    new_note(client, "Nummer", "Punkt #1 erledigen")
+    tagged_note(client, "Bad", "Fliesen aussuchen #bad")
+    tagged_note(client, "Wort", "Das Bad ist klein")
+    tagged_note(client, "Adresse", "siehe example.com/seite#bad")
+    tagged_note(client, "Nummer", "Punkt #1 erledigen")
+    tagged_note(client, "Code", "Im Code `#bad` steht kein Schlagwort")
     assert titles(find(client, "#bad")) == ["Bad"]
     assert marked(find(client, "#bad")["items"][0]["excerpt"]) == ["#bad"]
     # While typing: the start of a tag finds it already.
@@ -423,8 +434,8 @@ def test_notes9_ec7_only_own_notes_and_a_taken_right_counts_at_once(client, oper
     assert titles(find(client, "party")) == ["Meins"]
     # Shared (the way NOTES-13 docks on): found as long as the right lasts.
     shared: set[str] = {theirs_id}
-    monkeypatch.setattr(search, "SCOPES", [lambda account: Note.id.in_(list(shared)) if account.id == operator.id
-                                           else Note.id.in_([])])
+    monkeypatch.setattr(tags, "SHARED_NOTES", [lambda account_id: select(Note.id).where(
+        Note.id.in_(list(shared) if account_id == operator.id else []))])
     assert sorted(titles(find(client, "party"))) == ["Geheimplan", "Meins"]
     shared.clear()
     assert titles(find(client, "party")) == ["Meins"]
@@ -481,11 +492,15 @@ def test_notes9_older_index_versions_are_dropped(client, operator):
 
 
 def test_notes9_locked_content_is_not_searched_but_its_title_is(client, operator, monkeypatch):
-    monkeypatch.setattr(search, "CONTENT_HIDDEN", [lambda _db, note: note.title.startswith("Tresor")])
-    new_note(client, "Tresor PIN", "Geheimzahl 4711 #privat")
+    locked = tagged_note(client, "Tresor PIN", "Geheimzahl 4711 #privat")
+    tagged_note(client, "Offen", "Notiz #privat")
+    assert find(client, "4711")["total"] == 1
+    # Locking (NOTES-16) puts the note among the hidden ones and indexes it again.
+    monkeypatch.setattr(tags, "HIDDEN_NOTES", [lambda: Note.title.startswith("Tresor")])
+    search.reindex(locked)
     assert titles(find(client, "tresor")) == ["Tresor PIN"]
     assert find(client, "4711")["total"] == 0
-    assert find(client, "#privat")["total"] == 0
+    assert titles(find(client, "#privat")) == ["Offen"]
     item = find(client, "tresor")["items"][0]
     assert item["excerpt"] == []
 
@@ -512,17 +527,6 @@ def test_notes9_text_source_hit_names_attachment_and_page(client, operator, monk
     assert find(client, "zähler")["items"][0]["where"] == "text"
 
 
-def test_notes9_tag_source_can_be_swapped(client, operator):
-    note_id = new_note(client, "Mit Tabelle", "kein Schlagwort im Text")
-    try:
-        search.set_tag_source(lambda _db, note: ["garten"] if note.id == note_id else [])
-        search.reindex(note_id)
-        assert titles(find(client, "#garten")) == ["Mit Tabelle"]
-        assert titles(find(client, "", tag="garten")) == ["Mit Tabelle"]
-    finally:
-        search.set_tag_source(None)
-
-
 # --- Folding and parsing ------------------------------------------------------------------------------------------
 
 
@@ -536,7 +540,16 @@ def test_notes9_fold_and_its_map_agree():
 
 
 def test_notes9_parse_cuts_words_phrases_and_tags():
-    query = search.parse('Rechnung "Strom und Gas" #Haus, #1 rechnung')
+    query = search.parse('Rechnung "Strom und Gas" #Haus, #1 #Bäder rechnung')
     assert query.terms == ["rechnung", "strom und gas", "#1"]
-    assert query.tags == ["haus"]
+    assert query.tags == ["haus", "bäder"]
     assert search.parse("   ").empty
+
+
+def test_notes9_ec5_match_strings_are_always_closed(client, operator):
+    # The query never hands a quote or a NUL to MATCH (the parser keeps them out); the quoting holds anyway.
+    assert search._quoted('a"b\x00c') == '"a""bc"'
+    with SessionLocal() as db:
+        account = db.get(Account, operator.id)
+        match, extra = search._conditions(account, search.Query(terms=['x"y\x00z', 'NEAR("a"']), None)
+        assert db.scalar(search._base(account, match, extra, search.func.count())) == 0

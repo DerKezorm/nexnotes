@@ -7,7 +7,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { useFolders } from '../folders/store'
-import { searchApi, type TagCount } from './api'
+import { tagsApi, type TagInfo } from '../tags/api'
 import type { Period, SearchConditions } from './conditions'
 
 type Props = {
@@ -116,15 +116,16 @@ function FolderChoice({ conditions, onChange }: Props) {
 
 function TagChoice({ conditions, onChange }: Props) {
   const { t } = useTranslation()
-  const [tags, setTags] = useState<TagCount[] | null>(null)
+  const [tags, setTags] = useState<TagInfo[] | null>(null)
   const [typed, setTyped] = useState('')
   return (
     <Chip label={conditions.tag ? `#${conditions.tag}` : t('search.filter.tag')} active={Boolean(conditions.tag)} testId="filter-tag">
       {(close) => {
         if (tags === null) {
-          searchApi
-            .tags()
-            .then(setTags)
+          // The tags of NOTES-5: what counts as a tag is theirs to say.
+          tagsApi
+            .list()
+            .then((answer) => setTags(answer.tags))
             .catch(() => setTags([]))
         }
         const pick = (tag: string) => {
@@ -160,8 +161,8 @@ function TagChoice({ conditions, onChange }: Props) {
               </button>
             )}
             {shown.map((entry) => (
-              <button key={entry.key} type="button" role="menuitem" className="nn-menu-item justify-between" onClick={() => pick(entry.tag)}>
-                <span className="truncate text-accent-400">#{entry.tag}</span>
+              <button key={entry.key} type="button" role="menuitem" className="nn-menu-item justify-between" onClick={() => pick(entry.label)}>
+                <span className="truncate text-accent-400">#{entry.label}</span>
                 <span className="text-xs text-mist-500">{entry.count}</span>
               </button>
             ))}
