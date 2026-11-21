@@ -83,7 +83,8 @@ export function SelectionBar({ editor, onLink, headHeight = 0 }: { editor: Edito
       dismissed.current = null
     }
     const keys = (event: KeyboardEvent) => {
-      if (!dom.contains(event.target as Node)) return
+      // Keys of the window itself (the app's shortcuts) have no node as their target.
+      if (!(event.target instanceof Node) || !dom.contains(event.target)) return
       const shown = Boolean(bar.current?.isConnected)
       if (event.key === 'Escape' && shown) {
         hide()
