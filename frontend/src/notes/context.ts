@@ -32,6 +32,24 @@ if (typeof window !== 'undefined') {
   })
 }
 
+/** The note open on the side used last, as far as "New note" needs it (NOTES-3 AC-1, EC-4). */
+export type OpenNote = { noteId: string; folderId: string; isBlank: () => boolean; focusTitle: () => void }
+
+let openNote: OpenNote | null = null
+
+export function setOpenNote(next: OpenNote | null): void {
+  openNote = next
+}
+
+/**
+ * The open note when it is quite empty (no title, no text) and lies in `folderId`: "New note" there takes it instead
+ * of making a second one, which the first would make vanish again a moment later (EC-4).
+ */
+export function blankOpenNoteIn(folderId: string | null | undefined): OpenNote | null {
+  if (!openNote || !folderId || openNote.folderId !== folderId) return null
+  return openNote.isBlank() ? openNote : null
+}
+
 /** Leaves at once, or after the open note had its say. */
 export function tryLeave(proceed: () => void): void {
   if (guard && guard(proceed)) return

@@ -31,6 +31,7 @@ import { acquireProvider, BRIDGE, forgetParked, parkedProviders, releaseProvider
 import { accountChanged, followAccount, waitingChanges } from '../state/account'
 import { forgetMeta, metaOf, refreshMeta } from './meta'
 import { openNoteBeside, openNoteInNewTab } from './open'
+import { startNewNote } from '../notes/newNote'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabs, tabsNow } from './store'
 import { forgetRestored, rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
@@ -94,6 +95,13 @@ async function answer(method: string, path: string): Promise<Response> {
     const alive = [...notes.values()].filter((n) => !n.deleted_at && (belongs.get(n.id) ?? 1) === me)
     return reply(200, { key: 'all', view: { mode: 'list', sort: 'title', direction: 'asc', grouped: false }, counts: { own: alive.length, shared: 0 }, items: alive })
   }
+  if (method === 'POST' && path === '/api/notes') {
+    const body = JSON.parse(lastBody ?? '{}') as { id: string; folder_id?: string }
+    const made = note(body.id, '', body.folder_id ?? 'garden')
+    notes.set(made.id, made)
+    rooms.set(made.id, new Y.Doc())
+    return reply(201, made)
+  }
   if (method === 'GET' && path === '/api/note-list/stamp') return reply(200, { stamp: String(notes.size) })
   const one = /^\/api\/notes\/([^/]+)(\/.*)?$/.exec(path)
   if (one) {
@@ -101,6 +109,10 @@ async function answer(method: string, path: string): Promise<Response> {
     const found = notes.get(id)
     if (!found || (belongs.get(id) ?? 1) !== me) return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
     if (method === 'GET' && !tail) return reply(200, found)
+    if (method === 'DELETE' && !tail) {
+      notes.set(id, { ...found, deleted_at: NOW })
+      return reply(204, null)
+    }
     if (method === 'PUT' && tail === '/icon') {
       notes.set(id, { ...found, icon: String(JSON.parse(lastBody ?? '{}').icon) })
       return reply(200, notes.get(id))
@@ -609,6 +621,31 @@ describe('tabs in the page', () => {
     expect(tab('shop').getAttribute('aria-current')).toBe('true')
     expect(tab('meet').getAttribute('aria-current')).toBeNull()
     expect(tab('meet').className).not.toContain('shadow-[inset_0_3px_0')
+  })
+
+  it('NOTES-3 AC-1 EC-4 EC-9 "New note" while an empty note is open there takes that one; with text a second one comes', async () => {
+    notes.set('blank', note('blank', ''))
+    rooms.set('blank', new Y.Doc())
+    await render('/notes/blank?folder=garden')
+    const made = () => requests.filter((request) => request === 'POST /api/notes').length
+    const title = () => $('note-title') as HTMLInputElement
+    expect(title().value).toBe('')
+    await act(async () => void (document.activeElement as HTMLElement | null)?.blur())
+    // Quite empty and in the folder "New note" goes to: no second note, the cursor goes into its title.
+    await act(async () => startNewNote('garden'))
+    await idle()
+    expect(made()).toBe(0)
+    expect(document.activeElement).toBe(title())
+    expect(where).toBe('/notes/blank?folder=garden')
+    // Another folder is another place: a new note there.
+    await act(async () => startNewNote('kitchen'))
+    await idle()
+    expect(made()).toBe(1)
+    // Once something is written in it, it is no blank note any more: "New note" makes one.
+    await act(async () => typeTitle(title(), 'Groceries'))
+    await act(async () => startNewNote('garden'))
+    await idle()
+    expect(made()).toBe(2)
   })
 
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {

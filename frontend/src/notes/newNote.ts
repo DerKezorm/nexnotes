@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom'
 
 import { refreshFolders, useCurrentFolder } from '../folders/store'
 import { notesApi, notesChanged, type NoteHead } from './api'
-import { goTo, tryLeave } from './context'
+import { blankOpenNoteIn, goTo, tryLeave } from './context'
 
 let making: Promise<NoteHead> | null = null
 
@@ -49,6 +49,8 @@ export function openNew(note: NoteHead, folderId: string | null | undefined, go:
 
 /** "Neue Notiz" from outside React's tree (the folder pages' button): asks the open note first, then makes and opens. */
 export function startNewNote(folderId?: string | null): void {
+  const blank = blankOpenNoteIn(folderId)
+  if (blank) return blank.focusTitle()
   tryLeave(() => {
     createNote(folderId)
       .then((note) => openNew(note, folderId, goTo))
@@ -62,6 +64,9 @@ export function useNewNote(): { start: () => void; busy: boolean } {
   const { openFolderId, targetFolderId } = useCurrentFolder()
   const [busy, setBusy] = useState(false)
   const start = useCallback(() => {
+    // An empty note open in the same folder is the new note already: the cursor goes into its title.
+    const blank = blankOpenNoteIn(targetFolderId)
+    if (blank) return blank.focusTitle()
     tryLeave(() => {
       setBusy(true)
       createNote(targetFolderId)

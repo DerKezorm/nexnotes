@@ -28,7 +28,7 @@ import { RestoreWatch } from '../history/RestoreWatch'
 import { problemText } from '../lib/errors'
 import { pageTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
-import { setLeaveGuard, setPopGuard, type LeaveGuard } from '../notes/context'
+import { setLeaveGuard, setOpenNote, setPopGuard, type LeaveGuard } from '../notes/context'
 import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
 import { noteHref } from '../notes/newNote'
 import { useAuth } from '../state/auth'
@@ -257,6 +257,19 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
     onGuard(guard)
     return () => onGuard(null)
   }, [onGuard, guard])
+
+  // "New note" asks the open note whether it is still quite empty and where it lies.
+  const headFolder = head?.folder_id ?? ''
+  useEffect(() => {
+    if (!guarded || !headFolder) return
+    setOpenNote({
+      noteId,
+      folderId: headFolder,
+      isBlank: () => !cleanTitle(titleRef.current) && Boolean(editor && bodyIsEmpty(editor)),
+      focusTitle: () => titleField.current?.focus(),
+    })
+    return () => setOpenNote(null)
+  }, [guarded, headFolder, noteId, editor])
 
   // Leaving the note: the editor goes (another note, a tab closed, the page left).
   useEffect(() => {
