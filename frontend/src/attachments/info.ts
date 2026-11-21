@@ -14,7 +14,7 @@ import { onUploaded } from './uploads'
 export const ASK_AGAIN_MS = 3000
 const ASK_FOR_MS = 120_000
 
-type NoteInfo = { items: Map<string, AttachmentInfo>; loaded: boolean; loading: Promise<void> | null; missingSince: number | null }
+type NoteInfo = { items: Map<string, AttachmentInfo>; loaded: boolean; loading: Promise<void> | null; missingSince: number | null; wanted: Set<string> }
 
 const notes = new Map<string, NoteInfo>()
 const listeners = new Set<() => void>()
@@ -36,7 +36,7 @@ function subscribe(listener: () => void): () => void {
 function noteInfo(noteId: string): NoteInfo {
   let found = notes.get(noteId)
   if (!found) {
-    found = { items: new Map(), loaded: false, loading: null, missingSince: null }
+    found = { items: new Map(), loaded: false, loading: null, missingSince: null, wanted: new Set() }
     notes.set(noteId, found)
   }
   return found
@@ -69,13 +69,18 @@ function missing(noteId: string): void {
   if (Date.now() - info.missingSince > ASK_FOR_MS || timer) return
   timer = setTimeout(() => {
     timer = null
-    void loadNote(noteId)
+    void loadNote(noteId).then(() => {
+      // Still not there (a large file of somebody else): once more in a moment.
+      if ([...info.wanted].some((id) => !info.items.has(id))) missing(noteId)
+      else info.missingSince = null
+    })
   }, ASK_AGAIN_MS)
 }
 
 /** What a block asks for: the note read once, asked again while the attachment is not there yet. */
 function want(noteId: string, id: string): void {
   const info = noteInfo(noteId)
+  info.wanted.add(id)
   if (!info.loaded && !info.loading) void loadNote(noteId)
   else if (info.loaded && !info.items.has(id)) missing(noteId)
   else if (info.items.has(id)) info.missingSince = null

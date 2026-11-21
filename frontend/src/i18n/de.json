@@ -524,7 +524,8 @@
     "attachment_too_large": "„{{name}}“ ist zu groß. Höchstens {{max_mb}} MB je Datei; das legt der Betreiber fest.",
     "storage_limit_reached": "Dein Speicher ist voll. Neue Anhänge erst, wenn Platz frei ist.",
     "attachment_id_taken": "Dieser Anhang gehört schon zu einer anderen Notiz.",
-    "attachment_empty": "Die Datei ist leer."
+    "attachment_empty": "Die Datei ist leer.",
+    "upload_broken": "Das Hochladen brach ab. Der Anhang fehlt noch."
   },
   "folders": {
     "section": "Ordner",

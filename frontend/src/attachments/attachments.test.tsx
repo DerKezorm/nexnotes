@@ -20,7 +20,7 @@ import { NoteProvider } from '../editor/provider'
 import type { AttachmentInfo, Gallery, Limits } from './api'
 import { attachFiles, pastedLink } from './editing'
 import { GalleryPage } from './GalleryPage'
-import { forgetAttachments, loadLimits } from './info'
+import { ASK_AGAIN_MS, forgetAttachments, loadLimits } from './info'
 import { AttachButton, DropHint, RefusalList } from './NoteParts'
 import '../folders'
 import './register'
@@ -541,11 +541,25 @@ describe('NOTES-10 how attachments stand in the note', () => {
     expect(editor.state.doc.textContent).toBe('bleibt')
   })
 
-  it('NOTES-10 an attachment somebody else still uploads says it is missing yet', async () => {
+  it('NOTES-10 an attachment somebody else still uploads says it is missing yet, and shows once it is there', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     const { box } = await noteWith([], [{ type: 'image', attrs: { id: 'Else1aaaaaaaaaaaaaaaaa', name: 'von Anna.jpg' } }])
     const card = box.querySelector('[data-testid="attachment-missing"]')!
     expect(card.textContent).toContain('von Anna.jpg')
     expect(card.textContent).toContain('The attachment is still missing.')
+    // Anna's upload takes a while: the note asks again until it is there, then the picture shows.
+    try {
+      await act(async () => vi.advanceTimersByTimeAsync(ASK_AGAIN_MS + 100))
+      await settle()
+      expect(box.querySelector('[data-testid="attachment-missing"]')).not.toBeNull()
+      known.push(info('Else1aaaaaaaaaaaaaaaaa', 'image', 'von Anna.jpg', { inline: true }))
+      await act(async () => vi.advanceTimersByTimeAsync(ASK_AGAIN_MS + 100))
+      await settle()
+      expect(box.querySelector('[data-testid="attachment-missing"]')).toBeNull()
+      expect(box.querySelector('[data-attachment-id="Else1aaaaaaaaaaaaaaaaa"] img')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

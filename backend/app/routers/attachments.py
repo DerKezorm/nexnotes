@@ -22,6 +22,7 @@ from fastapi import APIRouter, FastAPI, Query, Request, Response
 from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from starlette.requests import ClientDisconnect
 
 from ..db import SessionLocal
 from ..deps import Account, DbSession
@@ -99,6 +100,10 @@ async def upload(
         row, new = await asyncio.to_thread(attachments.finish, started, work)
     except attachments.AttachmentError as exc:
         raise exc.http() from exc
+    except ClientDisconnect:
+        # The connection went while the file came (EC-2): nothing was kept, the page offers to upload again.
+        logger.info("An upload broke off note=%s", note_id)
+        raise error("upload_broken", "The upload broke off.", 400) from None
     if not new:
         response.status_code = 200
     return attachments.out(row)
