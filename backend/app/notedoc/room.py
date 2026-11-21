@@ -25,7 +25,16 @@ What the room does:
 * **Awareness** (who is here, where the caret is) is passed on and remembered; when a connection goes, the others are
   told its clients left.
 * **Concurrent deletion:** text typed into a paragraph that someone else deleted at the same time comes back as a
-  paragraph of its own (``rescue.py``, EC-1).
+  paragraph of its own (``rescue.py``, EC-1), and shapes the schema refuses after concurrent deletions (a checklist
+  without items) are mended (``doc.repair``), both as a change of the server after the update.
+* **A browser gets the document only after its own changes are in:** its sync step 1 is answered once its sync step 2
+  (the answer to the room's step 1) has arrived, and changes of others reach it only from then on. Text it wrote
+  offline into a paragraph someone deleted meanwhile is therefore sent before the browser learns of the deletion
+  (which would take that text away in the browser itself). Every y-websocket client sends that step 2 at once; one
+  that never does gets the document after ``sync_timeout`` seconds.
+* **pycrdt stays at 0.13.1** (``requirements-notedoc.txt``): 0.14 writes states with overlapping blocks after such
+  concurrent edits, which Yjs in the browser cannot read (``tests/notedoc/fixtures/concurrent``). The room does not
+  fold a state that does not encode cleanly (``yupdate.well_formed``).
 * **Changes from the server** (MCP, nexdeck, the REST API) go through ``Rooms.change``: applied to the open room or to
   the stored document, stored, passed to everyone.
 
@@ -49,9 +58,12 @@ Hooking it into the app (one ``Rooms`` per process, nexnotes runs one worker)::
     # at shutdown: await rooms.shutdown(); at startup: fold what waits (``fold_stored``)
 
 ``SqlNoteStore`` keeps ``notes.ydoc`` (the folded state) and ``note_updates`` (note_id, update, account_id,
-created_at); ``fold`` writes the state, ``notes.title`` and ``notes.text`` and deletes every update stored before the
-call (the room holds its lock, nothing is stored meanwhile). The store's methods are coroutines; synchronous database
-code runs in ``asyncio.to_thread``. They get bytes and strings, never the pycrdt document (it must stay in its thread).
+created_at); ``save_update`` gets ``account_id=None`` for the server's own changes (text put back, shapes mended),
+which should not count as "changed by" anyone (AC-9). ``fold`` writes the state and ``notes.text`` (the title the app
+takes as it decides: the document's title is what people typed, the column follows the app's title rules) and deletes
+every update stored before the call (the room holds its lock, nothing is stored meanwhile). The store's methods are
+coroutines; synchronous database code runs in ``asyncio.to_thread``. They get bytes and strings, never the pycrdt
+document (it must stay in its thread).
 """
 
 from __future__ import annotations
