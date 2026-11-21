@@ -1,7 +1,8 @@
 /**
- * The symbol before the title of an open note (NOTES-3 AC-18). Without one, a quiet "Add symbol" shows while the title
- * row is pointed at or has the focus; with one, the symbol itself is the button. Both open the picker of the folders,
- * with "Remove" for a note that has one.
+ * The symbol before the title of an open note (NOTES-3 AC-18). Without one, a pale "Choose a symbol" always holds its
+ * place, as large as a symbol, and grows clearer when pointed at or focused (fourth review: the empty place said
+ * nothing, and a touch screen never points); with one, the symbol itself is the button. Both open the picker of the
+ * folders, with "Remove" for a note that has one. Who may only read sees no placeholder.
  */
 import { SmilePlus } from 'lucide-react'
 import { useState } from 'react'
@@ -36,10 +37,10 @@ export function TitleIcon({ icon, color, editable, onChange }: { icon: string; c
           onClick={() => setOpen(true)}
           aria-label={t('editor.icon.add')}
           title={t('editor.icon.add')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-mist-500 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 hover:bg-ink-800 hover:text-mist-100 focus-visible:opacity-100"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-mist-600 transition-colors group-focus-within:text-mist-300 group-hover:text-mist-300 hover:bg-ink-800 hover:text-mist-100 focus-visible:text-mist-100"
           data-testid="title-icon-add"
         >
-          <SmilePlus aria-hidden className="h-5 w-5" />
+          <SmilePlus aria-hidden className="h-6 w-6" />
         </button>
       )}
       {open && (

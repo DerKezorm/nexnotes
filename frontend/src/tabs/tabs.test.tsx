@@ -717,6 +717,31 @@ describe('tabs in the page', () => {
     expect(localStorage.getItem(prefKey('outline', 1))).toBeNull()
   })
 
+  it('NOTES-3 AC-15 the outline stands right beside the sheet, the two centred together; the info goes with it (fourth review)', async () => {
+    width = 2560
+    await render('/notes/soup')
+    const page = $('note-page')!
+    const outline = $('outline')!
+    const pane = $('note-pane')!
+    // The column follows the sheet at the side's gap (24 px), the pair centred in the side: no auto margin on the
+    // sheet, which would push the column to the far edge of a wide window.
+    expect(outline.dataset.mode).toBe('column')
+    expect(outline.previousElementSibling).toBe(page)
+    expect(page.parentElement).toBe(pane)
+    expect(pane.className).toContain('justify-center')
+    expect(pane.className).toContain('md:gap-6')
+    expect(page.className.split(' ')).not.toContain('mx-auto')
+    expect(outline.className.split(' ')).not.toContain('ml-auto')
+    expect(outline.contains($('outline-info'))).toBe(true)
+    // Off and on again: the sheet keeps its width and stays centred, alone.
+    await act(async () => $('tool-outline')!.click())
+    expect($('outline')).toBeNull()
+    expect($('note-page')!.style.maxWidth).toBe('760px')
+    expect($('note-page')!.parentElement).toBe($('note-pane'))
+    await act(async () => $('tool-outline')!.click())
+    expect($('outline')!.previousElementSibling).toBe($('note-page'))
+  })
+
   it('NOTES-3 AC-15 a note without headings says in the outline how it comes about', async () => {
     width = 1170
     await render('/notes/soup')
@@ -803,7 +828,7 @@ describe('tabs in the page', () => {
     expect(rows.find((row) => row.textContent?.includes('Lentil soup'))!.querySelector('[data-testid="note-icon"]')).toBeNull()
     // Without a symbol: the quiet button in the title row, reachable by keyboard.
     const add = $('title-icon-add')!
-    expect(add.getAttribute('aria-label')).toBe('Add symbol')
+    expect(add.getAttribute('aria-label')).toBe('Choose a symbol')
     expect(add.tabIndex).toBe(0)
     await act(async () => add.click())
     const dialog = $('note-icon-dialog')!

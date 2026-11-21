@@ -86,8 +86,11 @@
     "invite": "Person einladen",
     "inviteEmailHint": "Freiwillig. Mit Adresse kann nexnotes den Link auch per Mail schicken.",
     "inviteLink": "Schick diesen Link der Person. Er gilt einmal und wird nur jetzt angezeigt.",
+    "inviteLinkToo": "Den Link kannst du hier auch selbst kopieren. Er gilt einmal und wird nur jetzt angezeigt.",
     "inviteMake": "Einladung anlegen",
     "inviteNoAddress": "ohne Adresse",
+    "inviteSend": "Einladung senden",
+    "inviteSent": "Einladung verschickt an {{email}}.",
     "last": "Zuletzt",
     "lead_one": "{{count}} Konto. Als Betreiber siehst du Speicher und Nutzung, aber keine Notizen.",
     "lead_other": "{{count}} Konten. Als Betreiber siehst du Speicher und Nutzung, aber keine Notizen.",
@@ -434,7 +437,7 @@
       "dots": "Gepunktet"
     },
     "icon": {
-      "add": "Symbol hinzufügen",
+      "add": "Symbol wählen",
       "change": "Symbol ändern",
       "title": "Symbol der Notiz",
       "remove": "Entfernen"

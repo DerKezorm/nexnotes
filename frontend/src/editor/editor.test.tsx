@@ -15,6 +15,7 @@ import { NoteProvider } from './provider'
 import { COLUMN_MIN, TABLE_MENU, WIDTH_STEP, columnWidths, setColumnWidths, tableActions } from './table'
 import { TableControls } from './TableControls'
 import { TitleField } from './TitleField'
+import { TitleIcon } from './TitleIcon'
 import { Toolbar } from './Toolbar'
 import { GROUP_LINE, groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './toolbarRows'
 import { forgetPrefs, prefKey } from '../lib/devicePref'
@@ -1096,5 +1097,51 @@ describe('NOTES-8 EC-1 the title field', () => {
     expect(seen).toEqual(['Grocery list', 'Big Grocery list'])
     await act(async () => root.unmount())
     element.remove()
+  })
+})
+
+describe('NOTES-3 AC-18 the place of the symbol before the title', () => {
+  async function icon(props: { icon?: string; editable: boolean }) {
+    const box = document.createElement('div')
+    box.className = 'group'
+    document.body.appendChild(box)
+    const root = createRoot(box)
+    await act(async () => root.render(<TitleIcon icon={props.icon ?? ''} color="" editable={props.editable} onChange={() => undefined} />))
+    return { box, root }
+  }
+
+  it('NOTES-3 AC-18 without a symbol a pale placeholder always holds its place, as large as a symbol, and opens the picker (fourth review)', async () => {
+    const { box, root } = await icon({ editable: true })
+    const add = box.querySelector<HTMLButtonElement>('[data-testid="title-icon-add"]')!
+    // Always there, also without pointing at it (a touch screen never points): never hidden by its opacity.
+    expect(add.className).not.toMatch(/(^| )opacity-0( |$)/)
+    expect(add.className).toContain('text-mist-600')
+    expect(add.className).toContain('hover:text-mist-100')
+    // The size of a symbol set (24 px in a 40 px button).
+    expect(add.className).toContain('h-10 w-10')
+    expect(add.querySelector('svg')!.getAttribute('class')).toContain('h-6 w-6')
+    expect(add.getAttribute('aria-label')).toBe(i18n.t('editor.icon.add'))
+    expect(add.title).toBe(i18n.t('editor.icon.add'))
+    await act(async () => add.click())
+    expect(document.querySelector('[data-testid="note-icon-dialog"]')).not.toBeNull()
+    await act(async () => root.unmount())
+    box.remove()
+  })
+
+  it('NOTES-3 AC-18 who may only read sees no placeholder, only a symbol that is set', async () => {
+    const reader = await icon({ editable: false })
+    expect(reader.box.querySelector('button')).toBeNull()
+    await act(async () => reader.root.unmount())
+    reader.box.remove()
+    const withSymbol = await icon({ editable: false, icon: 'shopping-cart' })
+    expect(withSymbol.box.querySelector('[data-testid="title-icon-add"]')).toBeNull()
+    expect(withSymbol.box.querySelector<HTMLButtonElement>('[data-testid="title-icon"]')!.disabled).toBe(true)
+    await act(async () => withSymbol.root.unmount())
+    withSymbol.box.remove()
+  })
+
+  it('NOTES-3 AC-18 the placeholder says "Choose a symbol", in German "Symbol wählen"', async () => {
+    expect(i18n.getFixedT('en')('editor.icon.add')).toBe('Choose a symbol')
+    expect(i18n.getFixedT('de')('editor.icon.add')).toBe('Symbol wählen')
   })
 })

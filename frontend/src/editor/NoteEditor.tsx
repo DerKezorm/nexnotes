@@ -684,11 +684,13 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       </div>
 
       {/* The sheet: the note's own surface on the page (white on nex gray in light, a step lighter in dark), as wide as
-          the text width says; a paper pattern is its background. */}
-      <div ref={measurePane} className="relative flex min-h-0 w-full flex-1 items-start md:gap-6 md:px-6 md:pt-5 md:pb-8">
+          the text width says; a paper pattern is its background. The outline's column stands right beside it, 24 px
+          away, and the two are centred together in the side (fourth review: no auto margins on the sheet, which would
+          push the column to the side's far edge). */}
+      <div ref={measurePane} className="relative flex min-h-0 w-full flex-1 items-start justify-center md:gap-6 md:px-6 md:pt-5 md:pb-8" data-testid="note-pane">
       <article
         ref={sheet}
-        className="nn-sheet relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch bg-ink-850 px-5 pt-6 pb-28 md:rounded-[14px] md:border md:border-ink-700 md:px-10 md:pb-10 md:shadow-[0_1px_3px_rgb(0_0_0/0.08),0_8px_24px_-12px_rgb(0_0_0/0.18)]"
+        className="nn-sheet relative flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch bg-ink-850 px-5 pt-6 pb-28 md:rounded-[14px] md:border md:border-ink-700 md:px-10 md:pb-10 md:shadow-[0_1px_3px_rgb(0_0_0/0.08),0_8px_24px_-12px_rgb(0_0_0/0.18)]"
         style={{ maxWidth: TEXT_MAX[textWidth] ?? 'none' }}
         data-testid="note-page"
         data-width={textWidth}

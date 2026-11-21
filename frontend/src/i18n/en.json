@@ -86,8 +86,11 @@
     "invite": "Invite a person",
     "inviteEmailHint": "Optional. With an address nexnotes can mail the link too.",
     "inviteLink": "Send this link to the person. It works once and is shown only now.",
+    "inviteLinkToo": "You can also copy the link here yourself. It works once and is shown only now.",
     "inviteMake": "Make the invitation",
     "inviteNoAddress": "no address",
+    "inviteSend": "Send invitation",
+    "inviteSent": "Invitation sent to {{email}}.",
     "last": "Last seen",
     "lead_one": "{{count}} account. As the operator you see storage and use, but no notes.",
     "lead_other": "{{count}} accounts. As the operator you see storage and use, but no notes.",
@@ -434,7 +437,7 @@
       "dots": "Dotted"
     },
     "icon": {
-      "add": "Add symbol",
+      "add": "Choose a symbol",
       "change": "Change symbol",
       "title": "Symbol of the note",
       "remove": "Remove"

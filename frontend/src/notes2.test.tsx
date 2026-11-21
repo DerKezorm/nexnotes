@@ -340,3 +340,69 @@ describe('an operator from a provider confirms with a fresh sign-in there', () =
     expect(assign).toHaveBeenCalledWith('/api/oidc/sso/start?next=%2Fsettings%2Faccounts&fresh=1')
   })
 })
+
+describe('the invitation dialog (NOTES-2 AC-2)', () => {
+  function operator(mail: boolean, made: unknown[]) {
+    handler = (method, path, body) => {
+      if (path === '/api/setup') return { status: 200, body: { needs_setup: false, signed_in: true, code_required: true, version: '0.1.0', min_password: 12 } }
+      if (path === '/api/auth/me') return { status: 200, body: { ...ME, role: 'operator', id: 1, name: 'tester', mail } }
+      if (path === '/api/invites' && method === 'POST') {
+        made.push(body)
+        const sent = Boolean((body as { send: boolean }).send)
+        return { status: 201, body: { id: 7, role: 'member', email: 'robin@example.com', by: 'tester', created_at: '2026-11-21T00:00:00Z', expires_at: '2026-11-28T00:00:00Z', link: 'http://notes.test/invite/abcdefghijklmnopqrstuvwxyz', sent } }
+      }
+      return undefined
+    }
+  }
+
+  async function openDialog(): Promise<Element> {
+    const { AccountsTab } = await import('./pages/settings/AccountsTab')
+    await render(<AuthProvider><AccountsTab /></AuthProvider>)
+    await act(async () => [...box.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === i18n.t('accounts.invite'))!.click())
+    return document.querySelector('[role="dialog"]')!
+  }
+
+  const submit = () => document.querySelector<HTMLButtonElement>('[data-testid="invite-submit"]')!
+
+  it('NOTES-2 AC-2 with "Send by mail" on the button sends the invitation, and the dialog says it went out (fourth review)', async () => {
+    const made: unknown[] = []
+    operator(true, made)
+    const dialog = await openDialog()
+    expect(submit().textContent).toBe('Make the invitation')
+    type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
+    const toggle = dialog.querySelector<HTMLInputElement>('[role="switch"]')!
+    await act(async () => toggle.click())
+    expect(submit().textContent).toBe('Send invitation')
+    // Without the address the switch no longer counts: the button only makes the invitation again.
+    type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, '')
+    expect(submit().textContent).toBe('Make the invitation')
+    type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
+    expect(submit().textContent).toBe('Send invitation')
+    await act(async () => dialog.querySelector('form')!.requestSubmit())
+    await settle()
+    expect(made).toEqual([{ email: 'robin@example.com', role: 'member', days: 7, send: true, language: 'en' }])
+    expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe('Invitation sent to robin@example.com.')
+    expect(document.body.textContent).toContain(i18n.t('accounts.inviteLinkToo'))
+    await act(async () => void (await i18n.changeLanguage('de')))
+    try {
+      expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe('Einladung verschickt an robin@example.com.')
+    } finally {
+      await act(async () => void (await i18n.changeLanguage('en')))
+    }
+  })
+
+  it('NOTES-2 AC-2 without a mail server the button makes the invitation and the dialog shows the link to pass on', async () => {
+    const made: unknown[] = []
+    operator(false, made)
+    const dialog = await openDialog()
+    expect(dialog.querySelector('[role="switch"]')).toBeNull()
+    type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
+    expect(submit().textContent).toBe('Make the invitation')
+    await act(async () => dialog.querySelector('form')!.requestSubmit())
+    await settle()
+    expect((made[0] as { send: boolean }).send).toBe(false)
+    expect(document.querySelector('[data-testid="invite-sent"]')).toBeNull()
+    expect(document.body.textContent).toContain(i18n.t('accounts.inviteLink'))
+    expect(i18n.getFixedT('de')('accounts.inviteSend')).toBe('Einladung senden')
+  })
+})
