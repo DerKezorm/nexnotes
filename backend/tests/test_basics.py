@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 from app import __version__
 from app.main import _mount_frontend
@@ -86,5 +88,7 @@ def test_a_cookie_suffix_keeps_two_instances_on_one_host_apart(monkeypatch) -> N
     from app.config import Settings
 
     assert Settings(cookie_suffix="_suite").cookie_name_suffix() == "_suite"
-    assert Settings(cookie_suffix="a;b=c d").cookie_name_suffix() == "abcd"
+    # Anything a cookie name cannot carry stops the start (NOTES-1 EC-5) instead of being cut out quietly.
+    with pytest.raises(ValidationError):
+        Settings(cookie_suffix="a;b=c d")
     assert Settings().cookie_name_suffix() == ""

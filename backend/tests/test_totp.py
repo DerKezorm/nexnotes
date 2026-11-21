@@ -335,6 +335,26 @@ def test_a_seed_sealed_with_another_secret_fails_closed(
     assert client.get("/api/auth/me").status_code == 401
 
 
+def test_notes2_ac5_an_account_deleted_between_password_and_code_gets_no_session(
+    client: TestClient, operator: Account, clock: Clock
+) -> None:
+    from app.models import AuthSession
+    from app.services import accounts
+
+    anna = person("anna")
+    secret, _codes = enrol(anna)
+    sign_out(anna)
+    password_step(anna, "anna")
+    with SessionLocal() as db:
+        row = db.scalar(select(Account).where(Account.name == "anna"))
+        accounts.delete_account(db, row)
+        anna_id = row.id
+    refused = code_step(anna, fresh_code(secret, clock))
+    assert refused.status_code == 403 and refused.json()["detail"]["code"] == "account_blocked"
+    with SessionLocal() as db:
+        assert db.scalars(select(AuthSession).where(AuthSession.account_id == anna_id)).all() == []
+
+
 def test_the_operator_resets_a_member_but_not_the_other_way_round(
     client: TestClient, operator: Account, clock: Clock
 ) -> None:

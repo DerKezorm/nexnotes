@@ -7,7 +7,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import i18n from './i18n'
 import { AuthProvider, SIGNED_IN_AGAIN_EVENT } from './state/auth'
 
@@ -219,5 +219,107 @@ describe('a session that ends while writing', () => {
     expect(said?.textContent).toContain(i18n.t('session.blockedText'))
     expect(document.body.textContent).toContain(i18n.t('session.blockedTitle'))
     expect(document.querySelector('[data-testid="session-expired"]')).toBeNull()
+  })
+})
+
+describe('the operator never sets another password (NOTES-2 AC-7)', () => {
+  it('NOTES-2 AC-7 the account list offers a reset link, never a password field, and shows the link once', async () => {
+    const anna = { ...ME, id: 2, providers: [], has_password: true, storage_used: 0, storage_limit: null, locked: false, blocked: false, blocked_at: null, deleted_at: null, purge_at: null }
+    handler = (method, path, body) => {
+      if (path === '/api/setup') return { status: 200, body: { needs_setup: false, signed_in: true, code_required: true, version: '0.1.0', min_password: 12 } }
+      if (path === '/api/auth/me') return { status: 200, body: { ...ME, role: 'operator', id: 1, name: 'tester' } }
+      if (path === '/api/accounts') return { status: 200, body: [anna] }
+      if (path === '/api/accounts/2/reset-link' && method === 'POST') {
+        expect(body).toEqual({ days: 30, current_password: 'mine is long' })
+        return { status: 201, body: { link: 'http://notes.test/reset/abcdefghijklmnopqrstuvwxyz', expires_at: '2026-12-21T00:00:00Z' } }
+      }
+      return undefined
+    }
+    const { AccountsTab } = await import('./pages/settings/AccountsTab')
+    await render(<AuthProvider><AccountsTab /></AuthProvider>)
+    await act(async () => box.querySelector<HTMLButtonElement>('[aria-label="' + i18n.t('accounts.actionsFor', { name: 'Anna' }) + '"]')!.click())
+    const items = [...box.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
+    expect(items).toContain(i18n.t('accounts.resetLink'))
+    await act(async () => [...box.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === i18n.t('accounts.resetLink'))!.click())
+    await settle()
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.querySelectorAll('input[autocomplete="new-password"]')).toHaveLength(0)
+    const select = dialog.querySelector('select')!
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, '30')
+    act(() => void select.dispatchEvent(new Event('change', { bubbles: true })))
+    type(dialog.querySelector<HTMLInputElement>('input[type="password"]')!, 'mine is long')
+    await act(async () => dialog.querySelector('form')!.requestSubmit())
+    await settle()
+    expect(document.querySelector<HTMLInputElement>('[data-testid="reset-link"] input')!.value).toBe('http://notes.test/reset/abcdefghijklmnopqrstuvwxyz')
+  })
+
+  it('NOTES-2 AC-7 the person sets the new password with the link and is sent to sign in', async () => {
+    let set: unknown = null
+    handler = (method, path, body) => {
+      if (path === '/api/setup') return { status: 200, body: { needs_setup: false, signed_in: false, code_required: true, version: '0.1.0', min_password: 12 } }
+      if (path.startsWith('/api/reset/') && method === 'GET') return { status: 200, body: { name: 'Anna', min_password: 12, expires_at: '2026-12-01T00:00:00Z' } }
+      if (path.startsWith('/api/reset/') && method === 'POST') {
+        set = body
+        return { status: 200, body: {} }
+      }
+      return undefined
+    }
+    const { ResetPage } = await import('./pages/AuthPages')
+    await render(<AuthProvider><Routes><Route path="/reset/:token" element={<ResetPage />} /></Routes></AuthProvider>, '/reset/abcdefghijklmnopqrstuvwxyz')
+    expect(box.textContent).toContain(i18n.t('auth.reset.text', { name: 'Anna' }))
+    type(box.querySelector<HTMLInputElement>('input[type="password"]')!, 'twelve chars')
+    await act(async () => box.querySelector('form')!.requestSubmit())
+    await settle()
+    expect(set).toEqual({ password: 'twelve chars' })
+    expect(box.textContent).toContain(i18n.t('auth.reset.doneTitle'))
+    expect(box.querySelector('a[href="/login"]')).not.toBeNull()
+  })
+
+  it('NOTES-2 AC-7 a used link says so and asks nothing', async () => {
+    handler = (_method, path) => {
+      if (path === '/api/setup') return { status: 200, body: { needs_setup: false, signed_in: false, code_required: true, version: '0.1.0', min_password: 12 } }
+      if (path.startsWith('/api/reset/')) return { status: 404, body: { detail: { code: 'reset_invalid' } } }
+      return undefined
+    }
+    const { ResetPage } = await import('./pages/AuthPages')
+    await render(<AuthProvider><Routes><Route path="/reset/:token" element={<ResetPage />} /></Routes></AuthProvider>, '/reset/abcdefghijklmnopqrstuvwxyz')
+    expect(box.textContent).toContain(i18n.t('auth.reset.invalidText'))
+    expect(box.querySelector('input')).toBeNull()
+  })
+
+  it.each(['en', 'de'])('NOTES-2 AC-7 after a reset the account is told at the next sign-in until it puts the notice away (%s)', async (language) => {
+    await i18n.changeLanguage(language)
+    let notice = true
+    handler = (method, path) => {
+      if (path === '/api/setup') return { status: 200, body: { needs_setup: false, signed_in: true, code_required: true, version: '0.1.0', min_password: 12 } }
+      if (path === '/api/auth/me') return { status: 200, body: { ...ME, password_reset_notice: notice } }
+      if (path === '/api/me/password-reset-notice/seen' && method === 'POST') {
+        notice = false
+        return { status: 200, body: { ...ME, password_reset_notice: false } }
+      }
+      return undefined
+    }
+    const { AppShell } = await import('./components/AppShell')
+    await render(<AuthProvider><Routes><Route element={<AppShell />}><Route path="/" element={<p>notes</p>} /></Route></Routes></AuthProvider>)
+    const said = document.querySelector('[data-testid="reset-notice"]')
+    expect(said?.textContent).toContain(language === 'de' ? 'Dein Passwort wurde über einen Link des Betreibers zurückgesetzt.' : 'Your password was reset through a link from the operator.')
+    await act(async () => [...said!.querySelectorAll('button')].find((button) => button.textContent === i18n.t('resetNotice.button'))!.click())
+    await settle()
+    expect(notice).toBe(false)
+    expect(document.querySelector('[data-testid="reset-notice"]')).toBeNull()
+  })
+})
+
+describe('an operator from a provider confirms with a fresh sign-in there', () => {
+  it('NOTES-2 AC-7 a refusal for an old sign-in offers the operator\'s providers, asking them for a new sign-in', async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign, pathname: '/settings/accounts', search: '' })
+    const { Feedback } = await import('./pages/settings/ui')
+    await render(<Feedback problem={new ApiError(403, 'fresh_sign_in_required', { minutes: 10, providers: [{ slug: 'sso', label: 'Pocket ID' }] })} />)
+    expect(box.textContent).toContain(i18n.t('errors.fresh_sign_in_required', { minutes: 10 }))
+    const button = box.querySelector<HTMLButtonElement>('[data-testid="sign-in-again"] button')!
+    expect(button.textContent).toBe(i18n.t('oidc.login.button', { name: 'Pocket ID' }))
+    await act(async () => button.click())
+    expect(assign).toHaveBeenCalledWith('/api/oidc/sso/start?next=%2Fsettings%2Faccounts&fresh=1')
   })
 })

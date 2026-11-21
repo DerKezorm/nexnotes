@@ -195,6 +195,21 @@ export function BackupsCard({ server }: { server: Server }) {
   const last = list[0]
   const changes = (b: BackupBrief) =>
     t('server.restoreChanges', { add: t('server.countFiles', { count: b.would_add }), change: t('server.countFiles', { count: b.would_change }), remove: t('server.countFiles', { count: b.would_remove }) })
+  // What a restore does to the notes (NOTES-1 AC-5): the numbers, and the first titles of the operator's own.
+  const noteChanges = (b: BackupBrief) => {
+    const kinds = (['add', 'change', 'remove'] as const).filter((kind) => b[`notes_${kind}_titles`].length > 0)
+    return (
+      <div className="space-y-1 text-sm" data-testid="restore-notes">
+        <p>{t('server.restoreNotes', { add: b.notes_add, change: b.notes_change, remove: b.notes_remove })}</p>
+        {kinds.map((kind) => (
+          <p key={kind} className="text-xs text-mist-400">
+            {t(`server.restoreTitles.${kind}`, { titles: b[`notes_${kind}_titles`].map((title) => title || t('server.untitled')).join(', ') })}
+          </p>
+        ))}
+        {kinds.length > 0 && <p className="text-xs text-mist-500">{t('server.restoreTitles.own')}</p>}
+      </div>
+    )
+  }
   return (
     <Card id="backups" icon={HardDrive} title={t('server.storage')}>
       <div className="space-y-1.5" data-testid="data-folder">
@@ -264,53 +279,60 @@ export function BackupsCard({ server }: { server: Server }) {
         </span>
       </div>
       <Feedback problem={server.problem} done={server.done} />
-      <ul className="divide-y divide-ink-700 rounded-[12px] border border-ink-700 text-sm" data-testid="backup-list">
-        {list.length === 0 && <li className="px-4 py-3 text-mist-500">{t('server.noBackups')}</li>}
-        {list.map((entry) => (
-          <li key={entry.name} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
-            <div className="min-w-0 flex-1">
-              <div className="text-mist-100">{dayTime(entry.created, lang)}</div>
-              <div className="text-xs text-mist-500">
-                {entry.uploaded ? t('server.uploaded') : t(`server.kinds.${entry.kind}`)} · {t('server.backupContent', { notes: t('server.countNotes', { count: entry.notes }), files: t('server.countFiles', { count: entry.files }) })} · {bytes(entry.size, lang)} · {entry.version}
+      {/* Without backups the line above says so once; an empty list would say it a second time. */}
+      {list.length > 0 && (
+        <ul className="divide-y divide-ink-700 rounded-[12px] border border-ink-700 text-sm" data-testid="backup-list">
+          {list.map((entry) => (
+            <li key={entry.name} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+              <div className="min-w-0 flex-1">
+                <div className="text-mist-100">{dayTime(entry.created, lang)}</div>
+                <div className="text-xs text-mist-500">
+                  {entry.uploaded ? t('server.uploaded') : t(`server.kinds.${entry.kind}`)} · {t('server.backupContent', { notes: t('server.countNotes', { count: entry.notes }), files: t('server.countFiles', { count: entry.files }) })} · {bytes(entry.size, lang)} · {entry.version}
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              <Button small label={forBackup(entry, t('server.check'))} onClick={() => void action.run(async () => setBrief(await backupsApi.check(entry.name)))}>
-                <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                {t('server.check')}
-              </Button>
-              <Button small label={forBackup(entry, t('server.download'))} onClick={() => setAsking({ kind: 'download', name: entry.name })}>
-                <Download className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                {t('server.download')}
-              </Button>
-              <Button
-                small
-                label={forBackup(entry, t('server.restore'))}
-                onClick={() =>
-                  void action.run(async () => {
-                    // First the trial run: what comes, what changes, what goes (NOTES-1 AC-5); then the question.
-                    const checked = await backupsApi.check(entry.name)
-                    setBrief(checked)
-                    if (checked.usable) setAsking({ kind: 'restore', name: entry.name, brief: checked })
-                  })
-                }
-              >
-                <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                {t('server.restore')}
-              </Button>
-              <Button small danger label={forBackup(entry, t('server.deleteBackup'))} onClick={() => setAsking({ kind: 'delete', name: entry.name })}>
-                <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
-                {t('server.deleteBackup')}
-              </Button>
-            </div>
-          </li>
-        ))}
-      </ul>
+              <div className="flex flex-wrap gap-1.5">
+                <Button small label={forBackup(entry, t('server.check'))} onClick={() => void action.run(async () => setBrief(await backupsApi.check(entry.name)))}>
+                  <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                  {t('server.check')}
+                </Button>
+                <Button small label={forBackup(entry, t('server.download'))} onClick={() => setAsking({ kind: 'download', name: entry.name })}>
+                  <Download className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                  {t('server.download')}
+                </Button>
+                <Button
+                  small
+                  label={forBackup(entry, t('server.restore'))}
+                  onClick={() =>
+                    void action.run(async () => {
+                      // First the trial run: what comes, what changes, what goes (NOTES-1 AC-5); then the question.
+                      const checked = await backupsApi.check(entry.name)
+                      setBrief(checked)
+                      if (checked.usable) setAsking({ kind: 'restore', name: entry.name, brief: checked })
+                    })
+                  }
+                >
+                  <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                  {t('server.restore')}
+                </Button>
+                <Button small danger label={forBackup(entry, t('server.deleteBackup'))} onClick={() => setAsking({ kind: 'delete', name: entry.name })}>
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                  {t('server.deleteBackup')}
+                </Button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
       {brief && (
         <div data-testid="backup-brief" className={'rounded-[12px] border px-4 py-3 text-sm ' + (brief.usable ? 'border-ok-500/40 bg-ok-500/10 text-mist-200' : 'border-bad-500/40 bg-bad-500/10 text-bad-500')}>
-          {brief.usable
-            ? `${t('server.checkOk', { notes: t('server.countNotes', { count: brief.notes }), files: t('server.countFiles', { count: brief.files }) })} ${changes(brief)}`
-            : t('server.checkBad')}
+          {brief.usable ? (
+            <>
+              <p>{`${t('server.checkOk', { notes: t('server.countNotes', { count: brief.notes }), files: t('server.countFiles', { count: brief.files }) })} ${changes(brief)}`}</p>
+              <div className="mt-1">{noteChanges(brief)}</div>
+            </>
+          ) : (
+            t('server.checkBad')
+          )}
         </div>
       )}
       {uploaded && <p className="rounded-[12px] border border-ok-500/40 bg-ok-500/10 px-4 py-3 text-sm text-mist-200">{t('server.uploadedHint')}</p>}
@@ -320,6 +342,7 @@ export function BackupsCard({ server }: { server: Server }) {
         <Confirm
           title={t(`server.confirm.backup_${asking.kind}.title`)}
           text={asking.kind === 'restore' && asking.brief ? `${changes(asking.brief)} ${t('server.confirm.backup_restore.text')}` : t(`server.confirm.backup_${asking.kind}.text`)}
+          details={asking.kind === 'restore' && asking.brief ? noteChanges(asking.brief) : undefined}
           confirm={t(`server.confirm.backup_${asking.kind}.button`)}
           danger={asking.kind !== 'download'}
           password={me?.sign_in === 'password'}

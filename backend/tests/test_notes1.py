@@ -8,7 +8,10 @@ from __future__ import annotations
 import errno
 import json
 import logging
+import os
+import shutil
 import sqlite3
+import subprocess
 import threading
 import time
 import zipfile
@@ -169,6 +172,24 @@ def test_notes1_ac4_the_schedule_makes_one_at_night_and_keeps_only_the_newest(
     assert len([entry for entry in backups.entries() if entry.kind == backups.SCHEDULED]) == 2
 
 
+def test_notes1_ac4_weekly_is_due_after_seven_days_at_night_not_after_six(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import datetime, timedelta
+    from types import SimpleNamespace
+
+    # The last scheduled backup on a Sunday night at 03:10.
+    made = datetime(2026, 11, 1, 3, 10).astimezone()
+    monkeypatch.setattr(backups, "entries", lambda: [SimpleNamespace(kind=backups.SCHEDULED, created=made.isoformat())])
+    # Six nights later a weekly backup is not due yet, a daily one is.
+    assert backups.due("weekly", now=made + timedelta(days=6)) is False
+    assert backups.due("daily", now=made + timedelta(days=6)) is True
+    # The seventh night it is; by day only a day late, for a server that sleeps at night.
+    assert backups.due("weekly", now=made + timedelta(days=7)) is True
+    assert backups.due("weekly", now=made + timedelta(days=7, hours=10)) is False
+    assert backups.due("weekly", now=made + timedelta(days=8, hours=10)) is True
+    assert backups.due("off", now=made + timedelta(days=30)) is False
+
 def test_notes1_ac5_the_check_says_what_a_restore_adds_changes_and_removes(
     client: TestClient, operator: Account
 ) -> None:
@@ -183,6 +204,59 @@ def test_notes1_ac5_the_check_says_what_a_restore_adds_changes_and_removes(
     assert brief["usable"] is True
     assert (brief["would_add"], brief["would_change"], brief["would_remove"]) == (1, 1, 1)
 
+
+def _note(owner_id: int, title: str) -> str:
+    from app.models import Note
+    from app.services.inbox import inbox_for
+
+    with SessionLocal() as db:
+        row = Note(owner_id=owner_id, folder_id=inbox_for(db, owner_id).id, title=title, text=title)
+        db.add(row)
+        db.commit()
+        return row.id
+
+
+def test_notes1_ac5_the_check_names_the_notes_a_restore_brings_back_changes_and_takes_away(
+    client: TestClient, operator: Account
+) -> None:
+    from datetime import timedelta
+
+    from app.models import Note
+
+    anna = make_account("anna")
+    kept = _note(operator.id, "Kept as it is")
+    edited = _note(operator.id, "Shopping list")
+    deleted = _note(operator.id, "Recipe for bread")
+    trashed = _note(operator.id, "Holiday plans")
+    _note(anna.id, "Anna's diary")
+    name = client.post("/api/backups", json={}).json()["name"]
+    with SessionLocal() as db:
+        later = utcnow() + timedelta(minutes=5)
+        db.get(Note, edited).updated_at = later
+        db.delete(db.get(Note, deleted))
+        db.get(Note, trashed).deleted_at = later
+        db.commit()
+    _note(operator.id, "Written after the backup")
+    _note(anna.id, "Anna's new secret")
+    brief = client.post(f"/api/backups/{name}/check").json()
+    assert brief["usable"] is True
+    assert (brief["notes_add"], brief["notes_change"], brief["notes_remove"]) == (2, 1, 2)
+    assert sorted(brief["notes_add_titles"]) == ["Holiday plans", "Recipe for bread"]
+    assert brief["notes_change_titles"] == ["Shopping list"]
+    # Numbers for every account, titles only of the operator's own notes (NOTES-2 AC-7).
+    assert brief["notes_remove_titles"] == ["Written after the backup"]
+    assert "Anna" not in json.dumps(brief)
+    assert kept not in json.dumps(brief)
+
+
+def test_notes1_ac5_the_check_names_at_most_five_titles_newest_first(client: TestClient, operator: Account) -> None:
+    name = client.post("/api/backups", json={}).json()["name"]
+    for title in ("Kiwi", "Apple", "Melon", "Banana", "Pear", "Cherry", "Fig"):
+        _note(operator.id, title)
+        time.sleep(0.002)
+    brief = client.post(f"/api/backups/{name}/check").json()
+    assert brief["notes_remove"] == 7
+    assert brief["notes_remove_titles"] == ["Fig", "Cherry", "Pear", "Banana", "Melon"]
 
 def test_notes1_ac5_a_restore_needs_the_confirmation_of_the_password(client: TestClient, operator: Account,
                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
@@ -451,8 +525,25 @@ def test_notes1_ec4_a_data_folder_without_write_access_stops_the_start(
 
 @pytest.mark.parametrize(("variable", "value", "allowed"), [
     ("NEXNOTES_SESSION_DAYS", "thirty", "a whole number"),
+    ("NEXNOTES_SESSION_DAYS", "0", "a whole number from 1 to 3650"),
+    ("NEXNOTES_SESSION_DAYS", "-3", "a whole number from 1 to 3650"),
+    ("NEXNOTES_SESSION_DAYS", "3651", "a whole number from 1 to 3650"),
     ("NEXNOTES_API_DOCS", "maybe", "true or false"),
+    ("NEXNOTES_DISABLE_BACKGROUND", "perhaps", "true or false"),
     ("NEXNOTES_COOKIE_SECURE", "sometimes", "auto"),
+    ("NEXNOTES_OPERATOR_NETWORKS", "192.168.1.0/33", "addresses and networks separated by commas"),
+    ("NEXNOTES_OPERATOR_NETWORKS", "192.168.1.0/24, home", "addresses and networks separated by commas"),
+    ("NEXNOTES_TRUSTED_PROXIES", "10.0.0.300", "addresses and networks separated by commas"),
+    ("NEXNOTES_LOG_LEVEL", "verbose", "quiet, normal, detailed, trace"),
+    ("NEXNOTES_PUBLIC_URL", "notes.example.com", "http:// or https://"),
+    ("NEXNOTES_PUBLIC_URL", "ftp://notes.example.com", "http:// or https://"),
+    ("NEXNOTES_PUBLIC_URL", "https://example.com/notes", "without a path"),
+    ("NEXNOTES_PUBLIC_URL", "https://notes.example.com:port", "http:// or https://"),
+    ("NEXNOTES_UPDATE_URL", "github.com/releases", "http:// or https://"),
+    ("NEXNOTES_COOKIE_SUFFIX", "a;b", "letters, digits and _ only"),
+    ("NEXNOTES_ARGON2_TIME", "0", "a whole number from 1 to 20"),
+    ("NEXNOTES_ARGON2_MEMORY_KIB", "512", "a whole number from 1024 to 4194304"),
+    ("NEXNOTES_ARGON2_PARALLELISM", "0", "a whole number from 1 to 16"),
 ])
 def test_notes1_ec5_a_wrong_variable_names_itself_and_what_is_allowed(
     monkeypatch: pytest.MonkeyPatch, variable: str, value: str, allowed: str
@@ -464,6 +555,48 @@ def test_notes1_ec5_a_wrong_variable_names_itself_and_what_is_allowed(
         Settings()
     [line] = _explain(caught.value)
     assert line.startswith(f"{variable} has the value {value!r}") and allowed in line
+
+
+@pytest.mark.parametrize(("variable", "value"), [
+    ("NEXNOTES_SESSION_DAYS", "1"),
+    ("NEXNOTES_SESSION_DAYS", "3650"),
+    ("NEXNOTES_OPERATOR_NETWORKS", "192.168.0.0/16, 10.0.0.5, fd00::/8"),
+    ("NEXNOTES_OPERATOR_NETWORKS", ""),
+    ("NEXNOTES_TRUSTED_PROXIES", "172.16.0.0/12"),
+    ("NEXNOTES_LOG_LEVEL", "DEBUG"),
+    ("NEXNOTES_LOG_LEVEL", "trace"),
+    ("NEXNOTES_PUBLIC_URL", "https://notes.example.com/"),
+    ("NEXNOTES_PUBLIC_URL", "http://192.168.1.5:8570"),
+    ("NEXNOTES_COOKIE_SUFFIX", "_second"),
+])
+def test_notes1_ec5_good_values_still_start(monkeypatch: pytest.MonkeyPatch, variable: str, value: str) -> None:
+    monkeypatch.setenv(variable, value)
+    Settings()
+
+
+def test_notes1_ec5_a_wrong_operator_network_stops_the_start_instead_of_opening_the_pages(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The case the review found: "/33" was skipped and the operator's pages were open from everywhere.
+    monkeypatch.setenv("NEXNOTES_OPERATOR_NETWORKS", "192.168.1.0/33")
+    get_settings.cache_clear()
+    try:
+        with caplog.at_level(logging.CRITICAL), pytest.raises(StartupError):
+            get_settings()
+        assert "NEXNOTES_OPERATOR_NETWORKS has the value '192.168.1.0/33', which is not valid. Allowed:" in caplog.text
+    finally:
+        monkeypatch.delenv("NEXNOTES_OPERATOR_NETWORKS")
+        get_settings.cache_clear()
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="needs a POSIX shell")
+@pytest.mark.parametrize("port", ["eighty", "0", "70000"])
+def test_notes1_ec5_a_wrong_port_stops_the_container_before_anything_starts(port: str) -> None:
+    entrypoint = Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh"
+    done = subprocess.run(["sh", str(entrypoint), "uvicorn", "app.main:app"], capture_output=True, text=True,
+                          env={**os.environ, "NEXNOTES_PORT": port}, timeout=30, check=False)
+    assert done.returncode == 1
+    assert f"NEXNOTES_PORT has the value '{port}', which is not valid. Allowed: a whole number from 1 to 65535"         in done.stderr
 
 
 def test_notes1_ec5_get_settings_stops_the_start_with_those_lines(monkeypatch: pytest.MonkeyPatch,

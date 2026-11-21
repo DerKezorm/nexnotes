@@ -22,7 +22,7 @@ from app.security import SESSION_COOKIE
 from app.services import accounts, apitokens, content
 
 from . import oidc_helpers
-from .conftest import PASSWORD, make_account, new_client, sign_in
+from .conftest import PASSWORD, TAB, make_account, new_client, sign_in
 from .oidc_helpers import FakeProvider, configure, error_in, fresh_browser, location, sign_in_via_oidc
 
 provider = oidc_helpers.provider
@@ -38,6 +38,12 @@ def _code(answer: object) -> str:
 
 def _invite(client: TestClient, **body: object) -> str:
     made = client.post("/api/invites", json=body)
+    assert made.status_code == 201, made.text
+    return str(made.json()["link"]).rsplit("/", 1)[1]
+
+
+def _reset(client: TestClient, account_id: int, **body: object) -> str:
+    made = client.post(f"/api/accounts/{account_id}/reset-link", json=_confirm(**body))
     assert made.status_code == 201, made.text
     return str(made.json()["link"]).rsplit("/", 1)[1]
 
@@ -125,7 +131,7 @@ def test_notes2_ac3_a_password_has_at_least_twelve_characters(client: TestClient
     changed = client.put("/api/auth/password", json={"current": PASSWORD, "new": SHORT})
     assert changed.status_code == 422 and _code(changed) == "password_too_short"
     anna = make_account("anna")
-    given = client.put(f"/api/accounts/{anna.id}/password", json=_confirm(password=SHORT))
+    given = fresh_browser().post(f"/api/reset/{_reset(client, anna.id)}", json={"password": SHORT})
     assert given.status_code == 422 and _code(given) == "password_too_short"
     with SessionLocal() as db:
         db.query(Account).delete()
@@ -464,3 +470,148 @@ def test_notes2_ac2_the_operator_may_invite_another_operator(client: TestClient,
     token = _invite(client, role=OPERATOR)
     made = fresh_browser().post(f"/api/invite/{token}", json={"display_name": "Kim", "password": GOOD})
     assert made.status_code == 200 and made.json()["role"] == OPERATOR
+
+
+# --- AC-7: the operator never knows another account's password ------------------------------------------------------
+
+
+def test_notes2_ac7_the_operator_gives_no_password_only_a_link_the_person_sets_one_with(
+    client: TestClient, operator: Account
+) -> None:
+    anna = make_account("anna")
+    # The old way is gone: no route sets another account's password.
+    assert client.put(f"/api/accounts/{anna.id}/password", json=_confirm(password=GOOD)).status_code in (404, 405)
+    with new_client(anna) as browser, SessionLocal() as db:
+        row = db.get(Account, anna.id)
+        assert row is not None
+        _device, device_token = apitokens.make(db, row, "iPhone")
+        _mcp, mcp_token = apitokens.make(db, row, "Desk", kind="mcp")
+        made = client.post(f"/api/accounts/{anna.id}/reset-link", json=_confirm())
+        assert made.status_code == 201 and "/reset/" in made.json()["link"]
+        assert "link" not in client.get("/api/accounts").json()[1]
+        token = made.json()["link"].rsplit("/", 1)[1]
+        # Making the link changes nothing: the old password and the sessions still hold.
+        assert browser.get("/api/auth/me").status_code == 200
+        assert fresh_browser().post("/api/auth/login", json={"name": "anna", "password": PASSWORD}).status_code == 200
+        stranger = fresh_browser()
+        assert stranger.get(f"/api/reset/{token}").json()["name"] == "Anna"
+        assert stranger.post(f"/api/reset/{token}", json={"password": GOOD}).status_code == 204
+        # Every session and every paired device of the account ended; keys made by hand stay.
+        assert browser.get("/api/auth/me").status_code == 401
+        device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {device_token}"})
+        assert device.get("/api/auth/me").status_code == 401
+        mcp = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {mcp_token}"})
+        assert mcp.get("/api/auth/me").status_code == 200
+    # Used once, then gone.
+    again = fresh_browser().post(f"/api/reset/{token}", json={"password": "another twelve"})
+    assert again.status_code == 404 and _code(again) == "reset_invalid"
+    assert fresh_browser().post("/api/auth/login", json={"name": "anna", "password": PASSWORD}).status_code == 401
+    # At the next sign-in the account hears that its password was set through the operator's link, until it puts
+    # the notice away.
+    person = fresh_browser()
+    assert person.post("/api/auth/login", json={"name": "anna", "password": GOOD}).status_code == 200
+    assert person.get("/api/auth/me").json()["password_reset_notice"] is True
+    assert person.post("/api/me/password-reset-notice/seen").json()["password_reset_notice"] is False
+    assert person.get("/api/auth/me").json()["password_reset_notice"] is False
+
+
+def test_notes2_ac7_a_reset_link_runs_out_like_an_invitation_and_a_new_one_replaces_the_old(
+    client: TestClient, operator: Account
+) -> None:
+    anna = make_account("anna")
+    for days in (0, 2, 365):
+        refused = client.post(f"/api/accounts/{anna.id}/reset-link", json=_confirm(days=days))
+        assert refused.status_code == 422 and _code(refused) == "invalid_days"
+    first = _reset(client, anna.id, days=1)
+    second = _reset(client, anna.id, days=30)
+    assert _code(fresh_browser().get(f"/api/reset/{first}")) == "reset_invalid"
+    from app.models import PasswordReset
+
+    with SessionLocal() as db:
+        row = db.scalar(select(PasswordReset).where(PasswordReset.account_id == anna.id))
+        assert row is not None
+        assert timedelta(days=29) < row.expires_at - utcnow() <= timedelta(days=30)
+        row.expires_at = utcnow() - timedelta(minutes=1)
+        db.commit()
+    late = fresh_browser().post(f"/api/reset/{second}", json={"password": GOOD})
+    assert late.status_code == 404 and _code(late) == "reset_expired"
+    assert fresh_browser().post("/api/auth/login", json={"name": "anna", "password": PASSWORD}).status_code == 200
+
+
+def test_notes2_ac7_a_provider_account_stays_one_until_the_person_sets_a_password(
+    client: TestClient, operator: Account
+) -> None:
+    with SessionLocal() as db:
+        mia = Account(name="mia", display_name="Mia", email="mia@example.com", role=MEMBER, sign_in="oidc",
+                      password_hash="")
+        db.add(mia)
+        db.commit()
+        mia_id = mia.id
+    token = _reset(client, mia_id)
+    listed = {row["name"]: row for row in client.get("/api/accounts").json()}
+    assert listed["mia"]["sign_in"] == "oidc" and listed["mia"]["has_password"] is False
+    assert _row("mia").sign_in == "oidc" and _row("mia").password_hash == ""
+    assert fresh_browser().post(f"/api/reset/{token}", json={"password": GOOD}).status_code == 204
+    assert _row("mia").sign_in == "password" and _row("mia").password_reset_notice is True
+
+
+def test_notes2_ac7_making_a_reset_link_asks_for_the_operators_password_and_is_for_operators_only(
+    client: TestClient, operator: Account
+) -> None:
+    anna = make_account("anna")
+    wrong = client.post(f"/api/accounts/{anna.id}/reset-link", json={"current_password": "wrong"})
+    assert wrong.status_code == 401 and _code(wrong) == "wrong_password"
+    with new_client(anna) as member:
+        assert member.post(f"/api/accounts/{operator.id}/reset-link", json={"current_password": PASSWORD}).status_code == 403
+
+
+def test_notes2_ac7_an_operator_from_a_provider_confirms_operator_acts_with_a_fresh_sign_in_there(
+    client: TestClient, operator: Account, provider: FakeProvider
+) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    from app.models import AuthSession
+
+    configure(client, provider)
+    boss = fresh_browser()
+    assert location(sign_in_via_oidc(boss, provider, sub="p-boss", preferred_username="boss")) == "/"
+    with SessionLocal() as db:
+        row = db.scalar(select(Account).where(Account.name == "boss"))
+        assert row is not None and row.sign_in == "oidc"
+        row.role = OPERATOR
+        db.commit()
+        boss_id = row.id
+    anna = make_account("anna")
+    # Just signed in at the provider: the act goes through without a password.
+    assert boss.post(f"/api/accounts/{anna.id}/block", json={}).status_code == 204
+    # Eleven minutes later a stolen session is not enough any more.
+    with SessionLocal() as db:
+        for session in db.scalars(select(AuthSession).where(AuthSession.account_id == boss_id)):
+            session.created_at = utcnow() - timedelta(minutes=11)
+        db.commit()
+    assert boss.get("/api/auth/me").status_code == 200
+    for refused in (
+        boss.post(f"/api/accounts/{anna.id}/unblock", json={}),
+        boss.post(f"/api/accounts/{anna.id}/reset-link", json={}),
+        boss.put(f"/api/accounts/{anna.id}/role", json={"role": "operator"}),
+        boss.request("DELETE", f"/api/accounts/{anna.id}", json={}),
+    ):
+        assert refused.status_code == 403 and _code(refused) == "fresh_sign_in_required"
+        assert refused.json()["detail"]["minutes"] == 10
+        assert refused.json()["detail"]["providers"] == [{"slug": "sso", "label": "Test SSO"}]
+    assert _row("anna").blocked_at is not None
+    # The way back asks the provider for a new sign-in, not its running session; afterwards the act goes through.
+    target = oidc_helpers.start(boss, fresh="1", next="/settings/accounts")
+    asked = parse_qs(urlsplit(target).query)
+    assert asked["prompt"] == ["login"] and asked["max_age"] == ["0"]
+    assert "prompt" not in parse_qs(urlsplit(oidc_helpers.start(fresh_browser())).query)
+    assert location(oidc_helpers.come_back(boss, provider, target)) == "/settings/accounts"
+    assert boss.post(f"/api/accounts/{anna.id}/unblock", json={}).status_code == 204
+    # A token of the operator is never enough, fresh or not.
+    with SessionLocal() as db:
+        row = db.get(Account, boss_id)
+        assert row is not None
+        _device, token = apitokens.make(db, row, "iPhone")
+    device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {token}", **TAB})
+    refused = device.post(f"/api/accounts/{anna.id}/block", json={})
+    assert refused.status_code == 403 and _code(refused) == "fresh_sign_in_required"

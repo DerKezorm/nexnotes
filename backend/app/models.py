@@ -112,6 +112,9 @@ class Account(Base):
     #: Set when the operator deleted the account. It counts as blocked and as gone for everybody else; for 30 days the
     #: operator can bring it back, then it goes with everything it owns.
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The password was set through a reset link of the operator: the account hears so at its next sign-in, until it
+    #: puts the notice away (NOTES-2 AC-7, the operator never signs in as somebody else unnoticed).
+    password_reset_notice: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     #: The most this account may keep, in bytes; None: no limit.
     storage_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: The second factor (``services/totp.py``): the seed encrypted with the server secret, empty while off; the
@@ -240,6 +243,20 @@ class Invite(Base):
     #: The role the new account gets.
     role: Mapped[str] = mapped_column(String(16), default=MEMBER)
     email: Mapped[str] = mapped_column(String(255), default="")
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class PasswordReset(Base):
+    """A link the operator makes for an account that forgot its password: the person sets a new one themselves, the
+    operator never knows it. Only the hash of the token is stored; used once, then gone; one per account."""
+
+    __tablename__ = "password_resets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)

@@ -224,7 +224,9 @@ export function AccountTab() {
 
         <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm">
           <Lock className="h-4 w-4 text-mist-500" aria-hidden />
-          <span className="min-w-0 flex-1 text-mist-300">{t('me.sessions.text')}</span>
+          {/* At least 12rem wide: on a phone the button goes to the next line instead of squeezing the text into a
+              column one word wide. */}
+          <span className="min-w-0 grow basis-48 text-mist-300">{t('me.sessions.text')}</span>
           <button type="button" disabled={busy} onClick={() => void run(() => authApi.logoutEverywhere(), t('me.sessions.done'))} className={QUIET}>
             {t('me.sessions.submit')}
           </button>
