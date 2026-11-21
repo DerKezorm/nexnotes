@@ -20,6 +20,7 @@ import re
 import pytest
 from notedoc_sim import World
 from pycrdt import XmlElement, XmlFragment, XmlText
+from test_notes12_interop import _browser_reads, _node
 
 from app.notedoc import doc as notedoc
 from app.notedoc import edit, yupdate
@@ -285,15 +286,20 @@ async def _run(seed: int, steps: int) -> dict[str, int]:
     # The document stays one the browser's schema takes, and its state reads in Yjs as it does in pycrdt.
     assert notedoc.clean_doc(expected) == expected
     assert yupdate.well_formed(room.doc.get_update()), f"seed {seed}: the state does not encode cleanly"
+    stats["state"] = room.doc.get_update()
+    stats["json"] = expected
     stats["tokens"] = sum(len(b.typed) for b in browsers)
     stats["rescued"] = sum(1 for _ in TOKEN.finditer(plain))
     await world.rooms.shutdown()
     return stats
 
 
-def test_notes12_ac2_ac3_ac4_ac7_ec1_ec3_random_edits_from_three_browsers_fixed_seed():
+def test_notes12_ac2_ac3_ac4_ac7_ec1_ec3_random_edits_from_three_browsers_fixed_seed(tmp_path):
     stats = asyncio.run(_run(seed=20261121, steps=600))
     assert stats["offline"] >= 1 and stats["breaks"] >= 3 and stats["tokens"] > 200
+    # The browser reads the end state as the server does (skipped without Node).
+    if _node() is not None:
+        assert _browser_reads(tmp_path, stats["state"])["doc"] == stats["json"]
 
 
 @pytest.mark.parametrize("seed", [1, 2, 3, 5, 8, 13, 21, 34])
