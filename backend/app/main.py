@@ -21,7 +21,7 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
-from .routers import about, auth, folders, health, history, invites, oidc, trash
+from .routers import about, auth, export, folders, health, history, invites, oidc, trash
 from .routers import accounts as accounts_router
 from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
@@ -46,7 +46,7 @@ ROUTERS = [
     backups_router, avatars_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.
-FEATURE_ROUTERS: list = [folders, notes_router, tags_router, search_router, history, trash, notes_list_router,
+FEATURE_ROUTERS: list = [folders, notes_router, tags_router, search_router, history, trash, notes_list_router, export,
                          attachments_router]
 
 

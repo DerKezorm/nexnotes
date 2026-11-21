@@ -29,7 +29,9 @@ there (``readable``). The headers are the router's (``routers/attachments.py``).
 Files go only after the commit that removed their row.
 
 **For the export (NOTES-17)**: ``files_of(db, note_id)`` gives every attachment a note names today, in the order of its
-text, with the path of its file; ``notedoc.markdown.to_markdown(..., attachment_href=...)`` writes their addresses.
+text, with the path of its file; ``export_files`` hands them to ``export.ATTACHMENT_SOURCES`` (``export_total`` to
+``ATTACHMENT_TOTALS``), and the export puts them at their place in the text (``to_markdown(..., attachment_href=...)``,
+``export_pdf.Writer``).
 """
 
 from __future__ import annotations
@@ -696,6 +698,46 @@ def files_of(db: Session, note_id: str) -> list[AttachmentFile]:
     return files
 
 
+#: The kinds of the export (``export.KINDS``) for those of the attachments; a link card's picture is no file of its own
+#: there (the card is a link in Markdown and a box in the PDF).
+_EXPORT_KINDS = {"image": "image", "scan": "image", "drawing": "drawing", "recording": "recording", "video": "video",
+                 "pdf": "pdf", "file": "file"}
+
+
+def export_files(db: Session, note: Note) -> list[Any]:
+    """The note's attachments as the export takes them (``export.ATTACHMENT_SOURCES``): the files the note names in
+    the order of its text, each opened only when it is written; a picture no PDF can draw (HEIC) through its WebP."""
+    from .export import ExportFile
+
+    found: list[Any] = []
+    entries = files_of(db, note.id)
+    rows = {row.id: row for row in db.scalars(select(Attachment).where(Attachment.id.in_(
+        [entry.id for entry in entries])))} if entries else {}
+    for entry in entries:
+        kind = _EXPORT_KINDS.get(entry.kind)
+        row = rows.get(entry.id)
+        if kind is None or row is None:
+            continue
+        picture = None
+        if row.has_view and kind == "image":
+            view = path_of(row.id, VIEW)
+            picture = (lambda shown=view: (shown.read_bytes(), "webp"))
+        found.append(ExportFile(id=entry.id, name=entry.name, kind=kind, size=entry.size,
+                                open=(lambda path=entry.path: open(path, "rb")), picture=picture))  # noqa: SIM115
+    return found
+
+
+def export_total(db: Session, note_ids: Iterable[str]) -> int:
+    """The bytes of the attachments of these notes, each once (``export.ATTACHMENT_TOTALS``, the size the dialog
+    names)."""
+    ids = list(note_ids)
+    if not ids:
+        return 0
+    named = select(AttachmentRef.attachment_id).where(AttachmentRef.note_id.in_(ids))
+    return int(db.scalar(select(func.coalesce(func.sum(Attachment.size), 0))
+                         .where(Attachment.id.in_(named), Attachment.kind != LINK_PICTURE)) or 0)
+
+
 # --- Hooks into the frame -----------------------------------------------------------------------------------------
 
 
@@ -721,6 +763,12 @@ def register() -> None:
         history.VERSIONS_PURGED_HOOKS.append(_versions_going)
     if all(job is not cleanup for _, job in rounds._jobs):
         rounds.register("attachments", cleanup)
+    from . import export
+
+    if export_files not in export.ATTACHMENT_SOURCES:
+        export.ATTACHMENT_SOURCES.append(export_files)
+    if export_total not in export.ATTACHMENT_TOTALS:
+        export.ATTACHMENT_TOTALS.append(export_total)
 
 
 def remove_all_of(db: Session, note_ids: Iterable[str]) -> None:

@@ -8,6 +8,7 @@
  *   smart folders, tags, trash), in the order of the drawing "Seitenleiste".
  * - `CONNECTION_SECTIONS`: cards of Settings, Connections (devices, nextasks, MCP keys, vault password).
  * - `SHELL_BANNERS`: bars over every page of the signed-in shell (the full storage of the attachments, NOTES-10).
+ * - `SHELL_PARTS`: things over every page of the signed-in app, beside the page itself (the notices of exports).
  */
 import type { ReactNode } from 'react'
 
@@ -18,3 +19,4 @@ export const FEATURE_ROUTES: FeatureRoute[] = []
 export const SIDEBAR_SECTIONS: Section[] = []
 export const CONNECTION_SECTIONS: Section[] = []
 export const SHELL_BANNERS: Section[] = []
+export const SHELL_PARTS: Section[] = []

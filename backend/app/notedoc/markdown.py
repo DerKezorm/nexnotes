@@ -34,8 +34,8 @@ from pycrdt import Doc
 from . import schema as s
 from .doc import clean_doc, clean_title, safe_href, to_json
 
-#: The address of an attachment in Markdown: ``(id, name) -> href``.
-AttachmentHref = Callable[[str, str | None], str]
+#: The address of an attachment in Markdown: ``(id, name) -> href``; ``None`` writes only its name.
+AttachmentHref = Callable[[str, str | None], str | None]
 #: The scheme of an attachment's address when nobody gives another one.
 ATTACHMENT_SCHEME = "attachment:"
 _href_of: ContextVar[AttachmentHref | None] = ContextVar("attachment_href", default=None)
@@ -100,6 +100,9 @@ def _block_md(block: dict[str, Any]) -> list[str]:
         name = attrs.get("name") or ""
         made = _href_of.get()
         href = made(attrs["id"], attrs.get("name")) if made else ATTACHMENT_SCHEME + attrs["id"]
+        if href is None:
+            # The writer has no file for it (an attachment that is gone): its name, as words.
+            return [_escape(name, line_start=True)] if name else []
         return [("!" if kind == s.IMAGE else "") + "[" + _escape(name) + "](" + _destination(href) + ")"]
     if kind == s.LINK_PREVIEW:
         href = attrs.get("href") or ""
@@ -172,7 +175,9 @@ def _table_md(rows: list[dict[str, Any]]) -> list[str]:
 
 
 _ESCAPE = re.compile(r"([\\`*_\[\]<~|])")
-_LINE_START = re.compile(r"^(\s*)(#|>|-|\+|=|\d+[.)])")
+#: What would start a block at the start of a line. A ``#`` only before a blank or the line's end: ``#einkauf`` is a
+#: tag (NOTES-5), and Obsidian reads it as one only unescaped (NOTES-17 AC-5).
+_LINE_START = re.compile(r"^(\s*)(#{1,6}(?=[ \t]|$)|>|-|\+|=|\d+[.)])")
 _ENTITY = re.compile(r"&(?=[A-Za-z0-9#]+;)")
 
 

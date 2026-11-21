@@ -4,12 +4,12 @@
  * password was set through the operator's reset link, the account hears so once it is signed in (NOTES-2 AC-7).
  */
 import { Menu } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { authApi } from '../api/client'
-import { SHELL_BANNERS } from '../extensions'
+import { SHELL_BANNERS, SHELL_PARTS } from '../extensions'
 import { useColumnWidth } from '../lib/columns'
 import { useAuth } from '../state/auth'
 import { ColumnHandle } from './ColumnHandle'
@@ -66,6 +66,9 @@ export function AppShell() {
       </div>
       <SessionDialog />
       <ResetNotice />
+      {SHELL_PARTS.map((part) => (
+        <Fragment key={part.key}>{part.render()}</Fragment>
+      ))}
     </div>
   )
 }
