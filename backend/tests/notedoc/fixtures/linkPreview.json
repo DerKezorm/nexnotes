@@ -1,0 +1,28 @@
+{
+  "title": "Case linkPreview",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "linkPreview",
+        "attrs": {
+          "href": "https://moebel-beispiel.example.com/ecksofa?farbe=grau",
+          "title": "Ecksofa Beispiel, 3-Sitzer",
+          "description": "Maße, Bezüge und Lieferzeit im Überblick",
+          "site": "moebel-beispiel.example.com",
+          "image": "Ee8fF9gG0hH1iI2jJ3kK4l"
+        }
+      },
+      {
+        "type": "linkPreview",
+        "attrs": {
+          "href": "https://example.org/",
+          "title": null,
+          "description": null,
+          "site": null,
+          "image": null
+        }
+      }
+    ]
+  }
+}

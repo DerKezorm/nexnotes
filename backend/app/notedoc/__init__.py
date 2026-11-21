@@ -10,6 +10,7 @@
 
 from .doc import (
     FormatError,
+    attachment_refs,
     change,
     clean_doc,
     clean_title,
@@ -36,6 +37,7 @@ __all__ = [
     "append_markdown",
     "append_paragraph",
     "append_task",
+    "attachment_refs",
     "change",
     "clean_doc",
     "clean_title",

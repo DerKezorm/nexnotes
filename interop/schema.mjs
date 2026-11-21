@@ -7,7 +7,7 @@
 // Node and mark names, attributes and their defaults must match backend/app/notedoc/schema.py; the interop fixtures
 // (make-fixtures.mjs) write the schema out and a backend test compares both.
 
-import { getSchema } from '@tiptap/core'
+import { getSchema, mergeAttributes, Node } from '@tiptap/core'
 import StarterKit from '@tiptap/starter-kit'
 import Heading from '@tiptap/extension-heading'
 import Highlight from '@tiptap/extension-highlight'
@@ -19,6 +19,90 @@ export const HIGHLIGHT_COLORS = ['honey', 'green', 'blue', 'rose', 'violet']
 
 /** Links only to these schemes (NOTES-3 EC-8); everything else is not a link. */
 export const LINK_PROTOCOLS = ['http', 'https', 'mailto']
+
+/** The id of an attachment (NOTES-10): 22 characters of base64url the browser makes; never a path. */
+export const ATTACHMENT_ID = /^[A-Za-z0-9_-]{16,32}$/
+
+/** How wide a picture stands in the note (NOTES-10 AC-2); the first is the default. */
+export const IMAGE_SIZES = ['medium', 'small', 'full']
+
+const attachmentId = (value) => (typeof value === 'string' && ATTACHMENT_ID.test(value) ? value : null)
+const text = (value) => (typeof value === 'string' && value.trim() ? value : null)
+const dataAttribute = (name, read = text) => ({
+  default: null,
+  parseHTML: (element) => read(element.getAttribute(`data-${name}`)),
+  renderHTML: (attributes) => (attributes[name] ? { [`data-${name}`]: attributes[name] } : {}),
+})
+
+/**
+ * Attachments (NOTES-10) are blocks without content that name the attachment by its id; the file is never in the
+ * document. A picture with its size, a file of any other kind (PDF, video ...), and the card of a link with its title,
+ * description, site and the id of the stored picture of the page.
+ */
+export const NoteImage = Node.create({
+  name: 'image',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      id: dataAttribute('id', attachmentId),
+      size: {
+        default: IMAGE_SIZES[0],
+        parseHTML: (element) => (IMAGE_SIZES.includes(element.getAttribute('data-size')) ? element.getAttribute('data-size') : IMAGE_SIZES[0]),
+        renderHTML: (attributes) => ({ 'data-size': attributes.size }),
+      },
+      name: dataAttribute('name'),
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'figure[data-type="image"]' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['figure', mergeAttributes({ 'data-type': 'image' }, HTMLAttributes)]
+  },
+})
+
+export const NoteAttachment = Node.create({
+  name: 'attachment',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addAttributes() {
+    return { id: dataAttribute('id', attachmentId), name: dataAttribute('name') }
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type="attachment"]' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-type': 'attachment' }, HTMLAttributes)]
+  },
+})
+
+export const NoteLinkPreview = Node.create({
+  name: 'linkPreview',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      href: dataAttribute('href', (value) => (typeof value === 'string' && /^https?:\/\//i.test(value.trim()) ? value.trim() : null)),
+      title: dataAttribute('title'),
+      description: dataAttribute('description'),
+      site: dataAttribute('site'),
+      image: dataAttribute('image', attachmentId),
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type="link-preview"]' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-type': 'link-preview' }, HTMLAttributes)]
+  },
+})
 
 /** Headings 1 to 3, each one can be folded (NOTES-3 AC-12); the state is part of the document. */
 export const CollapsibleHeading = Heading.extend({
@@ -87,6 +171,9 @@ export function noteExtensions() {
     TableRow,
     TableHeader,
     TableCell,
+    NoteImage,
+    NoteAttachment,
+    NoteLinkPreview,
   ]
 }
 

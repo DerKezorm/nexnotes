@@ -81,6 +81,34 @@ export const CASES = {
   blockquote: doc({ type: 'blockquote', content: [p(t('quoted')), p(t('twice'))] }),
   codeBlock: doc({ type: 'codeBlock', attrs: { language: 'python' }, content: [t("print('hi')\nx = 1")] }),
   horizontalRule: doc(p(t('above')), { type: 'horizontalRule' }, p(t('below'))),
+  // Attachments (NOTES-10): blocks without content that name the attachment by its id.
+  image: doc(
+    p(t('Foto vom Platz:')),
+    { type: 'image', attrs: { id: 'Zx3_aB9-cD4eF5gH6iJ7kL', size: 'small', name: 'Wohnzimmer.heic' } },
+    { type: 'image', attrs: { id: 'Mn0pQ1rS2tU3vW4xY5zA6b' } },
+    {
+      type: 'bulletList',
+      content: [{ type: 'listItem', content: [p(t('im Punkt')), { type: 'image', attrs: { id: 'Cc7dD8eE9fF0gG1hH2iI3j', size: 'full', name: 'Plan.png' } }] }],
+    },
+  ),
+  attachment: doc(
+    { type: 'attachment', attrs: { id: 'Pp4qQ5rR6sS7tT8uU9vV0w', name: 'Datenblatt Sofa.pdf' } },
+    p(t('dazwischen')),
+    { type: 'attachment', attrs: { id: 'Xx1yY2zZ3aA4bB5cC6dD7e', name: 'Grundriss.dwg' } },
+  ),
+  linkPreview: doc(
+    {
+      type: 'linkPreview',
+      attrs: {
+        href: 'https://moebel-beispiel.example.com/ecksofa?farbe=grau',
+        title: 'Ecksofa Beispiel, 3-Sitzer',
+        description: 'Maße, Bezüge und Lieferzeit im Überblick',
+        site: 'moebel-beispiel.example.com',
+        image: 'Ee8fF9gG0hH1iI2jJ3kK4l',
+      },
+    },
+    { type: 'linkPreview', attrs: { href: 'https://example.org/' } },
+  ),
 }
 
 export const TITLES = {

@@ -10,6 +10,11 @@ app (``yrs``):
 * ``title`` (``Text``): the title, at most ``MAX_TITLE`` characters, edited live like the text.
 * ``meta`` (``Map``): ``format`` = ``FORMAT``.
 
+Attachments (NOTES-10) are blocks without content that name the attachment by its ``id``; the file itself is never in
+the document: ``image`` (a picture, with its ``size`` small, medium or full width), ``attachment`` (a PDF, a video, any
+other file) and ``linkPreview`` (the card of a link: its target, title, description, site and the ``id`` of the stored
+picture of the page). They extend format 1: nothing that was there changes.
+
 The browser's schema is ``interop/schema.mjs``; ``backend/tests/notedoc/fixtures/schema.json`` is written from it and
 a test compares it with the tables here. Changing the format needs a new ``FORMAT`` number.
 """
@@ -44,6 +49,10 @@ CODE_BLOCK = "codeBlock"
 HORIZONTAL_RULE = "horizontalRule"
 HARD_BREAK = "hardBreak"
 TEXT = "text"
+# Attachments (NOTES-10): blocks without content.
+IMAGE = "image"
+ATTACHMENT = "attachment"
+LINK_PREVIEW = "linkPreview"
 
 # Mark names (Tiptap).
 BOLD = "bold"
@@ -72,6 +81,9 @@ NODE_ATTRS: dict[str, dict[str, Any]] = {
     CODE_BLOCK: {"language": None},
     HORIZONTAL_RULE: {},
     HARD_BREAK: {},
+    IMAGE: {"id": None, "size": "medium", "name": None},
+    ATTACHMENT: {"id": None, "name": None},
+    LINK_PREVIEW: {"href": None, "title": None, "description": None, "site": None, "image": None},
 }
 
 #: Every mark with the defaults of its attributes. The order is the schema's rank (the browser sorts marks by it).
@@ -88,7 +100,9 @@ MARKS = tuple(MARK_ATTRS)
 
 #: Nodes that hold blocks, and which children they take.
 BLOCKS = frozenset({PARAGRAPH, HEADING, BULLET_LIST, ORDERED_LIST, TASK_LIST, TABLE, BLOCKQUOTE, CODE_BLOCK,
-                    HORIZONTAL_RULE})
+                    HORIZONTAL_RULE, IMAGE, ATTACHMENT, LINK_PREVIEW})
+#: Blocks that name an attachment and hold nothing (NOTES-10).
+ATOMS = frozenset({IMAGE, ATTACHMENT, LINK_PREVIEW})
 #: Nodes that hold inline content (text runs and hard breaks).
 TEXTBLOCKS = frozenset({PARAGRAPH, HEADING})
 LISTS = {BULLET_LIST: LIST_ITEM, ORDERED_LIST: LIST_ITEM, TASK_LIST: TASK_ITEM}
@@ -100,6 +114,11 @@ HEADING_LEVELS = (1, 2, 3)
 HIGHLIGHT_COLORS = ("honey", "green", "blue", "rose", "violet")
 #: Schemes a link may point to (NOTES-3 EC-8); any other link loses its mark and stays plain text.
 LINK_SCHEMES = ("http", "https", "mailto")
+
+#: Sizes of a picture in the note (NOTES-10 AC-2); the first is the default.
+IMAGE_SIZES = ("medium", "small", "full")
+#: The id of an attachment: what the browser makes (22 characters of base64url), never a path.
+ATTACHMENT_ID = r"^[A-Za-z0-9_-]{16,32}$"
 
 # Limits.
 #: The title, in characters (NOTES-3 EC-7).
@@ -118,6 +137,10 @@ MAX_MARKDOWN = 512 * 1024
 MAX_TASK_TEXT = 10_000
 #: A link target, in characters.
 MAX_HREF = 2048
+#: The name of an attachment, the title, description and site of a link card, in characters.
+MAX_NAME = 200
+MAX_CARD_TITLE = 300
+MAX_CARD_TEXT = 500
 #: Nesting of blocks (lists in lists, quotes in quotes) the server reads or writes; deeper content is flattened.
 MAX_DEPTH = 32
 #: Updates kept before they are folded into the stored document.

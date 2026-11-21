@@ -1,0 +1,31 @@
+{
+  "title": "Case attachment",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "attachment",
+        "attrs": {
+          "id": "Pp4qQ5rR6sS7tT8uU9vV0w",
+          "name": "Datenblatt Sofa.pdf"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "dazwischen"
+          }
+        ]
+      },
+      {
+        "type": "attachment",
+        "attrs": {
+          "id": "Xx1yY2zZ3aA4bB5cC6dD7e",
+          "name": "Grundriss.dwg"
+        }
+      }
+    ]
+  }
+}

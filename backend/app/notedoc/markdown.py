@@ -7,6 +7,10 @@ Markdown (export, MCP) is CommonMark with the GitHub additions:
 * tables as pipe tables, the first row as the header (``<br>`` for a line break inside a cell);
 * quotes ``>``, fenced code with its language, ``---`` for a rule, a hard break as a backslash at the end of a line;
 * bold ``**``, italic ``*``, strike ``~~``, code in backticks, links ``[text](href)``.
+* attachments (NOTES-10): a picture as ``![name](attachment:<id>)``, any other file as ``[name](attachment:<id>)``, each
+  on a line of its own; a link card as the link ``[title](href)``. Whoever writes the files next to the Markdown (the
+  export) gives ``attachment_href`` and the address of each file goes there instead. Read back, such a line is the
+  picture or file again.
 * Underline and highlight have no Markdown of their own; they are written as the HTML most renderers show:
   ``<u>text</u>`` and ``<mark>text</mark>`` (``<mark data-color="green">`` for a colour other than the default). Reading
   Markdown, ``==text==`` (as Obsidian writes it) is a highlight too.
@@ -14,18 +18,27 @@ Markdown (export, MCP) is CommonMark with the GitHub additions:
 Reading Markdown (``from_markdown``), a single line break inside a paragraph is a line break in the note, not a space:
 a snippet from MCP or nexdeck means its lines.
 
-Plain text (search, preview) has the words only: one block per line, table cells separated by a tab, no markers.
+Plain text (search, preview) has the words only: one block per line, table cells separated by a tab, no markers; an
+attachment by its name, a link card by its title, description and address.
 """
 
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
+from contextvars import ContextVar
 from typing import Any
 
 from pycrdt import Doc
 
 from . import schema as s
 from .doc import clean_doc, clean_title, safe_href, to_json
+
+#: The address of an attachment in Markdown: ``(id, name) -> href``.
+AttachmentHref = Callable[[str, str | None], str]
+#: The scheme of an attachment's address when nobody gives another one.
+ATTACHMENT_SCHEME = "attachment:"
+_href_of: ContextVar[AttachmentHref | None] = ContextVar("attachment_href", default=None)
 
 # --- Writing Markdown ---------------------------------------------------------------------------------------------
 
@@ -34,9 +47,15 @@ def _document(source: Doc | dict[str, Any]) -> dict[str, Any]:
     return clean_doc(to_json(source) if isinstance(source, Doc) else source)
 
 
-def to_markdown(source: Doc | dict[str, Any], *, title: str | None = None) -> str:
-    """The note as Markdown. With ``title``, it comes first as a level-one heading."""
-    lines = _blocks_md(_document(source)["content"])
+def to_markdown(source: Doc | dict[str, Any], *, title: str | None = None,
+                attachment_href: AttachmentHref | None = None) -> str:
+    """The note as Markdown. With ``title``, it comes first as a level-one heading. ``attachment_href`` gives the
+    address of each attachment (``attachment:<id>`` without it)."""
+    token = _href_of.set(attachment_href)
+    try:
+        lines = _blocks_md(_document(source)["content"])
+    finally:
+        _href_of.reset(token)
     head = clean_title(title) if title else ""
     if head:
         lines = ["# " + _escape(head, line_start=True), "", *lines]
@@ -77,7 +96,22 @@ def _block_md(block: dict[str, Any]) -> list[str]:
         return _list_md(kind, attrs, content)
     if kind == s.TABLE:
         return _table_md(content)
+    if kind in (s.IMAGE, s.ATTACHMENT):
+        name = attrs.get("name") or ""
+        made = _href_of.get()
+        href = made(attrs["id"], attrs.get("name")) if made else ATTACHMENT_SCHEME + attrs["id"]
+        return [("!" if kind == s.IMAGE else "") + "[" + _escape(name) + "](" + _destination(href) + ")"]
+    if kind == s.LINK_PREVIEW:
+        href = attrs.get("href") or ""
+        return ["[" + _escape(attrs.get("title") or href) + "](" + _destination(href) + ")"]
     return []
+
+
+def _destination(href: str) -> str:
+    """A link's target as Markdown reads it back: in angle brackets when it holds spaces."""
+    if re.search(r"\s", href):
+        return "<" + re.sub(r"([<>\\])", r"\\\1", href) + ">"
+    return re.sub(r"([()\\<>])", r"\\\1", href)
 
 
 def _list_md(kind: str, attrs: dict[str, Any], items: list[dict[str, Any]]) -> list[str]:
@@ -284,6 +318,13 @@ def _blocks_plain(blocks: list[dict[str, Any]]) -> list[str]:
                 cells = [" ".join(line for line in _blocks_plain(cell.get("content") or []) if line.strip())
                          for cell in row.get("content") or []]
                 out.append("\t".join(cells))
+        elif kind in (s.IMAGE, s.ATTACHMENT):
+            name = (block.get("attrs") or {}).get("name")
+            if name:
+                out.append(name)
+        elif kind == s.LINK_PREVIEW:
+            attrs = block.get("attrs") or {}
+            out.extend(value for value in (attrs.get("title"), attrs.get("description"), attrs.get("href")) if value)
     return out
 
 
@@ -296,6 +337,8 @@ _QUOTE = re.compile(r"^ {0,3}> ?(.*)$")
 _ITEM = re.compile(r"^( *)([-*+]|\d{1,9}[.)])(?:( +)(.*))?$")
 _TASK = re.compile(r"^\[([ xX])\](?: +|$)(.*)$", re.S)
 _TABLE_RULE = re.compile(r"^ *\|? *:?-{1,}:? *(\| *:?-{1,}:? *)*\|? *$")
+#: A picture or file of the note on a line of its own (what ``to_markdown`` writes without ``attachment_href``).
+_ATTACHMENT_LINE = re.compile(r"^ {0,3}(!?)\[((?:[^\]\\]|\\.)*)\]\(attachment:([A-Za-z0-9_-]{16,32})\)[ \t]*$")
 
 
 def from_markdown(text: str) -> dict[str, Any]:
@@ -306,8 +349,8 @@ def from_markdown(text: str) -> dict[str, Any]:
 
 
 def _starts_block(line: str) -> bool:
-    return bool(_FENCE.match(line) or _HEADING.match(line) or _RULE.match(line) or _QUOTE.match(line)
-                or (_ITEM.match(line) and (_ITEM.match(line).group(4) or "").strip() != ""))
+    return bool(_ATTACHMENT_LINE.match(line) or _FENCE.match(line) or _HEADING.match(line) or _RULE.match(line)
+                or _QUOTE.match(line) or (_ITEM.match(line) and (_ITEM.match(line).group(4) or "").strip() != ""))
 
 
 def _parse_blocks(lines: list[str], depth: int) -> list[dict[str, Any]]:
@@ -332,6 +375,13 @@ def _parse_blocks(lines: list[str], depth: int) -> list[dict[str, Any]]:
             if body:
                 node["content"] = [{"type": s.TEXT, "text": "\n".join(body)}]
             blocks.append(node)
+            continue
+        attached = _ATTACHMENT_LINE.match(line)
+        if attached:
+            name = re.sub(r"\\(.)", r"\1", attached.group(2)) or None
+            blocks.append({"type": s.IMAGE if attached.group(1) else s.ATTACHMENT,
+                           "attrs": {"id": attached.group(3), "name": name}})
+            i += 1
             continue
         if _RULE.match(line):
             blocks.append({"type": s.HORIZONTAL_RULE})
