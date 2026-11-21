@@ -25,6 +25,7 @@ import { NotesPage } from '../notes/NotesPage'
 import { AuthProvider } from '../state/auth'
 import { tabCommand } from './keys'
 import { acquireProvider, BRIDGE, forgetParked, parkedProviders, releaseProvider } from './live'
+import { accountChanged } from '../state/account'
 import { forgetMeta } from './meta'
 import { openNoteBeside, openNoteInNewTab } from './open'
 import * as rules from './state'
@@ -615,6 +616,18 @@ describe('tabs in the page', () => {
     const clean = acquireProvider('shop')
     releaseProvider(clean)
     expect(parkedProviders()).toEqual([first])
+  })
+
+  it('NOTES-2 a parked connection of the account before is gone when the account of the tab changes', () => {
+    vi.stubGlobal('WebSocket', function () {
+      return { send() {}, close() {}, readyState: 0, binaryType: 'arraybuffer', onopen: null, onmessage: null, onclose: null, onerror: null }
+    })
+    const first = acquireProvider('soup')
+    first.doc.getText('title').insert(0, 'typed offline')
+    releaseProvider(first)
+    expect(parkedProviders()).toEqual([first])
+    accountChanged()
+    expect(parkedProviders()).toEqual([])
   })
 
   /** Text arrives in the note "blank" (another window typed it), its title stays empty. */

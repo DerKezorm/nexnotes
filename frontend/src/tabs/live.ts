@@ -15,6 +15,7 @@
 import * as Y from 'yjs'
 
 import { NoteProvider, type LiveStatus } from '../editor/provider'
+import { onAccountChange } from '../state/account'
 
 /** The origin of an update brought over by the bridge: its document counts it as its own and sends it too. */
 export const BRIDGE = Symbol('nexnotes-tab-bridge')
@@ -158,3 +159,6 @@ export function forgetParked(): void {
   }
   parked.clear()
 }
+
+// A parked connection holds a note of the account before: gone with it, never carried over to the next one.
+onAccountChange(forgetParked)
