@@ -251,6 +251,9 @@ def draw_picture(data: bytes) -> bytes | None:
             out = io.BytesIO()
             picture.save(out, "WEBP", quality=80, method=4, exif=b"", xmp=b"")
             return out.getvalue()
+    except MemoryError:
+        # Past the worker's memory: the worker ends, and the file stays without a preview.
+        raise
     except Exception:  # noqa: BLE001 - a broken picture means a card without one
         return None
 

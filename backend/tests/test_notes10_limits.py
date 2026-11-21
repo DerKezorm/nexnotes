@@ -604,8 +604,10 @@ def test_notes10_an_id_of_another_owner_in_one_s_own_note_stays_not_found_and_ou
 
 
 def test_notes10_previews_and_recognition_share_their_two_worker_places():
-    from app.services import ocr
+    from app.services import ocr, workqueue
 
+    # An earlier test may have stopped the queue (the server going down): the recognition would not start at all.
+    workqueue.stopping.clear()
     with worker_limits.slot(), worker_limits.slot():
         started = time.monotonic()
         with pytest.raises(ocr.EngineFailed) as busy:
@@ -614,3 +616,16 @@ def test_notes10_previews_and_recognition_share_their_two_worker_places():
         with pytest.raises(TimeoutError), worker_limits.slot(0.1):
             pass
     assert ocr.spawn({"op": "probe", "megabytes": 1}, timeout=30)["taken"] == MB
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows hands a C++ exception through as an OSError")
+def test_notes10_ac3_pdfium_running_out_of_memory_ends_the_worker_instead_of_passing_for_a_broken_file(
+        monkeypatch, tmp_path):
+    def bad_alloc(_path):
+        raise OSError(None, "Windows Error 0xe06d7363", None, -529697949)
+
+    monkeypatch.setattr(media, "_pdf", bad_alloc)
+    path = tmp_path / "plan.pdf"
+    path.write_bytes(pdf_of(1))
+    with pytest.raises(MemoryError):
+        media.prepare_here(path)

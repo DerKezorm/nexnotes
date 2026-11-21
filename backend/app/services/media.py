@@ -170,6 +170,10 @@ def prepare_any(path: str, role: str | None) -> Prepared:
     return sketches.prepare(Path(path), role)
 
 
+#: A C++ exception leaving a library, as Windows reports it (0xE06D7363, signed and unsigned).
+_CPP_EXCEPTION = (0xE06D7363, 0xE06D7363 - 2**32)
+
+
 def prepare_here(path: Path) -> Prepared:
     """What the file at ``path`` is and what the browser gets of it, in this process. Never raises for a broken or
     hostile file: what cannot be read is a file to download."""
@@ -183,8 +187,18 @@ def prepare_here(path: Path) -> Prepared:
             return _pdf(path)
         if kind == VIDEO:
             return _video(path, form)
+    except MemoryError:
+        # Past the worker's memory: the worker ends, and the file stays without a preview.
+        raise
+    except OSError as exc:
+        if getattr(exc, "winerror", None) in _CPP_EXCEPTION:
+            # pdfium's std::bad_alloc, as Windows hands it through ctypes: the memory ran out as well.
+            raise MemoryError from exc
+        logger.info("An attachment could not be read as %s: %s", kind, type(exc).__name__)
+        return Prepared(kind=FILE, notes=[type(exc).__name__])
     except Exception as exc:  # noqa: BLE001 - a hostile file fails in the decoder's own way
         logger.info("An attachment could not be read as %s: %s", kind, type(exc).__name__)
+        return Prepared(kind=FILE, notes=[type(exc).__name__])
     return Prepared(kind=FILE)
 
 
@@ -263,6 +277,9 @@ def _kept_as_it_is(path: Path, form: str, image: Any) -> bytes | None:
             with Image.open(io.BytesIO(kept)) as check:
                 same = check.size == image.size
             return kept if same else None
+    except MemoryError:
+        # Past the worker's memory: the worker ends, and the file stays without a preview.
+        raise
     except Exception:  # noqa: BLE001 - what cannot be kept as it is is drawn anew
         logger.info("A picture is drawn anew instead of kept as it is form=%s", form)
     return None

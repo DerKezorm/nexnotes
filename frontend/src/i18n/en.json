@@ -527,7 +527,6 @@
     "avatar_not_a_picture": "That is not a picture nexnotes accepts (JPEG, PNG, WebP, GIF, HEIC or AVIF).",
     "attachment_too_large": "“{{name}}” is too large. At most {{max_mb}} MB per file; the operator sets this.",
     "storage_limit_reached": "Your storage is full. New attachments only once there is room.",
-    "attachment_id_taken": "This attachment belongs to another note already.",
     "attachment_empty": "The file is empty.",
     "attachment_wrong_kind": "The file is not what it was sent as.",
     "text_not_possible": "This attachment carries no text.",
