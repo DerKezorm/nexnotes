@@ -1,3 +1,0 @@
-# Packages of the note document (backend/app/notedoc); they go into requirements.txt when the app takes it in.
-pycrdt==0.13.1
-pytest==9.2.0
