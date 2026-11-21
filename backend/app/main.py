@@ -21,13 +21,14 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
-from .routers import about, auth, folders, health, invites, oidc
+from .routers import about, auth, folders, health, history, invites, oidc, trash
 from .routers import accounts as accounts_router
 from .routers import backups as backups_router
 from .routers import locales as locales_router
 from .routers import logs as logs_router
 from .routers import notes as notes_router
 from .routers import settings as settings_router
+from .routers import tags as tags_router
 from .routers import totp as totp_router
 from .security import HashingBusy, purge_sessions
 from .services import accounts, backups, cleanup, locales, logs, mounts, oidc_store, settings_service, totp
@@ -41,7 +42,7 @@ ROUTERS = [
     backups_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.
-FEATURE_ROUTERS: list = [folders, notes_router]
+FEATURE_ROUTERS: list = [folders, notes_router, tags_router, history, trash]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:

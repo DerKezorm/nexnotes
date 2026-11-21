@@ -119,6 +119,22 @@ def _take_title(note: Note, title: str) -> None:
 
 # --- The store of the live room -----------------------------------------------------------------------------------
 
+#: Called after every stored update with the session, the note and the account (``None`` for the server's own
+#: changes), once the update is committed: the history (NOTES-15) remembers who wrote. A hook that fails is logged and
+#: never costs the update.
+UpdateHook = Callable[[Session, str, int | None], None]
+UPDATE_HOOKS: list[UpdateHook] = []
+
+
+def _after_update(db: Session, note_id: str, account_id: int | None) -> None:
+    for hook in UPDATE_HOOKS:
+        try:
+            hook(db, note_id, account_id)
+            db.commit()
+        except Exception:
+            db.rollback()
+            logger.exception("A hook after storing an update failed note=%s", note_id)
+
 
 @dataclass(frozen=True)
 class LiveSession:
@@ -156,6 +172,7 @@ class SqlNoteStore:
                     note.updated_at = utcnow()
                     note.updated_by_id = account_id
             db.commit()
+            _after_update(db, note_id, account_id)
             return int(db.scalar(select(func.count()).select_from(NoteUpdate)
                                  .where(NoteUpdate.note_id == note_id)) or 0)
 
