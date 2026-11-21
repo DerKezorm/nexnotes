@@ -383,7 +383,8 @@ describe('NOTES-3 EC-3 pasting', () => {
   const word = `<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>p.MsoNormal { color: red }</style><script>alert('x')</script></head>
     <body><!--[if gte mso 9]>junk<![endif]--><h1 style="color:blue" class="MsoTitle">Plan</h1><p class="MsoNormal" style="font-size: 30pt"><b>bold</b> and <span style="font-family: Comic Sans">plain</span><o:p></o:p></p>
     <form action="https://evil.example"><input value="secret"><button>Send</button><textarea>typed</textarea></form>
-    <ul><li>one</li><li>two</li></ul><img src="x" onerror="alert(1)"><p onclick="alert(2)">clicked</p></body></html>`
+    <ul><li>one</li><li>two</li></ul><img src="x" onerror="alert(1)"><p onclick="alert(2)">clicked</p>
+    <script>window.pasted = 'run'</script><p>after<script>document.title = 'taken'</script></p></body></html>`
 
   it('NOTES-3 EC-3 what nexnotes knows stays, the rest becomes plain text, scripts, forms and styles go', () => {
     const cleaned = cleanPastedHtml(word)
@@ -395,7 +396,10 @@ describe('NOTES-3 EC-3 pasting', () => {
     expect(types(editor)).toEqual(expect.arrayContaining(['heading', 'paragraph', 'bulletList', 'listItem']))
     expect(marksOf(editor)).toEqual(['bold'])
     expect(editor.getText()).toContain('plain')
-    expect(json).not.toMatch(/alert|secret|typed|Send|Comic|30pt|MsoNormal/)
+    expect(json).not.toMatch(/alert|secret|typed|Send|Comic|30pt|MsoNormal|pasted|taken/)
+    // A script in the body (not only in the head, which the body leaves out anyway) goes with its text.
+    expect(cleaned).not.toMatch(/pasted|taken/)
+    expect(editor.getText()).toContain('after')
   })
 
   it('NOTES-3 EC-3 a page from the web and Apple Notes keep headings, lists, links and tables', () => {
