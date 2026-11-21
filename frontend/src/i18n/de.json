@@ -575,13 +575,35 @@
     "oauth_pkce": "Das Programm meldet sich nicht auf dem sicheren Weg an (PKCE). Es kann sich nicht verbinden.",
     "oauth_redirect": "Diese Rücksprungadresse ist für das Programm nicht hinterlegt.",
     "oauth_response_type": "Das Programm fragt auf eine Art, die nexnotes nicht spricht.",
-    "origin_refused": "MCP ist nicht für Webseiten.",
+    "origin_refused": "Diese Schnittstelle ist für Programme, nicht für Webseiten.",
     "protocol_version": "Diese MCP-Fassung spricht nexnotes nicht.",
     "slow_down": "Zu viele Anfragen mit diesem Schlüssel. Warte eine Minute.",
     "smart_folder_exists": "Einen intelligenten Ordner „{{name}}“ gibt es schon. Wähle einen anderen Namen.",
     "smart_folder_name_invalid": "Gib dem intelligenten Ordner einen Namen mit höchstens {{maximum}} Zeichen.",
     "smart_condition_invalid": "Eine Bedingung ist nicht vollständig. Prüf sie noch einmal.",
-    "smart_folder_not_found": "Diesen intelligenten Ordner gibt es nicht mehr."
+    "smart_folder_not_found": "Diesen intelligenten Ordner gibt es nicht mehr.",
+    "token_invalid": "Dieser Schlüssel gilt nicht (mehr).",
+    "token_reads_only": "Dieser Schlüssel darf nur lesen.",
+    "not_allowed": "Diese Notiz ist nur zum Lesen mit dir geteilt.",
+    "item_changed": "Diesen Punkt gibt es so nicht mehr. Lade die Notiz neu.",
+    "note_format": "Diese Notiz hat ein Format, das dieser Server nicht kennt.",
+    "note_trashed": "Diese Notiz liegt im Papierkorb.",
+    "dashboard_too_many_keys": "Ein Konto hat höchstens {{max}} Schlüssel für nexdeck.",
+    "nextasks_not_connected": "nextasks ist nicht verbunden. Verbinde es unter Einstellungen, Verbindungen.",
+    "nextasks_address_invalid": "Das ist keine Adresse von nextasks. Sie beginnt mit http:// oder https://.",
+    "nextasks_address_local": "Diese Adresse liegt im eigenen Netz. Das muss der Betreiber unter Einstellungen, Server erst erlauben.",
+    "nextasks_address_refused": "Diese Adresse fragt nexnotes nie, auch nicht im eigenen Netz.",
+    "nextasks_unreachable": "nextasks ist gerade nicht erreichbar. Die Notiz bleibt, wie sie ist.",
+    "nextasks_timeout": "nextasks hat nicht rechtzeitig geantwortet. Die Notiz bleibt, wie sie ist.",
+    "nextasks_token_invalid": "nextasks nimmt diesen Schlüssel nicht (mehr). Trag unter Verbindungen einen neuen ein.",
+    "nextasks_api_off": "Der Betreiber von nextasks hat die API-Schlüssel abgeschaltet.",
+    "nextasks_read_only": "Dieser Schlüssel von nextasks darf nur lesen. Lege dort einen mit Lesen und Schreiben an.",
+    "nextasks_too_old": "Dieses nextasks spricht eine andere Schnittstelle als nexnotes. Aktualisiere nextasks oder nexnotes.",
+    "nextasks_list_unknown": "Diese Liste gibt es in nextasks nicht mehr, oder der Schlüssel darf dort nicht schreiben.",
+    "nextasks_slow_down": "nextasks bittet um weniger Anfragen. Versuch es in {{seconds}} Sekunden noch einmal.",
+    "nextasks_failed": "nextasks konnte das nicht.",
+    "nextasks_not_found": "nextasks kennt das nicht.",
+    "nextasks_task_gone": "Diese Aufgabe gibt es in nextasks nicht mehr."
   },
   "folders": {
     "section": "Ordner",
@@ -724,7 +746,8 @@
     "versionOf": "Fassung von",
     "viaKey": "MCP · {{key}}",
     "weekOf": "Woche ab {{date}}",
-    "sealed": "Diese Fassung ist verschlüsselt. Entsperre die Notiz, dann lässt sie sich hier ansehen."
+    "sealed": "Diese Fassung ist verschlüsselt. Entsperre die Notiz, dann lässt sie sich hier ansehen.",
+    "viaDeck": "nexdeck · {{key}}"
   },
   "home": {
     "empty": "Hier erscheinen deine Notizen. Neue Notizen, Ordner und Suche kommen mit den nächsten Schritten.",
@@ -1074,7 +1097,9 @@
     "logRequest": "Nr. / Konto",
     "logMessage": "Meldung",
     "logMore": "Ältere laden",
-    "logRequestHint": "Nur diese Anfrage zeigen"
+    "logRequestHint": "Nur diese Anfrage zeigen",
+    "localNetwork": "Verbindungen ins eigene Netz",
+    "localNetworkHint": "Mitglieder dürfen ihr nextasks auch unter einer Adresse im eigenen Netz (LAN, VPN) verbinden. Dann kann jedes Mitglied nexnotes Adressen dort ansprechen lassen."
   },
   "session": {
     "again": "Wieder anmelden",
@@ -1934,6 +1959,83 @@
       "tag": "Das Schlagwort {{tag}} aus einer Bedingung steht in keiner Notiz mehr.",
       "unnamed": "ohne Namen",
       "gone": "Gelöscht: {{name}}"
+    }
+  },
+  "nextasks": {
+    "section": {
+      "title": "nextasks",
+      "text": "Zeilen und Checklistenpunkte lassen sich als Aufgabe in dein nextasks schicken.",
+      "how": "So verbindest du: Lege in nextasks unter Mein Konto, Verbindungen einen API-Schlüssel mit Lesen und Schreiben an und trag hier die Adresse von nextasks und den Schlüssel ein.",
+      "url": "Adresse von nextasks",
+      "urlHint": "z. B. https://tasks.example.com",
+      "key": "API-Schlüssel",
+      "keyHint": "beginnt mit ntk_",
+      "localOff": "Läuft dein nextasks im eigenen Netz, muss der Betreiber das unter Einstellungen, Server erst erlauben.",
+      "connect": "Verbinden",
+      "checking": "Wird geprüft …",
+      "connected": "Verbunden mit {{host}} als {{name}}",
+      "changeKey": "Schlüssel ändern",
+      "disconnect": "Trennen",
+      "disconnectTitle": "nextasks trennen?",
+      "disconnectText": "Die Aufgaben bleiben in nextasks, die Zeichen an den Zeilen auch. Neue Zeilen schickst du erst nach dem nächsten Verbinden."
+    },
+    "send": {
+      "button": "An nextasks",
+      "title": "An nextasks schicken",
+      "nothing": "Setz den Cursor in eine Zeile oder markiere Zeilen mit Text.",
+      "many_one": "{{count}} Zeile wird zu {{count}} Aufgabe:",
+      "many_other": "{{count}} Zeilen werden zu {{count}} Aufgaben:",
+      "list": "Liste",
+      "loading": "Listen werden geladen …",
+      "due": "Fällig",
+      "optional": "(optional)",
+      "hint": "Die Zeile bleibt hier stehen und bekommt einen Link zur Aufgabe.",
+      "submit": "Schicken",
+      "submitMany": "{{count}} schicken",
+      "fix": "Zu den Verbindungen",
+      "done_one": "Aufgabe in nextasks angelegt.",
+      "done_other": "{{count}} Aufgaben in nextasks angelegt."
+    },
+    "mark": {
+      "plain": "in nextasks",
+      "due": "in nextasks · fällig {{when}}",
+      "title": "Aufgabe in nextasks, Liste {{list}}"
+    },
+    "gone": {
+      "title": "Aufgabe nicht mehr da",
+      "text": "Diese Aufgabe gibt es in nextasks nicht mehr. Die Zeile bleibt, wie sie ist.",
+      "remove": "Zeichen entfernen"
+    }
+  },
+  "deck": {
+    "section": {
+      "title": "Schlüssel für nexdeck",
+      "text": "Mit einem Schlüssel zeigt eine Karte in nexdeck deine angehefteten Notizen oder eine Checkliste und hakt auf Wunsch Punkte ab. Gesperrte Notizen sieht sie nie.",
+      "address": "Adresse für nexdeck",
+      "none": "Noch kein Schlüssel.",
+      "new": "Neuer Schlüssel",
+      "made": "„{{name}}“ angelegt · nur jetzt sichtbar",
+      "lastUsed": "zuletzt {{when}}",
+      "neverUsed": "noch nie benutzt",
+      "revoke": "Widerrufen",
+      "revokeTitle": "„{{name}}“ widerrufen?",
+      "revokeText": "Die Karte zeigt sofort nichts Neues mehr und kann nichts mehr abhaken.",
+      "count": "{{count}} von {{max}} Schlüsseln"
+    },
+    "level": {
+      "read": "nur zeigen",
+      "write": "zeigen und abhaken"
+    },
+    "dialog": {
+      "title": "Neuer Schlüssel für nexdeck",
+      "name": "Name",
+      "namePlaceholder": "z. B. Tablet in der Küche",
+      "right": "Recht",
+      "read": "Nur zeigen",
+      "readHint": "Angeheftete Notizen und Checklisten auf der Karte zeigen.",
+      "write": "Zeigen und abhaken",
+      "writeHint": "Dazu Punkte einer Checkliste direkt auf der Karte abhaken.",
+      "make": "Schlüssel anlegen"
     }
   }
 }

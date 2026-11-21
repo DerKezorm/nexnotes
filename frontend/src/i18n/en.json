@@ -575,13 +575,35 @@
     "oauth_pkce": "The program does not sign in the safe way (PKCE). It cannot connect.",
     "oauth_redirect": "This return address is not registered for the program.",
     "oauth_response_type": "The program asks in a way nexnotes does not speak.",
-    "origin_refused": "MCP is not for web pages.",
+    "origin_refused": "This interface is for programs, not for web pages.",
     "protocol_version": "This MCP version is not spoken here.",
     "slow_down": "Too many requests with this key. Wait a minute.",
     "smart_folder_exists": "There is already a smart folder named “{{name}}”. Choose another name.",
     "smart_folder_name_invalid": "A smart folder needs a name of at most {{maximum}} characters.",
     "smart_condition_invalid": "A condition is not complete. Check it once more.",
-    "smart_folder_not_found": "This smart folder no longer exists."
+    "smart_folder_not_found": "This smart folder no longer exists.",
+    "token_invalid": "This key is not valid (any more).",
+    "token_reads_only": "This key may only read.",
+    "not_allowed": "This note is shared with you to read only.",
+    "item_changed": "This item is not like that any more. Load the note again.",
+    "note_format": "This note is in a format this server does not know.",
+    "note_trashed": "This note is in the trash.",
+    "dashboard_too_many_keys": "An account can have at most {{max}} keys for nexdeck.",
+    "nextasks_not_connected": "nextasks is not connected. Connect it under Settings, Connections.",
+    "nextasks_address_invalid": "This is not an address of nextasks. It starts with http:// or https://.",
+    "nextasks_address_local": "This address is in the local network. The operator has to allow that first under Settings, Server.",
+    "nextasks_address_refused": "nexnotes never asks this address, not even in the local network.",
+    "nextasks_unreachable": "nextasks cannot be reached right now. The note stays as it is.",
+    "nextasks_timeout": "nextasks did not answer in time. The note stays as it is.",
+    "nextasks_token_invalid": "nextasks does not take this key (any more). Enter a new one under Connections.",
+    "nextasks_api_off": "The operator of nextasks has switched API keys off.",
+    "nextasks_read_only": "This key of nextasks may only read. Create one there that reads and writes.",
+    "nextasks_too_old": "This nextasks speaks another interface than nexnotes. Update nextasks or nexnotes.",
+    "nextasks_list_unknown": "This list is no longer in nextasks, or the key may not write there.",
+    "nextasks_slow_down": "nextasks asks for fewer requests. Try again in {{seconds}} seconds.",
+    "nextasks_failed": "nextasks could not do this.",
+    "nextasks_not_found": "nextasks does not know this.",
+    "nextasks_task_gone": "This task is no longer in nextasks."
   },
   "folders": {
     "section": "Folders",
@@ -724,7 +746,8 @@
     "versionOf": "Version of",
     "viaKey": "MCP · {{key}}",
     "weekOf": "Week of {{date}}",
-    "sealed": "This version is encrypted. Unlock the note to see it here."
+    "sealed": "This version is encrypted. Unlock the note to see it here.",
+    "viaDeck": "nexdeck · {{key}}"
   },
   "home": {
     "empty": "Your notes appear here. New notes, folders and search come with the next steps.",
@@ -1074,7 +1097,9 @@
     "logRequest": "No. / account",
     "logMessage": "Message",
     "logMore": "Load older",
-    "logRequestHint": "Show only this request"
+    "logRequestHint": "Show only this request",
+    "localNetwork": "Connections into the local network",
+    "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there."
   },
   "session": {
     "again": "Sign in again",
@@ -1822,7 +1847,7 @@
       "readHint": "Search, read, list folders and tags.",
       "write": "Read and write",
       "writeHint": "Also make notes, add to them, tick items off, move them, make folders and put notes into the trash.",
-      "make": "Make key"
+      "make": "Create key"
     },
     "consent": {
       "title": "Connect “{{name}}”?",
@@ -1934,6 +1959,83 @@
       "tag": "The tag {{tag}} of a condition is in no note any more.",
       "unnamed": "without a name",
       "gone": "Deleted: {{name}}"
+    }
+  },
+  "nextasks": {
+    "section": {
+      "title": "nextasks",
+      "text": "Lines and checklist items can be sent to your nextasks as tasks.",
+      "how": "To connect: create an API key that reads and writes in nextasks under My account, Connections, and enter the address of nextasks and the key here.",
+      "url": "Address of nextasks",
+      "urlHint": "e.g. https://tasks.example.com",
+      "key": "API key",
+      "keyHint": "starts with ntk_",
+      "localOff": "If your nextasks runs in the local network, the operator has to allow that first under Settings, Server.",
+      "connect": "Connect",
+      "checking": "Checking …",
+      "connected": "Connected to {{host}} as {{name}}",
+      "changeKey": "Change key",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect nextasks?",
+      "disconnectText": "The tasks stay in nextasks, and so do the marks beside the lines. New lines can be sent after connecting again."
+    },
+    "send": {
+      "button": "To nextasks",
+      "title": "Send to nextasks",
+      "nothing": "Put the cursor in a line or select lines with text.",
+      "many_one": "{{count}} line becomes {{count}} task:",
+      "many_other": "{{count}} lines become {{count}} tasks:",
+      "list": "List",
+      "loading": "Loading lists …",
+      "due": "Due",
+      "optional": "(optional)",
+      "hint": "The line stays here and gets a link to the task.",
+      "submit": "Send",
+      "submitMany": "Send {{count}}",
+      "fix": "Go to Connections",
+      "done_one": "Task made in nextasks.",
+      "done_other": "{{count}} tasks made in nextasks."
+    },
+    "mark": {
+      "plain": "in nextasks",
+      "due": "in nextasks · due {{when}}",
+      "title": "Task in nextasks, list {{list}}"
+    },
+    "gone": {
+      "title": "Task no longer there",
+      "text": "This task is no longer in nextasks. The line stays as it is.",
+      "remove": "Remove mark"
+    }
+  },
+  "deck": {
+    "section": {
+      "title": "Keys for nexdeck",
+      "text": "With a key, a card in nexdeck shows your pinned notes or a checklist and, if you want, ticks items off. It never sees locked notes.",
+      "address": "Address for nexdeck",
+      "none": "No key yet.",
+      "new": "New key",
+      "made": "“{{name}}” made · visible only now",
+      "lastUsed": "last {{when}}",
+      "neverUsed": "never used",
+      "revoke": "Revoke",
+      "revokeTitle": "Revoke “{{name}}”?",
+      "revokeText": "The card shows nothing new from now on and cannot tick anything off.",
+      "count": "{{count}} of {{max}} keys"
+    },
+    "level": {
+      "read": "show only",
+      "write": "show and tick off"
+    },
+    "dialog": {
+      "title": "New key for nexdeck",
+      "name": "Name",
+      "namePlaceholder": "e.g. tablet in the kitchen",
+      "right": "Right",
+      "read": "Show only",
+      "readHint": "Show pinned notes and checklists on the card.",
+      "write": "Show and tick off",
+      "writeHint": "Also tick checklist items off right on the card.",
+      "make": "Create key"
     }
   }
 }
