@@ -1,6 +1,7 @@
 /**
  * The frame of the signed-in app: the sidebar on the left (on a phone behind a button), the page on the right. A
- * session that ends while the page is open shows its dialog over everything, so nothing written is lost.
+ * session that ends while the page is open shows its dialog over everything, so nothing written is lost. After the
+ * password was set through the operator's reset link, the account hears so once it is signed in (NOTES-2 AC-7).
  */
 import { Menu } from 'lucide-react'
 import { useEffect, useState } from 'react'
@@ -8,6 +9,8 @@ import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { authApi } from '../api/client'
+import { useAuth } from '../state/auth'
+import { Dialog } from './Dialog'
 import { Logo } from './Logo'
 import { SessionDialog } from './SessionDialog'
 import { Sidebar } from './Sidebar'
@@ -54,6 +57,40 @@ export function AppShell() {
         </main>
       </div>
       <SessionDialog />
+      <ResetNotice />
     </div>
+  )
+}
+
+/** "Your password was reset through a link from the operator", until put away: whoever used the link, the account
+ * learns of it, so an operator who set a password and signed in as somebody else does not stay unnoticed. */
+function ResetNotice() {
+  const { t } = useTranslation()
+  const { me, setMe } = useAuth()
+  const [busy, setBusy] = useState(false)
+  if (!me?.password_reset_notice) return null
+  const seen = async () => {
+    setBusy(true)
+    try {
+      setMe(await authApi.resetNoticeSeen())
+    } catch {
+      // Shown again at the next load; nothing is lost.
+      setMe({ ...me, password_reset_notice: false })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <Dialog title={t('resetNotice.title')} onClose={() => void seen()}>
+      <div className="space-y-3" data-testid="reset-notice">
+        <p className="text-sm text-mist-200">{t('resetNotice.text')}</p>
+        <p className="text-sm text-mist-400">{t('resetNotice.hint')}</p>
+        <div className="flex justify-end">
+          <button type="button" disabled={busy} className="nn-btn nn-btn-accent" onClick={() => void seen()}>
+            {t('resetNotice.button')}
+          </button>
+        </div>
+      </div>
+    </Dialog>
   )
 }

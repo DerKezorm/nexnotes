@@ -4,7 +4,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { NotFoundPage } from './components/NotFound'
 import { AboutPage } from './pages/AboutPage'
-import { InvitePage, LoginPage, SetupPage } from './pages/AuthPages'
+import { InvitePage, LoginPage, ResetPage, SetupPage } from './pages/AuthPages'
 import { NotesHome } from './pages/NotesHome'
 import { SettingsPage } from './pages/SettingsPage'
 import { FEATURE_ROUTES } from './extensions'
@@ -33,6 +33,7 @@ export default function App() {
       <Route path="setup" element={<SetupPage />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="invite/:token" element={<InvitePage />} />
+      <Route path="reset/:token" element={<ResetPage />} />
       <Route
         element={
           <SignedIn>

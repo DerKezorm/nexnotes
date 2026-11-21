@@ -1,7 +1,8 @@
 /**
  * Settings, "Accounts" (drawing N2-Konten): every account with its address, way of signing in, role, storage with its
  * limit and last use (NOTES-1 AC-7, NOTES-2 AC-7); never a title or a word of a note. Invite a person, block, delete
- * (30 days to bring it back), give a role, set a limit, a new password, sign out everywhere, take a provider's link.
+ * (30 days to bring it back), give a role, set a limit, a reset link (the person sets the new password, NOTES-2 AC-7),
+ * sign out everywhere, take a provider's link.
  */
 import { MoreHorizontal, UserPlus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -36,7 +37,7 @@ export function AccountsTab() {
   const [menu, setMenu] = useState<number | null>(null)
   const [asking, setAsking] = useState<Asking | null>(null)
   const [limitFor, setLimitFor] = useState<AccountRow | null>(null)
-  const [passwordFor, setPasswordFor] = useState<AccountRow | null>(null)
+  const [resetFor, setResetFor] = useState<AccountRow | null>(null)
   const action = useAction()
   const lang = i18n.language
 
@@ -135,7 +136,7 @@ export function AccountsTab() {
                             <>
                               <MenuItem onClick={() => setAsking({ kind: 'role', row })}>{row.role === 'operator' ? t('accounts.makeMember') : t('accounts.makeOperator')}</MenuItem>
                               <MenuItem onClick={() => setLimitFor(row)}>{t('accounts.setLimit')}</MenuItem>
-                              <MenuItem onClick={() => setPasswordFor(row)}>{t('accounts.newPassword')}</MenuItem>
+                              <MenuItem onClick={() => setResetFor(row)}>{t('accounts.resetLink')}</MenuItem>
                               {row.two_factor && <MenuItem onClick={() => setAsking({ kind: 'resetFactor', row })}>{t('accounts.resetFactor')}</MenuItem>}
                               <MenuItem onClick={() => setAsking({ kind: 'signOut', row })}>{t('accounts.signOut')}</MenuItem>
                               {row.providers.map((provider) => (
@@ -193,9 +194,7 @@ export function AccountsTab() {
 
       {inviting && <InviteDialog onClose={() => setInviting(false)} onMade={load} />}
       {limitFor && <LimitDialog row={limitFor} onClose={() => setLimitFor(null)} onSaved={load} />}
-      {passwordFor && (
-        <PasswordDialog row={passwordFor} askOwn={operatorPassword} onClose={() => setPasswordFor(null)} onSaved={() => { setPasswordFor(null); load() }} />
-      )}
+      {resetFor && <ResetLinkDialog row={resetFor} askOwn={operatorPassword} onClose={() => setResetFor(null)} />}
       {asking && (
         <Confirm
           title={t(`accounts.confirm.${asking.kind}.title`, { name: asking.row.display_name || asking.row.name })}
@@ -335,35 +334,48 @@ function LimitDialog({ row, onClose, onSaved }: { row: AccountRow; onClose: () =
   )
 }
 
-function PasswordDialog({ row, askOwn, onClose, onSaved }: { row: AccountRow; askOwn: boolean; onClose: () => void; onSaved: () => void }) {
+/** The operator never sets another account's password (NOTES-2 AC-7): a one-time link lets the person do it. */
+function ResetLinkDialog({ row, askOwn, onClose }: { row: AccountRow; askOwn: boolean; onClose: () => void }) {
   const { t } = useTranslation()
-  const [password, setPassword] = useState('')
+  const [days, setDays] = useState('7')
   const [own, setOwn] = useState('')
+  const [link, setLink] = useState<string | null>(null)
   const action = useAction()
+  const name = row.display_name || row.name
   return (
-    <Dialog title={t('accounts.newPasswordFor', { name: row.display_name || row.name })} onClose={onClose}>
-      <form
-        className="space-y-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          void action.run(async () => {
-            await accountsApi.password(row.id, password, own)
-            onSaved()
-          })
-        }}
-      >
-        <Input label={t('me.password.new')} type="password" autoComplete="new-password" value={password} onChange={setPassword} hint={t('setup.passwordHint', { count: 12 })} />
-        {askOwn && <Input label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={own} onChange={setOwn} />}
-        <Feedback problem={action.problem} />
-        <div className="flex justify-end gap-2">
-          <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button type="submit" disabled={action.busy || !password} className="nn-btn nn-btn-accent">
-            {t('common.save')}
-          </button>
+    <Dialog title={t('accounts.resetLinkFor', { name })} onClose={onClose}>
+      {link ? (
+        <div className="space-y-3" data-testid="reset-link">
+          <p className="text-sm text-mist-300">{t('accounts.resetLinkShown', { name })}</p>
+          <CopyLink value={link} label={t('accounts.resetLink')} />
+          <div className="flex justify-end">
+            <button type="button" className="nn-btn nn-btn-accent" onClick={onClose}>
+              {t('common.done')}
+            </button>
+          </div>
         </div>
-      </form>
+      ) : (
+        <form
+          className="space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void action.run(async () => setLink((await accountsApi.resetLink(row.id, Number(days), own)).link))
+          }}
+        >
+          <p className="text-sm text-mist-400">{t('accounts.resetLinkText', { name })}</p>
+          <Select label={t('accounts.valid')} value={days} onChange={setDays} options={['1', '7', '30'].map((value) => ({ value, label: t('server.days', { count: Number(value) }) }))} />
+          {askOwn && <Input label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={own} onChange={setOwn} />}
+          <Feedback problem={action.problem} />
+          <div className="flex justify-end gap-2">
+            <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
+              {t('common.cancel')}
+            </button>
+            <button type="submit" disabled={action.busy || (askOwn && !own)} className="nn-btn nn-btn-accent">
+              {t('accounts.resetLinkMake')}
+            </button>
+          </div>
+        </form>
+      )}
     </Dialog>
   )
 }

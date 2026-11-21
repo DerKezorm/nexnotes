@@ -142,6 +142,8 @@ def account_view(account: AccountRow, db: Session | None = None) -> dict[str, An
         "two_factor": bool(account.totp_secret_enc),
         "two_factor_recovery_left": len(totp.load_recovery(account.totp_recovery)) if account.totp_secret_enc else 0,
         "password_changed_at": account.password_changed_at.isoformat() if account.password_changed_at else None,
+        # The password was set through the operator's reset link; the page says so until it is put away.
+        "password_reset_notice": bool(account.password_reset_notice),
         "created_at": account.created_at.isoformat(),
         "last_seen_at": account.last_seen_at.isoformat() if account.last_seen_at else None,
     }
@@ -357,6 +359,16 @@ def whats_new_seen(account: Account, db: DbSession) -> dict[str, Any]:
     row = db.get(AccountRow, account.id)
     assert row is not None
     row.whats_new_seen = __version__
+    db.commit()
+    return account_view(row)
+
+
+@router.post("/me/password-reset-notice/seen",
+             summary="The notice that the password was set through the operator's reset link is read")
+def password_reset_notice_seen(account: Account, db: DbSession) -> dict[str, Any]:
+    row = db.get(AccountRow, account.id)
+    assert row is not None
+    row.password_reset_notice = False
     db.commit()
     return account_view(row)
 

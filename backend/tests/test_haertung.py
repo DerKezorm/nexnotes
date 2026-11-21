@@ -231,8 +231,10 @@ def test_a5_what_the_operator_does_to_an_account_forgets_its_browsers(client: Te
         for path in ("block", "unblock"):
             assert client.post(f"/api/accounts/{anna.id}/{path}", json=confirm).status_code == 204
     elif way == "password":
-        answer = client.put(f"/api/accounts/{anna.id}/password", json={**confirm, "password": PASSWORD})
-        assert answer.status_code == 204
+        made = client.post(f"/api/accounts/{anna.id}/reset-link", json=confirm)
+        assert made.status_code == 201
+        token = made.json()["link"].rsplit("/", 1)[1]
+        assert client.post(f"/api/reset/{token}", json={"password": PASSWORD}).status_code == 204
     elif way == "sign-out":
         assert client.post(f"/api/accounts/{anna.id}/sign-out").status_code == 204
     else:

@@ -153,6 +153,8 @@ export type Me = {
   share_links?: boolean
   mcp_enabled?: boolean
   min_password?: number
+  /** The password was set through the operator's reset link; the page says so until it is put away. */
+  password_reset_notice?: boolean
 }
 
 export type SetupState = {
@@ -340,6 +342,7 @@ export const authApi = {
   profile: (change: { display_name?: string; email?: string }) => api<Me>('/api/me/profile', { method: 'PUT', body: change }),
   password: (current: string, next: string) => api<void>('/api/auth/password', { method: 'PUT', body: { current, new: next } }),
   whatsNewSeen: () => api<Me>('/api/me/whats-new/seen', { method: 'POST' }),
+  resetNoticeSeen: () => api<Me>('/api/me/password-reset-notice/seen', { method: 'POST' }),
   myProviders: () => api<MyProvider[]>('/api/oidc/me'),
   linkStart: (slug: string, password: string) =>
     api<{ url: string }>(`/api/oidc/${encodeURIComponent(slug)}/link`, { method: 'POST', body: { password } }),
@@ -349,6 +352,12 @@ export const authApi = {
   declineProviderEmail: () => api<void>('/api/oidc/me/address', { method: 'DELETE' }),
   /** The browser's clock, so the log can warn when the server's is far off. */
   clock: () => api<{ now: number; drift: number }>('/api/health/clock', { method: 'POST', body: { now: Date.now() } }),
+}
+
+/** A reset link from the operator, opened without an account. */
+export const resetApi = {
+  offer: (token: string) => api<{ name: string; min_password: number; expires_at: string }>(`/api/reset/${encodeURIComponent(token)}`),
+  use: (token: string, password: string) => api<void>(`/api/reset/${encodeURIComponent(token)}`, { method: 'POST', body: { password } }),
 }
 
 export const invitesApi = {
@@ -373,8 +382,9 @@ export const accountsApi = {
   role: (id: number, role: 'operator' | 'member', current_password: string) =>
     api<AccountRow>(`/api/accounts/${id}/role`, { method: 'PUT', body: { role, current_password } }),
   limit: (id: number, limit: number | null) => api<AccountRow>(`/api/accounts/${id}/storage-limit`, { method: 'PUT', body: { limit } }),
-  password: (id: number, password: string, current_password: string) =>
-    api<void>(`/api/accounts/${id}/password`, { method: 'PUT', body: { password, current_password } }),
+  /** A one-time link with which the person sets a new password themselves; the operator never knows it. */
+  resetLink: (id: number, days: number, current_password: string) =>
+    api<{ link: string; expires_at: string }>(`/api/accounts/${id}/reset-link`, { method: 'POST', body: { days, current_password } }),
   signOut: (id: number) => api<void>(`/api/accounts/${id}/sign-out`, { method: 'POST' }),
   resetSecondFactor: (id: number, current_password: string) =>
     api<void>(`/api/accounts/${id}/totp/reset`, { method: 'POST', body: { current_password } }),

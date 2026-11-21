@@ -1,7 +1,8 @@
-"""The operator's list of accounts: roles, blocking, deleting and bringing back, storage limits, new passwords.
+"""The operator's list of accounts: roles, blocking, deleting and bringing back, storage limits, reset links.
 
 The operator sees name, address, way of signing in, role, used storage with its limit and last use; never a title or a
-word of somebody else's notes. Every act that a stolen session must not be enough for asks for the operator's own
+word of somebody else's notes, and never sets somebody else's password (a reset link lets the person set their own,
+``routers/invites.py``). Every act that a stolen session must not be enough for asks for the operator's own
 password once more (``confirm_operator``).
 """
 
@@ -20,10 +21,10 @@ from ..errors import error
 from ..models import DELETE_GRACE_DAYS, OPERATOR
 from ..models import Account as AccountRow
 from ..security import end_all_sessions
-from ..services import accounts, content, totp
+from ..services import accounts, content, settings_service, totp
 from ..services.accounts import AccountError
 from ..services.oidc_store import linked_providers
-from .auth import account_view, check_password, fail
+from .auth import account_view, fail
 
 logger = logging.getLogger("nexnotes.auth")
 
@@ -39,8 +40,9 @@ class RoleIn(BaseModel):
     current_password: str = Field(default="", max_length=200)
 
 
-class PasswordSetIn(BaseModel):
-    password: str = Field(max_length=200)
+class ResetLinkIn(BaseModel):
+    #: How long the link is valid, as for an invitation: 1, 7 or 30 days.
+    days: int = 7
     current_password: str = Field(default="", max_length=200)
 
 
@@ -64,6 +66,7 @@ def _listed(db: DbSession, row: AccountRow, linked: dict[int, list[dict[str, obj
     used = content.counts(db, row.id)
     view = account_view(row)
     view.pop("two_factor_recovery_left", None)
+    view.pop("password_reset_notice", None)
     return {
         **view,
         "locked": accounts.is_locked(row),
@@ -177,16 +180,16 @@ def set_limit(account_id: int, payload: LimitIn, operator: OperatorAccount, db: 
     return _listed(db, row, linked_providers(db))
 
 
-@router.put("/{account_id}/password", status_code=204, summary="Give an account a new password")
-def set_password(
-    account_id: int, payload: PasswordSetIn, request: Request, operator: OperatorAccount, db: DbSession,
-) -> None:
+@router.post("/{account_id}/reset-link", status_code=201,
+             summary="A one-time link with which the person sets a new password themselves (shown once)")
+def reset_link(
+    account_id: int, payload: ResetLinkIn, request: Request, operator: OperatorAccount, db: DbSession,
+) -> dict[str, Any]:
     confirm_operator(request, db, operator, payload.current_password)
-    check_password(payload.password)
     row = _row(db, account_id)
     try:
-        accounts.set_password(db, row, payload.password)
+        made, token = accounts.create_reset(db, operator, row, days=payload.days)
     except AccountError as exc:
         raise fail(exc) from exc
-    end_all_sessions(db, row.id)
-    logger.warning("Password set name=%s by=%s", row.name, operator.name)
+    base = settings_service.public_url(db) or str(request.base_url).rstrip("/")
+    return {"link": f"{base}/reset/{token}", "expires_at": made.expires_at.isoformat()}

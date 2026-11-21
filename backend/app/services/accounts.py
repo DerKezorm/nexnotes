@@ -30,8 +30,11 @@ from ..models import (
     OPERATOR,
     ROLES,
     SIGN_IN_PASSWORD,
+    TOKEN_DEVICE,
     Account,
+    ApiToken,
     Invite,
+    PasswordReset,
     utcnow,
 )
 from ..security import LOCK_MINUTES, MAX_FAILURES, MIN_PASSWORD, hash_password, hash_token, verify_password
@@ -295,16 +298,81 @@ def change_password(db: Session, account: Account, current: str, new: str) -> No
     logger.info("Password changed name=%s", account.name)
 
 
-def set_password(db: Session, account: Account, new: str) -> None:
-    """The operator gives an account a new password (it forgot its own); it signs in with a password from now on."""
+# --- Reset links ----------------------------------------------------------------------------------------------------
+#
+# The operator never gives an account a password: whoever knows it could read every note of that account. A reset
+# link lets the person set one themselves; the account hears about it at its next sign-in, whoever used the link.
+
+
+def create_reset(db: Session, by: Account, account: Account, *, days: int) -> tuple[PasswordReset, str]:
+    """A new link for ``account``, valid ``days`` (as an invitation); an earlier one of the account stops counting.
+    Making it changes nothing about the account: its password and its way of signing in stay as they are."""
+    if days not in INVITE_DAYS:
+        raise AccountError("invalid_days", "Choose 1, 7 or 30 days.", 422)
+    if account.deleted_at is not None:
+        raise AccountError("not_found", "No such account.", 404)
+    db.execute(delete(PasswordReset).where(PasswordReset.account_id == account.id))
+    token = secrets.token_urlsafe(24)
+    row = PasswordReset(token_hash=hash_token(token), account_id=account.id, created_by=by.id,
+                        expires_at=utcnow() + timedelta(days=days))
+    db.add(row)
+    db.commit()
+    logger.warning("Password reset link made name=%s by=%s", account.name, by.name)
+    return row, token
+
+
+def find_reset(db: Session, token: str) -> tuple[PasswordReset, Account] | None:
+    """A usable link: not run out, its account not deleted, made by somebody who is still an operator."""
+    row = db.scalar(select(PasswordReset).where(PasswordReset.token_hash == hash_token(token)))
+    if row is None or row.expires_at <= utcnow():
+        return None
+    account = db.get(Account, row.account_id)
+    creator = db.get(Account, row.created_by) if row.created_by else None
+    if account is None or account.deleted_at is not None:
+        return None
+    if creator is None or creator.role != OPERATOR or creator.blocked_at is not None or creator.deleted_at is not None:
+        return None
+    return row, account
+
+
+def reset_expired(db: Session, token: str) -> bool:
+    """Whether the link is still there and only expired (to say so instead of "not valid any more")."""
+    row = db.scalar(select(PasswordReset).where(PasswordReset.token_hash == hash_token(token)))
+    return row is not None and row.expires_at <= utcnow()
+
+
+def use_reset(db: Session, token: str, new: str) -> Account:
+    """The person behind the link sets a new password. Every session and paired device of the account ends, the
+    account signs in with a password from now on (a provider stays linked), and it hears about it at the next
+    sign-in."""
+    from ..security import end_all_sessions
+
+    found = find_reset(db, token)
+    if found is None:
+        if reset_expired(db, token):
+            raise AccountError("reset_expired", "This link has expired.", 404)
+        raise AccountError("reset_invalid", "This link has been used already or is not valid any more.", 404)
+    reset, account = found
     check_password_rule(new)
+    # The link goes first, in the same transaction: two requests at once set one password, not two.
+    try:
+        gone = int(db.execute(delete(PasswordReset).where(PasswordReset.id == reset.id)).rowcount or 0) == 1
+    except OperationalError:
+        gone = False
+    if not gone:
+        db.rollback()
+        raise AccountError("reset_invalid", "This link has been used already or is not valid any more.", 404)
     account.password_hash = hash_password(new)
     account.password_changed_at = utcnow()
     account.sign_in = SIGN_IN_PASSWORD
     account.failed_logins = 0
     account.locked_until = None
+    account.password_reset_notice = True
+    db.execute(delete(ApiToken).where(ApiToken.account_id == account.id, ApiToken.kind == TOKEN_DEVICE))
     db.commit()
-    logger.info("Password set by the operator name=%s", account.name)
+    end_all_sessions(db, account.id)
+    logger.warning("Password set through a reset link name=%s", account.name)
+    return account
 
 
 # --- Roles, blocking, deleting ---------------------------------------------------------------------------------------

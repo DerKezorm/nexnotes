@@ -1,12 +1,13 @@
 /**
  * The pages before signing in: the first account (with the setup code from the server's log), signing in (password,
- * then the second factor; or a provider's button, in the order of the sign-in blueprint), and accepting an invitation.
+ * then the second factor; or a provider's button, in the order of the sign-in blueprint), accepting an invitation, and
+ * setting a new password with the operator's reset link.
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { ApiError, authApi, invitesApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
+import { ApiError, authApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
 import { Logo } from '../components/Logo'
 import { ProviderButtons } from '../components/ProviderButtons'
 import { ThemeSwitcher } from '../components/ThemeSwitcher'
@@ -384,6 +385,62 @@ export function InvitePage() {
         </form>
       )}
       <ProviderButtons providers={methods.providers} invite={token} withOr={passwordWay} />
+    </AuthFrame>
+  )
+}
+
+/** The operator's reset link (NOTES-2 AC-7): the person sets a new password; nobody is signed in by it. */
+export function ResetPage() {
+  const { t } = useTranslation()
+  const { token = '' } = useParams()
+  const [offer, setOffer] = useState<{ name: string; min_password: number } | null>(null)
+  const [invalid, setInvalid] = useState<'invalid' | 'expired' | null>(null)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [problem, setProblem] = useState<Trouble>(null)
+
+  useEffect(() => {
+    resetApi.offer(token).then(setOffer, (error) => setInvalid(codeOf(error) === 'reset_expired' ? 'expired' : 'invalid'))
+  }, [token])
+
+  if (invalid || done) {
+    const key = done ? 'done' : invalid
+    return (
+      <AuthFrame title={t(`auth.reset.${key}Title`)}>
+        <p className="text-sm text-mist-400">{t(`auth.reset.${key}Text`)}</p>
+        <Link to="/login" className={'nn-btn mt-4 flex w-full ' + (done ? 'nn-btn-accent' : 'nn-btn-ghost')}>
+          {t('auth.backToLogin')}
+        </Link>
+      </AuthFrame>
+    )
+  }
+  if (!offer) return null
+  return (
+    <AuthFrame title={t('auth.reset.title')} text={t('auth.reset.text', { name: offer.name })}>
+      <form
+        className="space-y-4"
+        onSubmit={async (event) => {
+          event.preventDefault()
+          if (password.length < offer.min_password) return setProblem({ code: 'password_too_short', values: { minimum: offer.min_password } })
+          setBusy(true)
+          setProblem(null)
+          try {
+            await resetApi.use(token, password)
+            setDone(true)
+          } catch (error) {
+            const found = troubleOf(error)
+            if (found.code === 'reset_expired' || found.code === 'reset_invalid') setInvalid(found.code === 'reset_expired' ? 'expired' : 'invalid')
+            else setProblem(found)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        <Problem problem={problem} />
+        <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" autoFocus hint={t('setup.passwordHint', { count: offer.min_password })} />
+        <Primary busy={busy}>{t('auth.reset.submit')}</Primary>
+      </form>
     </AuthFrame>
   )
 }

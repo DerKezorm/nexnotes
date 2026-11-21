@@ -1,7 +1,9 @@
-"""Invitations: the operator invites a person, who makes an account with a password or through a provider.
+"""Invitations: the operator invites a person, who makes an account with a password or through a provider. And reset
+links: the operator makes one for an account that forgot its password, and the person sets a new one themselves.
 
-The link is shown once (and mailed, when a mail server is set up). Only the hash of its token is stored; used once,
-then gone. An expired link says so; a used or withdrawn one says it is not valid any more, and nothing is made.
+Both links are shown once (an invitation is also mailed, when a mail server is set up). Only the hash of a token is
+stored; used once, then gone. An expired link says so; a used or withdrawn one says it is not valid any more, and
+nothing is made.
 """
 
 from __future__ import annotations
@@ -42,6 +44,10 @@ class InviteIn(BaseModel):
     send: bool = False
     #: The language the operator's page shows: the mail's, when neither the receiver nor the operator has one.
     language: str = Field(default="", max_length=16)
+
+
+class ResetIn(BaseModel):
+    password: str = Field(max_length=200)
 
 
 class AcceptIn(BaseModel):
@@ -167,3 +173,36 @@ def accept(token: Token, payload: AcceptIn, request: Request, response: Response
             brake.failed(key)
         raise fail(exc) from exc
     return sign_in(db, request, response, account)
+
+
+# --- Reset links -------------------------------------------------------------------------------------------------
+
+
+@router.get("/reset/{token}", summary="Whom a reset link is for (no sign-in needed)")
+def reset_state(token: Token, db: DbSession) -> dict[str, Any]:
+    found = accounts.find_reset(db, token)
+    if found is None:
+        if accounts.reset_expired(db, token):
+            raise error("reset_expired", "This link has expired.", 404)
+        raise error("reset_invalid", "This link has been used already or is not valid any more.", 404)
+    reset, account = found
+    return {"name": account.shown_name, "min_password": MIN_PASSWORD, "expires_at": reset.expires_at.isoformat()}
+
+
+@router.post("/reset/{token}", status_code=204, summary="Set a new password with a reset link; signs in nowhere")
+def reset_password(token: Token, payload: ResetIn, request: Request, db: DbSession) -> None:
+    key = "reset:" + client_ip(request)
+    wait = brake.wait_seconds(key, NAME_TRIES)
+    if wait:
+        raise HTTPException(
+            status_code=429,
+            detail=detail("too_many_attempts", "Too many attempts. Try again later.", retry_after=wait),
+            headers={"Retry-After": str(wait)},
+        )
+    check_password(payload.password)
+    try:
+        accounts.use_reset(db, token, payload.password)
+    except AccountError as exc:
+        if exc.code in ("reset_invalid", "reset_expired"):
+            brake.failed(key)
+        raise fail(exc) from exc
