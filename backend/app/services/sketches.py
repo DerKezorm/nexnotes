@@ -4,8 +4,9 @@ The app draws and records; the browser only shows and plays. Both arrive as atta
 role (``POST /api/attachments?...&as=<role>``) that says what the device means them to be. The role never makes a
 file into something its content is not:
 
-* ``drawing``: the picture of a sketch, a PNG the app draws of it. It must be a picture (``media.prepare``) and is drawn
-  anew like any picture, with its view and preview; its kind is ``drawing`` (gallery, lists, export as a picture).
+* ``drawing``: the picture of a sketch, a PNG the app draws of it. It must be a picture (``media.prepare_here``) and
+  is drawn anew like any picture, with its view and preview; its kind is ``drawing`` (gallery, lists, export as a
+  picture).
 * ``drawing-data``: the sketch itself (PencilKit's data), only for the app to draw on. Nothing is read of it; it is
   only ever downloaded, and neither the gallery, the search nor the export know it (kind ``drawingdata``).
 * ``recording``: sound, recognised from its first bytes (M4A/AAC, MP3, WAV, OGG, FLAC, WebM, CAF). Its length comes
@@ -15,7 +16,8 @@ file into something its content is not:
   checked and written anew with only the fields the format has.
 
 The note's document names them by id (``drawing``: ``id``, ``data``; ``recording``: ``id``, ``transcript``;
-``notedoc/schema.py``), so rights, history, cleanup and storage are those of every attachment.
+``notedoc/schema.py``), so rights, history, cleanup and storage are those of every attachment. All of it is read
+in a worker with limits of memory and time (``media.prepare``, ``media_worker``).
 
 The words of a transcript are found by the search (``search.register_text_source``: a hit names the recording) and go
 into an export as a text file beside the sound (``export.ATTACHMENT_SOURCES``).
@@ -247,7 +249,7 @@ def prepare(path: Path, role: str) -> media.Prepared:
     if kind is None:
         raise WrongKind("unknown role")
     if kind == DRAWING:
-        prepared = media.prepare(path)
+        prepared = media.prepare_here(path)
         if prepared.kind != media.IMAGE:
             raise WrongKind("a sketch is a picture")
         prepared.kind = DRAWING

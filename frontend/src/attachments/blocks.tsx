@@ -346,6 +346,11 @@ function FileCard({ info, actions }: { info: AttachmentInfo; actions: BlockActio
             {t('attachments.download')}
           </button>
         </span>
+        {info.preview_failed && (
+          <span className="text-[12.5px] text-mist-500" data-testid="attachment-no-preview">
+            {t('attachments.noPreview')}
+          </span>
+        )}
       </span>
       <Remove onRemove={actions.editable ? actions.onRemove : undefined} />
     </div>

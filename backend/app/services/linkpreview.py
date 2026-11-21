@@ -221,9 +221,25 @@ def read_page(text: str) -> dict[str, str | None]:
     }
 
 
+#: Seconds the worker may take to draw a page's picture.
+PICTURE_SECONDS = 15
+
+
 def _picture(data: bytes) -> bytes | None:
+    """The page's picture drawn anew, in a worker with limits (``media_worker``); ``None`` without one."""
+    from . import media_worker
+
     if avatars.sniff(data[:64]) not in PICTURE_KINDS:
         return None
+    try:
+        return media_worker.run("app.services.linkpreview:draw_picture", data, seconds=PICTURE_SECONDS)
+    except media_worker.MediaFailed as exc:
+        logger.info("The picture of a link card was not drawn reason=%s", exc.reason)
+        return None
+
+
+def draw_picture(data: bytes) -> bytes | None:
+    """In the worker: the picture as a WebP of at most ``PICTURE_EDGE`` pixels, from its pixels alone."""
     try:
         from PIL import Image
 

@@ -193,6 +193,7 @@
     "openPdf": "„{{name}}“ zum Blättern öffnen",
     "play": "„{{name}}“ abspielen",
     "cannotPlay": "Spielt hier nicht ab",
+    "noPreview": "Ohne Vorschau: zu aufwendig zum Anzeigen",
     "openLink": "„{{title}}“ öffnen",
     "plainLink": "Als Link lassen",
     "gallery": {

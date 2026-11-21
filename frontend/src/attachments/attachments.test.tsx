@@ -488,6 +488,19 @@ describe('NOTES-10 how attachments stand in the note', () => {
     expect(clicked).toEqual([`/api/attachments/${zip.id}/file?download=1`])
   })
 
+  it('NOTES-10 AC-3 a file the server gave up reading (a PDF bomb) is a file to download that says it has no preview', async () => {
+    const bomb = info('Bom1aaaaaaaaaaaaaaaaaa', 'file', 'plan.pdf', { size: 633, preview_failed: true })
+    const plain = info('Zip2aaaaaaaaaaaaaaaaaa', 'file', 'Grundriss.zip', { size: 798_720 })
+    const { box } = await noteWith([bomb, plain], [
+      { type: 'attachment', attrs: { id: bomb.id, name: bomb.name } },
+      { type: 'attachment', attrs: { id: plain.id, name: plain.name } },
+    ])
+    const [first, second] = [...box.querySelectorAll('[data-testid="attachment-file"]')]
+    expect(first.querySelector('[data-testid="attachment-no-preview"]')!.textContent).toBe('No preview: too demanding to show')
+    expect(first.querySelector('[data-testid="attachment-download"]')).not.toBeNull()
+    expect(second.querySelector('[data-testid="attachment-no-preview"]')).toBeNull()
+  })
+
   it('NOTES-10 AC-8 a video plays in the note, with its still and length', async () => {
     const video = info('Vid1aaaaaaaaaaaaaaaaaa', 'video', 'Rundgang Wohnzimmer.mov', { mime: 'video/mp4', thumb: true, inline: true, duration_ms: 42_000, size: 50_331_648 })
     const { box } = await noteWith([video], [{ type: 'attachment', attrs: { id: video.id, name: video.name } }])
