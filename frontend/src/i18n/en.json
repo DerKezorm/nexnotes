@@ -529,7 +529,10 @@
     "export_expired": "The export was ready for 24 hours and is gone now. Start it again.",
     "export_not_ready": "The export is not ready yet.",
     "export_not_failed": "Only an export that broke off can be started again.",
-    "typeset_failed": "The PDF could not be made."
+    "typeset_failed": "The PDF could not be made.",
+    "export_pdf_busy": "A PDF is being made already. Try again in a few seconds.",
+    "export_waiting": "Another export of yours is waiting already. Start the next one once it runs.",
+    "export_no_room": "The server does not have enough room for this export right now."
   },
   "folders": {
     "section": "Folders",

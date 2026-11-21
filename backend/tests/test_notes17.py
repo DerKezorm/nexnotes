@@ -68,6 +68,10 @@ def quiet(monkeypatch: pytest.MonkeyPatch) -> None:
     # The jobs run when the test says so (``run_pending``), not in a thread of their own.
     monkeypatch.setattr(export, "AUTO", False)
     monkeypatch.setattr(notes, "LEAVE_GRACE", 0.05)
+    # A disk of 4 GB: the reserve is its minimum, whatever the disk of the machine running the tests.
+    monkeypatch.setattr(export, "total_bytes", lambda: 4 * 1024**3)
+    # Every test with places of its own for PDFs.
+    monkeypatch.setattr(export_pdf, "GATE", export_pdf.Gate(export_pdf.RUNNING, export_pdf.WAITING))
 
 
 @pytest.fixture
@@ -530,9 +534,7 @@ def test_notes17_ac8_the_zip_stays_24_hours_then_goes_and_counts_nowhere(client,
         row.expires_at = utcnow() - timedelta(seconds=1)
         row.created_at = utcnow() - timedelta(hours=25)
         db.commit()
-    assert client.get(f"/api/export/jobs/{job['id']}/download").status_code == 410
-    assert client.get(f"/api/export/jobs/{job['id']}/download").json()["detail"]["code"] == "export_expired"
-    # The cleaning round of the frame takes it away.
+    # The cleaning round of the frame takes it away (a download asked for meanwhile does too, see below).
     export.register()
     assert any(name == "exports" for name, _job in cleanup._jobs)
     cleanup.run_once()
@@ -584,12 +586,14 @@ def test_notes17_ec1_a_locked_note_is_there_with_title_and_hint_only(client, ope
 def test_notes17_ec2_a_second_export_of_the_same_member_waits_for_the_first(client, operator):
     new_note(client, "a", "b")
     first = client.post("/api/export/jobs", json={}).json()
-    second = client.post("/api/export/jobs", json={}).json()
     anna = make_account("anna")
     with new_client(anna) as theirs:
         new_note(theirs, "c", "d")
         other = theirs.post("/api/export/jobs", json={}).json()
+    # Running, the member's first lets a second wait behind it.
     assert export._claim() == first["id"]
+    second = client.post("/api/export/jobs", json={}).json()
+    assert second["status"] == QUEUED and second["id"] != first["id"]
     # The member's second waits while the first runs; another member's goes ahead.
     assert export._claim() == other["id"]
     assert export._claim() is None
@@ -745,8 +749,9 @@ def test_notes17_ec6_a_restart_breaks_the_running_export_off_and_offers_to_start
 
 def test_notes17_ec7_too_little_room_ends_the_export_before_it_starts(client, operator, monkeypatch):
     new_note(client, "a", "b" * 1000)
-    monkeypatch.setattr(export, "free_bytes", lambda: export.RESERVE + 100)
     job = client.post("/api/export/jobs", json={}).json()
+    # The disk filled while the export waited for its turn.
+    monkeypatch.setattr(export, "free_bytes", lambda: export.RESERVE + 100)
     export.run_pending()
     done = client.get("/api/export/jobs").json()[0]
     assert done["status"] == FAILED and done["problem"] == "disk_full"
@@ -997,3 +1002,305 @@ def test_notes17_ec1_a_locked_note_takes_none_of_its_real_attachments_along(clie
     answer = client.get(f"/api/export/notes/{note_id}/markdown")
     assert answer.headers["content-type"].startswith("text/markdown")
     assert "pass.png" not in answer.text and "Geheimnis" not in answer.text
+
+
+# --- Findings of the review (21.11.2026) ---------------------------------------------------------------------------------
+# 1: waiting PDFs held the threads of every request; 2: any number of jobs per account; 3: ZIPs readable for all;
+# 4: Typst fetched packages from the net; 5: ZIPs past their time lay up to 30 hours; 6: files of broken-off downloads.
+
+
+def _session_of(account: Account) -> str:
+    from app.security import start_session
+
+    with SessionLocal() as db:
+        return start_session(db, db.get(Account, account.id), "127.0.0.1", "tests")
+
+
+@pytest.mark.timing
+def test_notes17_ec2_many_pdfs_at_once_keep_the_server_answering(client, operator, monkeypatch):
+    """90 PDF requests at once (before: /api/health answered after 41 s). A PDF waits for its place outside the
+    threads every request needs, one per account, in a bounded line; the others hear 429 with Retry-After at once."""
+    import threading
+    import time
+    from concurrent.futures import ThreadPoolExecutor
+
+    from app.security import SESSION_COOKIE
+
+    lock = threading.Lock()
+    at_once = {"now": 0, "most": 0}
+
+    def slow(_main, **_kwargs):
+        with lock:
+            at_once["now"] += 1
+            at_once["most"] = max(at_once["most"], at_once["now"])
+        time.sleep(0.4)
+        with lock:
+            at_once["now"] -= 1
+        return b"%PDF-1.4 stand-in"
+
+    monkeypatch.setattr(export_pdf, "compile_here", slow)
+    people = []
+    for number in range(12):
+        person = make_account(f"pdf{number}")
+        with new_client(person) as theirs:
+            people.append((_session_of(person), new_note(theirs, f"Notiz {number}", "Text")))
+    with new_client() as shared:
+        def fetch(index: int) -> tuple[int, str | None]:
+            token, note_id = people[index % len(people)]
+            answer = shared.get(f"/api/export/notes/{note_id}/pdf", headers={"cookie": f"{SESSION_COOKIE}={token}"})
+            return answer.status_code, answer.headers.get("retry-after")
+
+        with ThreadPoolExecutor(90) as pool:
+            futures = [pool.submit(fetch, index) for index in range(90)]
+            time.sleep(0.3)
+            slowest = 0.0
+            for _ in range(5):
+                started = time.perf_counter()
+                assert shared.get("/api/health").status_code == 200
+                slowest = max(slowest, time.perf_counter() - started)
+                time.sleep(0.1)
+            results = [future.result(timeout=120) for future in futures]
+    print(f"/api/health beside 90 PDF requests: slowest {slowest * 1000:.0f} ms")
+    assert slowest < 1.0, slowest
+    made = [result for result in results if result[0] == 200]
+    refused = [result for result in results if result[0] == 429]
+    assert made and refused and len(made) + len(refused) == 90
+    assert {retry for _status, retry in refused} == {str(export_pdf.RETRY_AFTER_SECONDS)}
+    assert at_once["most"] <= export_pdf.RUNNING
+
+
+def test_notes17_ec2_one_pdf_per_account_at_a_time_a_second_hears_429(client, operator):
+    note_id = new_note(client, "Eins", "x")
+    # A PDF of this account is being made.
+    export_pdf.GATE.admit(operator.id)
+    answer = client.get(f"/api/export/notes/{note_id}/pdf")
+    assert answer.status_code == 429 and answer.headers["retry-after"] == str(export_pdf.RETRY_AFTER_SECONDS)
+    assert answer.json()["detail"]["code"] == "export_pdf_busy"
+    anna = make_account("anna")
+    with new_client(anna) as theirs:
+        theirs_id = new_note(theirs, "Zwei", "y")
+        assert theirs.get(f"/api/export/notes/{theirs_id}/pdf").status_code == 200
+    export_pdf.GATE.leave(operator.id)
+    assert client.get(f"/api/export/notes/{note_id}/pdf").status_code == 200
+
+
+def test_notes17_ec2_the_line_of_pdfs_is_bounded(client, operator):
+    note_id = new_note(client, "Eins", "x")
+    for key in range(export_pdf.RUNNING + export_pdf.WAITING):
+        export_pdf.GATE.admit(f"somebody-{key}")
+    answer = client.get(f"/api/export/notes/{note_id}/pdf")
+    assert answer.status_code == 429 and answer.json()["detail"]["code"] == "export_pdf_busy"
+    export_pdf.GATE.leave("somebody-0")
+    assert client.get(f"/api/export/notes/{note_id}/pdf").status_code == 200
+
+
+def test_notes17_ec2_a_pdf_in_line_waits_for_its_place_and_gives_up_in_time(client, operator, monkeypatch):
+    import threading
+
+    note_id = new_note(client, "Eins", "x")
+    gate = export_pdf.GATE
+    # Both places are taken by PDFs of others.
+    assert gate.take() and gate.take() and not gate.take()
+    monkeypatch.setattr(export_pdf, "WAIT_SECONDS", 0.3)
+    assert client.get(f"/api/export/notes/{note_id}/pdf").status_code == 429
+    # A place comes free while it waits: it gets that one.
+    monkeypatch.setattr(export_pdf, "WAIT_SECONDS", 20.0)
+    threading.Timer(0.3, gate.give_back).start()
+    assert client.get(f"/api/export/notes/{note_id}/pdf").status_code == 200
+    gate.give_back()
+    # Nothing stays in line or taken.
+    assert gate.take() and gate.take()
+    gate.give_back()
+    gate.give_back()
+    gate.admit(operator.id)
+
+
+def test_notes17_ec2_an_account_has_one_export_waiting_and_one_running_at_most(client, operator):
+    folder = make_folder(client, "Akten")
+    new_note(client, "a", "b", folder)
+    first = client.post("/api/export/jobs", json={})
+    assert first.status_code == 202
+    # The same once more: the one that waits, not a second ZIP.
+    assert client.post("/api/export/jobs", json={}).json()["id"] == first.json()["id"]
+    refused = client.post("/api/export/jobs", json={"folder_id": folder})
+    assert refused.status_code == 409 and refused.json()["detail"]["code"] == "export_waiting"
+    # The first runs: one more may wait.
+    assert export._claim() == first.json()["id"]
+    assert client.post("/api/export/jobs", json={"folder_id": folder}).status_code == 202
+    assert client.post("/api/export/jobs", json={}).status_code == 409
+    for _ in range(20):
+        client.post("/api/export/jobs", json={"folder_id": folder})
+    with SessionLocal() as db:
+        assert len(list(db.scalars(select(ExportJob)))) == 2
+
+
+def test_notes17_ac8_a_new_zip_takes_the_place_of_the_older_one_of_the_same(client, operator):
+    folder = make_folder(client, "Akten")
+    new_note(client, "a", "b", folder)
+    ids = {}
+    for name, body in (("all", {}), ("folder", {"folder_id": folder}), ("all again", {})):
+        ids[name] = client.post("/api/export/jobs", json=body).json()["id"]
+        export.run_pending()
+    assert client.get(f"/api/export/jobs/{ids['all']}/download").status_code == 404
+    assert not (export.export_dir() / f"{ids['all']}.zip").exists()
+    assert client.get(f"/api/export/jobs/{ids['folder']}/download").status_code == 200
+    assert client.get(f"/api/export/jobs/{ids['all again']}/download").status_code == 200
+    assert {job["id"] for job in client.get("/api/export/jobs").json()} == {ids["folder"], ids["all again"]}
+
+
+def test_notes17_ec7_the_reserve_grows_with_the_disk_and_counts_the_other_exports(client, operator, monkeypatch):
+    gib = 1024**3
+    monkeypatch.setattr(export, "total_bytes", lambda: 1024**3)
+    assert export.reserve() == export.RESERVE
+    monkeypatch.setattr(export, "total_bytes", lambda: 1000 * gib)
+    assert export.reserve() == 50 * gib
+    new_note(client, "a", "b" * 1000)
+    # Far more than the 256 MB, but not the 5 % of a large disk: refused before it starts.
+    monkeypatch.setattr(export, "free_bytes", lambda: 40 * gib)
+    refused = client.post("/api/export/jobs", json={})
+    assert refused.status_code == 507 and refused.json()["detail"]["code"] == "export_no_room"
+    monkeypatch.setattr(export, "free_bytes", lambda: 60 * gib)
+    mine = client.post("/api/export/jobs", json={}).json()
+    with SessionLocal() as db:
+        db.get(ExportJob, mine["id"]).estimate = 9 * gib
+        db.commit()
+    anna = make_account("anna")
+    with new_client(anna) as theirs:
+        new_note(theirs, "c", "d")
+        # Beside the 9 GB the other export will write, there is no room for a second.
+        monkeypatch.setattr(export, "free_bytes", lambda: 55 * gib)
+        assert theirs.post("/api/export/jobs", json={}).status_code == 507
+        monkeypatch.setattr(export, "free_bytes", lambda: 60 * gib)
+        theirs_job = theirs.post("/api/export/jobs", json={}).json()
+        # The disk got fuller meanwhile: when it runs, the other export's 9 GB still count.
+        monkeypatch.setattr(export, "free_bytes", lambda: 55 * gib)
+        with SessionLocal() as db:
+            db.get(ExportJob, theirs_job["id"]).status = RUNNING
+            db.commit()
+        export.run_job(theirs_job["id"])
+        done = next(job for job in theirs.get("/api/export/jobs").json() if job["id"] == theirs_job["id"])
+    assert done["status"] == FAILED and done["problem"] == "disk_full"
+
+
+def test_notes17_zips_and_files_of_an_export_are_the_owners_alone(client, operator, monkeypatch, attachments):
+    import os
+    from pathlib import Path
+
+    made: list[str] = []
+    tightened: list[str] = []
+    real_new, real_tighten = export.private.new_file, export.private.tighten
+
+    def new_file(path):
+        made.append(Path(path).name)
+        real_new(path)
+
+    def tighten(path):
+        tightened.append(Path(path).name)
+        real_tighten(path)
+
+    monkeypatch.setattr(export.private, "new_file", new_file)
+    monkeypatch.setattr(export.private, "tighten", tighten)
+    note_id = new_note(client, "Geheim", "Klartext")
+    attachments[note_id] = [("bild.png", "image", png())]
+    job = client.post("/api/export/jobs", json={}).json()
+    export.run_pending()
+    assert f"{job['id']}.part" in made and "exports" in tightened
+    assert client.get(f"/api/export/notes/{note_id}/markdown").status_code == 200
+    assert any(name.startswith("note-") and name.endswith(".tmp") for name in tightened)
+    if os.name == "posix":
+        assert (export.export_dir() / f"{job['id']}.zip").stat().st_mode & 0o777 == 0o600
+        assert export.export_dir().stat().st_mode & 0o777 == 0o700
+
+
+def test_notes17_ac2_typst_fetches_no_package_from_the_net(tmp_path, monkeypatch):
+    """An import of a package fails: everything Typst would fetch goes to a proxy where nothing answers. Here that
+    proxy listens and writes down what came, to see that every request went there and none past it."""
+    import os
+    import socket
+    import threading
+
+    from app.services import typeset_worker
+
+    assert typeset_worker.OFFLINE_PROXY == "http://127.0.0.1:9"
+    seen: list[str] = []
+    server = socket.socket()
+    server.bind(("127.0.0.1", 0))
+    server.listen()
+
+    def answer_nothing() -> None:
+        while True:
+            try:
+                connection, _address = server.accept()
+            except OSError:
+                return
+            with connection:
+                connection.settimeout(5)
+                try:
+                    seen.append(connection.recv(1024).decode("latin-1"))
+                except OSError:
+                    pass
+
+    threading.Thread(target=answer_nothing, daemon=True).start()
+    monkeypatch.setattr(typeset_worker, "OFFLINE_PROXY", f"http://127.0.0.1:{server.getsockname()[1]}")
+    before = {name: os.environ.get(name) for name in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY")}
+    main = tmp_path / "main.typ"
+    main.write_text('#import "@preview/example:0.1.0": *\nHallo\n', "utf-8")
+    try:
+        with pytest.raises(typeset_worker.TypesetFailed) as failed:
+            typeset_worker.compile_apart(main, fonts=export_pdf.FONTS, packages=tmp_path / "packages", fmt="pdf",
+                                         ppi=72.0, timeout=60)
+    finally:
+        server.close()
+    assert "download" in failed.value.detail
+    assert seen and all(request.startswith("CONNECT packages.typst.org") for request in seen), seen
+    # The server's own process keeps its settings; only the typesetting process is cut off.
+    assert {name: os.environ.get(name) for name in before} == before
+
+
+def test_notes17_ac8_fetching_a_zip_past_its_time_removes_it_at_once(client, operator):
+    new_note(client, "Kurz", "x")
+    job = client.post("/api/export/jobs", json={}).json()
+    export.run_pending()
+    file = export.export_dir() / f"{job['id']}.zip"
+    assert file.is_file()
+    with SessionLocal() as db:
+        db.get(ExportJob, job["id"]).expires_at = utcnow() - timedelta(seconds=1)
+        db.commit()
+    gone = client.get(f"/api/export/jobs/{job['id']}/download")
+    assert gone.status_code == 410 and gone.json()["detail"]["code"] == "export_expired"
+    assert not file.exists()
+
+
+def test_notes17_ac8_the_cleaning_round_looks_for_old_zips_every_hour(monkeypatch):
+    monkeypatch.setattr(cleanup, "_jobs", [])
+    monkeypatch.setattr(cleanup, "_every", {})
+    monkeypatch.setattr(cleanup, "_last", {})
+    monkeypatch.setattr(cleanup, "_purge_accounts", lambda: None)
+    runs: list[str] = []
+    monkeypatch.setattr(export, "purge_expired", lambda: runs.append("exports"))
+    export.register()
+    cleanup.register("history", lambda: runs.append("history"))
+    cleanup.run_due(now=1000.0)
+    assert runs == ["exports", "history"]
+    runs.clear()
+    cleanup.run_due(now=1000.0 + 3600)
+    assert runs == ["exports"]
+    runs.clear()
+    cleanup.run_due(now=1000.0 + 6 * 3600)
+    assert runs == ["exports", "history"]
+    assert cleanup.TICK_SECONDS <= export.PURGE_EVERY_SECONDS <= 3600
+
+
+def test_notes17_ac1_a_broken_off_download_leaves_its_file_an_hour_at_most(client, operator):
+    import os
+    import time
+
+    old = export.export_dir() / "note-broken.tmp"
+    old.write_bytes(b"PK")
+    hours_ago = time.time() - 2 * 3600
+    os.utime(old, (hours_ago, hours_ago))
+    fresh = export.export_dir() / "note-sending.tmp"
+    fresh.write_bytes(b"PK")
+    export.purge_expired()
+    assert not old.exists() and fresh.exists()
+    fresh.unlink()
