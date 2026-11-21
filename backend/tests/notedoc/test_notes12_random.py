@@ -22,7 +22,7 @@ from notedoc_sim import World
 from pycrdt import XmlElement, XmlFragment, XmlText
 
 from app.notedoc import doc as notedoc
-from app.notedoc import edit
+from app.notedoc import edit, yupdate
 from app.notedoc.markdown import to_plain
 
 TOKEN = re.compile(r"\[[abc]\d+\]")
@@ -282,8 +282,9 @@ async def _run(seed: int, steps: int) -> dict[str, int]:
     for label in ticked - deleted:
         if label in items:
             assert items[label], f"seed {seed}: {label} was ticked and is not"
-    # The document stays one the browser's schema takes.
+    # The document stays one the browser's schema takes, and its state reads in Yjs as it does in pycrdt.
     assert notedoc.clean_doc(expected) == expected
+    assert yupdate.well_formed(room.doc.get_update()), f"seed {seed}: the state does not encode cleanly"
     stats["tokens"] = sum(len(b.typed) for b in browsers)
     stats["rescued"] = sum(1 for _ in TOKEN.finditer(plain))
     await world.rooms.shutdown()

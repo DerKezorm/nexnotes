@@ -3,8 +3,9 @@
 //   node check-update.mjs <update.bin> [<more.bin> ...]
 //
 // The updates are applied in order to one document. Prints {"title": ..., "doc": <ProseMirror JSON>, "format": ...}
-// and exits with 0; exits with 1 when the body is not a valid document of the schema (or y-prosemirror had to drop a
-// node it could not read, which loses its content in the browser).
+// and exits with 0; exits with 1 when the body is not a valid document of the schema, when y-prosemirror had to drop
+// a node it could not read (its content would be lost in the browser), or when Yjs keeps parts of the updates waiting
+// (pending) because they do not fit together.
 
 import { readFileSync } from 'node:fs'
 import { Node } from '@tiptap/pm/model'
@@ -41,6 +42,9 @@ try {
   for (const binding of [yProsemirror, yTiptap]) {
     const ydoc = new Y.Doc()
     for (const file of files) Y.applyUpdate(ydoc, readFileSync(file))
+    if (ydoc.store.pendingStructs || ydoc.store.pendingDs) {
+      throw new Error('parts of the update wait for something that is not there (pending)')
+    }
     const body = ydoc.getXmlFragment('body')
     const elements = countElements(body)
     const node = binding.yXmlFragmentToProseMirrorRootNode(body, schema)

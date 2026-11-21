@@ -237,6 +237,12 @@ def decode_delete_set(data: bytes) -> IdRanges:
     return read_id_ranges(_Reader(data))
 
 
+def decode_state_vector(data: bytes) -> dict[int, int]:
+    """A state vector: the next clock of every client the document knows."""
+    reader = _Reader(data)
+    return {reader.uint(): reader.uint() for _ in range(reader.uint())}
+
+
 @dataclass
 class Update:
     structs: list[Struct]
@@ -260,6 +266,32 @@ def decode_update(data: bytes) -> Update:
             clock += struct.length
     deleted = read_id_ranges(reader)
     return Update(structs, deleted)
+
+
+def well_formed(data: bytes) -> bool:
+    """True when a whole document as one update reads in Yjs as it does in pycrdt: every client's structs follow each
+    other without a gap, a skip or an overlap.
+
+    pycrdt 0.14 (yrs 0.27 and later) can write a state with overlapping blocks after text was typed into a paragraph
+    deleted at the same time: a skip of a negative length, which Yjs in the browser reads as a jump far ahead and
+    keeps everything after it waiting. The room checks every state it folds with this."""
+    try:
+        reader = _Reader(data)
+        for _ in range(reader.uint()):
+            count = reader.uint()
+            reader.uint()
+            clock = reader.uint()
+            if clock != 0:
+                return False
+            for _ in range(count):
+                struct = _read_struct(reader, 0, clock)
+                if struct.kind == SKIP or struct.length <= 0:
+                    return False
+                clock += struct.length
+        read_id_ranges(reader)
+    except DecodeError:
+        return False
+    return reader.pos == len(reader.data)
 
 
 def _read_id(reader: _Reader) -> Id:

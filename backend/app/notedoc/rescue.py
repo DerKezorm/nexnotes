@@ -21,7 +21,7 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
-from pycrdt import Doc, XmlElement, XmlFragment, XmlText
+from pycrdt import Doc, Text, XmlElement, XmlFragment, XmlText
 
 from . import schema as s
 from .doc import body_of
@@ -33,7 +33,9 @@ from .yupdate import (
     StructIndex,
     Update,
     decode_delete_set,
+    decode_state_vector,
     decode_update,
+    utf16_len,
     utf16_slice,
 )
 
@@ -54,15 +56,39 @@ class Applied:
     structural: bool = False
     #: The top-level blocks inside which an element lost a child (where ``doc.repair`` has to look).
     touched: list[int] = field(default_factory=list)
-    #: The update decoded, when it was needed.
-    decoded: Update | None = None
+    #: The state vector before the update: which items the document had already.
+    known: dict[int, int] = field(default_factory=dict)
 
 
-def _state_vector(data: bytes) -> dict[int, int]:
-    from .yupdate import _Reader
+def _text_length(value: Any) -> int:
+    """UTF-16 length of the text in something inserted (a string, or an element with everything inside it)."""
+    if isinstance(value, str):
+        return utf16_len(value)
+    if isinstance(value, list):
+        return sum(_text_length(item) for item in value)
+    if isinstance(value, XmlText):
+        return sum(utf16_len(chunk) for chunk, _ in value.diff() if isinstance(chunk, str))
+    if isinstance(value, (XmlElement, XmlFragment)):
+        return sum(_text_length(child) for child in value.children)
+    return 0
 
-    reader = _Reader(data)
-    return {reader.uint(): reader.uint() for _ in range(reader.uint())}
+
+def _new_text(decoded: Update, state_before: dict[int, int]) -> list[tuple[int, int, int]]:
+    """The text an update brings that the document did not have: (client, start, end) in clocks, minus what the update
+    deletes itself."""
+    out = []
+    for struct in decoded.structs:
+        if struct.kind != STRING:
+            continue
+        start = max(struct.clock, state_before.get(struct.client, 0))
+        end = struct.clock + struct.length
+        if start >= end:
+            continue
+        kept = IdRanges()
+        kept.add(struct.client, start, end - start)
+        for client, spans in kept.minus(decoded.deleted).ranges.items():
+            out.extend((client, low, high) for low, high in spans)
+    return out
 
 
 def apply(doc: Doc, update: bytes) -> Applied:
@@ -70,16 +96,26 @@ def apply(doc: Doc, update: bytes) -> Applied:
     seen: dict[str, Any] = {}
     positions: list[int] = []
     structural: list[int] = []
+    shown = [0]
 
     def on_transaction(event: Any) -> None:
         seen["before"] = event.before_state
         seen["after"] = event.after_state
         seen["deleted"] = event.delete_set
 
+    def count(delta: Any) -> None:
+        for step in delta or []:
+            if isinstance(step, dict) and "insert" in step:
+                shown[0] += _text_length(step["insert"])
+
+    def on_title(event: Any) -> None:
+        count(event.delta)
+
     def on_body(events: Any) -> None:
         for event in events:
             path = list(event.path or [])
             delta = event.delta or []
+            count(delta)
             if not any("delete" in step for step in delta if isinstance(step, dict)):
                 continue
             if not isinstance(event.target, XmlText):
@@ -98,25 +134,45 @@ def apply(doc: Doc, update: bytes) -> Applied:
                     break
 
     body = body_of(doc)
+    title = doc.get(s.TITLE, type=Text)
     before_state = doc.get_state()
     subscription = doc.observe(on_transaction)
     deep = body.observe_deep(on_body)
+    titled = title.observe(on_title)
     try:
         doc.apply_update(update)
     finally:
         doc.unobserve(subscription)
         body.unobserve(deep)
+        title.unobserve(titled)
     deleted = decode_delete_set(seen.get("deleted", b""))
     changed = bool(deleted) or seen.get("before", before_state) != seen.get("after", before_state)
+    # Text typed into a paragraph that is gone already never shows. Newer pycrdt names it in the transaction's delete
+    # set, older ones do not: when less text showed than the update brought, the document's delete set tells which.
+    known = decode_state_vector(before_state)
+    try:
+        new = _new_text(decode_update(update), known)
+    except DecodeError:
+        new = []
+    if new and shown[0] < sum(end - start for _, start, end in new):
+        everything = decode_update(doc.get_update(doc.get_state())).deleted
+        late = IdRanges()
+        for client, start, end in new:
+            for low, high in everything.overlap(client, start, end):
+                late.add(client, low, high - low)
+        if late:
+            deleted = _union(deleted, late)
+            changed = True
     return Applied(changed=changed, deleted=deleted, at=min(positions) if positions else None,
-                   structural=bool(structural), touched=sorted({index for index in structural if index >= 0}))
+                   structural=bool(structural), touched=sorted({index for index in structural if index >= 0}),
+                   known=known)
 
 
 def redundant(update: bytes, state_before: bytes) -> bool:
     """True when the update holds nothing the document did not have (a browser re-sending on reconnect). An update
     that only waits for a missing part (pending) is not redundant: it must be stored."""
     try:
-        known = _state_vector(state_before)
+        known = decode_state_vector(state_before)
         decoded = decode_update(update)
     except DecodeError:
         return False
@@ -154,7 +210,7 @@ class Rescuer:
         if not applied.deleted:
             return 0
         try:
-            decoded = applied.decoded or decode_update(update)
+            decoded = decode_update(update)
         except DecodeError:
             logger.warning("An update could not be read for concurrent deletions")
             return 0
@@ -167,29 +223,31 @@ class Rescuer:
         if not collateral:
             self.deletions.append(record)
             return 0
-        # The update's own new items that went because their paragraph was gone (typed late): their text is in the
-        # update. Items of others that this update took with a paragraph: their text is in the state before.
+        # Items new with this update that went because their paragraph was gone (typed late): their text is in the
+        # update. Items the document had, taken with a paragraph this update deleted: their text is in the state
+        # before (an item deleted before has no text there any more, so it never comes back twice).
         index = StructIndex(decoded.structs)
         before: StructIndex | None = None
-        pieces: list[tuple[Struct, str]] = []
+        late: list[tuple[Struct, str]] = []
+        taken: list[tuple[Struct, str]] = []
         for client, spans in collateral.ranges.items():
+            known = applied.known.get(client, 0)
             for start, end in spans:
-                found = _strings_in(index, client, start, end)
-                if not found and before_whole:
+                if end > known:
+                    late.extend(_strings_in(index, client, max(start, known), end))
+                if start < known and before_whole:
                     if before is None:
                         try:
                             before = decode_update(before_whole).index()
                         except DecodeError:
                             logger.warning("The document could not be read for concurrent deletions")
                             before = StructIndex([])
-                    found = _strings_in(before, client, start, end)
-                pieces.extend(found)
-        if not pieces:
+                    taken.extend(_strings_in(before, client, start, min(end, known)))
+        if not late and not taken:
             self.deletions.append(record)
             return 0
-        pieces.sort(key=lambda piece: (piece[0].client, piece[0].clock))
-        late = [piece for piece in pieces if index.find((piece[0].client, piece[0].clock)) is not None]
-        taken = [piece for piece in pieces if index.find((piece[0].client, piece[0].clock)) is None]
+        late.sort(key=lambda piece: (piece[0].client, piece[0].clock))
+        taken.sort(key=lambda piece: (piece[0].client, piece[0].clock))
         restored = 0
         # A deletion of the update itself is remembered, so text typed late into what it deleted finds its place.
         if taken or applied.deleted.minus(collateral):

@@ -81,6 +81,7 @@ from .doc import change as change_doc
 from .doc import load, merged, recording, repair, title_of
 from .markdown import to_plain
 from .rescue import Rescuer, apply, redundant
+from .yupdate import well_formed
 
 logger = logging.getLogger("nexnotes.live")
 
@@ -263,9 +264,7 @@ class Rooms:
                     result, update = change_doc(doc, edit)
                     if update is not None:
                         waiting = await self.store.save_update(note_id, update, account_id)
-                        if waiting >= self.fold_after:
-                            await self.store.fold(note_id, _folded(doc))
-                        else:
+                        if waiting < self.fold_after or not await self._fold_doc(note_id, doc):
                             await self.store.summary(note_id, title_of(doc), to_plain(doc))
                     return result
         async with room.lock:
@@ -353,10 +352,18 @@ class Rooms:
         if room.summary_task is not None:
             room.summary_task.cancel()
             room.summary_task = None
-        if room.waiting or room.dirty:
-            await self.store.fold(room.note_id, _folded(room.doc))
+        if (room.waiting or room.dirty) and await self._fold_doc(room.note_id, room.doc):
             room.waiting = 0
             room.dirty = False
+
+    async def _fold_doc(self, note_id: str, doc: Doc) -> bool:
+        folded = _folded(doc)
+        if not well_formed(folded.state):
+            # Every update stays stored as it came; the browser reads those. Folding waits for a fixed pycrdt.
+            logger.error("The document of a note does not encode cleanly; not folded note=%s", note_id)
+            return False
+        await self.store.fold(note_id, folded)
+        return True
 
     async def _drop(self, room: Room, peer: Peer, code: int) -> None:
         peer.gone = True

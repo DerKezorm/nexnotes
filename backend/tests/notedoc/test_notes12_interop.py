@@ -18,13 +18,16 @@ import pytest
 from test_notes12_format import EVERYTHING
 
 from app.notedoc import doc as notedoc
-from app.notedoc import edit
+from app.notedoc import edit, yupdate
 from app.notedoc import schema as s
 from app.notedoc.markdown import from_markdown, to_markdown
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
 INTEROP = Path(__file__).resolve().parents[3] / "interop"
 CASES = sorted(path.stem for path in FIXTURES.glob("*.bin"))
+#: A note from the random test as stored: the first state, then 22 updates as three browsers sent them (one of them
+#: reconnecting, so an update waits for an earlier one for a moment) and the server's own changes.
+CONCURRENT = sorted((FIXTURES / "concurrent").glob("*.bin"), key=lambda path: (path.name != "start.bin", path.name))
 
 
 def _fixture(name: str) -> tuple[bytes, dict]:
@@ -157,3 +160,27 @@ def test_notes12_interop_node_check_refuses_a_document_the_browser_cannot_read(t
     # The room mends such a shape before anyone reads it.
     notedoc.repair(doc)
     assert _browser_reads(tmp_path, doc.get_update())["doc"] == notedoc.to_json(doc)
+
+
+def test_notes12_state_after_concurrent_typing_encodes_cleanly():
+    # pycrdt 0.14 (yrs 0.27 and later) writes this note, after the last update, as a state with overlapping blocks (a
+    # skip of minus four) that Yjs in the browser keeps waiting; 0.14.0 even panics on it. This is why pycrdt stays
+    # at 0.13 until that is fixed.
+    doc = notedoc.load(CONCURRENT[0].read_bytes(), [path.read_bytes() for path in CONCURRENT[1:]])
+    assert yupdate.well_formed(doc.get_update())
+
+
+def test_notes12_well_formed_refuses_a_negative_skip():
+    doc = notedoc.new_doc("x")
+    assert yupdate.well_formed(doc.get_update())
+    # One client, three structs: GC of 9, a skip of 2**32 - 4 (minus four for yrs), a GC of 4.
+    broken = bytes([1, 3, 7, 0, 0, 9, 10]) + bytes.fromhex("fcffffff0f") + bytes([0, 4, 0])
+    assert not yupdate.well_formed(broken)
+    assert not yupdate.well_formed(b"")
+
+
+@needs_node
+def test_notes12_interop_browser_reads_the_state_after_concurrent_typing_without_waiting_parts(tmp_path):
+    doc = notedoc.load(CONCURRENT[0].read_bytes(), [path.read_bytes() for path in CONCURRENT[1:]])
+    seen = _browser_reads(tmp_path, doc.get_update())
+    assert seen["doc"] == notedoc.to_json(doc)
