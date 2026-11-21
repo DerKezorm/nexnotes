@@ -6,7 +6,7 @@
  * - writing together (`Collaboration` on the `body` of the Yjs document, `CollaborationCaret` for the others' carets);
  *   undo and redo come from the collaboration and touch only one's own changes (NOTES-3 AC-13); setting or taking away
  *   a format (highlighter, bold, a link …) is always one step of its own, however soon after typing;
- * - tables inside a box that scrolls sideways (AC-5);
+ * - tables inside a box that scrolls sideways (AC-5), with columns as wide as one sets them (AC-19);
  * - headings that fold (AC-12), checklists with "x von y" and "Erledigtes nach unten" (AC-4);
  * - pasted HTML without scripts, forms and styles (EC-3); links open with Ctrl or ⌘ in a new tab without access to
  *   nexnotes (EC-8);
@@ -33,6 +33,7 @@ import type {} from '@tiptap/starter-kit'
 import { caretLook, presentAccounts, type PresenceUser } from './presence'
 import type { NoteProvider } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
+import { COLUMN_MIN, columnWidthPlugin } from './table'
 import { noteTags } from './tags'
 
 export { HIGHLIGHT_COLORS }
@@ -390,15 +391,20 @@ function noteEditing(t: T, hooks: EditorHooks): AnyExtension {
       }
     },
     addProseMirrorPlugins() {
-      return [foldingPlugin(t), taskPlugin(t), formatStepsPlugin()]
+      return [foldingPlugin(t), taskPlugin(t), formatStepsPlugin(), columnWidthPlugin()]
     },
   })
 }
 
-/** The schema's extensions, with the table drawn inside a box that scrolls (the schema itself unchanged). */
+/**
+ * The schema's extensions, with the table drawn inside a box that scrolls and columns that one drags wider or
+ * narrower (NOTES-3 AC-19; `colwidth` of the cells, already part of the schema). The schema itself is unchanged.
+ */
 export function schemaExtensions(): AnyExtension[] {
   return noteExtensions().map((extension) =>
-    extension.name === 'table' ? (extension.configure({ ...extension.options, renderWrapper: true }) as AnyExtension) : extension,
+    extension.name === 'table'
+      ? (extension.configure({ ...extension.options, renderWrapper: true, resizable: true, cellMinWidth: COLUMN_MIN, handleWidth: 6, lastColumnResizable: true }) as AnyExtension)
+      : extension,
   )
 }
 

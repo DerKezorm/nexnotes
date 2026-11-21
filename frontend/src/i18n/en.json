@@ -261,6 +261,9 @@
       "rowDown": "Move row down",
       "rowUp": "Move row up",
       "toggleHeaderRow": "Header row",
+      "columnWider": "Wider column",
+      "columnNarrower": "Narrower column",
+      "columnFit": "Fit column to content",
       "appendColumn": "Add a column",
       "appendRow": "Add a row"
     },

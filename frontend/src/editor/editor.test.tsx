@@ -12,7 +12,7 @@ import i18n from '../i18n'
 import { bodyIsEmpty, cleanPastedHtml, collapseKey, editorExtensions, editorProps, foldedRanges, openLink, safeHref, taskCount, toggleDoneToBottom, toggleFold } from './extensions'
 import { presenceUser } from './presence'
 import { NoteProvider } from './provider'
-import { tableActions } from './table'
+import { COLUMN_MIN, TABLE_MENU, WIDTH_STEP, columnWidths, setColumnWidths, tableActions } from './table'
 import { TableControls } from './TableControls'
 import { TitleField } from './TitleField'
 import { Toolbar } from './Toolbar'
@@ -427,6 +427,61 @@ describe('NOTES-3 AC-5 NOTES-12 a table changed by two at once', () => {
     })
     expect(rows).toBe(3)
     expect(anna.getHTML()).toBe(lena.getHTML())
+  })
+})
+
+describe('NOTES-3 AC-19 column widths', () => {
+  it('NOTES-3 AC-19 the layout is fixed: typing never changes a column, text wraps in its cell, the edge has a grip', () => {
+    // The browser test (e2e/table-width.spec.ts) measures; here the rules that make it so.
+    const table = css.match(/\.nn-editor table \{([^}]*)\}/)![1]
+    expect(table).toMatch(/table-layout:\s*fixed;/)
+    expect(table).toMatch(/width:\s*100%;/)
+    const cell = css.match(/\.nn-editor td \{([^}]*)\}/)![1]
+    expect(cell).toMatch(/overflow-wrap:\s*anywhere;/)
+    expect(cell).not.toMatch(/min-width/)
+    expect(css).toContain('.nn-editor .column-resize-handle {')
+    expect(css).toContain('.nn-editor .ProseMirror.resize-cursor { cursor: col-resize; }')
+  })
+
+  it('NOTES-3 AC-19 a width set in one window arrives in the other; wider and narrower from the menu, never under 60 px', () => {
+    const mine = new Y.Doc()
+    const theirs = new Y.Doc()
+    mine.on('update', (update: Uint8Array, origin: unknown) => origin !== 'wire' && Y.applyUpdate(theirs, update, 'wire'))
+    theirs.on('update', (update: Uint8Array, origin: unknown) => origin !== 'wire' && Y.applyUpdate(mine, update, 'wire'))
+    const anna = makeEditor(mine, 1)
+    const lena = makeEditor(theirs, 2)
+    anna.commands.setContent('<table><tr><th><p>Name</p></th><th><p>Qty</p></th></tr><tr><td><p>Apples</p></td><td><p>3</p></td></tr></table>')
+    const widths = (editor: Editor) => {
+      let found: number[] = []
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'table') found = columnWidths(node)
+        return node.type.name !== 'table'
+      })
+      return found
+    }
+    // A new table: no widths, the columns share the text's width.
+    expect(widths(anna)).toEqual([0, 0])
+    expect(TABLE_MENU).toEqual(expect.arrayContaining(['columnWider', 'columnNarrower', 'columnFit']))
+    let tablePos = -1
+    anna.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'table') tablePos = pos
+    })
+    expect(setColumnWidths(anna.view, tablePos, { 0: 240 })).toBe(true)
+    expect(widths(anna)).toEqual([240, 0])
+    expect(widths(lena)).toEqual([240, 0])
+    expect(lena.view.dom.querySelector('col')?.style.width).toBe('240px')
+    // From the menu, with the cursor in the first column.
+    let apples = -1
+    lena.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === 'Apples') apples = pos
+    })
+    lena.commands.setTextSelection(apples + 1)
+    expect(tableActions(lena).columnWider()).toBe(true)
+    expect(widths(anna)).toEqual([240 + WIDTH_STEP, 0])
+    for (let i = 0; i < 10; i++) tableActions(lena).columnNarrower()
+    expect(widths(anna)).toEqual([COLUMN_MIN, 0])
+    expect(setColumnWidths(anna.view, tablePos, { 1: 12 })).toBe(true)
+    expect(widths(lena)).toEqual([COLUMN_MIN, COLUMN_MIN])
   })
 })
 

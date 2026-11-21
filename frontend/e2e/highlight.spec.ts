@@ -76,12 +76,15 @@ function hueOf([r, g, b]: [number, number, number]): { hue: number; saturation: 
   return { hue, saturation }
 }
 
+/** "asdfasd" selected with the keyboard, as one does; again if the editor was not ready for the first keys. */
 async function selectWord(page: Page) {
-  await page.locator('.nn-editor .ProseMirror p').first().click()
-  await page.keyboard.press('Home')
-  for (let i = 0; i < FROM; i++) await page.keyboard.press('ArrowRight')
-  for (let i = FROM; i < TO; i++) await page.keyboard.press('Shift+ArrowRight')
-  await expect.poll(() => page.evaluate(() => String(window.getSelection()))).toBe('asdfasd')
+  await expect(async () => {
+    await page.locator('.nn-editor .ProseMirror p').first().click()
+    await page.keyboard.press('Home')
+    for (let i = 0; i < FROM; i++) await page.keyboard.press('ArrowRight')
+    for (let i = FROM; i < TO; i++) await page.keyboard.press('Shift+ArrowRight')
+    expect(await page.evaluate(() => String(window.getSelection()))).toBe('asdfasd')
+  }).toPass({ timeout: 10_000 })
 }
 
 for (const theme of ['dark', 'light'] as const) {

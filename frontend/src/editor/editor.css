@@ -170,21 +170,38 @@
 .nn-task-toggle:hover { color: var(--color-mist-200); }
 .nn-task-toggle[aria-pressed='true'] { color: var(--color-accent-400); }
 
-/* Tables in a box that scrolls sideways (AC-5). */
+/* Tables in a box that scrolls sideways (AC-5). The columns keep their width while one types (AC-19): the layout is
+   fixed, text wraps inside its cell, a cell only grows in height. Without set widths the columns share the text's
+   width equally; with set widths (`colwidth`, the table then carries `width: …px`) the box is as wide as the table
+   and scrolls when the columns together are wider than the text. */
 .nn-editor .tableWrapper {
   overflow-x: auto;
   border: 1px solid var(--color-ink-700);
   border-radius: 10px;
 }
-.nn-editor table { border-collapse: collapse; width: 100%; min-width: 420px; font-size: 14px; }
+.nn-editor .tableWrapper:has(> table[style^='width']) { width: fit-content; max-width: 100%; }
+.nn-editor table { border-collapse: collapse; table-layout: fixed; width: 100%; font-size: 14px; }
 .nn-editor th,
 .nn-editor td {
+  position: relative;
   border-top: 1px solid var(--color-ink-700);
   padding: 7px 11px;
   vertical-align: top;
   text-align: left;
-  min-width: 80px;
+  overflow-wrap: anywhere;
 }
+/* The grip on a column's edge, shown while the pointer is on it; dragging sets the width, a double click fits it. */
+.nn-editor .column-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: -1px;
+  right: -2px;
+  width: 4px;
+  z-index: 2;
+  background: var(--color-accent-500);
+  pointer-events: none;
+}
+.nn-editor .ProseMirror.resize-cursor { cursor: col-resize; }
 .nn-editor th { background: var(--color-ink-850); font-weight: 600; border-top: none; }
 .nn-editor td + td,
 .nn-editor th + th,
