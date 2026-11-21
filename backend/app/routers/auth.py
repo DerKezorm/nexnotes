@@ -151,8 +151,6 @@ def account_view(account: AccountRow, db: Session | None = None) -> dict[str, An
         # The address a sign-in provider knows the account by, offered on the account page.
         "provider_email": offered_address(db, account) if db is not None else "",
         "language": account.language,
-        # The paper new notes start on (NOTES-3 AC-17).
-        "paper": notes_service.default_paper(account),
         "two_factor": bool(account.totp_secret_enc),
         "two_factor_recovery_left": len(totp.load_recovery(account.totp_recovery)) if account.totp_secret_enc else 0,
         "password_changed_at": account.password_changed_at.isoformat() if account.password_changed_at else None,
@@ -325,6 +323,8 @@ def me(account: Account, db: DbSession) -> dict[str, Any]:
         "share_links": bool(settings_service.get(db, "share_links")),
         "mcp_enabled": bool(settings_service.get(db, "mcp_enabled")),
         "min_password": MIN_PASSWORD,
+        # The paper new notes start on (NOTES-3 AC-17): the account's own, not in the operator's list of accounts.
+        "paper": notes_service.default_paper(account),
     }
 
 
@@ -405,7 +405,7 @@ def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession) 
     preferences["paper"] = paper
     row.preferences = preferences
     db.commit()
-    return account_view(row)
+    return me(row, db)
 
 
 @router.put("/me/language", summary="The language of the own account, on every device; empty follows the browser")
