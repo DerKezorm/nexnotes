@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -19,8 +19,53 @@ function iconWithChecksum(): Plugin {
   }
 }
 
+/** The files of the shell the service worker keeps beside the built ones (NOTES-23): what the start page names
+ * without a hash in its address. */
+export const SHELL_FILES = [
+  '/theme.js',
+  '/logo.svg',
+  '/manifest.webmanifest',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/maskable-192.png',
+  '/icons/maskable-512.png',
+  '/icons/apple-touch-icon.png',
+  '/icons/icon-192-dark.png',
+]
+
+/** The built files the start page names itself (its script, its styles, the chunks it preloads). */
+export function namedAssets(html: string): string[] {
+  const found = new Set<string>()
+  for (const match of html.matchAll(/(?:src|href)="(\/assets\/[^"?#]+)"/g)) found.add(match[1])
+  return [...found].sort()
+}
+
+/** The service worker learns its build: a stamp from the start page and the worker itself, and the files of the shell
+ * (`public/sw.js`). A new build is a new worker, and its cache has a name of its own (NOTES-23). */
+function serviceWorker(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'service-worker',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    writeBundle() {
+      const root = new URL('./', import.meta.url)
+      const dist = new URL(outDir.replace(/\\/g, '/') + '/', root)
+      const html = readFileSync(new URL('index.html', dist), 'utf8')
+      const worker = readFileSync(new URL('sw.js', dist), 'utf8')
+      const shell = [...namedAssets(html), ...SHELL_FILES]
+      const stamp = createHash('sha256').update(html).update(worker).update(shell.join('\n')).digest('hex').slice(0, 16)
+      const written = worker.replace("'__NEXNOTES_BUILD__'", JSON.stringify(stamp)).replace('/* __NEXNOTES_SHELL__ */ []', JSON.stringify(shell))
+      if (written === worker) throw new Error('sw.js: the marks for the build are missing')
+      writeFileSync(new URL('sw.js', dist), written)
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), iconWithChecksum()],
+  plugins: [react(), tailwindcss(), iconWithChecksum(), serviceWorker()],
   build: {
     rollupOptions: {
       output: {

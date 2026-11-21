@@ -16,7 +16,8 @@ export function pushSupported(): boolean {
 let registering: Promise<ServiceWorkerRegistration> | null = null
 
 export function worker(): Promise<ServiceWorkerRegistration> {
-  if (!registering) registering = navigator.serviceWorker.register('/sw.js', { scope: '/' })
+  // Never from the browser's HTTP cache: a new build is a new worker (NOTES-23).
+  if (!registering) registering = navigator.serviceWorker.register('/sw.js', { scope: '/', updateViaCache: 'none' })
   return registering
 }
 

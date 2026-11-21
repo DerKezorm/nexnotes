@@ -1828,5 +1828,32 @@
       "broken": "Diese Anfrage zum Verbinden ist unvollständig. Starte das Verbinden im Programm noch einmal.",
       "later": "Du findest das Programm unter Einstellungen, Verbindungen, und widerrufst es dort."
     }
+  },
+  "pwa": {
+    "update": "Es gibt eine neue Version von nexnotes.",
+    "reload": "Neu laden",
+    "offline": {
+      "title": "Keine Verbindung",
+      "text": "nexnotes im Browser braucht den Server. Sobald das Netz zurück ist, geht es weiter.",
+      "retry": "Erneut versuchen",
+      "hint": "Ohne Netz schreiben geht mit der iPhone- und iPad-App."
+    },
+    "share": {
+      "title": "In nexnotes ablegen",
+      "preview": "Vorschau",
+      "titleLabel": "Titel",
+      "titleHint": "(Pflicht, vorgeschlagen)",
+      "titleMissing": "Ohne Titel geht es nicht.",
+      "folder": "Ordner",
+      "note": "Notiz dazu",
+      "noteHint": "(optional)",
+      "save": "Ablegen",
+      "saving": "Wird abgelegt …",
+      "uploading": "Datei {{done}} von {{count}} wird hochgeladen …",
+      "offline": "Keine Verbindung. Der geteilte Inhalt bleibt hier, bis das Netz zurück ist; dann noch einmal „Ablegen“.",
+      "tooLarge": "„{{name}}“ ist größer als erlaubt ({{max_mb}} MB) und wird nicht abgelegt.",
+      "lost": "Das Geteilte ist nicht (mehr) da: schon abgelegt, abgebrochen oder zu lange her. Teile es bitte noch einmal.",
+      "toApp": "Zu nexnotes"
+    }
   }
 }

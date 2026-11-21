@@ -25,6 +25,8 @@ import './vault'
 import './notify'
 // The trash closes the sidebar's places (drawing "Seitenleiste"): imported after every feature with an entry there.
 import './trash'
+// The installable web app (NOTES-23): the service worker with the shell, a new version, the start on a phone.
+import './pwa/register'
 import './i18n'
 import { followSystem } from './lib/theme'
 import { bearTranslatedPages } from './lib/translatedPage'

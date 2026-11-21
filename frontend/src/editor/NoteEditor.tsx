@@ -127,6 +127,10 @@ function LiveConnection(props: Props & { onLocked: () => void }) {
   return <LiveNote {...props} provider={provider} />
 }
 
+/** Room the caret keeps to the edges of the visible text when the editor scrolls it into view: below, the height of the
+ * phone's formatting bar above the keyboard and a little more (NOTES-23 EC-2). */
+const CARET_ROOM = { top: 16, bottom: 80, left: 0, right: 0 }
+
 function useKeyboardInset(): number {
   const [inset, setInset] = useState(0)
   useEffect(() => {
@@ -278,7 +282,8 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [provider],
   )
-  const editor = useEditor({ extensions, editorProps: { ...editorProps, attributes: { 'aria-label': t('editor.textLabel'), class: 'nn-prose', 'data-testid': 'note-body' } } }, [extensions])
+  // The caret keeps clear of the phone's bar above the keyboard while typing (NOTES-23 EC-2).
+  const editor = useEditor({ extensions, editorProps: { ...editorProps, scrollMargin: CARET_ROOM, scrollThreshold: CARET_ROOM, attributes: { 'aria-label': t('editor.textLabel'), class: 'nn-prose', 'data-testid': 'note-body' } } }, [extensions])
 
   useEffect(() => {
     if (editor && editor.isEditable !== editable) editor.setEditable(editable)
