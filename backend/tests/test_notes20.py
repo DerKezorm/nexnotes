@@ -422,6 +422,14 @@ def test_notes20_ac7_a_declined_sign_in_gives_no_code_and_strange_return_address
     assert client.get("/api/oauth/authorize", params={**asked, "code_challenge_method": "plain"}).status_code == 400
     declined = client.post("/api/oauth/authorize", json={**asked, "approve": False})
     assert "error=access_denied" in declined.json()["redirect"] and "code=" not in declined.json()["redirect"]
+    # A code is traded only with the verifier that belongs to its challenge (PKCE).
+    agreed = client.post("/api/oauth/authorize", json={**asked, "approve": True, "level": "write"})
+    code = parse_qs(urlsplit(agreed.json()["redirect"]).query)["code"][0]
+    stolen = program.post("/api/oauth/token", data={"grant_type": "authorization_code", "code": code,
+                                                     "client_id": client_id, "redirect_uri": redirect,
+                                                     "code_verifier": _pkce()[0]})
+    assert stolen.status_code == 400 and stolen.json()["error"] == "invalid_grant"
+    assert client.get("/api/mcp/keys").json()["keys"] == []
     # The consent needs the member's own session; a key is not enough.
     assert TestClient(app, base_url="http://testserver").get("/api/oauth/authorize", params=asked).status_code == 401
 

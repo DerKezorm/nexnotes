@@ -442,9 +442,6 @@ async def create_note(caller: Caller, args: dict[str, Any]) -> Any:
                                           origin=caller.label, title_suggested=True)
             except HTTPException as exc:
                 raise ToolError("Folder not found." if exc.status_code == 404 else _problem(exc)) from exc
-            if note.title and not note.title_check:
-                note.title_check = True
-                db.commit()
             logger.info("MCP note made note=%s key_id=%s", note.id, caller.key_id)
             return {**_note_head(db, account, note), "title_check": bool(note.title_check)}
 

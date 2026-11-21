@@ -144,9 +144,6 @@ async def endpoint(request: Request) -> Response:
     if not mcp.brake(caller.key_id):
         return _refuse(429, "slow_down", "Too many requests with this key. Wait a minute.", {"Retry-After": "60"})
     logs.set_actor(caller.account.name)
-    declared = request.headers.get("content-length")
-    if declared is not None and (not declared.isdigit() or int(declared) > MAX_BODY):
-        return _refuse(413, "too_large", "The request is too large.")
     body = b""
     async for chunk in request.stream():
         body += chunk
