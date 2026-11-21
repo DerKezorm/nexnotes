@@ -216,3 +216,39 @@
     box-shadow: inset 0 3px 0 var(--color-accent-500), 0 0 0 3px rgb(242 193 78 / 0.55);
   }
 }
+
+/*
+ * A finger's size on a phone and a tablet (NOTES-23 AC-7): every button and field is at least 44 px to tap. In
+ * `:where()`, so the rule weighs nothing beside the classes of an element and only lifts what is smaller; the text of
+ * a note keeps its lines. A checkbox of a checklist keeps its look and gets an invisible area around it instead.
+ */
+@media (max-width: 767px), (pointer: coarse) {
+  :where(
+      button,
+      select,
+      textarea,
+      input:not([type='checkbox'], [type='radio'], [type='hidden'], [type='range'], [type='color']),
+      [role='button'],
+      [role='menuitem'],
+      [role='menuitemradio'],
+      [role='menuitemcheckbox'],
+      [role='tab'],
+      [role='radio'],
+      [role='option'],
+      [role='switch'],
+      summary
+    ):not(.ProseMirror *) {
+    min-height: 44px;
+  }
+  :where(button, [role='button'], [role='tab'], [role='radio']):not(.ProseMirror *) {
+    min-width: 44px;
+  }
+  .nn-editor ul[data-type='taskList'] li > label {
+    position: relative;
+  }
+  .nn-editor ul[data-type='taskList'] li > label::after {
+    content: '';
+    position: absolute;
+    inset: -12px;
+  }
+}

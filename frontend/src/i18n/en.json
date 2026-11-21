@@ -1935,5 +1935,32 @@
       "unnamed": "without a name",
       "gone": "Deleted: {{name}}"
     }
+  },
+  "pwa": {
+    "update": "A new version of nexnotes is here.",
+    "reload": "Reload",
+    "offline": {
+      "title": "No connection",
+      "text": "nexnotes in the browser needs the server. As soon as the network is back, it goes on.",
+      "retry": "Try again",
+      "hint": "Writing without network works in the iPhone and iPad app."
+    },
+    "share": {
+      "title": "Save to nexnotes",
+      "preview": "Preview",
+      "titleLabel": "Title",
+      "titleHint": "(required, suggested)",
+      "titleMissing": "A title is required.",
+      "folder": "Folder",
+      "note": "Note",
+      "noteHint": "(optional)",
+      "save": "Save",
+      "saving": "Saving …",
+      "uploading": "Uploading file {{done}} of {{count}} …",
+      "offline": "No connection. What was shared stays here until the network is back; then tap “Save” again.",
+      "tooLarge": "“{{name}}” is larger than allowed ({{max_mb}} MB) and is not saved.",
+      "lost": "What was shared is not here (any more): saved, cancelled or too long ago. Please share it again.",
+      "toApp": "Go to nexnotes"
+    }
   }
 }

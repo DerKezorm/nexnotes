@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate, useOutlet } from 'react-router-dom'
 
 import { NoteEditor } from '../editor/NoteEditor'
+import { PhoneBack } from '../pwa/phone'
 import { useFolders, useShownFolder } from '../folders/store'
 import { useDesktop } from '../tabs/desktop'
 import { TabbedNotes } from '../tabs/TabbedNotes'
@@ -31,6 +32,8 @@ export function AllNotesList() {
   useListTitle(t('notes.all'))
   return (
     <div className={'flex min-h-full flex-col ' + padding}>
+      {/* On a phone the lists come after the folders (NOTES-23 AC-1). */}
+      {!open && <PhoneBack to="/folders" label={t('folders.section')} />}
       <NoteList heading={t('notes.all')} />
       {!open && (
         <button
@@ -68,7 +71,7 @@ function PhoneNote({ noteId, list, fresh }: { noteId: string; list: string; fres
   return (
     <div className="flex h-full min-h-0" data-testid="notes-page">
       <div className="nn-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
-        <Link to={list} className="flex items-center gap-1.5 px-4 pt-3 text-[15px] text-accent-400 md:hidden">
+        <Link to={list} className="flex min-h-11 w-fit items-center gap-1.5 px-4 pt-1.5 text-[15px] text-accent-400 md:hidden" data-testid="phone-back">
           <ArrowLeft className="h-4 w-4" aria-hidden />
           {name}
         </Link>

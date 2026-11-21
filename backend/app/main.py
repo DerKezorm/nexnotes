@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.exception_handlers import http_exception_handler
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
@@ -215,6 +215,22 @@ for module in ROUTERS + FEATURE_ROUTERS:
 oidc_store.configure()
 
 
+@app.post("/share-target", include_in_schema=False)
+def share_target() -> RedirectResponse:
+    """The form of the share target (NOTES-23 AC-5) without a service worker in the browser to take it: nothing of it
+    is read or kept, the page says that what was shared did not arrive. The service worker takes the form itself and
+    keeps it in memory; a note is only made by the API, with a session and ``X-Nexnotes-Client``, after "Save". So a
+    page of another site that sends this form changes nothing."""
+    return RedirectResponse("/share?shared=lost", status_code=303)
+
+
+#: The service worker and the manifest are asked anew each time: a new build is a new worker (NOTES-23).
+_ALWAYS_ASKED = {"sw.js": "text/javascript", "manifest.webmanifest": "application/manifest+json"}
+#: The mark of the start page: the one answer to a page the service worker may keep (``public/sw.js``). Pages the
+#: server draws itself (a read link with a note in it) never carry it.
+SHELL_HEADER = "X-Nexnotes-Shell"
+
+
 def _mount_frontend(target: FastAPI, dist: Path) -> None:
     index = dist / "index.html"
     if not index.exists():
@@ -230,8 +246,10 @@ def _mount_frontend(target: FastAPI, dist: Path) -> None:
             return JSONResponse(status_code=404, content={"detail": detail("not_found", "Not found.")})
         candidate = (dist / path).resolve()
         if path and candidate.is_file() and root in candidate.parents and candidate != start_page:
+            if path in _ALWAYS_ASKED:
+                return FileResponse(candidate, media_type=_ALWAYS_ASKED[path], headers={"Cache-Control": "no-cache"})
             return FileResponse(candidate)
-        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+        return FileResponse(index, headers={"Cache-Control": "no-cache", SHELL_HEADER: "1"})
 
 
 _mount_frontend(app, get_settings().frontend_dist)

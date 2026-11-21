@@ -3,7 +3,7 @@
  * or the empty state of NOTES-6 EC-1 (EC-5); the inbox with where each note came from (AC-7), "File" (AC-14) and its
  * own empty state (EC-6); and on the phone the list of all folders (drawing "Handy-Ordner").
  */
-import { ChevronDown, ChevronRight, FileText, Inbox, LayoutGrid, Mic, MoreHorizontal, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Users, Zap } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
@@ -15,6 +15,7 @@ import { NoteList } from '../notes/NoteList'
 import { ago } from '../lib/time'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
+import { PhoneBack, PhoneNewNote } from '../pwa/phone'
 import { foldersApi, type Folder, type InboxNote } from './api'
 import { draggedNow, droppedFrom, endDrag, NOTES_MOVED_EVENT, startNoteDrag, useNoteActions } from './actions'
 import { useFolderActions } from './useFolderActions'
@@ -56,6 +57,8 @@ export function FolderPage() {
     )
 
   const path = pathOf(tree, id)
+  // On a phone: back to the folder above, or to all folders (NOTES-23 AC-1).
+  const parent = path.length > 1 ? path[path.length - 2] : null
   const takeNotes = (event: DragEvent) => {
     if (draggedNow()?.kind !== 'notes') return
     event.preventDefault()
@@ -65,6 +68,7 @@ export function FolderPage() {
 
   return (
     <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="folder-page">
+      <PhoneBack to={parent ? `/folder/${parent.id}` : '/folders'} label={parent ? parent.name : t('folders.section')} />
       <nav aria-label={t('folders.page.path')} className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-mist-500">
         {path.map((step, index) =>
           index < path.length - 1 ? (
@@ -120,6 +124,7 @@ export function FolderPage() {
       ) : (
         <NoteList folderId={folder.id} />
       )}
+      {newNote && <PhoneNewNote onClick={() => newNote(folder.id)} label={t('folders.page.newNote', { name: folder.name })} />}
       {menu && <FolderMenu folder={folder} anchor={menu} onClose={() => setMenu(null)} onAction={(action) => actions.act(action, folder)} />}
       {actions.node}
     </div>
@@ -163,7 +168,7 @@ export function InboxPage() {
   const { t, i18n } = useTranslation()
   const tree = useFolders()
   const actions = useFolderActions()
-  const { noteHref } = useNoteActions()
+  const { noteHref, newNote } = useNoteActions()
   const [notes, setNotes] = useState<InboxNote[] | null>(null)
   const [problem, setProblem] = useState('')
   const asked = useRef(0)
@@ -196,6 +201,8 @@ export function InboxPage() {
 
   return (
     <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="inbox-page">
+      <PhoneBack to="/folders" label={t('folders.section')} />
+      {newNote && tree.inbox && <PhoneNewNote onClick={() => newNote(tree.inbox!.id)} label={t('folders.page.newNote', { name: t('folders.inbox.name') })} />}
       <div className="space-y-1">
         <h1 className="text-2xl font-bold">{t('folders.inbox.name')}</h1>
         <p className="text-[13.5px] text-mist-400">{t('folders.inbox.text')}</p>
@@ -292,12 +299,27 @@ export function FoldersPage() {
       <div className="flex-1 space-y-3.5 px-4 pt-5 pb-4">
         <h1 className="text-[26px] font-bold tracking-tight">{t('folders.section')}</h1>
         <div className="nn-card overflow-hidden rounded-[14px]">
-          <Link to="/inbox" className="flex h-[50px] items-center justify-between px-3.5 text-base hover:bg-ink-800">
+          <Link to="/inbox" className="flex min-h-[50px] items-center justify-between border-b border-ink-800 px-3.5 text-base hover:bg-ink-800">
             <span className="flex items-center gap-2.5">
               <Inbox aria-hidden className="h-4 w-4 text-mist-500" />
               {t('folders.inbox.name')}
             </span>
             <span className="text-[15px] text-mist-500">{tree.inbox?.count ?? ''} ›</span>
+          </Link>
+          {/* The places of the drawing "Handy-Ordner" (NOTES-23 AC-1): all notes and what others shared. */}
+          <Link to="/" className="flex min-h-[50px] items-center justify-between border-b border-ink-800 px-3.5 text-base hover:bg-ink-800" data-testid="folders-all">
+            <span className="flex items-center gap-2.5">
+              <NotebookText aria-hidden className="h-4 w-4 text-mist-500" />
+              {t('notes.all')}
+            </span>
+            <span className="text-[15px] text-mist-500">›</span>
+          </Link>
+          <Link to="/shared" className="flex min-h-[50px] items-center justify-between px-3.5 text-base hover:bg-ink-800" data-testid="folders-shared">
+            <span className="flex items-center gap-2.5">
+              <Users aria-hidden className="h-4 w-4 text-mist-500" />
+              {t('shares.page.title')}
+            </span>
+            <span className="text-[15px] text-mist-500">›</span>
           </Link>
         </div>
         <p className="px-1 text-xs font-semibold tracking-[0.06em] text-mist-500 uppercase">{t('folders.section')}</p>
@@ -307,7 +329,7 @@ export function FoldersPage() {
               const hasChildren = (tree.children.get(folder.id) ?? []).length > 0
               const isOpen = open.has(folder.id)
               return (
-                <div key={folder.id} className="flex h-[50px] items-center border-b border-ink-800 last:border-b-0" style={{ paddingLeft: 6 + Math.min(depth, 8) * 18 }}>
+                <div key={folder.id} className="flex min-h-[50px] items-center border-b border-ink-800 last:border-b-0" style={{ paddingLeft: 6 + Math.min(depth, 8) * 18 }}>
                   {hasChildren ? (
                     <button type="button" aria-label={isOpen ? t('folders.collapse') : t('folders.expand')} onClick={() => setFolderOpen(folder.id, !isOpen)} className="flex h-11 w-8 shrink-0 items-center justify-center text-mist-500">
                       {isOpen ? <ChevronDown aria-hidden className="h-4 w-4" /> : <ChevronRight aria-hidden className="h-4 w-4" />}
@@ -315,7 +337,7 @@ export function FoldersPage() {
                   ) : (
                     <span aria-hidden className="w-8 shrink-0" />
                   )}
-                  <Link to={`/folder/${folder.id}`} className="flex h-full min-w-0 flex-1 items-center justify-between gap-2 pr-1 text-base">
+                  <Link to={`/folder/${folder.id}`} className="flex min-h-[50px] min-w-0 flex-1 items-center justify-between gap-2 pr-1 text-base">
                     <span className="flex min-w-0 items-center gap-2.5">
                       <FolderMark folder={folder} size={16} />
                       <span className="truncate" title={folder.name}>

@@ -1,6 +1,8 @@
 /**
  * Who is signed in. `loading` until the server answered, `setup` while nexnotes has no account yet, `signedOut`,
- * or `signedIn` with the account.
+ * or `signedIn` with the account; `offline` while the server does not answer at all (no network, or a proxy says it is
+ * down): the installed app opened without network shows "No connection" instead of the sign-in, and asks again every
+ * few seconds and as soon as the network is back (NOTES-23 AC-4).
  *
  * A session that ends while the page is open does not throw the page away: what is being written stays on screen.
  * `interrupted` says why: `expired` (the session ran out; a dialog asks to sign in again, and afterwards
@@ -19,7 +21,7 @@ import { showNotice } from '../folders/notice'
 import i18n, { changeLanguage } from '../i18n'
 import { followAccount } from './account'
 
-type Status = 'loading' | 'setup' | 'signedOut' | 'signedIn'
+type Status = 'loading' | 'setup' | 'signedOut' | 'signedIn' | 'offline'
 export type Interruption = 'expired' | 'blocked' | null
 
 /** Sent on `window` once the account signed in again after its session ran out: whatever waited is saved now. */
@@ -43,6 +45,15 @@ const Context = createContext<Auth | null>(null)
 
 /** How often an open page asks whether its session still holds: a block shows within seconds. */
 export const SESSION_MS = 5_000
+/** How often a page without the server asks again. */
+export const OFFLINE_RETRY_MS = 5_000
+
+/** No answer of the server at all: the network is gone (fetch fails), or a proxy says the server is down. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function unreachable(error: unknown): boolean {
+  if (error instanceof ApiError) return error.status === 502 || error.status === 503 || error.status === 504
+  return error instanceof TypeError
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<Status>('loading')
@@ -77,6 +88,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       setMe(await authApi.me())
     } catch (error) {
+      if (unreachable(error)) {
+        setStatus('offline')
+        return
+      }
       setStatus('signedOut')
       if (error instanceof ApiError && error.status === 401) {
         followAccount(null)
@@ -88,6 +103,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refresh()
   }, [refresh])
+
+  // Without the server: ask again every few seconds, and at once when the network is back.
+  useEffect(() => {
+    if (status !== 'offline') return
+    const again = () => void refresh()
+    const timer = window.setInterval(again, OFFLINE_RETRY_MS)
+    window.addEventListener('online', again)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('online', again)
+    }
+  }, [status, refresh])
 
   useEffect(() => {
     const gone = (event: Event) => {

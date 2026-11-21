@@ -61,6 +61,14 @@ who, the note and what was added or ticked, bundled once nobody has written for 
 browser that allowed them (Web Push; the message is encrypted for the browser, so the push service never reads it) and
 in the iOS app. The key that signs Web Push is made at the first start and kept encrypted with the server's secret.
 
+## On a phone
+
+In a phone's browser nexnotes shows one view at a time: folders, then notes, then the note. It installs as a web app
+("Add to Home screen" in Chrome on Android, Safari on iPhone) and starts without the browser bar. The service worker
+keeps only the app itself, never notes: without a connection the installed app says so and tries again. On Android
+nexnotes appears in the share menu; what another app shares opens as "Save to nexnotes" with a suggested title and
+lands in the inbox. The shared things stay in the browser's memory until saved, nothing is stored on the device.
+
 ## Languages
 
 English and German ship with nexnotes. Put a language file (`nl.json`, same keys as the English one) into

@@ -8,6 +8,8 @@ import { InvitePage, LoginPage, ResetPage, SetupPage } from './pages/AuthPages'
 import { NotesHome } from './pages/NotesHome'
 import { SettingsPage } from './pages/SettingsPage'
 import { FEATURE_ROUTES, LIST_LAYOUT, type FeatureRoute } from './extensions'
+import { OfflinePage } from './pwa/OfflinePage'
+import { SharePage } from './pwa/share/SharePage'
 import { useAuth } from './state/auth'
 
 /**
@@ -34,10 +36,17 @@ function featureRoute(route: FeatureRoute) {
 }
 
 export default function App() {
+  const { status } = useAuth()
+  const location = useLocation()
   const inLayout = (route: FeatureRoute) => Boolean(route.list && LIST_LAYOUT.element)
+  // Without the server no page but "No connection" (NOTES-23 AC-4); the page of something shared keeps its form, so
+  // nothing shared is lost (EC-3).
+  if (status === 'offline' && location.pathname !== '/share') return <OfflinePage />
   return (
     <Routes>
       <Route path="setup" element={<SetupPage />} />
+      {/* "Save to nexnotes": what another app shared (NOTES-23 AC-5); signs in by itself, outside the shell. */}
+      <Route path="share" element={<SharePage />} />
       <Route path="login" element={<LoginPage />} />
       <Route path="invite/:token" element={<InvitePage />} />
       <Route path="reset/:token" element={<ResetPage />} />
