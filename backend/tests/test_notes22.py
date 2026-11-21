@@ -74,7 +74,9 @@ def test_notes22_ec2_a_broken_language_file_is_left_out_and_named_in_the_log(
     with caplog.at_level(logging.WARNING):
         listed = client.get("/api/locales").json()
     assert [entry["code"] for entry in listed] == ["nl"]
-    assert "fr.json" in caplog.text or "fr" in caplog.text
+    skipped = [record.getMessage() for record in caplog.records if "skipped" in record.getMessage()]
+    assert len(skipped) == 1 and skipped[0].startswith("Language file name=fr.json skipped: ")
+    assert "nl.json" not in caplog.text
     # nexnotes runs on.
     assert client.get("/api/health").json()["status"] == "ok"
 

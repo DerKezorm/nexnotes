@@ -16,11 +16,13 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import event, select
+from sqlalchemy import event, func, select
+from sqlalchemy.exc import IntegrityError
 
 from app.db import SessionLocal, engine
 from app.models import Account, Folder, Note, utcnow
 from app.services import folders as folder_service
+from app.services import inbox as inbox_service
 from app.services.inbox import inbox_for
 
 from .conftest import make_account, new_client
@@ -123,6 +125,7 @@ def test_notes4_ac1_folders_nest_at_the_top_and_fifteen_levels_deep(client: Test
 
 def test_notes4_ac1_folders_belong_to_their_account_only(client: TestClient, operator: Account) -> None:
     mine = make(client, "Privat")
+    secret = note(operator, mine, "Geheim")
     other = make_account("berta")
     with new_client(other) as berta:
         assert tree(berta)["folders"] == []
@@ -132,7 +135,15 @@ def test_notes4_ac1_folders_belong_to_their_account_only(client: TestClient, ope
         assert berta.get(f"/api/folders/{mine}/impact").status_code == 404
         own = make(berta, "Eigenes")
         assert berta.post("/api/folders/move", json={"target_id": own, "folder_ids": [mine]}).status_code == 404
+        # Another account's note does not move into her folder, alone or among her own: all or nothing.
+        hers = note(other, own, "Ihre")
+        assert berta.post("/api/folders/move", json={"target_id": own, "note_ids": [secret]}).status_code == 404
+        inbox = tree(berta)["inbox"]["id"]
+        mixed = berta.post("/api/folders/move", json={"target_id": inbox, "note_ids": [hers, secret]})
+        assert mixed.status_code == 404
+        assert note_row(hers).folder_id == own
     assert [folder["name"] for folder in tree(client)["folders"]] == ["Privat"]
+    assert note_row(secret).folder_id == mine
 
 
 # --- AC-2, AC-3, AC-14 Moving -----------------------------------------------------------------------------------------
@@ -347,6 +358,46 @@ def test_notes4_ac7_captured_notes_land_in_the_inbox_with_where_they_came_from(c
         assert carla.get("/api/folders/inbox").json()["notes"] == []
 
 
+def test_notes4_ac7_the_database_holds_one_inbox_per_account(client: TestClient, operator: Account) -> None:
+    inbox = inbox_id(operator)
+    with SessionLocal() as db:
+        db.add(Folder(owner_id=operator.id, kind="inbox", name=""))
+        with pytest.raises(IntegrityError):
+            db.commit()
+    assert tree(client)["inbox"]["id"] == inbox
+    # Only the inbox is one of a kind: normal folders and other accounts' inboxes are not held back.
+    make(client, "Eins")
+    make(client, "Zwei")
+    assert inbox_id(make_account("emil")) != inbox
+
+
+def test_notes4_ac7_two_first_requests_at_once_make_one_inbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    fresh = make_account("dora")
+    original = inbox_service._find
+    other: list[str] = []
+
+    def found_nothing_then_another_made_it(db: Any, account_id: int) -> Any:
+        found = original(db, account_id)
+        if not other:
+            # Between this request's look and its write, a second device makes the inbox.
+            other.append("")
+            with SessionLocal() as second:
+                other[0] = inbox_for(second, account_id).id
+                second.commit()
+        return found
+
+    monkeypatch.setattr(inbox_service, "_find", found_nothing_then_another_made_it)
+    with SessionLocal() as db:
+        mine = inbox_for(db, fresh.id).id
+        db.commit()
+    assert other[0] and mine == other[0]
+    with SessionLocal() as db:
+        inboxes = db.scalar(
+            select(func.count()).select_from(Folder).where(Folder.owner_id == fresh.id, Folder.kind == "inbox")
+        )
+    assert inboxes == 1
+
+
 # --- AC-8 The count beside a folder -----------------------------------------------------------------------------------
 
 
@@ -421,13 +472,24 @@ def test_notes4_ac11_new_folders_stand_alphabetically_then_the_members_order_hol
         # A rename no longer moves it: the member's order holds.
         laptop.patch(f"/api/folders/{ids['Zoo']}", json={"name": "Aaa"})
         assert names(laptop)[0] == "Aaa"
-    # A new folder after the member ordered joins at the end, also one moved in.
-    make(client, "Neu")
-    sub = make(client, "Unten", ids["Rezepte"])
+    # New folders after the member ordered join at the end in the order they came, not where the alphabet would put
+    # them.
+    make(client, "Mitte")
+    make(client, "Anfang")
+    assert names(client)[-2:] == ["Mitte", "Anfang"]
+    # The same under a parent whose subfolders the member sorted by hand, also for one moved in.
+    recipes = ids["Rezepte"]
+    cake, bread = make(client, "Kuchen", recipes), make(client, "Brot", recipes)
+    assert names(client, recipes) == ["Brot", "Kuchen"]
+    client.put("/api/folders/order", json={"parent_id": recipes, "ids": [cake, bread]})
+    make(client, "Suppe", recipes)
+    make(client, "Auflauf", recipes)
+    assert names(client, recipes) == ["Kuchen", "Brot", "Suppe", "Auflauf"]
+    client.post("/api/folders/move", json={"target_id": recipes, "folder_ids": [ids["arbeit"]]})
+    assert names(client, recipes) == ["Kuchen", "Brot", "Suppe", "Auflauf", "arbeit"]
     # Ordered first where it was (its place there is 0): at its new place it still joins at the end.
-    client.put("/api/folders/order", json={"parent_id": ids["Rezepte"], "ids": [sub, make(client, "Daneben", ids["Rezepte"])]})
-    client.post("/api/folders/move", json={"target_id": None, "folder_ids": [sub]})
-    assert names(client)[-2:] == ["Neu", "Unten"]
+    client.post("/api/folders/move", json={"target_id": None, "folder_ids": [cake]})
+    assert names(client)[-3:] == ["Mitte", "Anfang", "Kuchen"]
 
 
 def test_notes4_ac11_order_from_an_older_list_keeps_folders_made_meanwhile(client: TestClient, operator: Account) -> None:
@@ -461,6 +523,28 @@ def test_notes4_ec2_the_same_name_twice_in_one_place_is_refused_whatever_the_cas
     assert client.post("/api/folders", json={"name": "Haushalt"}).status_code == 201
 
 
+def test_notes4_ec2_moving_several_folders_never_puts_twins_side_by_side(client: TestClient, operator: Account) -> None:
+    target = make(client, "Ziel")
+    already = make(client, "Doppelt", target)
+    elsewhere = make(client, "Woanders")
+    newcomer = make(client, "doppelt", elsewhere)
+    # The first one listed lies in the target already; the second would become its twin.
+    refused = client.post("/api/folders/move", json={"target_id": target, "folder_ids": [already, newcomer]})
+    assert refused.status_code == 409 and code(refused) == "folder_name_taken", refused.text
+    assert names(client, target) == ["Doppelt"]
+    assert by_id(client)[newcomer]["parent_id"] == elsewhere
+    # Two of one name from different places, moved together: neither goes.
+    third = make(client, "Drittens")
+    first, second = make(client, "Liste", elsewhere), make(client, "LISTE", third)
+    refused = client.post("/api/folders/move", json={"target_id": target, "folder_ids": [first, second]})
+    assert refused.status_code == 409 and code(refused) == "folder_name_taken", refused.text
+    assert by_id(client)[first]["parent_id"] == elsewhere and by_id(client)[second]["parent_id"] == third
+    # Listing the one already there beside one of another name is fine.
+    moved = client.post("/api/folders/move", json={"target_id": target, "folder_ids": [already, first]})
+    assert moved.status_code == 200 and moved.json() == {"folders": 1, "notes": 0}
+    assert names(client, target) == ["Doppelt", "Liste"]
+
+
 def test_notes4_ec7_names_keep_umlauts_and_emoji_lose_edge_blanks_and_stay_within_sixty(
     client: TestClient, operator: Account
 ) -> None:
@@ -478,6 +562,27 @@ def test_notes4_ec7_names_keep_umlauts_and_emoji_lose_edge_blanks_and_stay_withi
     assert code(client.patch(f"/api/folders/{folder}", json={"name": "z" * 61})) == "folder_name_too_long"
     # Blanks at the edges do not count toward the sixty.
     assert client.post("/api/folders", json={"name": "  " + "w" * 60 + "  "}).status_code == 201
+
+
+def test_notes4_ec7_names_without_a_visible_character_are_refused_and_edge_format_characters_go(
+    client: TestClient, operator: Account
+) -> None:
+    for invisible in ("\u200b", "\u200b \u200b", "\u200d", "\ufeff\u2060", "\u00ad", " \u200e\u200f ", "\u3164",
+                      "\u2800", "\u0301", "\U000e0067\U000e007f"):
+        refused = client.post("/api/folders", json={"name": invisible})
+        assert refused.status_code == 400 and code(refused) == "folder_name_missing", repr(invisible)
+    folder = make(client, "\u200bNotizen\ufeff\u200d ")
+    assert by_id(client)[folder]["name"] == "Notizen"
+    assert code(client.patch(f"/api/folders/{folder}", json={"name": "\u200b\u200b"})) == "folder_name_missing"
+    # Emoji built with joiners keep them, also at the edge of the name; so do flags that end in tag characters.
+    scotland = "\U0001f3f4\U000e0067\U000e0062\U000e0073\U000e0063\U000e0074\U000e007f"
+    for emoji in ("\U0001f469\u200d\U0001f4bb", "\U0001f469\u200d\U0001f4bb Code",
+                  "Familie \U0001f468\u200d\U0001f469\u200d\U0001f467", scotland):
+        made = make(client, f"\u200b {emoji}\u200b")
+        assert by_id(client)[made]["name"] == emoji, repr(emoji)
+    # A zero width space inside a name is part of it.
+    inner = make(client, "Ab\u200bc")
+    assert by_id(client)[inner]["name"] == "Ab\u200bc"
 
 
 # --- EC-4 Two devices at once -----------------------------------------------------------------------------------------

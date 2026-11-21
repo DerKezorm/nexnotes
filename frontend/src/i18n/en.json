@@ -100,13 +100,16 @@
     "makeMember": "Make member",
     "makeOperator": "Make operator",
     "never": "never",
-    "newPassword": "New password …",
-    "newPasswordFor": "New password for {{name}}",
     "openInvites": "Open invitations",
     "password": "Password",
     "passwordTwoFactor": "Password + 2FA",
     "person": "Person",
     "resetFactor": "Reset the second factor",
+    "resetLink": "Reset link …",
+    "resetLinkFor": "Reset link for {{name}}",
+    "resetLinkMake": "Make the link",
+    "resetLinkShown": "Send this link to {{name}}. It works once and is shown only now.",
+    "resetLinkText": "With this link {{name}} sets a new password themselves; you never learn it. Until then the old one stays. Using the link signs the account out everywhere and ends its paired devices, and at the next sign-in it is told that its password was reset through your link.",
     "restore": "Bring back",
     "role": "Role",
     "sendMail": "Send by mail",
@@ -155,13 +158,24 @@
     "login": {
       "ended": "Your session has ended. Sign in again.",
       "forgot": "Forgot your password?",
-      "forgotText": "The operator can give you a new password in the settings under “Accounts”.",
+      "forgotText": "The operator can make you a link in the settings under “Accounts”, with which you set a new password yourself.",
       "noAccount": "No account? Ask the operator for an invitation.",
       "submit": "Sign in",
       "title": "Sign in to nexnotes"
     },
     "name": "Name",
-    "password": "Password"
+    "password": "Password",
+    "reset": {
+      "doneText": "Sign in with your new password now.",
+      "doneTitle": "Password set",
+      "expiredText": "This link has expired. Ask the operator for a new one.",
+      "expiredTitle": "Link expired",
+      "invalidText": "This link has been used already or was replaced by a newer one.",
+      "invalidTitle": "Link not valid",
+      "submit": "Set the password",
+      "text": "For {{name}}. Every session and paired device of the account ends; afterwards you sign in with the new password.",
+      "title": "Set a new password"
+    }
   },
   "common": {
     "cancel": "Cancel",
@@ -282,6 +296,7 @@
   },
   "errors": {
     "folder_not_found": "This folder does not exist.",
+    "fresh_sign_in_required": "For this, sign in at your provider once more first: operator acts need a sign-in from the last {{minutes}} minutes. You come back here afterwards.",
     "internal_error": "That did not work.",
     "account_blocked": "This account is blocked. Ask the operator.",
     "account_locked": "Too many wrong passwords. The account waits a quarter of an hour.",
@@ -339,6 +354,8 @@
     "public_url_invalid": "This is not an address nexnotes can use. Check how it is written.",
     "public_url_missing": "Mail needs the public address of nexnotes; the operator sets it under Settings.",
     "public_url_needed": "nexnotes has no public address yet. Enter it first.",
+    "reset_expired": "This link has expired. Ask the operator for a new one.",
+    "reset_invalid": "This link has been used already or was replaced by a newer one.",
     "second_factor_expired": "Too many wrong codes, or too long a wait. Start again with your password.",
     "second_factor_setup_required": "Set up your second factor first.",
     "second_factor_unavailable": "The second factor cannot be checked on this installation. Ask the operator to reset it.",
@@ -563,6 +580,12 @@
     "otherWindow": "you, other window",
     "two": "{{first}} and {{second}} are here too"
   },
+  "resetNotice": {
+    "button": "Got it",
+    "hint": "If that was not you, tell the operator and change your password under “My account”.",
+    "text": "Your password was reset through a link from the operator.",
+    "title": "Password reset"
+  },
   "roles": {
     "member": "Member",
     "operator": "Operator"
@@ -669,6 +692,13 @@
     "restarting": "nexnotes restarts with the backup. The page reloads in a moment.",
     "restore": "Restore",
     "restoreChanges": "Restoring adds {{add}}, changes {{change}} and removes {{remove}}.",
+    "restoreNotes": "Notes added: {{add}} · changed: {{change}} · removed: {{remove}}.",
+    "restoreTitles": {
+      "add": "Added: {{titles}}",
+      "change": "Changed: {{titles}}",
+      "own": "Titles are named only for your own notes.",
+      "remove": "Removed: {{titles}}"
+    },
     "schedule": "Automatically",
     "secretKept": "Kept; type only to change it.",
     "send": "Send",
@@ -686,6 +716,7 @@
     "trash": "Empty the trash after",
     "twoFactorRequired": "Require a second factor",
     "twoFactorRequiredHint": "Every account that signs in with a password must set one up before it gets further. Accounts from a sign-in provider bring the provider's. An account with a password is not affected either when it comes in through a provider for which “{{trusts}}” is on.",
+    "untitled": "Untitled",
     "upload": "Upload language",
     "uploadBackup": "Upload a backup",
     "uploadMax": "Largest file per attachment (MB)",

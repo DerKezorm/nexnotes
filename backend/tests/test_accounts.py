@@ -190,8 +190,11 @@ def test_the_operator_manages_accounts(client: TestClient, operator: Account) ->
     anna_client = TestClient(client.app, headers={"X-Nexnotes-Client": "tab-anna00000"})
     sign_in(anna_client, anna)
     assert anna_client.get("/api/accounts").status_code == 403
-    assert client.put(f"/api/accounts/{anna.id}/password", json={"password": GOOD, "current_password": PASSWORD}).status_code == 204
-    # A new password from the operator ends the account's sessions.
+    made = client.post(f"/api/accounts/{anna.id}/reset-link", json={"current_password": PASSWORD})
+    assert made.status_code == 201
+    stranger = TestClient(client.app, headers={"X-Nexnotes-Client": "tab-reset0000"})
+    assert stranger.post(f"/api/reset/{made.json()['link'].rsplit('/', 1)[1]}", json={"password": GOOD}).status_code == 204
+    # A new password through the operator's link ends the account's sessions.
     assert anna_client.get("/api/auth/me").status_code == 401
     sign_in(anna_client, anna)
     assert client.post(f"/api/accounts/{anna.id}/sign-out").status_code == 204

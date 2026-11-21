@@ -1,12 +1,13 @@
 /**
  * The pages before signing in: the first account (with the setup code from the server's log), signing in (password,
- * then the second factor; or a provider's button, in the order of the sign-in blueprint), and accepting an invitation.
+ * then the second factor; or a provider's button, in the order of the sign-in blueprint), accepting an invitation, and
+ * setting a new password with the operator's reset link.
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { ApiError, authApi, invitesApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
+import { ApiError, authApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
 import { Logo } from '../components/Logo'
 import { ProviderButtons } from '../components/ProviderButtons'
 import { ThemeSwitcher } from '../components/ThemeSwitcher'
@@ -83,11 +84,20 @@ function Primary({ children, busy = false }: { children: ReactNode; busy?: boole
   )
 }
 
-export function Problem({ code, fromAddress = false }: { code: string | null; fromAddress?: boolean }) {
-  if (!code) return null
+/** What went wrong: the server's code with the values its sentence needs ("at least {{minimum}} characters"). */
+export type Trouble = { code: string; values?: Record<string, unknown> } | null
+
+/** The refusal as a `Trouble`, values kept: only the code lost them, and the page showed "{{minimum}}". */
+// eslint-disable-next-line react-refresh/only-export-components
+export function troubleOf(error: unknown): NonNullable<Trouble> {
+  return error instanceof ApiError ? { code: error.code, values: error.values } : { code: 'internal_error' }
+}
+
+export function Problem({ problem, fromAddress = false }: { problem: Trouble; fromAddress?: boolean }) {
+  if (!problem) return null
   return (
     <p role="alert" className="rounded-[9px] border border-bad-500/30 bg-bad-500/10 px-3 py-2 text-sm text-bad-500">
-      {fromAddress ? signInErrorText(code) : errorText(code)}
+      {fromAddress ? signInErrorText(problem.code) : errorText(problem.code, problem.values)}
     </p>
   )
 }
@@ -100,7 +110,7 @@ export function Warning({ children }: { children: ReactNode }) {
   )
 }
 
-const codeOf = (error: unknown) => (error instanceof ApiError ? error.code : 'internal_error')
+const codeOf = (error: unknown) => troubleOf(error).code
 
 /** How long the pages wait for the ways in before they fall back to the password, as on a failed answer. */
 export const WAYS_IN_WAIT_MS = 5000
@@ -127,7 +137,7 @@ export function SetupPage() {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
+  const [problem, setProblem] = useState<Trouble>(null)
   useEffect(() => {
     authApi.setupState().then(setState, () => undefined)
   }, [])
@@ -148,21 +158,21 @@ export function SetupPage() {
         className="space-y-4"
         onSubmit={async (event) => {
           event.preventDefault()
-          if (!name.trim()) return setProblem('name_missing')
-          if (password.length < min) return setProblem('password_too_short')
+          if (!name.trim()) return setProblem({ code: 'name_missing' })
+          if (password.length < min) return setProblem({ code: 'password_too_short', values: { minimum: min } })
           setBusy(true)
           setProblem(null)
           try {
             setMe(await authApi.setup({ display_name: name.trim(), email: email.trim(), password, code: code.trim(), language: i18n.language }))
           } catch (error) {
-            setProblem(codeOf(error))
+            setProblem(troubleOf(error))
           } finally {
             setBusy(false)
           }
         }}
       >
         {state?.data_on_share && <Warning>{t('setup.share')}</Warning>}
-        <Problem code={problem} />
+        <Problem problem={problem} />
         <AuthField label={t('setup.code')} value={code} onChange={setCode} autoFocus hint={t('setup.codeHint')} />
         <AuthField label={t('auth.name')} value={name} onChange={setName} autoComplete="name" maxLength={80} />
         <AuthField label={t('auth.email')} value={email} onChange={setEmail} type="email" autoComplete="email" />
@@ -185,7 +195,7 @@ export function LoginPage() {
   const [step, setStep] = useState<'password' | 'code'>(params.get('step') === 'code' ? 'code' : 'password')
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(params.get('error'))
+  const [problem, setProblem] = useState<Trouble>(params.get('error') ? { code: params.get('error')! } : null)
   const [fromAddress, setFromAddress] = useState(params.get('error') !== null)
   const [operatorWay, setOperatorWay] = useState(false)
   const [forgot, setForgot] = useState(false)
@@ -202,8 +212,8 @@ export function LoginPage() {
   if (methods === null) return null
 
   const submit = async () => {
-    if (step === 'password' && !name.trim()) return setProblem('email_missing')
-    if (step === 'password' && !password) return setProblem('password_missing')
+    if (step === 'password' && !name.trim()) return setProblem({ code: 'email_missing' })
+    if (step === 'password' && !password) return setProblem({ code: 'password_missing' })
     setBusy(true)
     setProblem(null)
     setFromAddress(false)
@@ -219,9 +229,9 @@ export function LoginPage() {
       setMe(await authApi.me())
       navigate(next, { replace: true })
     } catch (error) {
-      const found = codeOf(error)
+      const found = troubleOf(error)
       setProblem(found)
-      if (found === 'second_factor_expired') {
+      if (found.code === 'second_factor_expired') {
         setStep('password')
         setCode('')
       }
@@ -240,7 +250,7 @@ export function LoginPage() {
             if (code.trim()) void submit()
           }}
         >
-          <Problem code={problem} fromAddress={fromAddress} />
+          <Problem problem={problem} fromAddress={fromAddress} />
           <AuthField label={t('auth.code.label')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus hint={t('auth.code.hint')} />
           <Primary busy={busy}>{t('auth.login.submit')}</Primary>
           <button
@@ -276,7 +286,7 @@ export function LoginPage() {
           }}
         >
           {endedNote}
-          <Problem code={problem} fromAddress={fromAddress} />
+          <Problem problem={problem} fromAddress={fromAddress} />
           <AuthField label={t('auth.email')} value={name} onChange={setName} autoComplete="username" autoFocus name="email" />
           <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="current-password" />
           <Primary busy={busy}>{t('auth.login.submit')}</Primary>
@@ -288,7 +298,7 @@ export function LoginPage() {
       ) : (
         <div className="space-y-4">
           {endedNote}
-          <Problem code={problem} fromAddress={fromAddress} />
+          <Problem problem={problem} fromAddress={fromAddress} />
         </div>
       )}
       <ProviderButtons providers={providers} next={next} withOr={passwordShown} />
@@ -314,7 +324,7 @@ export function InvitePage() {
   const [email, setEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<string | null>(null)
+  const [problem, setProblem] = useState<Trouble>(null)
   const [methods, setMethods] = useState<Methods | null>(null)
 
   useEffect(() => {
@@ -354,20 +364,20 @@ export function InvitePage() {
           className="space-y-4"
           onSubmit={async (event) => {
             event.preventDefault()
-            if (!name.trim()) return setProblem('name_missing')
+            if (!name.trim()) return setProblem({ code: 'name_missing' })
             setBusy(true)
             setProblem(null)
             try {
               setMe(await invitesApi.accept(token, { display_name: name.trim(), email: (email ?? offer.email).trim(), password }))
               navigate('/', { replace: true })
             } catch (error) {
-              setProblem(codeOf(error))
+              setProblem(troubleOf(error))
             } finally {
               setBusy(false)
             }
           }}
         >
-          <Problem code={problem} />
+          <Problem problem={problem} />
           <AuthField label={t('auth.name')} value={name} onChange={setName} autoComplete="name" autoFocus maxLength={80} />
           <AuthField label={t('auth.email')} value={email ?? offer.email} onChange={setEmail} type="email" autoComplete="email" />
           <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: offer.min_password })} />
@@ -375,6 +385,62 @@ export function InvitePage() {
         </form>
       )}
       <ProviderButtons providers={methods.providers} invite={token} withOr={passwordWay} />
+    </AuthFrame>
+  )
+}
+
+/** The operator's reset link (NOTES-2 AC-7): the person sets a new password; nobody is signed in by it. */
+export function ResetPage() {
+  const { t } = useTranslation()
+  const { token = '' } = useParams()
+  const [offer, setOffer] = useState<{ name: string; min_password: number } | null>(null)
+  const [invalid, setInvalid] = useState<'invalid' | 'expired' | null>(null)
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [done, setDone] = useState(false)
+  const [problem, setProblem] = useState<Trouble>(null)
+
+  useEffect(() => {
+    resetApi.offer(token).then(setOffer, (error) => setInvalid(codeOf(error) === 'reset_expired' ? 'expired' : 'invalid'))
+  }, [token])
+
+  if (invalid || done) {
+    const key = done ? 'done' : invalid
+    return (
+      <AuthFrame title={t(`auth.reset.${key}Title`)}>
+        <p className="text-sm text-mist-400">{t(`auth.reset.${key}Text`)}</p>
+        <Link to="/login" className={'nn-btn mt-4 flex w-full ' + (done ? 'nn-btn-accent' : 'nn-btn-ghost')}>
+          {t('auth.backToLogin')}
+        </Link>
+      </AuthFrame>
+    )
+  }
+  if (!offer) return null
+  return (
+    <AuthFrame title={t('auth.reset.title')} text={t('auth.reset.text', { name: offer.name })}>
+      <form
+        className="space-y-4"
+        onSubmit={async (event) => {
+          event.preventDefault()
+          if (password.length < offer.min_password) return setProblem({ code: 'password_too_short', values: { minimum: offer.min_password } })
+          setBusy(true)
+          setProblem(null)
+          try {
+            await resetApi.use(token, password)
+            setDone(true)
+          } catch (error) {
+            const found = troubleOf(error)
+            if (found.code === 'reset_expired' || found.code === 'reset_invalid') setInvalid(found.code === 'reset_expired' ? 'expired' : 'invalid')
+            else setProblem(found)
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        <Problem problem={problem} />
+        <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" autoFocus hint={t('setup.passwordHint', { count: offer.min_password })} />
+        <Primary busy={busy}>{t('auth.reset.submit')}</Primary>
+      </form>
     </AuthFrame>
   )
 }

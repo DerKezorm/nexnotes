@@ -16,7 +16,7 @@ import type { Folder, InboxNote } from './api'
 import { FolderTree, InboxEntry } from './FolderTree'
 import { FolderPage, InboxPage } from './pages'
 import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder } from './store'
-import { hideNotice, UNDO_MS } from './notice'
+import { hideNotice } from './notice'
 
 // ---- The stand-in server ---------------------------------------------------------------------------------------------
 
@@ -385,7 +385,8 @@ describe('the trash (NOTES-4 AC-5, EC-10)', () => {
     const notice = () => document.querySelector('[data-testid="folder-notice"]')
     expect(notice()!.textContent).toBe('“Arbeit” with 14 notes moved to the trash.Undo')
 
-    await act(async () => void vi.advanceTimersByTime(UNDO_MS - 100))
+    // Ten seconds by the spec, written out: a shorter notice must not pass.
+    await act(async () => void vi.advanceTimersByTime(9_900))
     click(button('Undo', notice()!))
     await settle()
     expect(changes().map((call) => `${call.method} ${call.path}`)).toEqual(['DELETE /api/folders/a', 'POST /api/folders/a/restore'])
@@ -401,7 +402,9 @@ describe('the trash (NOTES-4 AC-5, EC-10)', () => {
     click(button('Move to trash', document.querySelector('[role="dialog"]')!))
     await settle()
     expect(document.querySelector('[data-testid="folder-notice"]')).not.toBeNull()
-    await act(async () => void vi.advanceTimersByTime(UNDO_MS))
+    await act(async () => void vi.advanceTimersByTime(9_900))
+    expect(document.querySelector('[data-testid="folder-notice"]')).not.toBeNull()
+    await act(async () => void vi.advanceTimersByTime(100))
     expect(document.querySelector('[data-testid="folder-notice"]')).toBeNull()
   })
 })

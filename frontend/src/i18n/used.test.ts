@@ -4,7 +4,7 @@
  * and a sentence of another app (a vault, notes, a task) told them nexnotes had it.
  *
  * A key counts as asked for when the code names it, or names its start in a built key (`notices.${kind}`,
- * `auth.invite.intoSpace${by}`). The error texts are checked against the server's codes in
+ * `accounts.confirm.${kind}.title`). The error texts are checked against the server's codes in
  * `backend/tests/test_texts.py`.
  */
 
@@ -41,7 +41,7 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 function askedFor(key: string): boolean {
   const base = key.replace(/_(one|other|zero)$/, '')
   if (source.includes(base)) return true
-  // A key with a built end: `auth.invite.intoSpace${by}` asks for intoSpace and intoSpaceBy.
+  // A key with a built end: `auth.reset.${key}Title` asks for doneTitle, expiredTitle and invalidTitle.
   const stem = base.replace(/[A-Z][a-z]*$/, '')
   if (stem !== base && new RegExp(`['\`]${escape(stem)}\\$\\{`).test(source)) return true
   // A key built from a fixed start and a value: `server.confirm.backup_${kind}.title`.
@@ -65,16 +65,16 @@ describe('the shipped texts', () => {
   })
 
   it('have every key a page asks for, in both languages', () => {
-    // A key named whole in the code: t('board.back'), i18nKey="…", or a constant handed to t() later (label:
-    // 'nav.boards'). Built keys (`notices.${kind}`) are left to the check above. A deleted key showed its bare name
-    // as the label of the back arrow.
-    const spaces = new Set(Object.keys(de))
+    // A key named whole in the code: t('server.restore'), i18nKey="…", or a constant handed to t() later (label:
+    // 'settings.tabs.account'). Built keys (`server.restoreTitles.${kind}`) are left to the check above. A deleted
+    // key showed its bare name as a label.
+    const sections = new Set(Object.keys(de))
     const keys = new Set(flat(de))
     const english = new Set(flat(en))
     const has = (set: Set<string>, key: string) => set.has(key) || set.has(`${key}_one`) || set.has(`${key}_other`)
     const asked = [...source.matchAll(/['"`]([a-z][A-Za-z0-9]*(?:\.[A-Za-z0-9_]+)+)['"`]/g)]
       .map((m) => m[1])
-      .filter((key) => spaces.has(key.split('.')[0]) && !/\.(tsx?|json|svg|png|css|js)$/.test(key))
+      .filter((key) => sections.has(key.split('.')[0]) && !/\.(tsx?|json|svg|png|css|js)$/.test(key))
     expect(asked.length).toBeGreaterThan(250)
     expect([...new Set(asked.filter((key) => !has(keys, key) || !has(english, key)))]).toEqual([])
   })

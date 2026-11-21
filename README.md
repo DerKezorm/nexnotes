@@ -40,7 +40,10 @@ about a data folder on a network share.
 | `NEXNOTES_SECRET_KEY` | Signs sign-in attempts and encrypts stored secrets. Empty: a random key in the data folder. |
 | `NEXNOTES_OPERATOR_NETWORKS` | Networks the operator's settings may be changed from. Empty: anywhere. |
 | `NEXNOTES_COOKIE_SECURE` | `auto` (default), `true` or `false`. |
-| `NEXNOTES_LOG_LEVEL` | Overrides the log level set in the interface. |
+| `NEXNOTES_LOG_LEVEL` | Overrides the log level set in the interface: `quiet`, `normal`, `detailed` or `trace`. |
+| `NEXNOTES_SESSION_DAYS` | Days a browser stays signed in, 1 to 3650 (default 30). |
+| `NEXNOTES_COOKIE_SUFFIX` | Appended to the cookie names when two instances share a host: letters, digits and `_`. |
+| `NEXNOTES_PORT` | Port inside the container, 1 to 65535 (default 8000), for host networking. |
 
 A variable with a value nexnotes cannot use stops the start with a line in the log that names the variable and the
 values it takes.

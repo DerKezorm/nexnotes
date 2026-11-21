@@ -51,7 +51,8 @@ async def upload_locale(code: str, request: Request, _operator: OperatorAccount)
     async for chunk in request.stream():
         raw.extend(chunk)
         if len(raw) > locales.MAX_BYTES:
-            raise error("too_large", "The file is too large.", 413)
+            # The page's sentence names the limit ("larger than allowed ({{max_mb}} MB)").
+            raise error("too_large", "The file is too large.", 413, max_mb=round(locales.MAX_BYTES / 1024**2, 1))
     try:
         return locales.save(code, bytes(raw))
     except locales.LocaleError as exc:

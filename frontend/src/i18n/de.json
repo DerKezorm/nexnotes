@@ -100,13 +100,16 @@
     "makeMember": "Zum Mitglied machen",
     "makeOperator": "Zum Betreiber machen",
     "never": "noch nie",
-    "newPassword": "Neues Passwort …",
-    "newPasswordFor": "Neues Passwort für {{name}}",
     "openInvites": "Offene Einladungen",
     "password": "Passwort",
     "passwordTwoFactor": "Passwort + 2FA",
     "person": "Person",
     "resetFactor": "Zweiten Faktor zurücksetzen",
+    "resetLink": "Link zum Zurücksetzen …",
+    "resetLinkFor": "Link zum Zurücksetzen für {{name}}",
+    "resetLinkMake": "Link erstellen",
+    "resetLinkShown": "Schick diesen Link an {{name}}. Er gilt einmal und wird nur jetzt angezeigt.",
+    "resetLinkText": "Mit diesem Link setzt {{name}} selbst ein neues Passwort; du erfährst es nie. Bis dahin gilt das alte. Wer den Link benutzt, meldet das Konto überall ab und beendet seine gekoppelten Geräte, und beim nächsten Anmelden erfährt das Konto, dass sein Passwort über deinen Link zurückgesetzt wurde.",
     "restore": "Zurückholen",
     "role": "Rolle",
     "sendMail": "Per Mail schicken",
@@ -155,13 +158,24 @@
     "login": {
       "ended": "Deine Sitzung ist beendet. Melde dich wieder an.",
       "forgot": "Passwort vergessen?",
-      "forgotText": "Der Betreiber kann dir in den Einstellungen unter „Konten“ ein neues Passwort geben.",
+      "forgotText": "Der Betreiber kann dir in den Einstellungen unter „Konten“ einen Link erstellen, mit dem du selbst ein neues Passwort setzt.",
       "noAccount": "Kein Konto? Lass dich vom Betreiber einladen.",
       "submit": "Anmelden",
       "title": "Bei nexnotes anmelden"
     },
     "name": "Name",
-    "password": "Passwort"
+    "password": "Passwort",
+    "reset": {
+      "doneText": "Melde dich jetzt mit dem neuen Passwort an.",
+      "doneTitle": "Passwort gesetzt",
+      "expiredText": "Dieser Link ist abgelaufen. Bitte den Betreiber um einen neuen.",
+      "expiredTitle": "Link abgelaufen",
+      "invalidText": "Dieser Link wurde schon benutzt oder durch einen neueren ersetzt.",
+      "invalidTitle": "Link nicht gültig",
+      "submit": "Passwort setzen",
+      "text": "Für {{name}}. Alle Sitzungen und gekoppelten Geräte des Kontos enden; danach meldest du dich mit dem neuen Passwort an.",
+      "title": "Neues Passwort setzen"
+    }
   },
   "common": {
     "cancel": "Abbrechen",
@@ -282,6 +296,7 @@
   },
   "errors": {
     "folder_not_found": "Diesen Ordner gibt es nicht.",
+    "fresh_sign_in_required": "Melde dich dafür zuerst noch einmal bei deinem Anbieter an: Betreiber-Handlungen brauchen eine Anmeldung aus den letzten {{minutes}} Minuten. Danach kommst du hierher zurück.",
     "internal_error": "Das hat nicht geklappt.",
     "account_blocked": "Dieses Konto ist gesperrt. Wende dich an den Betreiber.",
     "account_locked": "Zu viele falsche Passwörter. Das Konto wartet eine Viertelstunde.",
@@ -339,6 +354,8 @@
     "public_url_invalid": "Diese Adresse lässt sich in nexnotes nicht verwenden. Prüf, wie sie geschrieben ist.",
     "public_url_missing": "Für Mails braucht nexnotes seine öffentliche Adresse; der Betreiber trägt sie unter Einstellungen ein.",
     "public_url_needed": "nexnotes hat noch keine öffentliche Adresse. Trag sie zuerst ein.",
+    "reset_expired": "Dieser Link ist abgelaufen. Bitte den Betreiber um einen neuen.",
+    "reset_invalid": "Dieser Link wurde schon benutzt oder durch einen neueren ersetzt.",
     "second_factor_expired": "Zu viele falsche Codes oder zu lange gewartet. Fang mit dem Passwort neu an.",
     "second_factor_setup_required": "Richte zuerst deinen zweiten Faktor ein.",
     "second_factor_unavailable": "Der zweite Faktor lässt sich auf dieser Installation nicht prüfen. Bitte den Betreiber, ihn zurückzusetzen.",
@@ -563,6 +580,12 @@
     "otherWindow": "du, anderes Fenster",
     "two": "{{first}} und {{second}} sind auch hier"
   },
+  "resetNotice": {
+    "button": "Verstanden",
+    "hint": "Warst du das nicht, sag es dem Betreiber und ändere dein Passwort unter „Mein Konto“.",
+    "text": "Dein Passwort wurde über einen Link des Betreibers zurückgesetzt.",
+    "title": "Passwort zurückgesetzt"
+  },
   "roles": {
     "member": "Mitglied",
     "operator": "Betreiber"
@@ -669,6 +692,13 @@
     "restarting": "nexnotes startet mit der Sicherung neu. Die Seite lädt gleich neu.",
     "restore": "Wiederherstellen",
     "restoreChanges": "Beim Wiederherstellen kommen {{add}} dazu, {{change}} ändern sich, {{remove}} fallen weg.",
+    "restoreNotes": "Notizen dazu: {{add}} · geändert: {{change}} · weg: {{remove}}.",
+    "restoreTitles": {
+      "add": "Dazu: {{titles}}",
+      "change": "Geändert: {{titles}}",
+      "own": "Titel stehen nur bei deinen eigenen Notizen.",
+      "remove": "Weg: {{titles}}"
+    },
     "schedule": "Automatisch",
     "secretKept": "Bleibt; nur zum Ändern tippen.",
     "send": "Senden",
@@ -686,6 +716,7 @@
     "trash": "Papierkorb leeren nach",
     "twoFactorRequired": "Zweiten Faktor verlangen",
     "twoFactorRequiredHint": "Jedes Konto, das sich mit Passwort anmeldet, muss ihn einrichten, bevor es weiterkommt. Konten von einem Anmeldeanbieter bringen dessen eigenen mit. Ein Konto mit Passwort ist ebenfalls nicht betroffen, wenn es über einen Anbieter kommt, bei dem „{{trusts}}“ an ist.",
+    "untitled": "Ohne Titel",
     "upload": "Sprache hochladen",
     "uploadBackup": "Sicherung hochladen",
     "uploadMax": "Größte Datei je Anhang (MB)",

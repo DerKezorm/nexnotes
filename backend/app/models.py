@@ -16,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -23,6 +24,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     false,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -112,6 +114,9 @@ class Account(Base):
     #: Set when the operator deleted the account. It counts as blocked and as gone for everybody else; for 30 days the
     #: operator can bring it back, then it goes with everything it owns.
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The password was set through a reset link of the operator: the account hears so at its next sign-in, until it
+    #: puts the notice away (NOTES-2 AC-7, the operator never signs in as somebody else unnoticed).
+    password_reset_notice: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     #: The most this account may keep, in bytes; None: no limit.
     storage_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: The second factor (``services/totp.py``): the seed encrypted with the server secret, empty while off; the
@@ -245,6 +250,20 @@ class Invite(Base):
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
 
 
+class PasswordReset(Base):
+    """A link the operator makes for an account that forgot its password: the person sets a new one themselves, the
+    operator never knows it. Only the hash of the token is stored; used once, then gone; one per account."""
+
+    __tablename__ = "password_resets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
 #: Token kinds: a paired iPhone or iPad (NOTES-24), or a key for MCP tools (NOTES-20). Both act as their account.
 TOKEN_DEVICE = "device"
 TOKEN_MCP = "mcp"
@@ -286,6 +305,10 @@ class Folder(Base):
     """A folder of one account; folders nest without a limit (``parent_id``). The inbox is a folder of its own kind."""
 
     __tablename__ = "folders"
+    __table_args__ = (
+        # One inbox per account, also when two first requests make it at the same moment (``services/inbox.py``).
+        Index("uq_folders_one_inbox", "owner_id", unique=True, sqlite_where=text("kind = 'inbox'")),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     owner_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)

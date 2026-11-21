@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-#: Every "not found" says the same: a space one may not read must answer exactly like one that is not there, and a
+#: Every "not found" says the same: a note one may not read must answer exactly like one that is not there, and a
 #: route-specific text ("No such folder.", "no such version") would tell the two apart.
 NOT_FOUND = "Not found."
 
