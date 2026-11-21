@@ -10,14 +10,14 @@ import { readableColor } from '../lib/color'
 import { forgetPrefs } from '../lib/devicePref'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 
 import i18n from '../i18n'
 import { registerNoteActions, startNoteDrag } from './actions'
 import type { Folder, InboxNote } from './api'
 import { FolderTree, InboxEntry } from './FolderTree'
 import { FolderPage, InboxPage } from './pages'
-import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder } from './store'
+import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder, useShownFolder } from './store'
 import { hideNotice } from './notice'
 
 // ---- The stand-in server ---------------------------------------------------------------------------------------------
@@ -90,6 +90,13 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 15; i++) await act(async () => await Promise.resolve())
 }
 
+function ShownFolder() {
+  const { pathname } = useLocation()
+  const folder = /^\/folder\/([^/]+)$/.exec(pathname)?.[1] ?? (pathname === '/inbox' ? 'inbox' : null)
+  useShownFolder(folder)
+  return <Outlet />
+}
+
 async function render(at = '/'): Promise<void> {
   await act(async () =>
     root.render(
@@ -97,8 +104,11 @@ async function render(at = '/'): Promise<void> {
         <InboxEntry />
         <FolderTree />
         <Routes>
-          <Route path="/folder/:id" element={<FolderPage />} />
-          <Route path="/inbox" element={<InboxPage />} />
+          {/* As the notes' workspace: the folder of the list on show is the open one. */}
+          <Route element={<ShownFolder />}>
+            <Route path="/folder/:id" element={<FolderPage />} />
+            <Route path="/inbox" element={<InboxPage />} />
+          </Route>
           <Route path="*" element={null} />
         </Routes>
         <Where />

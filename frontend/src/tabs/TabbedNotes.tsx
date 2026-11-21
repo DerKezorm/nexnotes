@@ -1,9 +1,13 @@
 /**
- * The notes page on a wider screen (NOTES-8): the row of tabs on top, the list of the folder beside the open note while
- * there is room for both, and one note or two side by side (drawings "N8-Nebeneinander", "N8-Tabs-Probe").
+ * The notes page on a wider screen (NOTES-8): the row of tabs on top, the list in the middle beside the open notes
+ * while there is room for both, and one note or two side by side (drawings "N8-Nebeneinander", "N8-Tabs-Probe").
  *
- * - The address names the note on the side used last. Every way that opens a note (the list, a link, the search, the
- *   browser's back button) opens it there: its tab if it has one, otherwise in place of that side's note.
+ * - The list is whatever the sidebar chose (a folder, a tag, the search, the inbox, all notes); choosing another changes
+ *   only the list, the tabs and their editors stay (AC-9).
+ * - The address names the list and the note on the side used last. Every way that opens a note (the list, a link, the
+ *   search, the browser's back button) opens it there: its tab if it has one, otherwise in place of that side's note.
+ *   An address without a note while tabs are open gets the note of the side used last (also the first visit after a
+ *   reload, AC-5).
  * - Two sides need 2 × 340 px; with less, one shows with a switcher, and the split comes back when the window grows
  *   (EC-2). The line between them moves with the mouse or the arrow keys, never below 340 px a side (AC-2).
  * - A note dragged from a list, or a tab, onto the right edge opens beside (AC-1).
@@ -11,20 +15,23 @@
  */
 import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { ColumnHandle } from '../components/ColumnHandle'
 import { draggedNow } from '../folders/actions'
+import { useFolders } from '../folders/store'
 import { useColumnWidth } from '../lib/columns'
+import { ListPlaceContext } from '../notes/listPlace'
+import { folderOfList, hrefIn } from '../notes/workspace'
 import { useAuth } from '../state/auth'
 import { listenForTabKeys } from './keys'
 import { installTabLinks } from './links'
 import { onLiveStopped } from './live'
 import { refreshMeta, useTabMetas } from './meta'
-import { focusSide as focusSideAction, hrefOf, openNoteBeside, setNavigation } from './open'
-import { focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
+import { focusSide as focusSideAction, openNoteBeside, setNavigation } from './open'
+import { focusedKey, focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
 import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './store'
-import { draggedTab, firstVisit, MIN_PANE, ROOMY_PANE, SEPARATOR } from './layout'
+import { draggedTab, MIN_PANE, ROOMY_PANE, SEPARATOR } from './layout'
 import { TabBar } from './TabBar'
 import { TabPane } from './TabPane'
 
@@ -46,13 +53,12 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
 
 type Props = {
   noteId?: string
-  folderId?: string
   /** Just made: the cursor goes into the title. */
   fresh: boolean
-  /** The list to go back to when the last tab closes. */
-  back: string
-  /** The list of the folder (or of all notes). */
+  /** The list in the middle (all notes, a folder, the inbox, a tag, the search). */
   list: ReactNode
+  /** Its address without a note (`/folder/<id>`, `/search?q=…`, `/`). */
+  listPath: string
 }
 
 export function TabbedNotes(props: Props) {
@@ -61,10 +67,10 @@ export function TabbedNotes(props: Props) {
   return <Tabbed {...props} account={me.id} />
 }
 
-function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { account: number }) {
+function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: number }) {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const location = useLocation()
+  const tree = useFolders()
   loadAccountTabs(account)
   const state = useTabs()
   const metas = useTabMetas(state.tabs.map((tab) => tab.note))
@@ -76,32 +82,32 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
   const [listWidth] = useColumnWidth('list')
 
   useEffect(() => {
-    setNavigation((path, options) => navigate(path, { replace: options?.replace, state: options?.state }), back)
+    setNavigation((path, options) => navigate(path, { replace: options?.replace, state: options?.state }))
     return () => setNavigation(null)
-  }, [navigate, back])
+  }, [navigate])
+
+  // The folder of the list, kept with a tab opened from it.
+  const shownFolder = folderOfList(listPath)
+  const folderId = shownFolder === 'inbox' ? (tree.inbox?.id ?? '') : (shownFolder ?? '')
 
   // The address opens its note on the side used last; before anything is drawn. Not a note of the account before,
   // though, which the address may still name after another account came into this browser tab: that goes to the
-  // start, and never into this account's tabs.
+  // start (the list may be a folder of the account before too), and never into this account's tabs. An address without a note keeps the tabs and names the note on
+  // the side used last (another list chosen in the sidebar, the first visit after a reload).
   useLayoutEffect(() => {
     if (noteId && isOtherAccountsNote(noteId)) {
       setSettled(false)
       navigate('/', { replace: true })
       return
     }
-    if (noteId) tabs.openHere(noteId, folderId ?? '')
+    if (noteId) tabs.openHere(noteId, folderId)
+    else {
+      const state = tabsNow()
+      const tab = tabOf(state, focusedKey(state))
+      if (tab) navigate(hrefIn(listPath, tab.note), { replace: true })
+    }
     setSettled(true)
-  }, [noteId, folderId, account, navigate])
-
-  // The first visit of a page load at "/": back to the tabs of last time.
-  useLayoutEffect(() => {
-    if (!firstVisit()) return
-    if (noteId || location.pathname !== '/' || location.search) return
-    const href = hrefOf(tabsNow())
-    if (href) navigate(href, { replace: true })
-    // Once per page load, whatever the page's later addresses.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [noteId, folderId, listPath, account, navigate])
 
   useEffect(() => listenForTabKeys(), [])
   useEffect(() => onLiveStopped((note) => void refreshMeta([note])), [])
@@ -110,7 +116,7 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
   const left = tabOf(state, state.left)
   const right = tabOf(state, state.right)
   const side = focusSide(state)
-  const open = Boolean(noteId) && settled && Boolean(left)
+  const open = settled && Boolean(left)
   const split = open && Boolean(right)
   const both = split && width >= 2 * MIN_PANE + SEPARATOR
   const showList = open && width - listWidth >= (both ? 2 * ROOMY_PANE + SEPARATOR : MIN_PANE)
@@ -175,13 +181,9 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
       {state.tabs.length > 0 && <TabBar state={state} metas={metas} split={split} open={open} />}
       <div className="flex min-h-0 flex-1">
         {(!open || showList) && (
-          <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined}>
-            <div
-              className={
-                'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r px-3 py-4' : 'flex w-full px-8 py-6')
-              }
-            >
-              {list}
+          <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined} data-testid="list-column">
+            <div className={'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r' : 'flex w-full')}>
+              <ListPlaceContext.Provider value={open ? 'column' : 'page'}>{list}</ListPlaceContext.Provider>
             </div>
             {open && <ColumnHandle column="list" />}
           </div>

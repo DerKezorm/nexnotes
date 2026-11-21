@@ -43,11 +43,12 @@ test('NOTES-6 EC-1 all notes of an account without notes show the empty state, l
     await member.goto('/')
     await expectEmptyState(member)
   }
-  // A new note left empty goes away again (NOTES-3 EC-4): the empty state is back.
+  // A new note left empty goes away again when its tab closes (NOTES-3 EC-4; another list keeps it open, NOTES-8
+  // AC-9): the empty state is back.
   await member.setViewportSize({ width: 1600, height: 900 })
   await member.getByTestId('list-empty-new').click()
   await expect(member.getByTestId('note-editor')).toBeVisible()
-  await member.getByRole('link', { name: 'All notes' }).click()
+  await member.getByTestId('tab-close').click()
   await expectEmptyState(member)
   await context.close()
 })

@@ -7,7 +7,7 @@ import { AboutPage } from './pages/AboutPage'
 import { InvitePage, LoginPage, ResetPage, SetupPage } from './pages/AuthPages'
 import { NotesHome } from './pages/NotesHome'
 import { SettingsPage } from './pages/SettingsPage'
-import { FEATURE_ROUTES } from './extensions'
+import { FEATURE_ROUTES, LIST_LAYOUT, type FeatureRoute } from './extensions'
 import { useAuth } from './state/auth'
 
 /**
@@ -29,7 +29,12 @@ function SignedIn({ children }: { children: ReactNode }) {
   return <Fragment key={me?.id ?? 'nobody'}>{children}</Fragment>
 }
 
+function featureRoute(route: FeatureRoute) {
+  return route.path === '' ? <Route key="index" index element={route.element} /> : <Route key={route.path} path={route.path} element={route.element} />
+}
+
 export default function App() {
+  const inLayout = (route: FeatureRoute) => Boolean(route.list && LIST_LAYOUT.element)
   return (
     <Routes>
       <Route path="setup" element={<SetupPage />} />
@@ -44,10 +49,9 @@ export default function App() {
         }
       >
         {!FEATURE_ROUTES.some((route) => route.path === '') && <Route index element={<NotesHome />} />}
-        {FEATURE_ROUTES.map((route) => (route.path === '' ? <Route key="index" index element={route.element} /> : null))}
-        {FEATURE_ROUTES.filter((route) => route.path !== '').map((route) => (
-          <Route key={route.path} path={route.path} element={route.element} />
-        ))}
+        {/* The lists share one workspace, so the notes beside them stay while the list changes (NOTES-8 AC-9). */}
+        {FEATURE_ROUTES.some(inLayout) && <Route element={LIST_LAYOUT.element}>{FEATURE_ROUTES.filter(inLayout).map(featureRoute)}</Route>}
+        {FEATURE_ROUTES.filter((route) => !inLayout(route)).map(featureRoute)}
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/:tab" element={<SettingsPage />} />
         <Route path="about" element={<AboutPage />} />

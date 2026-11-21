@@ -22,7 +22,7 @@ import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
 import type { NoteHead } from '../notes/api'
 import { tryLeave } from '../notes/context'
-import { NotesPage } from '../notes/NotesPage'
+import { AllNotesList, NotesPage } from '../notes/NotesPage'
 import { SIGNED_OUT_EVENT } from '../api/client'
 import { SessionDialog } from '../components/SessionDialog'
 import { AuthProvider, useAuth } from '../state/auth'
@@ -30,11 +30,11 @@ import { tabCommand } from './keys'
 import { acquireProvider, BRIDGE, forgetParked, parkedProviders, releaseProvider } from './live'
 import { accountChanged, followAccount, waitingChanges } from '../state/account'
 import { forgetMeta, metaOf, refreshMeta } from './meta'
-import { openNoteBeside, openNoteInNewTab } from './open'
+import { openNoteBeside, openNoteInNewTab, showTab } from './open'
 import { startNewNote } from '../notes/newNote'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabs, tabsNow } from './store'
-import { forgetRestored, rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
+import { rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
@@ -262,8 +262,13 @@ async function render(path: string): Promise<void> {
           <SessionDialog />
           <PerAccount>
             <Routes>
-              <Route path="/" element={<NotesPage />} />
-              <Route path="/notes/:noteId" element={<NotesPage />} />
+              {/* As `App.tsx`: the lists inside the workspace, the trash a page of its own. */}
+              <Route element={<NotesPage />}>
+                <Route path="/" element={<AllNotesList />} />
+                <Route path="/notes/:noteId" element={<AllNotesList />} />
+                <Route path="/folder/:id" element={<div data-testid="folder-list" />} />
+                <Route path="/inbox" element={<div data-testid="inbox-list" />} />
+              </Route>
               <Route path="/trash" element={<div data-testid="trash-page" />} />
             </Routes>
           </PerAccount>
@@ -281,7 +286,6 @@ async function reload(path: string): Promise<void> {
   box.remove()
   forgetTabs()
   forgetMeta()
-  forgetRestored()
   await render(path)
 }
 
@@ -338,7 +342,6 @@ beforeEach(() => {
   forgetFolders()
   forgetTabs()
   forgetMeta()
-  forgetRestored()
   vi.stubGlobal('WebSocket', RoomSocket)
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
   vi.stubGlobal(
@@ -378,6 +381,32 @@ afterEach(async () => {
 // ---- The tests -----------------------------------------------------------------------------------------------------
 
 describe('tabs in the page', () => {
+  it('NOTES-8 AC-9 another list changes only the middle: the tabs and the editor stay, the address names both', async () => {
+    await render('/notes/soup')
+    await act(async () => openNoteInNewTab('shop'))
+    await idle()
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    const editor = pane('left')!.querySelector('.ProseMirror')
+    expect(editor).not.toBeNull()
+    // The path over the note chooses its folder's list.
+    const path = pane('left')!.querySelector('[data-testid="note-path"]') as HTMLAnchorElement
+    expect(path.tagName).toBe('A')
+    await act(async () => path.click())
+    await idle()
+    expect(where).toBe('/folder/garden?note=shop')
+    expect($('folder-list')).not.toBeNull()
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    // The very same editor: not drawn anew, its connection kept.
+    expect(pane('left')!.querySelector('.ProseMirror')).toBe(editor)
+    // A tab chosen now keeps the list and names its note.
+    const soup = tabsNow().tabs.find((one) => one.note === 'soup')
+    await act(async () => showTab(soup?.key ?? ''))
+    await idle()
+    expect(where).toBe('/folder/garden?note=soup')
+    expect($('folder-list')).not.toBeNull()
+    // The first test of the file also pays for loading the editor: more time than the others need.
+  }, 20_000)
+
   it('NOTES-8 AC-3 a note opened in a new tab keeps the first one open; each tab shows its folder color, title and a cross', async () => {
     await render('/notes/soup')
     expect(tabTitles()).toEqual(['Lentil soup'])
@@ -626,7 +655,7 @@ describe('tabs in the page', () => {
   it('NOTES-3 AC-1 EC-4 EC-9 "New note" while an empty note is open there takes that one; with text a second one comes', async () => {
     notes.set('blank', note('blank', ''))
     rooms.set('blank', new Y.Doc())
-    await render('/notes/blank?folder=garden')
+    await render('/folder/garden?note=blank')
     const made = () => requests.filter((request) => request === 'POST /api/notes').length
     const title = () => $('note-title') as HTMLInputElement
     expect(title().value).toBe('')
@@ -636,7 +665,7 @@ describe('tabs in the page', () => {
     await idle()
     expect(made()).toBe(0)
     expect(document.activeElement).toBe(title())
-    expect(where).toBe('/notes/blank?folder=garden')
+    expect(where).toBe('/folder/garden?note=blank')
     // Another folder is another place: a new note there.
     await act(async () => startNewNote('kitchen'))
     await idle()

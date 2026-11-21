@@ -135,7 +135,7 @@ function defaultIndex(typing: Typing | null): number {
 
 /** Opens a tag's page; an open note without a title asks first (NOTES-3 AC-9). */
 export function openTag(label: string): void {
-  tryLeave(() => goTo(tagHref(label)))
+  tryLeave(() => goTo(tagHref(label)), tagHref(label))
 }
 
 /** Puts the chosen tag in place of what was typed, with a blank after it. */

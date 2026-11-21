@@ -80,17 +80,3 @@ export function draggedTab(): string | null {
 export function setDraggedTab(key: string | null): void {
   dragging = key
 }
-
-let restored = false
-
-/** The tabs of last time come back once per page load (AC-5); true the first time it is asked. */
-export function firstVisit(): boolean {
-  if (restored) return false
-  restored = true
-  return true
-}
-
-/** For tests: as after a fresh page load. */
-export function forgetRestored(): void {
-  restored = false
-}

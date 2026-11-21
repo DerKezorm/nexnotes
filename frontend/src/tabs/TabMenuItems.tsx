@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation } from 'react-router-dom'
 
 import { useCurrentFolder } from '../folders/store'
+import { noteOf } from '../notes/workspace'
 import { useDesktop } from './desktop'
 import { openNoteBeside, openNoteInNewTab } from './open'
 import { pulseTab } from './pulse'
@@ -24,7 +25,7 @@ export function TabMenuItems({ noteId, onDone }: { noteId: string; onDone: () =>
   if (!desktop) return null
   const folder = openFolderId ?? undefined
   // A note is on screen only while the page shows notes; on a list page alone every tab is "behind".
-  const showing = location.pathname.startsWith('/notes/')
+  const showing = noteOf(location.pathname, location.search) !== null
   const tab = state.tabs.find((one) => one.note === noteId)
   const front = showing && tabOf(state, focusedKey(state))?.note === noteId
   const beside = showing && Boolean(state.right) && tabOf(state, state.right)?.note === noteId

@@ -6,14 +6,14 @@
 import { ChevronDown, ChevronRight, FileText, Inbox, Link2, Mic, MoreHorizontal, Plug, Plus } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { LogoMark } from '../components/Logo'
 import { notesApi } from '../notes/api'
 import { NoteList } from '../notes/NoteList'
 import { ago } from '../lib/time'
 import { problemText } from '../lib/errors'
-import { useTitle } from '../lib/title'
+import { useListPadding, useListTitle } from '../notes/listPlace'
 import { foldersApi, type Folder, type InboxNote } from './api'
 import { draggedNow, droppedFrom, endDrag, NOTES_MOVED_EVENT, startNoteDrag, useNoteActions } from './actions'
 import { useFolderActions } from './useFolderActions'
@@ -22,15 +22,10 @@ import { FolderMark } from './FolderMark'
 import { FolderMenu } from './FolderMenu'
 import { colorOf } from './palette'
 import { originText } from './origin'
-import { flatten, pathOf, revealFolder, setCurrentFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { flatten, pathOf, revealFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
 
-/** The open folder for "New note" (AC-9) while the page is shown. */
-function useOpenHere(id: string | null) {
-  useEffect(() => {
-    setCurrentFolder(id)
-    return () => setCurrentFolder(null)
-  }, [id])
-}
+// The open folder for "New note" (AC-9) follows the list on show: the notes' workspace sets it (`NotesPage`), whether
+// the list has room beside the notes or not.
 
 // ---- A folder --------------------------------------------------------------------------------------------------------
 
@@ -43,13 +38,14 @@ export function FolderPage() {
   const [menu, setMenu] = useState<HTMLElement | null>(null)
   const [over, setOver] = useState(false)
   const folder = tree.byId.get(id)
-  useOpenHere(folder ? id : null)
-  useTitle(folder?.name ?? t('folders.section'))
+  const location = useLocation()
+  const padding = useListPadding()
+  useListTitle(folder?.name ?? t('folders.section'))
   useEffect(() => {
     if (tree.status === 'ready' && tree.byId.has(id)) revealFolder(id)
   }, [id, tree.status, tree.byId])
 
-  if (tree.inbox?.id === id) return <Navigate to="/inbox" replace />
+  if (tree.inbox?.id === id) return <Navigate to={`/inbox${location.search}`} replace state={location.state} />
   if (tree.status !== 'ready' && !folder) return null
   if (!folder)
     return (
@@ -67,7 +63,7 @@ export function FolderPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-4 px-4 py-5 md:px-8 md:py-6" data-testid="folder-page">
+    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="folder-page">
       <nav aria-label={t('folders.page.path')} className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-mist-500">
         {path.map((step, index) =>
           index < path.length - 1 ? (
@@ -145,8 +141,8 @@ export function InboxPage() {
   const [notes, setNotes] = useState<InboxNote[] | null>(null)
   const [problem, setProblem] = useState('')
   const asked = useRef(0)
-  useTitle(t('folders.inbox.name'))
-  useOpenHere(tree.inbox?.id ?? null)
+  const padding = useListPadding()
+  useListTitle(t('folders.inbox.name'))
 
   const load = useCallback(async () => {
     const mine = ++asked.current
@@ -173,7 +169,7 @@ export function InboxPage() {
   }, [load])
 
   return (
-    <div className="flex min-h-full flex-col gap-4 px-4 py-5 md:px-8 md:py-6" data-testid="inbox-page">
+    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="inbox-page">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold">{t('folders.inbox.name')}</h1>
         <p className="text-[13.5px] text-mist-400">{t('folders.inbox.text')}</p>
@@ -264,7 +260,7 @@ export function FoldersPage() {
   const actions = useFolderActions()
   const { newNote } = useNoteActions()
   const [menu, setMenu] = useState<{ folder: Folder; anchor: HTMLElement } | null>(null)
-  useTitle(t('folders.section'))
+  useListTitle(t('folders.section'))
   const rows = flatten(tree, open)
   return (
     <div className="flex min-h-full flex-col" data-testid="folders-page">

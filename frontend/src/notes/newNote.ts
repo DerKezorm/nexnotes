@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom'
 import { refreshFolders, useCurrentFolder } from '../folders/store'
 import { notesApi, notesChanged, type NoteHead } from './api'
 import { blankOpenNoteIn, goTo, tryLeave } from './context'
+import { currentList, hrefIn } from './workspace'
 
 let making: Promise<NoteHead> | null = null
 
@@ -36,15 +37,15 @@ export function createNote(folderId?: string | null): Promise<NoteHead> {
   return making
 }
 
-/** Where an open note lives in the address; with the folder whose list stands beside it. */
+/** Where a note opens: beside the list on show (`/folder/<id>?note=<id>`, `/notes/<id>` beside all notes; NOTES-8
+ * AC-9), or beside the list of `folderId` when one is named. */
 export function noteHref(id: string, folderId?: string | null): string {
-  const path = `/notes/${encodeURIComponent(id)}`
-  return folderId ? `${path}?folder=${encodeURIComponent(folderId)}` : path
+  return hrefIn(folderId ? `/folder/${encodeURIComponent(folderId)}` : currentList(), id)
 }
 
-/** The note just made, opened with the cursor in the title (AC-1). */
-export function openNew(note: NoteHead, folderId: string | null | undefined, go: (path: string, state: unknown) => void): void {
-  go(noteHref(note.id, folderId), { fresh: true })
+/** The note just made, opened beside the list on show with the cursor in the title (AC-1). */
+export function openNew(note: NoteHead, go: (path: string, state: unknown) => void): void {
+  go(noteHref(note.id), { fresh: true })
 }
 
 /** "Neue Notiz" from outside React's tree (the folder pages' button): asks the open note first, then makes and opens. */
@@ -53,7 +54,7 @@ export function startNewNote(folderId?: string | null): void {
   if (blank) return blank.focusTitle()
   tryLeave(() => {
     createNote(folderId)
-      .then((note) => openNew(note, folderId, goTo))
+      .then((note) => openNew(note, goTo))
       .catch(() => undefined)
   })
 }
@@ -61,7 +62,7 @@ export function startNewNote(folderId?: string | null): void {
 /** "Neue Notiz" for a button: into the open folder, or the inbox. */
 export function useNewNote(): { start: () => void; busy: boolean } {
   const navigate = useNavigate()
-  const { openFolderId, targetFolderId } = useCurrentFolder()
+  const { targetFolderId } = useCurrentFolder()
   const [busy, setBusy] = useState(false)
   const start = useCallback(() => {
     // An empty note open in the same folder is the new note already: the cursor goes into its title.
@@ -70,10 +71,10 @@ export function useNewNote(): { start: () => void; busy: boolean } {
     tryLeave(() => {
       setBusy(true)
       createNote(targetFolderId)
-        .then((note) => openNew(note, openFolderId, (path, state) => navigate(path, { state })))
+        .then((note) => openNew(note, (path, state) => navigate(path, { state })))
         .catch(() => undefined)
         .finally(() => setBusy(false))
     })
-  }, [navigate, openFolderId, targetFolderId])
+  }, [navigate, targetFolderId])
   return { start, busy }
 }
