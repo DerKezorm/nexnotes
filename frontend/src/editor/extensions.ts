@@ -9,7 +9,8 @@
  * - headings that fold (AC-12), checklists with "x von y" and "Erledigtes nach unten" (AC-4);
  * - pasted HTML without scripts, forms and styles (EC-3); links open with Ctrl or ⌘ in a new tab without access to
  *   nexnotes (EC-8);
- * - the placeholder and a few shortcuts (link, table, folding).
+ * - the placeholder and a few shortcuts (link, table, folding);
+ * - tags painted in the accent colour, with suggestions while one is typed (`tags.ts`, NOTES-5).
  */
 import { Extension, type AnyExtension, type Editor } from '@tiptap/core'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -29,6 +30,7 @@ import type {} from '@tiptap/starter-kit'
 import { caretLook, type PresenceUser } from './presence'
 import type { NoteProvider } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
+import { noteTags } from './tags'
 
 export { HIGHLIGHT_COLORS }
 
@@ -401,6 +403,8 @@ export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}
     Placeholder.configure({ placeholder, showOnlyCurrent: true, includeChildren: false }),
     LinkOpener,
     noteEditing(t, hooks),
+    // Tags (NOTES-5): painted and suggested, never a node or a mark of their own.
+    noteTags(t),
   ]
 }
 

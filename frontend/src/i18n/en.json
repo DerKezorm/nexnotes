@@ -371,7 +371,9 @@
     "unknown_language": "nexnotes does not have this language.",
     "use_disable": "Turn your own second factor off on your account page.",
     "wrong_credentials": "Email or password is wrong.",
-    "wrong_password": "The password is wrong."
+    "wrong_password": "The password is wrong.",
+    "tag_name_invalid": "A tag is made of letters, digits, hyphens, underscores or emoji, without spaces, with at least one letter and at most 64 characters.",
+    "tag_exists": "The tag #{{label}} exists already."
   },
   "folders": {
     "section": "Folders",
@@ -809,6 +811,35 @@
     "text": "The first account runs the server. You invite more people afterwards.",
     "title": "Set up nexnotes",
     "version": "Version {{version}}"
+  },
+  "tags": {
+    "heading": "Tags",
+    "showAll": "Show all ({{count}})",
+    "allTitle": "All tags",
+    "none": "No tags yet. Type #word into a note.",
+    "failed": "The tags could not be loaded.",
+    "countNotes_one": "{{count}} note",
+    "countNotes_other": "{{count}} notes",
+    "ofWhich": ", {{count}} of them from {{names}}",
+    "empty": "No note has this tag.",
+    "from": "from {{name}}",
+    "rename": "Rename",
+    "delete": "Delete",
+    "saveSmart": "Save as smart folder",
+    "renameTitle": "Rename tag",
+    "newName": "New name",
+    "renameSays_one": "Changes one of your notes.",
+    "renameSays_other": "Changes {{count}} of your notes.",
+    "kept_one": "In the note from {{names}},",
+    "kept_other": "In the notes from {{names}},",
+    "keptEnd": " stays as it is.",
+    "mergeAsk": "{{tag}} exists already. Both become one tag.",
+    "merge": "Merge",
+    "deleteTitle": "Delete tag",
+    "deleteSays_one": "{{tag}} goes from one of your notes; the rest of the text stays.",
+    "deleteSays_other": "{{tag}} goes from {{count}} of your notes; the rest of the text stays.",
+    "suggestions": "Tag suggestions",
+    "openTag": "All notes with {{tag}}"
   },
   "theme": {
     "dark": "Dark",
