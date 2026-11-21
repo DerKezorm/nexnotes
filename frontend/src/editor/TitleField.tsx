@@ -18,7 +18,7 @@ type Props = {
   editable: boolean
   /** Enter, or the arrow down at the end: into the text. */
   onEnter: () => void
-  /** Every new value, typed here or by someone else. */
+  /** The value when the field is drawn, then every new one, typed here or by someone else. */
   onValue?: (value: string) => void
   autoFocus?: boolean
   invalid?: boolean
@@ -53,12 +53,14 @@ export const TitleField = forwardRef<TitleFieldHandle, Props>(function TitleFiel
       }
     }
     text.observe(observer)
+    // The value there is now, always: a document that has its title before the field is drawn (the same note on the
+    // other side, a parked connection opened again) changes nothing afterwards, and the note must still know it.
     const now = text.toString()
     if (now !== last.current) {
       last.current = now
       setValue(now)
-      onValue?.(now)
     }
+    onValue?.(now)
     return () => text.unobserve(observer)
     // onValue is read when called; a new function each render does not need a new observer.
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -106,12 +106,14 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   const myName = me?.display_name || me?.name || ''
   const [head, setHead] = useState<NoteHead | null>(null)
   const [problem, setProblem] = useState('')
-  const [title, setTitle] = useState('')
+  // The title the document has now (the same note on the other side, a parked connection): never "" for a moment,
+  // which would ask for a title on leaving and show "Ohne Titel" in the tab (NOTES-8 EC-1).
+  const [title, setTitle] = useState(() => provider.doc.getText('title').toString())
   const [askLeave, setAskLeave] = useState<null | (() => void)>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const titleField = useRef<TitleFieldHandle>(null)
-  const titleRef = useRef('')
+  const titleRef = useRef(title)
   const deleted = useRef(false)
   const titleAtSync = useRef<string | null>(null)
   const inset = useKeyboardInset()

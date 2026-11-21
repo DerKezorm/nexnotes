@@ -13,6 +13,7 @@ import { bodyIsEmpty, cleanPastedHtml, collapseKey, editorExtensions, editorProp
 import { presenceUser } from './presence'
 import { NoteProvider } from './provider'
 import { tableActions } from './table'
+import { TitleField } from './TitleField'
 import { Toolbar } from './Toolbar'
 
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
@@ -520,5 +521,22 @@ describe('NOTES-15 AC-4 a restore while somebody writes', () => {
     Y.applyUpdate(mine, Y.encodeStateAsUpdate(server))
     const caret = editor.state.doc.resolve(editor.state.selection.from)
     expect([caret.index(0), caret.parent.textContent, caret.parentOffset]).toEqual([0, 'first session', 13])
+  })
+})
+
+describe('NOTES-8 EC-1 the title field', () => {
+  it('NOTES-8 EC-1 a document that has its title before the field is drawn reports it at once, and every change after', async () => {
+    const doc = new Y.Doc()
+    doc.getText('title').insert(0, 'Grocery list')
+    const seen: string[] = []
+    const element = document.createElement('div')
+    document.body.appendChild(element)
+    const root = createRoot(element)
+    await act(async () => root.render(<TitleField doc={doc} editable onEnter={() => undefined} onValue={(value) => seen.push(value)} />))
+    expect(seen).toEqual(['Grocery list'])
+    await act(async () => doc.getText('title').insert(0, 'Big '))
+    expect(seen).toEqual(['Grocery list', 'Big Grocery list'])
+    await act(async () => root.unmount())
+    element.remove()
   })
 })

@@ -38,6 +38,8 @@ let notes: Map<string, NoteHead & { locked?: boolean }>
 const rooms = new Map<string, Y.Doc>()
 const sockets: RoomSocket[] = []
 let me = 1
+/** Every request to the stand-in server, as "METHOD /path". */
+const requests: string[] = []
 const INBOX = 'inbox-1'
 const NOW = new Date().toISOString()
 
@@ -141,6 +143,16 @@ class RoomSocket {
 }
 
 const openSockets = () => sockets.filter((socket) => socket.readyState === 1)
+
+/** A paragraph of text in the room of a note, so that leaving it without a title would ask for one. */
+function withText(id: string, text: string): void {
+  const paragraph = new Y.XmlElement('paragraph')
+  paragraph.insert(0, [new Y.XmlText(text)])
+  rooms.get(id)!.getXmlFragment('body').insert(0, [paragraph])
+}
+
+/** What would have written a title, or thrown the note away, on leaving it. */
+const titleWrites = () => requests.filter((line) => /\/title\/suggestion$|\/discard$|^PUT .*\/title$/.test(line))
 
 // ---- Rendering -----------------------------------------------------------------------------------------------------
 
@@ -258,8 +270,10 @@ beforeEach(() => {
       disconnect() {}
     },
   )
+  requests.length = 0
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'http://localhost')
+    requests.push(`${init?.method ?? 'GET'} ${url.pathname}`)
     return answer(init?.method ?? 'GET', url.pathname)
   })
 })
@@ -434,6 +448,55 @@ describe('tabs in the page', () => {
     const right = pane('right')!.querySelector('[data-testid="note-title"]') as HTMLInputElement
     await act(async () => typeTitle(left, 'Lentil soup, spicy'))
     expect(right.value).toBe('Lentil soup, spicy')
+  })
+
+  it('NOTES-8 EC-1 the same note twice: ending the split or closing the right side asks for no title and keeps it on the server', async () => {
+    withText('soup', 'red lentils, onion')
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('soup'))
+    await settle(80)
+    expect(pane('right')!.dataset.note).toBe('soup')
+    // Both tabs know the title from the start, never "Untitled" for a moment.
+    expect(tabTitles()).toEqual(['Lentil soup', 'Lentil soup'])
+    await act(async () => $('tab-end-split')!.click())
+    await settle(120)
+    expect($('leave-dialog')).toBeNull()
+    expect(pane('right')).toBeNull()
+    // Beside again, then its tab closed.
+    await act(async () => openNoteBeside('soup'))
+    await settle(80)
+    expect(pane('right')!.dataset.note).toBe('soup')
+    const right = $$('tab').find((tab) => tab.dataset.side === 'right')!
+    await act(async () => $('tab-close', right)!.click())
+    await settle(120)
+    expect($('leave-dialog')).toBeNull()
+    expect($$('tab')).toHaveLength(1)
+    expect(titleWrites()).toEqual([])
+    expect(rooms.get('soup')!.getText('title').toString()).toBe('Lentil soup')
+    expect(tabTitles()).toEqual(['Lentil soup'])
+  })
+
+  it('NOTES-8 EC-1 a parked tab opened again knows its title: leaving it asks for none', async () => {
+    withText('soup', 'red lentils, onion')
+    await render('/notes/soup')
+    await act(async () => window.dispatchEvent(new Event('offline')))
+    const title = pane('left')!.querySelector('[data-testid="note-title"]') as HTMLInputElement
+    await act(async () => typeTitle(title, 'Lentil soup, spicy'))
+    // Out of view with its change still waiting: parked.
+    await act(async () => openNoteInNewTab('shop'))
+    await settle(80)
+    expect(parkedProviders().map((provider) => provider.noteId)).toEqual(['soup'])
+    const soup = $$('tab').find((tab) => tab.dataset.note === 'soup')!
+    await act(async () => soup.click())
+    await settle(80)
+    expect(pane('left')!.dataset.note).toBe('soup')
+    expect(parkedProviders()).toEqual([])
+    expect(tabTitles()).toEqual(['Lentil soup, spicy', 'Saturday shopping'])
+    await act(async () => $('tab-close', $$('tab').find((tab) => tab.dataset.note === 'soup')!)!.click())
+    await settle(120)
+    expect($('leave-dialog')).toBeNull()
+    expect($$('tab').map((tab) => tab.dataset.note)).toEqual(['shop'])
+    expect(titleWrites()).toEqual([])
   })
 
   it('NOTES-8 EC-1 two editors of one note: their documents meet at once and keep their own presence', () => {
