@@ -6,10 +6,9 @@
  * keys go through the entries, Escape and a click outside close it, focus returns where it came from (EC-11).
  */
 import { FolderInput, FolderPlus, Palette, Pencil, Share2, Trash2, Upload, type LucideIcon } from 'lucide-react'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
+import { Menu } from '../components/Menu'
 import type { Folder } from './api'
 
 export type MenuAction = 'newSubfolder' | 'rename' | 'style' | 'move' | 'trash'
@@ -41,55 +40,8 @@ export function FolderMenu({
   onClose: () => void
 }) {
   const { t } = useTranslation()
-  const panel = useRef<HTMLDivElement>(null)
-  const [place, setPlace] = useState({ left: 0, top: 0 })
-
-  useLayoutEffect(() => {
-    const box = anchor.getBoundingClientRect()
-    const height = panel.current?.offsetHeight ?? 300
-    const left = Math.max(8, Math.min(box.right + 4, window.innerWidth - WIDTH - 8))
-    const top = Math.max(8, Math.min(box.top, window.innerHeight - height - 8))
-    setPlace({ left: box.right + 4 + WIDTH > window.innerWidth ? Math.max(8, box.left) : left, top })
-  }, [anchor])
-
-  useEffect(() => {
-    panel.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus()
-    const outside = (event: PointerEvent) => {
-      if (panel.current && !panel.current.contains(event.target as Node)) onClose()
-    }
-    window.addEventListener('pointerdown', outside, true)
-    return () => window.removeEventListener('pointerdown', outside, true)
-  }, [onClose])
-
-  const close = () => {
-    onClose()
-    anchor.focus()
-  }
-
-  const keys = (event: React.KeyboardEvent) => {
-    const items = [...(panel.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])]
-    const at = items.indexOf(document.activeElement as HTMLElement)
-    const go = (index: number) => items[(index + items.length) % items.length]?.focus()
-    if (event.key === 'ArrowDown') go(at + 1)
-    else if (event.key === 'ArrowUp') go(at - 1)
-    else if (event.key === 'Home') go(0)
-    else if (event.key === 'End') go(items.length - 1)
-    else if (event.key === 'Escape' || event.key === 'Tab') close()
-    else return
-    event.preventDefault()
-    event.stopPropagation()
-  }
-
-  return createPortal(
-    <div
-      ref={panel}
-      role="menu"
-      aria-label={t('folders.menu.label', { name: folder.name })}
-      data-testid="folder-menu"
-      onKeyDown={keys}
-      className="nn-menu fixed"
-      style={{ left: place.left, top: place.top, width: WIDTH }}
-    >
+  return (
+    <Menu anchor={anchor} onClose={onClose} label={t('folders.menu.label', { name: folder.name })} align="start" width={WIDTH} testId="folder-menu">
       {ENTRIES.map((entry) => {
         const Icon = entry.icon
         return (
@@ -117,7 +69,6 @@ export function FolderMenu({
           </button>
         )
       })}
-    </div>,
-    document.body,
+    </Menu>
   )
 }

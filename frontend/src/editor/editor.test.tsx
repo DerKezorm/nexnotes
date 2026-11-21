@@ -421,7 +421,7 @@ describe('NOTES-3 AC-14 AC-15 room on a wide screen', () => {
     expect(button.tabIndex).toBe(-1)
     expect(button.hasAttribute('data-tool')).toBe(true)
     await act(async () => button.click())
-    const items = [...box.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
+    const items = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')]
     expect(items.map((item) => [item.textContent?.replace('✓', ''), item.getAttribute('aria-checked')])).toEqual([['Narrow', 'true'], ['Wide', 'false'], ['Full width', 'false']])
     await act(async () => items[1].click())
     expect(localStorage.getItem(prefKey('textWidth', 0))).toBe('wide')
@@ -430,7 +430,7 @@ describe('NOTES-3 AC-14 AC-15 room on a wide screen', () => {
     forgetPrefs()
     const other = await toolbar(makeEditor())
     await act(async () => other.box.querySelector<HTMLButtonElement>('[data-testid="tool-width"]')!.click())
-    expect(other.box.querySelector('[role="menuitemradio"][aria-checked="true"]')!.textContent).toContain('Wide')
+    expect(document.querySelector('[role="menuitemradio"][aria-checked="true"]')!.textContent).toContain('Wide')
     expect(parseTextWidth('full')).toBe('full')
     expect(parseTextWidth('enormous')).toBe('narrow')
     expect(TEXT_MAX).toEqual({ narrow: 760, wide: 1100, full: null })

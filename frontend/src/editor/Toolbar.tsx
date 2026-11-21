@@ -33,6 +33,7 @@ import {
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Menu } from '../components/Menu'
 import { HIGHLIGHT_COLORS } from './extensions'
 import { tableActions } from './table'
 import { useOutlineShown } from './outlineData'
@@ -77,39 +78,13 @@ type ButtonSpec = {
   menu?: boolean
 }
 
-function Popover({ label, onClose, children, end = false }: { label: string; onClose: () => void; children: ReactNode; end?: boolean }) {
-  const box = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    box.current?.querySelector<HTMLElement>('button')?.focus()
-    const away = (event: PointerEvent) => {
-      if (!box.current?.contains(event.target as Node)) onClose()
-    }
-    window.addEventListener('pointerdown', away, true)
-    return () => window.removeEventListener('pointerdown', away, true)
-  }, [onClose])
+/** A small menu of a tool (highlighter, table, width): the shared menu, beside the tool's button. */
+function Popover({ label, onClose, children, anchor, end = false }: { label: string; onClose: () => void; children: ReactNode; anchor: HTMLElement | null; end?: boolean }) {
+  if (!anchor) return null
   return (
-    <div
-      ref={box}
-      role="menu"
-      aria-label={label}
-      className={'nn-menu absolute top-full mt-1 ' + (end ? 'right-0' : 'left-0')}
-      onKeyDown={(event) => {
-        if (event.key === 'Escape') {
-          event.preventDefault()
-          event.stopPropagation()
-          onClose()
-          return
-        }
-        if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-          event.preventDefault()
-          const items = Array.from(box.current?.querySelectorAll<HTMLElement>('button') ?? [])
-          const at = items.indexOf(document.activeElement as HTMLElement)
-          items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
-        }
-      }}
-    >
+    <Menu anchor={anchor} onClose={onClose} label={label} align={end ? 'end' : 'start'}>
       {children}
-    </div>
+    </Menu>
   )
 }
 
@@ -122,6 +97,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   const [textWidth, setTextWidth] = useTextWidth()
   const [outline, setOutline] = useOutlineShown()
   const chain = () => editor.chain().focus()
+  const toolButton = (key: string) => bar.current?.querySelector<HTMLElement>(`[data-testid="tool-${key}"]`) ?? null
 
   // Alt+F10 in the text moves to the toolbar (EC-11).
   useEffect(() => {
@@ -277,7 +253,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
               <Icon className="h-4 w-4" strokeWidth={button.key === 'bold' ? 2.6 : 2} aria-hidden />
             </button>
             {button.key === 'highlight' && menu === 'highlight' && (
-              <Popover label={t('editor.tools.highlight')} onClose={() => setMenu(null)}>
+              <Popover label={t('editor.tools.highlight')} onClose={() => setMenu(null)} anchor={toolButton('highlight')}>
                 {HIGHLIGHT_COLORS.map((color) => (
                   <button
                     key={color}
@@ -309,7 +285,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
               </Popover>
             )}
             {button.key === 'width' && menu === 'width' && (
-              <Popover label={t('editor.tools.width')} onClose={() => setMenu(null)} end>
+              <Popover label={t('editor.tools.width')} onClose={() => setMenu(null)} anchor={toolButton('width')} end>
                 {TEXT_WIDTHS.map((width) => (
                   <button
                     key={width}
@@ -330,7 +306,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
               </Popover>
             )}
             {button.key === 'table' && menu === 'table' && (
-              <Popover label={t('editor.table.label')} onClose={() => setMenu(null)}>
+              <Popover label={t('editor.table.label')} onClose={() => setMenu(null)} anchor={toolButton('table')}>
                 {(
                   [
                     ['addRowBefore', 'editor.table.addRowBefore'],

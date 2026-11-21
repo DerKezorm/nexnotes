@@ -105,7 +105,7 @@ async function render(at = '/notes/n1/history'): Promise<void> {
   await settle()
 }
 
-const $ = (testId: string) => box.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+const $ = (testId: string) => document.body.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
 const all = (testId: string) => [...box.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
 
 beforeAll(async () => {

@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Dialog } from '../components/Dialog'
+import { Menu } from '../components/Menu'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
 import { historyHref } from '../history/href'
@@ -118,6 +119,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   const [askLeave, setAskLeave] = useState<null | (() => void)>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const menuButton = useRef<HTMLButtonElement>(null)
   const [textWidth] = useTextWidth()
   const [outlineShown] = useOutlineShown()
   // The free width of this note's side: the outline stands beside the text only where there is room (AC-15).
@@ -453,12 +455,13 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
               aria-haspopup="menu"
               aria-expanded={menuOpen}
               data-testid="note-menu"
+              ref={menuButton}
               onClick={() => setMenuOpen(!menuOpen)}
             >
               <Ellipsis className="h-4 w-4" aria-hidden />
             </button>
             {menuOpen && (
-              <div role="menu" className="nn-menu absolute top-full right-0 mt-1" onKeyDown={(event) => event.key === 'Escape' && setMenuOpen(false)}>
+              <Menu anchor={menuButton.current!} onClose={() => setMenuOpen(false)} label={t('editor.more')} testId="note-menu-panel">
                 {titleCheck && (
                   <button type="button" role="menuitem" className="nn-menu-item" onClick={() => void titleOk()}>
                     {t('notes.titleOk')}
@@ -491,7 +494,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
                     />
                   </div>
                 )}
-              </div>
+              </Menu>
             )}
           </span>
         </div>

@@ -4,6 +4,7 @@
  * (30 days to bring it back), give a role, set a limit, a reset link (the person sets the new password, NOTES-2 AC-7),
  * sign out everywhere, take a provider's link.
  */
+import { Menu } from '../../components/Menu'
 import { Avatar } from '../../components/Avatar'
 import { MoreHorizontal, UserPlus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -35,7 +36,7 @@ export function AccountsTab() {
   const [rows, setRows] = useState<AccountRow[] | null>(null)
   const [invites, setInvites] = useState<Invite[]>([])
   const [inviting, setInviting] = useState(false)
-  const [menu, setMenu] = useState<number | null>(null)
+  const [menu, setMenu] = useState<{ id: number; anchor: HTMLElement } | null>(null)
   const [asking, setAsking] = useState<Asking | null>(null)
   const [limitFor, setLimitFor] = useState<AccountRow | null>(null)
   const [resetFor, setResetFor] = useState<AccountRow | null>(null)
@@ -121,14 +122,16 @@ export function AccountsTab() {
                       <button
                         type="button"
                         aria-label={t('accounts.actionsFor', { name: shown })}
-                        aria-expanded={menu === row.id}
+                        aria-expanded={menu?.id === row.id}
+                        aria-haspopup="menu"
                         className="nn-btn nn-btn-ghost h-8 w-8 px-0"
-                        onClick={() => setMenu(menu === row.id ? null : row.id)}
+                        data-testid="account-menu-button"
+                        onClick={(event) => setMenu(menu?.id === row.id ? null : { id: row.id, anchor: event.currentTarget })}
                       >
                         <MoreHorizontal className="h-4 w-4" aria-hidden />
                       </button>
-                      {menu === row.id && (
-                        <div className="nn-menu absolute right-3 z-20 mt-1 text-left" role="menu">
+                      {menu?.id === row.id && (
+                        <Menu anchor={menu.anchor} onClose={() => setMenu(null)} label={t('accounts.actionsFor', { name: shown })} className="text-left" testId="account-menu">
                           {row.deleted_at ? (
                             <MenuItem onClick={() => setAsking({ kind: 'restore', row })}>{t('accounts.restore')}</MenuItem>
                           ) : (
@@ -161,7 +164,7 @@ export function AccountsTab() {
                               )}
                             </>
                           )}
-                        </div>
+                        </Menu>
                       )}
                     </td>
                   </tr>

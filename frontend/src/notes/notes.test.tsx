@@ -199,7 +199,7 @@ async function render(path: string, state?: unknown): Promise<void> {
   await settle(60)
 }
 
-const $ = (testId: string) => box.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null
+const $ = (testId: string) => document.body.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null
 
 function typeTitle(value: string) {
   const input = $('note-title') as HTMLInputElement

@@ -273,8 +273,8 @@ async function reload(path: string): Promise<void> {
   await render(path)
 }
 
-const $ = (testId: string, inside: ParentNode = box) => inside.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null
-const $$ = (testId: string, inside: ParentNode = box) => [...inside.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
+const $ = (testId: string, inside: ParentNode = document.body) => inside.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null
+const $$ = (testId: string, inside: ParentNode = document.body) => [...inside.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
 const tabTitles = () => $$('tab-title').map((element) => element.textContent)
 const pane = (side: 'left' | 'right') => box.querySelector(`[data-testid="tab-pane"][data-side="${side}"]`) as HTMLElement | null
 

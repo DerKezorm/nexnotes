@@ -254,9 +254,10 @@ describe('the operator never sets another password (NOTES-2 AC-7)', () => {
     const { AccountsTab } = await import('./pages/settings/AccountsTab')
     await render(<AuthProvider><AccountsTab /></AuthProvider>)
     await act(async () => box.querySelector<HTMLButtonElement>('[aria-label="' + i18n.t('accounts.actionsFor', { name: 'Anna' }) + '"]')!.click())
-    const items = [...box.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
+    // The menu stands over everything, outside the table's box.
+    const items = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
     expect(items).toContain(i18n.t('accounts.resetLink'))
-    await act(async () => [...box.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === i18n.t('accounts.resetLink'))!.click())
+    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === i18n.t('accounts.resetLink'))!.click())
     await settle()
     const dialog = document.querySelector('[role="dialog"]')!
     expect(dialog.querySelectorAll('input[autocomplete="new-password"]')).toHaveLength(0)
