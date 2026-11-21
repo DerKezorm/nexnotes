@@ -1,0 +1,39 @@
+# nexnotes, start with:  docker compose up -d --build
+#
+# Then open http://<your-host>:8570. The first account you create there is the operator; it needs the setup code
+# from the log (docker logs nexnotes) or the one you set below.
+
+services:
+  nexnotes:
+    build: .
+    container_name: nexnotes
+    restart: unless-stopped
+
+    ports:
+      # Host port on the left, container port on the right.
+      - "8570:8000"
+
+    volumes:
+      # Database, attachments, logs, backups and the operator's own languages.
+      # A local disk, never an SMB or NFS share: SQLite's locking does not work reliably over network filesystems.
+      - ./data:/data
+
+    environment:
+      # Who should own the files in the data directory. The container fixes the permissions itself on startup.
+      PUID: 1000
+      PGID: 1000
+
+      TZ: Europe/Berlin
+
+      # The address people use to reach nexnotes, for invitation links, read links and the providers' redirect. Can
+      # also be set in the interface.
+      # NEXNOTES_PUBLIC_URL: https://notes.example.com
+
+      # Behind a reverse proxy: its address, so that the brake against password guessing sees the real sender, and
+      # so that nexnotes believes the proxy that it was reached over https (X-Forwarded-Proto).
+      # The proxy must pass WebSockets through (notes are edited together live).
+      # NEXNOTES_TRUSTED_PROXIES: 172.16.0.0/12
+
+      # The code the first account needs. Without it nexnotes makes one at every start until it is set up and
+      # writes it to the log: docker logs nexnotes
+      # NEXNOTES_SETUP_TOKEN: choose-a-long-one
