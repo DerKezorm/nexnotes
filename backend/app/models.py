@@ -16,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     String,
@@ -23,6 +24,7 @@ from sqlalchemy import (
     UniqueConstraint,
     event,
     false,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -303,6 +305,10 @@ class Folder(Base):
     """A folder of one account; folders nest without a limit (``parent_id``). The inbox is a folder of its own kind."""
 
     __tablename__ = "folders"
+    __table_args__ = (
+        # One inbox per account, also when two first requests make it at the same moment (``services/inbox.py``).
+        Index("uq_folders_one_inbox", "owner_id", unique=True, sqlite_where=text("kind = 'inbox'")),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
     owner_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)

@@ -66,15 +66,40 @@ PREVIEW = 200
 # --- Names ------------------------------------------------------------------------------------------------------------
 
 
+#: Letters that draw nothing although Unicode files them as letters or symbols (Hangul fillers, the blank Braille
+#: pattern): a name of only these looks empty.
+_BLANK_LETTERS = frozenset("\u115f\u1160\u3164\uffa0\u2800")
+
+
+def _invisible_at_edge(char: str) -> bool:
+    """Blanks and format characters (zero width space, joiners, direction marks, BOM) at the edge of a name. Tag
+    characters stay: they end flag emoji such as the one of Scotland."""
+    if char.isspace():
+        return True
+    return unicodedata.category(char) == "Cf" and not 0xE0020 <= ord(char) <= 0xE007F
+
+
+def _visible(char: str) -> bool:
+    """A character that puts ink on the screen: not a blank, not a control or format character, not a combining
+    mark on its own."""
+    return unicodedata.category(char)[0] not in "ZCM" and char not in _BLANK_LETTERS
+
+
 def clean_name(raw: str) -> str:
-    """The name as stored: one Unicode spelling (NFC), control characters as blanks, no blanks at the edges. Umlauts
-    and emoji stay as they are (EC-7)."""
-    return unicodedata.normalize("NFC", _CONTROL.sub(" ", raw)).strip()
+    """The name as stored: one Unicode spelling (NFC), control characters as blanks, no blanks or format characters
+    at the edges. Umlauts and emoji stay as they are, also emoji built with joiners (EC-7)."""
+    name = unicodedata.normalize("NFC", _CONTROL.sub(" ", raw))
+    start, end = 0, len(name)
+    while start < end and _invisible_at_edge(name[start]):
+        start += 1
+    while end > start and _invisible_at_edge(name[end - 1]):
+        end -= 1
+    return name[start:end]
 
 
 def checked_name(raw: str) -> str:
     name = clean_name(raw)
-    if not name:
+    if not any(_visible(char) for char in name):
         raise error("folder_name_missing", "Enter a name for the folder.")
     if len(name) > NAME_MAX:
         raise error("folder_name_too_long", f"A folder name has at most {NAME_MAX} characters.", maximum=NAME_MAX)
@@ -331,7 +356,8 @@ def move(db: Session, account_id: int, *, target_id: str | None, folder_ids: lis
             if folder.id in above_target:
                 raise error("folder_into_itself", "A folder cannot go into itself or one of its subfolders.")
         arriving = [folder for folder in folders if folder.parent_id != target_id]
-        staying = _siblings(db, account_id, target_id, leaving=folder_ids)
+        # Only the arriving ones leave the check: a listed folder that already lies in the target stays beside them.
+        staying = _siblings(db, account_id, target_id, leaving=[folder.id for folder in arriving])
         seen: list[Folder] = list(staying)
         for folder in arriving:
             if _name_taken(seen, folder.name):
