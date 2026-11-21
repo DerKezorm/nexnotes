@@ -1673,6 +1673,11 @@
     "differs": "The two passwords are not the same.",
     "titleHint": "The title stays readable so that you can find the note. Keep secrets out of the title.",
     "progress": "Encrypting {{done}} of {{of}} …",
+    "working": {
+      "unlock": "Unlocking …",
+      "lock": "Locking …",
+      "remove": "Removing the lock …"
+    },
     "setup": {
       "title": "Set up the vault",
       "text": "Locked notes are encrypted on your device. The server and its operator see nothing but encrypted data. One password covers all your locked notes.",

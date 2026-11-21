@@ -25,7 +25,7 @@ import { isOpen, openVault, type OpenResult } from './session'
 /** The shortest vault password the page takes: the server never sees it and cannot check it. */
 export const MIN_LENGTH = 8
 
-function PasswordInput({ label, value, onChange, invalid, autoFocus, testId, describedBy }: { label: string; value: string; onChange: (value: string) => void; invalid?: boolean; autoFocus?: boolean; testId: string; describedBy?: string }) {
+function PasswordInput({ label, value, onChange, invalid, autoFocus, testId, describedBy, readOnly }: { label: string; value: string; onChange: (value: string) => void; invalid?: boolean; autoFocus?: boolean; testId: string; describedBy?: string; readOnly?: boolean }) {
   return (
     <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-mist-100">
       {label}
@@ -37,6 +37,7 @@ function PasswordInput({ label, value, onChange, invalid, autoFocus, testId, des
         autoComplete="new-password"
         spellCheck={false}
         autoFocus={autoFocus}
+        readOnly={readOnly}
         aria-invalid={invalid || undefined}
         aria-describedby={describedBy}
         data-testid={testId}
@@ -138,7 +139,9 @@ function SetupForm({ submitLabel, onSubmit, onCancel, busy }: { submitLabel: str
   )
 }
 
-function PasswordForm({ submitLabel, onOpened, onCancel, busy, onForgot }: { submitLabel: string; onOpened: () => void; onCancel?: () => void; busy?: boolean; onForgot?: () => void }) {
+/** While the password is checked (the derivation takes a moment, WebCrypto off the page's thread) the button says what
+ * happens and the field holds still: what is typed meanwhile would be emptied with the answer. */
+function PasswordForm({ submitLabel, workingLabel, onOpened, onCancel, busy, onForgot }: { submitLabel: string; workingLabel: string; onOpened: () => void; onCancel?: () => void; busy?: boolean; onForgot?: () => void }) {
   const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [working, setWorking] = useState(false)
@@ -159,8 +162,8 @@ function PasswordForm({ submitLabel, onOpened, onCancel, busy, onForgot }: { sub
     }
   }
   return (
-    <form className="flex flex-col gap-3" onSubmit={(event) => void submit(event)} data-testid="vault-unlock">
-      <PasswordInput label={t('vault.password')} value={password} onChange={setPassword} invalid={Boolean(tries.message)} autoFocus testId="vault-password" describedBy={tries.message ? id : undefined} />
+    <form className="flex flex-col gap-3" onSubmit={(event) => void submit(event)} aria-busy={working || undefined} data-testid="vault-unlock">
+      <PasswordInput label={t('vault.password')} value={password} onChange={setPassword} invalid={Boolean(tries.message)} autoFocus testId="vault-password" describedBy={tries.message ? id : undefined} readOnly={working} />
       {tries.message && (
         <p id={id} role="alert" className="text-[12.5px] font-medium text-bad-500" data-testid="vault-message">
           {tries.message}
@@ -178,7 +181,7 @@ function PasswordForm({ submitLabel, onOpened, onCancel, busy, onForgot }: { sub
           </button>
         )}
         <button type="submit" className="nn-btn nn-btn-accent" disabled={working || busy || tries.waiting > 0 || !password} data-testid="vault-submit">
-          {tries.waiting > 0 ? t('vault.unlock.wait', { time: clock(tries.waiting) }) : submitLabel}
+          {working ? workingLabel : tries.waiting > 0 ? t('vault.unlock.wait', { time: clock(tries.waiting) }) : submitLabel}
         </button>
       </div>
     </form>
@@ -235,10 +238,16 @@ export function LockDialog({ noteId, onClose }: { noteId: string; onClose: () =>
         {status?.set_up && !isOpen() && (
           <>
             <p className="text-sm leading-relaxed text-mist-400">{t('vault.lock.text')}</p>
-            <PasswordForm submitLabel={t('vault.lock.submit')} onCancel={onClose} busy={busy} onOpened={() => void lock()} />
+            <PasswordForm submitLabel={t('vault.lock.submit')} workingLabel={t('vault.working.lock')} onCancel={onClose} busy={busy} onOpened={() => void lock()} />
           </>
         )}
-        {progress && <p className="text-[12.5px] text-mist-500" aria-live="polite">{progress}</p>}
+        {/* From the first moment of the work, not only from the first part encrypted: the password form is gone then
+            and the dialog would stand empty. */}
+        {(busy || progress) && (
+          <p className="text-[12.5px] text-mist-500" aria-live="polite" data-testid="vault-progress">
+            {progress || t('vault.working.lock')}
+          </p>
+        )}
         {problem && <p className="text-sm text-bad-500">{problem}</p>}
       </div>
     </Dialog>
@@ -270,7 +279,7 @@ export function UnlockCard({ title, onOpened }: { title: string; onOpened?: () =
       <div className="flex w-full max-w-[420px] flex-col gap-3 rounded-[16px] border border-ink-700 bg-ink-850 p-5">
         <span className="text-base font-bold text-mist-100">{t('vault.unlock.title')}</span>
         <span className="text-[13.5px] leading-relaxed text-mist-400">{t('vault.unlock.text')}</span>
-        <PasswordForm submitLabel={t('vault.unlock.submit')} onOpened={() => onOpened?.()} onForgot={() => setForgot(true)} />
+        <PasswordForm submitLabel={t('vault.unlock.submit')} workingLabel={t('vault.working.unlock')} onOpened={() => onOpened?.()} onForgot={() => setForgot(true)} />
       </div>
       {forgot && <ForgotDialog onClose={() => setForgot(false)} />}
     </article>
@@ -301,8 +310,12 @@ export function RemoveLockDialog({ noteId, onClose, onDone }: { noteId: string; 
     <Dialog title={t('vault.remove.title')} onClose={onClose} lead={<span className="grid h-9 w-9 place-items-center rounded-[10px] bg-accent-wash text-accent-400"><LockOpen className="h-[18px] w-[18px]" aria-hidden /></span>}>
       <div className="flex flex-col gap-3" data-testid="vault-remove-dialog">
         <p className="text-sm leading-relaxed text-mist-400">{t('vault.remove.text')}</p>
-        <PasswordForm submitLabel={t('vault.remove.submit')} onCancel={onClose} busy={busy} onOpened={() => void remove()} />
-        {progress && <p className="text-[12.5px] text-mist-500" aria-live="polite">{progress}</p>}
+        <PasswordForm submitLabel={t('vault.remove.submit')} workingLabel={t('vault.working.remove')} onCancel={onClose} busy={busy} onOpened={() => void remove()} />
+        {(busy || progress) && (
+          <p className="text-[12.5px] text-mist-500" aria-live="polite" data-testid="vault-progress">
+            {progress || t('vault.working.remove')}
+          </p>
+        )}
         {problem && <p className="text-sm text-bad-500">{problem}</p>}
       </div>
     </Dialog>

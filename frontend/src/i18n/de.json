@@ -1673,6 +1673,11 @@
     "differs": "Die beiden Passwörter sind nicht gleich.",
     "titleHint": "Der Titel bleibt lesbar, damit du die Notiz findest. Schreib nichts Geheimes in den Titel.",
     "progress": "Verschlüsselt {{done}} von {{of}} …",
+    "working": {
+      "unlock": "Wird entsperrt …",
+      "lock": "Wird gesperrt …",
+      "remove": "Sperre wird aufgehoben …"
+    },
     "setup": {
       "title": "Tresor einrichten",
       "text": "Gesperrte Notizen werden auf deinem Gerät verschlüsselt. Der Server und der Betreiber sehen nur Verschlüsseltes. Ein Passwort gilt für alle deine gesperrten Notizen.",

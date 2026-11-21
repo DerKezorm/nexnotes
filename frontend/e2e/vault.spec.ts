@@ -2,9 +2,10 @@
  * NOTES-16 in a real browser against the real server: set up the vault at the first lock, the note encrypted before
  * it leaves, opened again with the password, written and saved encrypted, a wrong password with its wait, the lock
  * taken off. The page is the operator of global-setup.ts. Each test locks its own note; the vault is the account's,
- * so the first test that runs sets it up and the others use it.
+ * so the first test that runs sets it up and the others use it. The wrong passwords (EC-1) are given in an account of
+ * their own: their wait holds the whole vault, 30 seconds and twice as long each round, and would stop every test after.
  */
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-vault0000' }
 const PASSWORD = 'e2e Tresor-Passwort'
@@ -15,13 +16,27 @@ async function newNote(page: Page, title: string, markdown: string): Promise<str
   return ((await made.json()) as { id: string }).id
 }
 
+/** A member of its own (an invite of the operator), signed in in a browser context of its own. */
+async function member(page: Page, browser: Browser, name: string): Promise<BrowserContext> {
+  const invite = await page.request.post('/api/invites', { data: {}, headers: TAB })
+  const token = String((await invite.json()).link).split('/invite/')[1]
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+  const email = `${name.toLowerCase()}-${Date.now()}@example.com`
+  const made = await context.request.post(`/api/invite/${token}`, { data: { display_name: name, email, password: 'a long e2e member password' }, headers: TAB })
+  expect(made.ok()).toBe(true)
+  return context
+}
+
 async function lock(page: Page, id: string): Promise<void> {
   await page.goto(`/notes/${id}`)
   await expect(page.getByTestId('note-body')).toBeVisible()
   await page.getByTestId('note-menu').click()
   await page.getByTestId('note-lock').click()
+  // The dialog asks the server whether the vault is there and only then shows a form: wait for one of the two, a
+  // look at once found neither and filled the set-up form's password as if it were the plain one.
   const setup = page.getByTestId('vault-setup')
-  if (await setup.isVisible().catch(() => false)) {
+  await expect(setup.or(page.getByTestId('vault-unlock'))).toBeVisible()
+  if (await setup.isVisible()) {
     await expect(page.getByTestId('vault-warning')).toContainText('A forgotten password means the content is gone')
     await expect(page.getByTestId('vault-title-hint')).toBeVisible()
     await page.getByTestId('vault-password').fill(PASSWORD)
@@ -32,7 +47,15 @@ async function lock(page: Page, id: string): Promise<void> {
     await page.getByTestId('vault-password').fill(PASSWORD)
   }
   await page.getByTestId('vault-submit').click()
-  await expect(page.getByTestId('vault-lock-dialog')).toBeHidden({ timeout: 20_000 })
+  // Done when the server says the note is locked; the dialog closes then. (Its inner box alone was "hidden" while it
+  // was empty between the password and the work, and the next page load broke the lock off half-way.)
+  await expect.poll(async () => (await (await page.request.get(`/api/notes/${id}`)).json()).locked, { timeout: 20_000 }).toBe(true)
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+}
+
+/** The revision of a locked note's encrypted content on the server. */
+async function sealedRev(page: Page, id: string): Promise<number> {
+  return ((await (await page.request.get(`/api/vault/notes/${id}`)).json()) as { rev: number }).rev
 }
 
 test('NOTES-16 AC-1 AC-2 AC-3 AC-7 lock, open with the password, write, and the server keeps only ciphertext', async ({ page }) => {
@@ -43,6 +66,7 @@ test('NOTES-16 AC-1 AC-2 AC-3 AC-7 lock, open with the password, write, and the 
   expect(head.locked).toBe(true)
   const sealed = await page.request.get(`/api/vault/notes/${id}`)
   expect(await sealed.text()).not.toContain(secret)
+  const rev = await sealedRev(page, id)
   // A new page load: the key is gone with the page, the password is asked.
   await page.goto(`/notes/${id}`)
   await expect(page.getByTestId('locked-note')).toBeVisible()
@@ -53,7 +77,9 @@ test('NOTES-16 AC-1 AC-2 AC-3 AC-7 lock, open with the password, write, and the 
   await page.getByTestId('note-body').click()
   await page.keyboard.press('End')
   await page.keyboard.type(' und mehr')
-  await expect(page.getByTestId('note-saved')).toHaveText('Saved', { timeout: 10_000 })
+  // Saved encrypted: a new revision on the server, and the note says so.
+  await expect.poll(() => sealedRev(page, id), { timeout: 10_000 }).toBeGreaterThan(rev)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
   const after = await page.request.get(`/api/vault/notes/${id}`)
   expect(await after.text()).not.toContain('und mehr')
   // Nothing of the password in the browser's storage.
@@ -61,17 +87,22 @@ test('NOTES-16 AC-1 AC-2 AC-3 AC-7 lock, open with the password, write, and the 
   expect(stored).not.toContain(PASSWORD)
 })
 
-test('NOTES-16 EC-1 three wrong passwords wait with a countdown', async ({ page }) => {
+test('NOTES-16 EC-1 three wrong passwords wait with a countdown', async ({ page: operator, browser }) => {
+  const context = await member(operator, browser, 'Vera')
+  const page = await context.newPage()
   const id = await newNote(page, 'Tresor falsch', 'x')
   await lock(page, id)
   await page.goto(`/notes/${id}`)
   for (let attempt = 0; attempt < 3; attempt++) {
     await page.getByTestId('vault-password').fill(`falsch ${attempt}`)
     await page.getByTestId('vault-submit').click()
+    // The server's answer is in when the field is emptied: the message of the try before stood there already.
+    await expect(page.getByTestId('vault-password')).toHaveValue('')
     await expect(page.getByTestId('vault-message')).toBeVisible()
   }
   await expect(page.getByTestId('vault-submit')).toHaveText(/Unlock in 0:\d\d/)
   await expect(page.getByTestId('vault-submit')).toBeDisabled()
+  await context.close()
 })
 
 test('NOTES-16 AC-4 the lock comes off and the note is a normal note again', async ({ page }) => {
