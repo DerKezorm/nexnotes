@@ -16,7 +16,7 @@ const ME = {
 
 function Shown() {
   const { t } = useTranslation()
-  return <p data-testid="shown">{t('settings.tabs.account')}</p>
+  return <p data-testid="shown">{t('settings.groups.account')}</p>
 }
 
 afterEach(() => {

@@ -1,6 +1,6 @@
 /**
  * NOTES-1 and NOTES-2 in the interface: the setup page (first account, setup code, a warning for a data folder on a
- * share, nothing to do once set up), the tabs of the settings for a member and for the operator, and what an open
+ * share, nothing to do once set up), the areas of the settings for a member and for the operator, and what an open
  * window does when its session ends while writing (runs out: sign in again, nothing lost; blocked: says so).
  */
 import { act } from 'react'
@@ -161,17 +161,21 @@ describe('the settings (NOTES-2 AC-9)', () => {
       </AuthProvider>,
       '/settings',
     )
-    return [...box.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)
+    return [...box.querySelectorAll('[data-testid="settings-nav"] a[data-testid^="settings-nav-"]')].map((entry) => entry.textContent)
   }
 
-  it('NOTES-2 AC-9 a member finds My account and Connections; an operator also Server, Accounts and Log', async () => {
-    expect(await settingsAs('member')).toEqual([i18n.t('settings.tabs.account'), i18n.t('settings.tabs.connections')])
+  it('NOTES-2 AC-9 a member finds the areas of My account; an operator also those of the server', async () => {
+    const own = ['profile', 'security', 'appearance', 'connections']
+    const server = ['general', 'signIn', 'mail', 'storage', 'ocr', 'accounts', 'log']
+    const titles = (keys: string[]) => keys.map((key) => i18n.t(`settings.areas.${key}.title`))
+    expect(await settingsAs('member')).toEqual(titles(own))
     act(() => root.unmount())
     root = createRoot(box)
-    expect(await settingsAs('operator')).toEqual(['account', 'connections', 'server', 'accounts', 'log'].map((tab) => i18n.t(`settings.tabs.${tab}`)))
+    expect(await settingsAs('operator')).toEqual(titles([...own, ...server]))
+    // `/settings` is the profile: its card, not those of the other areas.
     expect(box.textContent).toContain(i18n.t('me.profile.title'))
-    expect(box.textContent).toContain(i18n.t('me.security.title'))
-    expect(box.textContent).toContain(i18n.t('me.looks.title'))
+    expect(box.textContent).not.toContain(i18n.t('me.security.title'))
+    expect(box.textContent).not.toContain(i18n.t('me.looks.title'))
   })
 })
 

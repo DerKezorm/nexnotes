@@ -773,7 +773,7 @@
       "byOperator": "(by the operator)",
       "language": "Language",
       "languageHint": "(on all your devices)",
-      "title": "Language and appearance",
+      "title": "Look and paper",
       "paper": "Paper of new notes",
       "paperHint": "Each note can be changed later in its menu."
     },
@@ -1122,15 +1122,59 @@
     "waitingText_other": "{{count}} changes are not saved yet. If you sign out now, they are lost."
   },
   "settings": {
-    "ownPassword": "Your password",
-    "saved": "Saved.",
-    "tabs": {
+    "areas": {
+      "accounts": {
+        "text": "Who uses nexnotes, with role and storage, and open invitations.",
+        "title": "Accounts"
+      },
+      "appearance": {
+        "text": "How nexnotes looks on this device, and the paper of new notes.",
+        "title": "Appearance"
+      },
+      "connections": {
+        "text": "Programs and services that work with your notes.",
+        "title": "Connections"
+      },
+      "general": {
+        "text": "Limits, features for every account and added languages.",
+        "title": "General"
+      },
+      "log": {
+        "text": "What the server writes down, to look into problems.",
+        "title": "Log"
+      },
+      "mail": {
+        "text": "The mail server nexnotes sends invitations through.",
+        "title": "Mail"
+      },
+      "ocr": {
+        "text": "The languages nexnotes reads in pictures, scans and PDFs.",
+        "title": "Text recognition"
+      },
+      "profile": {
+        "text": "Picture, name, email address and language of your account.",
+        "title": "Profile"
+      },
+      "security": {
+        "text": "Sign-in, password, second factor, read links and the vault password.",
+        "title": "Security"
+      },
+      "signIn": {
+        "text": "How everyone signs in: password, public address, second factor and providers.",
+        "title": "Sign-in"
+      },
+      "storage": {
+        "text": "The space in use and the backups of the server.",
+        "title": "Storage and backups"
+      }
+    },
+    "groups": {
       "account": "My account",
-      "accounts": "Accounts",
-      "connections": "Connections",
-      "log": "Log",
       "server": "Server"
     },
+    "jump": "Settings page",
+    "ownPassword": "Your password",
+    "saved": "Saved.",
     "title": "Settings"
   },
   "setup": {

@@ -773,7 +773,7 @@
       "byOperator": "(vom Betreiber)",
       "language": "Sprache",
       "languageHint": "(gilt auf allen deinen Geräten)",
-      "title": "Sprache und Darstellung",
+      "title": "Aussehen und Papier",
       "paper": "Papier neuer Notizen",
       "paperHint": "Jede Notiz lässt sich danach über ihr Menü umstellen."
     },
@@ -1122,15 +1122,59 @@
     "waitingText_other": "{{count}} Änderungen sind noch nicht gespeichert. Meldest du dich jetzt ab, gehen sie verloren."
   },
   "settings": {
-    "ownPassword": "Dein Passwort",
-    "saved": "Gespeichert.",
-    "tabs": {
+    "areas": {
+      "accounts": {
+        "text": "Wer nexnotes nutzt, mit Rolle und Speicher, und offene Einladungen.",
+        "title": "Konten"
+      },
+      "appearance": {
+        "text": "Wie nexnotes auf diesem Gerät aussieht, und das Papier neuer Notizen.",
+        "title": "Darstellung"
+      },
+      "connections": {
+        "text": "Programme und Dienste, die mit deinen Notizen arbeiten.",
+        "title": "Verbindungen"
+      },
+      "general": {
+        "text": "Grenzen, Funktionen für alle Konten und eigene Sprachen.",
+        "title": "Allgemein"
+      },
+      "log": {
+        "text": "Was der Server mitschreibt, zum Nachsehen bei Fehlern.",
+        "title": "Log"
+      },
+      "mail": {
+        "text": "Der Mailserver, über den nexnotes Einladungen verschickt.",
+        "title": "Mail"
+      },
+      "ocr": {
+        "text": "In welchen Sprachen nexnotes Text in Bildern, Scans und PDFs liest.",
+        "title": "Texterkennung"
+      },
+      "profile": {
+        "text": "Bild, Name, Mailadresse und Sprache deines Kontos.",
+        "title": "Profil"
+      },
+      "security": {
+        "text": "Anmeldung, Passwort, zweiter Faktor, Links zum Lesen und das Passwort des Tresors.",
+        "title": "Sicherheit"
+      },
+      "signIn": {
+        "text": "Wie sich alle anmelden: Passwort, öffentliche Adresse, zweiter Faktor und Anbieter.",
+        "title": "Anmeldung"
+      },
+      "storage": {
+        "text": "Der belegte Platz und die Backups des Servers.",
+        "title": "Speicher und Sicherung"
+      }
+    },
+    "groups": {
       "account": "Mein Konto",
-      "accounts": "Konten",
-      "connections": "Verbindungen",
-      "log": "Log",
       "server": "Server"
     },
+    "jump": "Seite der Einstellungen",
+    "ownPassword": "Dein Passwort",
+    "saved": "Gespeichert.",
     "title": "Einstellungen"
   },
   "setup": {

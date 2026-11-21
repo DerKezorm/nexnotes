@@ -14,7 +14,7 @@ import { useAuth } from './state/auth'
 
 /**
  * Everything behind the sign-in: without an account the page goes to the sign-in, and comes back after. An account
- * that still has to set up its second factor (the operator requires one) reaches its own account page only.
+ * that still has to set up its second factor (the operator requires one) reaches the settings only, at Security.
  *
  * The note features add their pages as routes inside the shell (`FEATURE_ROUTES` in `extensions.ts`), next to the
  * start area. Another account in the same tab gets the shell drawn anew; the stores outside the tree forget the
@@ -26,7 +26,7 @@ function SignedIn({ children }: { children: ReactNode }) {
   if (status === 'loading') return null
   if (status === 'setup') return <Navigate to="/setup" replace />
   if (status === 'signedOut') return <Navigate to={`/login?${ended ? 'ended=1&' : ''}next=${encodeURIComponent(location.pathname + location.search)}`} replace />
-  if (me?.second_factor_setup_required && !location.pathname.startsWith('/settings')) return <Navigate to="/settings" replace />
+  if (me?.second_factor_setup_required && !location.pathname.startsWith('/settings')) return <Navigate to="/settings/security" replace />
   // Drawn anew for every account: no list, hit or open dialog of the account before stays in the tab.
   return <Fragment key={me?.id ?? 'nobody'}>{children}</Fragment>
 }

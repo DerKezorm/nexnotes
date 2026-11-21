@@ -56,13 +56,14 @@ test('sign-in through the provider button ends in a session', async ({ page, bro
   await ossie.getByLabel('Password').fill(PASSWORD)
   await ossie.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(ossie).not.toHaveURL(/\/login/)
-  await ossie.goto('/settings')
+  await ossie.goto('/settings/security')
   const row = ossie.getByTestId('my-providers').locator('li').filter({ hasText: 'Stand-in 33' })
   await expect(row).toContainText('Not linked')
   await row.getByRole('button', { name: 'Link' }).click()
   await row.getByLabel('Password').fill(PASSWORD)
   await row.getByRole('button', { name: 'Link' }).click()
-  await expect(ossie).toHaveURL(/\/settings\?linked=standin33/)
+  // The provider answers at /settings; the page goes on to Security, where the providers are.
+  await expect(ossie).toHaveURL(/\/settings\/security\?linked=standin33/)
   // The provider by the name on its button, not by the short name in the address.
   await expect(ossie.getByText('Your account is linked to Stand-in 33.')).toBeVisible()
   await expect(ossie.getByTestId('my-providers').locator('li').filter({ hasText: 'Stand-in 33' })).toContainText('Linked')
@@ -94,8 +95,8 @@ test('sign-in through the provider button ends in a session', async ({ page, bro
 test('add, edit and remove a provider; the authentik card lists its steps', async ({ page }) => {
   const problems = collectProblems(page)
   await removeEntry(page, 'stand-in')
-  await page.goto('/settings/server')
-  await expect(page.getByRole('heading', { name: 'Sign-in', exact: true })).toBeVisible()
+  await page.goto('/settings/sign-in')
+  await expect(page.locator('#sign-in').getByRole('heading', { name: 'Sign-in', exact: true })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Sign-in providers' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'authentik in one step' })).toBeVisible()
   await page.getByRole('button', { name: 'Add a provider' }).click()
@@ -158,7 +159,7 @@ test('the authentik card asks before another issuer, and runs again only when an
       json: { ok: !!body.confirm_issuer_change, steps, client_id: '', issuer: '', provider_id: null, links_dropped: 0, count: 3 },
     })
   })
-  await page.goto('/settings/server')
+  await page.goto('/settings/sign-in')
   const card = page.locator('#sign-in-authentik')
   await card.getByLabel('Address of authentik').fill('https://auth.example.com')
   await card.getByLabel('API token').fill(`e2e-${Date.now()}`)
