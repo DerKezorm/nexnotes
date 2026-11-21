@@ -403,7 +403,9 @@
       "undo": "Undo",
       "width": "Text width",
       "outline": "Show or hide the outline",
-      "more": "More tools"
+      "more": "More tools",
+      "noteTools": "Tools of the note",
+      "readOnly": "Read only"
     },
     "style": {
       "h1": "Heading",
@@ -1493,6 +1495,9 @@
     },
     "label": "Open notes",
     "left": "left",
+    "list": "List",
+    "listHint": "Show or hide the note list",
+    "listDrawer": "Note list",
     "newTab": "New note in a new tab",
     "openBeside": "Open beside",
     "altClick": "Alt+click",
@@ -1501,6 +1506,7 @@
     "openTrash": "Open the trash",
     "resize": "Change the width",
     "right": "right",
+    "tools": "Tools for “{{title}}” ({{side}})",
     "sides": "Which side",
     "state": {
       "deleted": "in the trash",

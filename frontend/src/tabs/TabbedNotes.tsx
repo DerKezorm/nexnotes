@@ -10,17 +10,24 @@
  *   reload, AC-5).
  * - Two sides need 2 × 340 px; with less, one shows with a switcher, and the split comes back when the window grows
  *   (EC-2). The line between them moves with the mouse or the arrow keys, never below 340 px a side (AC-2).
+ * - Beside two notes the list is a column while both sides keep their 340 px, else a drawer over the left note
+ *   (`ListDrawer.tsx`): a list chosen in the sidebar opens it, a note chosen in it opens on the side used last and
+ *   closes it. The button "List" in the row of tabs shows and hides the column (kept on this device) or the drawer.
+ * - Two sides on show: one toolbar over both with the text tools, working on the side used last (`SharedToolbar.tsx`);
+ *   each sheet keeps a small bar of its own for the whole note (21.11.2026). One side, or the switcher: as before.
  * - A note dragged from a list, or a tab, onto the right edge opens beside (AC-1).
  * - On the first visit of a page load at "/", the tabs of last time come back with their split (AC-5).
  */
-import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { ColumnHandle } from '../components/ColumnHandle'
+import type { ToolsEntry } from '../editor/sharedTools'
 import { draggedNow } from '../folders/actions'
 import { useFolders } from '../folders/store'
 import { useColumnWidth } from '../lib/columns'
+import { useDevicePref } from '../lib/devicePref'
 import { ListPlaceContext } from '../notes/listPlace'
 import { folderOfList, hrefIn } from '../notes/workspace'
 import { useAuth } from '../state/auth'
@@ -31,7 +38,10 @@ import { refreshMeta, useTabMetas } from './meta'
 import { focusSide as focusSideAction, openNoteBeside, setNavigation } from './open'
 import { focusedKey, focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
 import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './store'
-import { draggedTab, MIN_PANE, ROOMY_PANE, SEPARATOR } from './layout'
+import { draggedTab, listStand, MIN_PANE, SEPARATOR } from './layout'
+import { useListDrawer } from './drawerState'
+import { ListDrawer } from './ListDrawer'
+import { SharedToolbar } from './SharedToolbar'
 import { TabBar } from './TabBar'
 import { TabPane } from './TabPane'
 
@@ -80,6 +90,19 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const [dropping, setDropping] = useState(false)
   // The list beside an open note, as wide as set on this device; it gives way before a note gets too narrow.
   const [listWidth] = useColumnWidth('list')
+  // Beside two notes with room for it, the column can be hidden with the button "List"; kept on this device.
+  const [columnOn, setColumnOn] = useDevicePref('splitList', (raw) => raw !== 'off')
+  // The editors of the two sides on show, by tab, for the one toolbar over both.
+  const [toolEntries, setToolEntries] = useState<ReadonlyMap<string, ToolsEntry>>(() => new Map())
+  const registerTools = useCallback((key: string, entry: ToolsEntry | null) => {
+    setToolEntries((before) => {
+      if (entry ? before.get(key) === entry : !before.has(key)) return before
+      const next = new Map(before)
+      if (entry) next.set(key, entry)
+      else next.delete(key)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     setNavigation((path, options) => navigate(path, { replace: options?.replace, state: options?.state }))
@@ -119,7 +142,17 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const open = settled && Boolean(left)
   const split = open && Boolean(right)
   const both = split && width >= 2 * MIN_PANE + SEPARATOR
-  const showList = open && width - listWidth >= (both ? 2 * ROOMY_PANE + SEPARATOR : MIN_PANE)
+  const stand = open ? listStand(split, width, listWidth) : 'none'
+  const showList = stand === 'column' && (!split || columnOn)
+  // Two notes and no column: the list comes as a drawer over the left note.
+  const drawer = useListDrawer(split && !showList, listPath)
+  // "List": with room it shows or hides the column, else it opens or closes the drawer.
+  const toggleList = (button: HTMLElement) => {
+    if (stand === 'column') {
+      setColumnOn(columnOn ? 'off' : null)
+      drawer.close(false)
+    } else drawer.toggle(button)
+  }
   const areaWidth = width - (showList ? listWidth : 0)
   const room = areaWidth - SEPARATOR
   const leftWidth = Math.round(Math.min(Math.max(state.ratio * room, MIN_PANE), room - MIN_PANE))
@@ -175,11 +208,26 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
     openNoteBeside(what.note, what.folder)
   }
 
+  const usedLast = side === 'left' ? left : right
   const shown = [left, right].filter((tab): tab is NonNullable<typeof tab> => Boolean(tab))
   return (
     <div ref={page} className="flex h-full min-h-0 flex-col" data-testid="notes-page" data-tabs="on">
-      {state.tabs.length > 0 && <TabBar state={state} metas={metas} split={split} open={open} />}
-      <div className="flex min-h-0 flex-1">
+      {state.tabs.length > 0 && (
+        <TabBar
+          state={state}
+          metas={metas}
+          split={split}
+          open={open}
+          listToggle={
+            split
+              ? stand === 'column'
+                ? { pressed: showList, onToggle: toggleList }
+                : { expanded: drawer.open, controls: drawer.id, onToggle: toggleList }
+              : undefined
+          }
+        />
+      )}
+      <div className="relative flex min-h-0 flex-1">
         {(!open || showList) && (
           <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined} data-testid="list-column">
             <div className={'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r' : 'flex w-full')}>
@@ -188,6 +236,7 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
             {open && <ColumnHandle column="list" />}
           </div>
         )}
+        {drawer.open && <ListDrawer drawer={drawer} width={Math.min(listWidth, width)} list={list} />}
         {open && (
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">
             {split && !both && (
@@ -211,6 +260,13 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
                 })}
               </div>
             )}
+            {both && (
+              <SharedToolbar
+                entry={usedLast ? toolEntries.get(usedLast.key) : undefined}
+                side={side}
+                title={(usedLast && metas.get(usedLast.note)?.title) || t('notes.untitled')}
+              />
+            )}
             <div
               ref={area}
               className="relative flex min-h-0 min-w-0 flex-1"
@@ -232,9 +288,11 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
                     meta={metas.get(tab.note)}
                     focused={focused}
                     line={both && focused}
+                    standing={both ? (focused ? 'active' : 'passive') : undefined}
                     hidden={split && !both && !focused}
                     fresh={fresh && focused && tab.note === noteId}
                     style={style}
+                    registerTools={both ? registerTools : undefined}
                   />
                 )
               })}

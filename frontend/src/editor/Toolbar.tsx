@@ -93,7 +93,20 @@ function Popover({ label, onClose, children, anchor, end = false }: { label: str
   )
 }
 
-export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; onLink: () => void; compact?: boolean }) {
+type ToolbarProps = {
+  editor: Editor
+  onLink: () => void
+  compact?: boolean
+  /** `text`: only the tools that work on the text, for the one bar over two notes side by side (NOTES-8, 21.11.2026);
+   * the text width and the outline then stand in each sheet's own bar (`NoteViewTools`). */
+  part?: 'all' | 'text'
+  /** The bar's name for a screen reader; over two notes it names the note it works on. */
+  label?: string
+  /** The note is one to read only: every tool is shown but cannot be used. */
+  locked?: boolean
+}
+
+export function Toolbar({ editor, onLink, compact = false, part = 'all', label, locked = false }: ToolbarProps) {
   const { t } = useTranslation()
   const state = useEditorState({ editor, selector: ({ editor: current }) => readState(current) })
   const bar = useRef<HTMLDivElement>(null)
@@ -178,7 +191,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   ]
   if (compact) buttons.push({ key: 'keyboard', label: t('editor.tools.closeKeyboard'), icon: Keyboard, run: () => editor.commands.blur() })
   // The width of the text (AC-14): a matter of the screen, so not on a phone, and it works on a note one only reads.
-  else
+  else if (part === 'all')
     buttons.push(
       { key: 'width', label: t('editor.tools.width'), icon: MoveHorizontal, menu: true, active: textWidth !== 'narrow', run: () => setMenu(menu === 'width' ? null : 'width') },
       // The outline (AC-15): beside the text where there is room, otherwise a panel over its right edge. Pressed means
@@ -246,7 +259,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
           data-tool
           tabIndex={focusAt === 0 ? 0 : -1}
           onFocus={() => setFocusAt(0)}
-          disabled={!state.editable}
+          disabled={locked || !state.editable}
           value={state.style}
           onKeyDown={(event) => {
             // The arrows choose inside the list; only sideways leaves it.
@@ -283,7 +296,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
           onFocus={() => setFocusAt(position)}
           onMouseDown={(event) => event.preventDefault()}
           onClick={button.run}
-          disabled={button.disabled || (!state.editable && !['undo', 'redo', 'keyboard', 'width', 'outline'].includes(button.key))}
+          disabled={locked || button.disabled || (!state.editable && !['undo', 'redo', 'keyboard', 'width', 'outline'].includes(button.key))}
           aria-label={button.label}
           aria-pressed={button.menu ? undefined : button.active}
           aria-haspopup={button.menu ? 'menu' : undefined}
@@ -326,7 +339,8 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
     <div
       ref={bar}
       role="toolbar"
-      aria-label={t('editor.tools.label')}
+      aria-label={label ?? t('editor.tools.label')}
+      aria-disabled={locked || undefined}
       onKeyDown={move}
       data-testid="toolbar"
       data-rows={rows ? rows.length : 1}
@@ -367,7 +381,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
                 aria-checked={state.style === value}
                 className="nn-menu-item"
                 data-testid={`more-style-${value}`}
-                disabled={!state.editable}
+                disabled={locked || !state.editable}
                 onClick={() => {
                   setMoreOpen(false)
                   run()
@@ -387,7 +401,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
                 className="nn-menu-item"
                 data-testid={`more-${button.key}`}
                 data-outline-toggle={button.key === 'outline' ? outlineToggle?.id : undefined}
-                disabled={button.disabled || (!state.editable && !['undo', 'redo', 'width', 'outline'].includes(button.key))}
+                disabled={locked || button.disabled || (!state.editable && !['undo', 'redo', 'width', 'outline'].includes(button.key))}
                 onClick={() => {
                   setMoreOpen(false)
                   button.run()

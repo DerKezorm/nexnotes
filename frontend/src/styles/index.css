@@ -197,6 +197,30 @@
   }
 }
 
+/*
+ * Two notes side by side (NOTES-8 AC-1): the side used last, where a tab opens its note, stands out by more than the
+ * honey line. Its sheet has a calm honey frame; the other side is dimmed: its sheet on the page's gray without a
+ * shadow (the text keeps its full contrast), its toolbar at 75 % (its text still 4.5:1 on the page in light and dark).
+ * The change fades in 150 ms; with reduced motion at once (the rule above).
+ */
+[data-split] .nn-sheet,
+[data-split] [data-testid='editor-head'] {
+  transition:
+    background-color 150ms ease,
+    opacity 150ms ease;
+}
+[data-split='active'] .nn-sheet {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: -1px;
+}
+[data-split='passive'] .nn-sheet {
+  background-color: var(--color-ink-950);
+  box-shadow: none;
+}
+[data-split='passive'] [data-testid='editor-head'] {
+  opacity: 0.75;
+}
+
 /* A tab a menu brought to the front (NOTES-8): a short honey pulse, so one sees where it is. */
 @keyframes nn-tab-pulse {
   0%,
