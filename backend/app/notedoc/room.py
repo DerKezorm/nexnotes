@@ -267,9 +267,11 @@ class Rooms:
         for peer in list(room.peers):
             await self._drop(room, peer, code)
 
-    async def change(self, note_id: str, edit: Callable[[Doc], T], *, account_id: int | None = None) -> T:
+    async def change(self, note_id: str, edit: Callable[[Doc], T], *, account_id: int | None = None,
+                     rescue: Callable[[Rescuer, T], None] | None = None) -> T:
         """A change by the server: applied in one transaction to the live document (or the stored one when nobody has
-        the note open), stored, passed to everyone. Returns what ``edit`` returned."""
+        the note open), stored, passed to everyone. Returns what ``edit`` returned. ``rescue`` tells the open room's
+        rescuer, under the same lock, where text typed into what the change deleted should go."""
         room = self.rooms.get(note_id)
         if room is None:
             async with self.guard:
@@ -285,6 +287,8 @@ class Rooms:
                     return result
         async with room.lock:
             result, update = change_doc(room.doc, edit)
+            if update is not None and rescue is not None:
+                rescue(room.rescuer, result)
             if update is not None:
                 await self._keep(room, update, account_id)
         if update is not None:

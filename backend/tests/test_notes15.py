@@ -763,3 +763,74 @@ def test_notes15_ac5_a_copy_of_a_version_is_found_by_the_search(client, operator
     found = client.get("/api/search", params={"q": "Kohlrabi"}).json()
     ids = {hit["id"] for hit in found.get("notes", found.get("results", found.get("items", [])))}
     assert copy["id"] in ids, found
+
+
+# --- Findings of the review ---------------------------------------------------------------------------------------
+
+
+def _paragraphs(live: Live) -> list[str]:
+    return [str(child.children[0]) if child.children else "" for child in live.doc.get("body", type=XmlFragment).children
+            if isinstance(child, XmlElement)]
+
+
+def test_notes15_ac4_a_word_typed_while_restoring_stays_one_word(client, operator):
+    """Somebody types into a paragraph the restore replaces; the keystroke that was on its way when the restore came
+    joins the paragraph that took its place, where the cursor lands, so the word is not torn into a paragraph "w" and
+    the rest. Nothing is lost."""
+    note = new_note(client, title="Plan", markdown="first session\n\nsecond")
+    history.clock.set(T0)
+    write(note["id"], operator.id, "third")
+    history.clock.advance(minutes=10)
+    history.take_due()
+    target = history_of(client, note["id"])["versions"][0]
+    # A second window keeps the note open meanwhile, so the room that restores is the one the keystroke reaches.
+    keeper = Live(client, note["id"], token_for(operator))
+    live = Live(client, note["id"], token_for(operator))
+    for each in (keeper, live):
+        assert each.pump(lambda each=each: each.synced)
+    run = live.doc.get("body", type=XmlFragment).children[0].children[0]
+    for word in (" w6", " w7"):
+        run.insert(len(str(run)), word)
+    live.settle(0.2)
+    # The next word is being typed while the restore happens: its first letters reach the room only after it.
+    live.disconnect()
+    run.insert(len(str(run)), " w")
+    assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
+    live.connect()
+    assert live.pump(lambda: _paragraphs(live)[:1] == ["first session w"]), _paragraphs(live)
+    # The restore has reached the editor; the cursor stands at the end of the paragraph that took the place of the
+    # one typed into, and the word goes on there.
+    run = live.doc.get("body", type=XmlFragment).children[0].children[0]
+    run.insert(len(str(run)), "8 w9")
+    live.settle(0.3)
+    keeper.settle(0.3)
+    assert _paragraphs(live) == _paragraphs(keeper) == ["first session w8 w9", "second", "third"]
+    live.close()
+    keeper.close()
+    assert to_plain(stored_doc(note["id"])) == "first session w8 w9\nsecond\nthird"
+    # What was typed before the restore is in the history.
+    assert "first session w6 w7" in text_of(versions(note["id"])[1])
+
+
+@pytest.mark.parametrize("round_", range(8))
+def test_notes15_ac4_a_restored_first_paragraph_stays_first(client, operator, round_):
+    """The Yjs engine of the server puts a block written at the very start of a list it got from another client by
+    client number, half the time at the end: the restore never writes there."""
+    from app.notedoc.doc import body_of
+
+    def change_first(doc) -> None:
+        body_of(doc).children[0].children[0].insert(0, "changed ")
+
+    def drop_first(doc) -> None:
+        del body_of(doc).children[0:1]
+
+    for edit_first, expected in ((change_first, "alpha\nbeta\ngamma"), (drop_first, "alpha\nbeta\ngamma")):
+        note = new_note(client, title="Order", markdown="alpha\n\nbeta")
+        history.clock.set(T0)
+        write(note["id"], operator.id, "gamma")
+        history.clock.advance(minutes=10)
+        history.take_due()
+        target = history_of(client, note["id"])["versions"][0]
+        asyncio.run(notes.change(note["id"], edit_first, account_id=operator.id))
+        assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
+        assert to_plain(stored_doc(note["id"])) == expected
