@@ -423,6 +423,13 @@
     "restarting": "nexnotes startet mit der Sicherung neu. Die Seite lädt gleich neu.",
     "restore": "Wiederherstellen",
     "restoreChanges": "Beim Wiederherstellen kommen {{add}} dazu, {{change}} ändern sich, {{remove}} fallen weg.",
+    "restoreNotes": "Notizen dazu: {{add}} · geändert: {{change}} · weg: {{remove}}.",
+    "restoreTitles": {
+      "add": "Dazu: {{titles}}",
+      "change": "Geändert: {{titles}}",
+      "own": "Titel stehen nur bei deinen eigenen Notizen.",
+      "remove": "Weg: {{titles}}"
+    },
     "schedule": "Automatisch",
     "secretKept": "Bleibt; nur zum Ändern tippen.",
     "send": "Senden",
@@ -440,6 +447,7 @@
     "trash": "Papierkorb leeren nach",
     "twoFactorRequired": "Zweiten Faktor verlangen",
     "twoFactorRequiredHint": "Jedes Konto, das sich mit Passwort anmeldet, muss ihn einrichten, bevor es weiterkommt. Konten von einem Anmeldeanbieter bringen dessen eigenen mit. Ein Konto mit Passwort ist ebenfalls nicht betroffen, wenn es über einen Anbieter kommt, bei dem „{{trusts}}“ an ist.",
+    "untitled": "Ohne Titel",
     "upload": "Sprache hochladen",
     "uploadBackup": "Sicherung hochladen",
     "uploadMax": "Größte Datei je Anhang (MB)",

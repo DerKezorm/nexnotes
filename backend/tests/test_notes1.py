@@ -187,6 +187,59 @@ def test_notes1_ac5_the_check_says_what_a_restore_adds_changes_and_removes(
     assert (brief["would_add"], brief["would_change"], brief["would_remove"]) == (1, 1, 1)
 
 
+def _note(owner_id: int, title: str) -> str:
+    from app.models import Note
+    from app.services.inbox import inbox_for
+
+    with SessionLocal() as db:
+        row = Note(owner_id=owner_id, folder_id=inbox_for(db, owner_id).id, title=title, text=title)
+        db.add(row)
+        db.commit()
+        return row.id
+
+
+def test_notes1_ac5_the_check_names_the_notes_a_restore_brings_back_changes_and_takes_away(
+    client: TestClient, operator: Account
+) -> None:
+    from datetime import timedelta
+
+    from app.models import Note
+
+    anna = make_account("anna")
+    kept = _note(operator.id, "Kept as it is")
+    edited = _note(operator.id, "Shopping list")
+    deleted = _note(operator.id, "Recipe for bread")
+    trashed = _note(operator.id, "Holiday plans")
+    _note(anna.id, "Anna's diary")
+    name = client.post("/api/backups", json={}).json()["name"]
+    with SessionLocal() as db:
+        later = utcnow() + timedelta(minutes=5)
+        db.get(Note, edited).updated_at = later
+        db.delete(db.get(Note, deleted))
+        db.get(Note, trashed).deleted_at = later
+        db.commit()
+    _note(operator.id, "Written after the backup")
+    _note(anna.id, "Anna's new secret")
+    brief = client.post(f"/api/backups/{name}/check").json()
+    assert brief["usable"] is True
+    assert (brief["notes_add"], brief["notes_change"], brief["notes_remove"]) == (2, 1, 2)
+    assert sorted(brief["notes_add_titles"]) == ["Holiday plans", "Recipe for bread"]
+    assert brief["notes_change_titles"] == ["Shopping list"]
+    # Numbers for every account, titles only of the operator's own notes (NOTES-2 AC-7).
+    assert brief["notes_remove_titles"] == ["Written after the backup"]
+    assert "Anna" not in json.dumps(brief)
+    assert kept not in json.dumps(brief)
+
+
+def test_notes1_ac5_the_check_names_at_most_five_titles_newest_first(client: TestClient, operator: Account) -> None:
+    name = client.post("/api/backups", json={}).json()["name"]
+    for title in ("Kiwi", "Apple", "Melon", "Banana", "Pear", "Cherry", "Fig"):
+        _note(operator.id, title)
+        time.sleep(0.002)
+    brief = client.post(f"/api/backups/{name}/check").json()
+    assert brief["notes_remove"] == 7
+    assert brief["notes_remove_titles"] == ["Fig", "Cherry", "Pear", "Banana", "Melon"]
+
 def test_notes1_ac5_a_restore_needs_the_confirmation_of_the_password(client: TestClient, operator: Account,
                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(backups, "restart_soon", lambda *_args, **_kw: None)

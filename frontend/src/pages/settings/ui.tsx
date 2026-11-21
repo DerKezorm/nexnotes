@@ -264,9 +264,11 @@ export function useAction() {
 }
 
 /** "Really?" with the operator's password where the server asks for it again. */
-export function Confirm({ title, text, confirm, danger = false, password = false, onCancel, onConfirm }: {
+export function Confirm({ title, text, details, confirm, danger = false, password = false, onCancel, onConfirm }: {
   title: string
   text: string
+  /** More below the text, such as what a restore changes. */
+  details?: ReactNode
   confirm: string
   danger?: boolean
   password?: boolean
@@ -286,6 +288,7 @@ export function Confirm({ title, text, confirm, danger = false, password = false
         }}
       >
         <p className="text-sm text-mist-300">{text}</p>
+        {details}
         {password && <input className="nn-field" type="password" value={value} onChange={(e) => setValue(e.target.value)} placeholder={t('settings.ownPassword')} autoComplete="current-password" autoFocus />}
         <Feedback problem={problem} />
         <div className="flex justify-end gap-2">

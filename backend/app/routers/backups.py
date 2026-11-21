@@ -83,9 +83,9 @@ async def upload(request: Request, operator: OperatorAccount) -> dict[str, str]:
 
 
 @router.post("/{name}/check")
-def check(name: BackupName, _operator: OperatorAccount) -> dict[str, Any]:
+def check(name: BackupName, operator: OperatorAccount) -> dict[str, Any]:
     try:
-        brief = backups.check(name)
+        brief = backups.check(name, viewer_id=operator.id)
     except backups.BackupError as exc:
         raise _fail(exc) from exc
     return {**asdict(brief), "usable": brief.usable}

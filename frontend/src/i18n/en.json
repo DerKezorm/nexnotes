@@ -423,6 +423,13 @@
     "restarting": "nexnotes restarts with the backup. The page reloads in a moment.",
     "restore": "Restore",
     "restoreChanges": "Restoring adds {{add}}, changes {{change}} and removes {{remove}}.",
+    "restoreNotes": "Notes added: {{add}} · changed: {{change}} · removed: {{remove}}.",
+    "restoreTitles": {
+      "add": "Added: {{titles}}",
+      "change": "Changed: {{titles}}",
+      "own": "Titles are named only for your own notes.",
+      "remove": "Removed: {{titles}}"
+    },
     "schedule": "Automatically",
     "secretKept": "Kept; type only to change it.",
     "send": "Send",
@@ -440,6 +447,7 @@
     "trash": "Empty the trash after",
     "twoFactorRequired": "Require a second factor",
     "twoFactorRequiredHint": "Every account that signs in with a password must set one up before it gets further. Accounts from a sign-in provider bring the provider's. An account with a password is not affected either when it comes in through a provider for which “{{trusts}}” is on.",
+    "untitled": "Untitled",
     "upload": "Upload language",
     "uploadBackup": "Upload a backup",
     "uploadMax": "Largest file per attachment (MB)",

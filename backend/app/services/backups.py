@@ -125,6 +125,15 @@ class Brief:
     would_add: int
     would_change: int
     would_remove: int
+    #: Notes a restore brings back (in the archive, not here or in the trash), changes (another ``updated_at``) and
+    #: takes away (made since): numbers for all, the first titles only of the asking account's own notes (an operator
+    #: never reads titles of other accounts, NOTES-2 AC-7).
+    notes_add: int = 0
+    notes_change: int = 0
+    notes_remove: int = 0
+    notes_add_titles: list[str] = field(default_factory=list)
+    notes_change_titles: list[str] = field(default_factory=list)
+    notes_remove_titles: list[str] = field(default_factory=list)
 
     @property
     def usable(self) -> bool:
@@ -347,8 +356,61 @@ def _safe_member(name: str) -> str | None:
     return rel if MEDIA_NAME.match(rel) else None
 
 
-def check(name: str) -> Brief:
-    """The trial run: is the archive whole, and what would a restore change in the media folder?"""
+#: How many titles of each kind the check names.
+TITLES_SHOWN = 5
+#: A note as both databases store it: owner, title, last change (as stored text), in the trash.
+_NoteRow = tuple[int, str, str, bool]
+
+
+def _notes_in(connection: sqlite3.Connection) -> dict[str, _NoteRow]:
+    """The notes of a database file, read with plain SQL: an archive from an older version may lack the table or the
+    trash column; then it has no notes, or none in the trash."""
+    tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    if "notes" not in tables:
+        return {}
+    columns = {row[1] for row in connection.execute("PRAGMA table_info(notes)")}
+    trashed = "deleted_at IS NOT NULL" if "deleted_at" in columns else "0"
+    return {
+        str(row[0]): (int(row[1]), str(row[2] or ""), str(row[3] or ""), bool(row[4]))
+        for row in connection.execute(f"SELECT id, owner_id, title, updated_at, {trashed} FROM notes")  # noqa: S608
+    }
+
+
+def _live_notes() -> dict[str, _NoteRow]:
+    """The notes of the running database, through the app's own connection (never a second one from outside)."""
+    from ..db import engine
+
+    raw = engine.raw_connection()
+    try:
+        return _notes_in(raw.driver_connection)  # type: ignore[arg-type]
+    finally:
+        raw.close()
+
+
+def _compare_notes(archived: dict[str, _NoteRow], current: dict[str, _NoteRow],
+                   viewer_id: int | None) -> dict[str, Any]:
+    """Alive in the archive but not here: comes back. Alive here but not in the archive: goes. Alive in both with
+    another last change: changes. Titles newest first, only the viewer's own."""
+    alive_then = {key: row for key, row in archived.items() if not row[3]}
+    alive_now = {key: row for key, row in current.items() if not row[3]}
+    add = [row for key, row in alive_then.items() if key not in alive_now]
+    remove = [row for key, row in alive_now.items() if key not in alive_then]
+    change = [row for key, row in alive_now.items() if key in alive_then and alive_then[key][2] != row[2]]
+
+    def titles(rows: list[_NoteRow]) -> list[str]:
+        own = sorted((row for row in rows if viewer_id is not None and row[0] == viewer_id), key=lambda row: row[2],
+                     reverse=True)
+        return [row[1] for row in own[:TITLES_SHOWN]]
+
+    return {
+        "notes_add": len(add), "notes_change": len(change), "notes_remove": len(remove),
+        "notes_add_titles": titles(add), "notes_change_titles": titles(change), "notes_remove_titles": titles(remove),
+    }
+
+
+def check(name: str, viewer_id: int | None = None) -> Brief:
+    """The trial run: is the archive whole, and what would a restore change, in the notes and in the media folder?
+    ``viewer_id``: the account asking, whose own notes are named by title."""
     path = path_of(name)
     try:
         archive = zipfile.ZipFile(path)
@@ -361,6 +423,7 @@ def check(name: str) -> Brief:
                               f"the archive comes from nexnotes {manifest.version}, newer than this one")
         members = {info.filename: info for info in archive.infolist()}
         database_ok = False
+        archived_notes: dict[str, _NoteRow] = {}
         if DATABASE_ENTRY in members:
             scratch = folder() / f".check-{os.getpid()}-{time.time_ns()}.db"
             try:
@@ -370,6 +433,8 @@ def check(name: str) -> Brief:
                     connection = sqlite3.connect(scratch)
                     try:
                         database_ok = connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+                        if database_ok:
+                            archived_notes = _notes_in(connection)
                     finally:
                         connection.close()
             except (sqlite3.DatabaseError, OSError):
@@ -405,6 +470,7 @@ def check(name: str) -> Brief:
         name=name, version=manifest.version, created=manifest.created, kind=manifest.kind, notes=manifest.notes,
         files=manifest.files, database_ok=database_ok, files_ok=not damaged, damaged=sorted(damaged)[:20],
         would_add=len(add), would_change=len(change), would_remove=len(remove_),
+        **_compare_notes(archived_notes, _live_notes(), viewer_id),
     )
 
 

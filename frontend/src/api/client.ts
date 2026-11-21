@@ -270,6 +270,13 @@ export type BackupBrief = {
   would_add: number
   would_change: number
   would_remove: number
+  /** Notes a restore brings back, changes and takes away; titles only of the operator's own notes. */
+  notes_add: number
+  notes_change: number
+  notes_remove: number
+  notes_add_titles: string[]
+  notes_change_titles: string[]
+  notes_remove_titles: string[]
   usable: boolean
 }
 
