@@ -2,8 +2,10 @@
  * What an open note does for the notifications (NOTES-14): it tells the server it is in view, so this browser gets no
  * notification about it (AC-9), and it opens at the line a notification named (AC-5).
  */
+import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey, TextSelection } from '@tiptap/pm/state'
+import { Decoration, DecorationSet } from '@tiptap/pm/view'
 import type { Editor } from '@tiptap/react'
-import { TextSelection } from '@tiptap/pm/state'
 import { useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 
@@ -64,8 +66,38 @@ export function textBlockAt(editor: Editor, index: number): number | null {
   return found
 }
 
+/** How long the line a notification named stays marked. */
+export const CHANGE_MARK_MS = 4000
+
+/** The mark on that line: a decoration of the editor, not a class set on its element. ProseMirror draws a block again
+ * when something changes its element from outside, and a class set by hand went with the old element at once. */
+export const changeFoundKey = new PluginKey<DecorationSet>('noteChangeFound')
+
+type ChangeMeta = { from: number; to: number } | null
+
+export const ChangeFound = Extension.create({
+  name: 'changeFound',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<DecorationSet>({
+        key: changeFoundKey,
+        state: {
+          init: () => DecorationSet.empty,
+          apply: (tr, old) => {
+            const meta = tr.getMeta(changeFoundKey) as ChangeMeta | undefined
+            if (meta === null) return DecorationSet.empty
+            if (meta) return DecorationSet.create(tr.doc, [Decoration.node(meta.from, meta.to, { class: 'nn-change-found' })])
+            return old.map(tr.mapping, tr.doc)
+          },
+        },
+        props: { decorations: (state) => changeFoundKey.getState(state) },
+      }),
+    ]
+  },
+})
+
 /** `?change=<n>` in the address (a tapped notification): the cursor goes to the end of that line, which comes into
- * view, once the note is there. */
+ * view marked for a few seconds, once the note is there. The editor needs `ChangeFound` among its extensions. */
 export function useJumpToChange(editor: Editor | null, ready: boolean): void {
   const [params] = useSearchParams()
   const wanted = params.get('change')
@@ -73,13 +105,22 @@ export function useJumpToChange(editor: Editor | null, ready: boolean): void {
     if (!editor || !ready || wanted === null || !/^\d{1,6}$/.test(wanted)) return
     const pos = textBlockAt(editor, Number(wanted))
     if (pos === null) return
-    editor.view.dispatch(editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos)).scrollIntoView())
-    const element = editor.view.domAtPos(pos).node
-    const block = (element instanceof HTMLElement ? element : element.parentElement)?.closest('p, h1, h2, h3, h4, h5, h6, pre, li')
-    if (block instanceof HTMLElement) {
-      block.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-      block.classList.add('nn-change-found')
-      setTimeout(() => block.classList.remove('nn-change-found'), 4000)
+    const block = editor.state.doc.resolve(pos)
+    const from = block.before()
+    const to = from + block.parent.nodeSize
+    editor.view.dispatch(
+      editor.state.tr.setSelection(TextSelection.create(editor.state.doc, pos)).setMeta(changeFoundKey, { from, to }).scrollIntoView(),
+    )
+    const element = editor.view.nodeDOM(from)
+    if (element instanceof HTMLElement) element.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    const unmark = () => {
+      if (!editor.isDestroyed && changeFoundKey.getState(editor.state)?.find().length)
+        editor.view.dispatch(editor.state.tr.setMeta(changeFoundKey, null))
+    }
+    const timer = setTimeout(unmark, CHANGE_MARK_MS)
+    return () => {
+      clearTimeout(timer)
+      unmark()
     }
   }, [editor, ready, wanted])
 }

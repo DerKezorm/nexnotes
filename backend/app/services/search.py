@@ -331,21 +331,28 @@ def _row_values(db: Session, note: Note) -> dict[str, str]:
     return {"title": title, "body": fold(note.text or ""), "extra": extra}
 
 
+#: A row for the note in the owner's block, unless it has one. A write: it takes the database's write lock first.
+_NEW_ROW = ("INSERT INTO @rows (id, note_id) SELECT COALESCE(MAX(id) + 1, :first), :id FROM @rows "
+            "WHERE id BETWEEN :first AND :last ON CONFLICT (note_id) DO NOTHING")
+
+
 def _write(db: Session, note: Note) -> None:
     values = _row_values(db, note)
     first, last = _block(note.owner_id)
-    row = db.execute(_sql("SELECT id FROM @rows WHERE note_id = :id"), {"id": note.id}).scalar()
-    if row is not None and not first <= row <= last:
+    marks = {"id": note.id, "first": first, "last": last}
+    # Written before anything is read: two writers of one note (two starts filling the gaps, a recognition finished
+    # while the note is indexed elsewhere) would otherwise both read "no row yet" and the second insert fail. The insert
+    # takes the write lock, so what follows reads the row as the other writer left it and nobody changes it meanwhile.
+    db.execute(_sql(_NEW_ROW), marks)
+    row = db.execute(_sql("SELECT id FROM @rows WHERE note_id = :id"), {"id": note.id}).scalar_one()
+    if not first <= row <= last:
         # The note has another owner now: its row moves into the owner's block.
         db.execute(_sql("DELETE FROM @index WHERE rowid = :row"), {"row": row})
         db.execute(_sql("DELETE FROM @rows WHERE id = :row"), {"row": row})
-        row = None
-    if row is None:
-        row = db.execute(_sql("INSERT INTO @rows (id, note_id) SELECT COALESCE(MAX(id) + 1, :first), :id FROM @rows "
-                              "WHERE id BETWEEN :first AND :last RETURNING id"),
-                         {"id": note.id, "first": first, "last": last}).scalar()
-    else:
-        db.execute(_sql("DELETE FROM @index WHERE rowid = :row"), {"row": row})
+        db.execute(_sql(_NEW_ROW), marks)
+        row = db.execute(_sql("SELECT id FROM @rows WHERE note_id = :id"), {"id": note.id}).scalar_one()
+    # One entry per row: what the index held under it goes before the new one comes.
+    db.execute(_sql("DELETE FROM @index WHERE rowid = :row"), {"row": row})
     db.execute(_sql("INSERT INTO @index (rowid, title, body, extra) VALUES (:row, :title, :body, :extra)"),
                {"row": row, **values})
 

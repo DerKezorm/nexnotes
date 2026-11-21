@@ -47,9 +47,14 @@ test('NOTES-14 EC-3 a browser that refuses notifications is told where to allow 
   await page.context().clearPermissions()
   await page.goto(`/notes/${id}`)
   await page.getByTestId('notify-bell').click()
-  const allow = page.getByTestId('notify-allow')
-  if (await allow.count()) await allow.click()
-  await expect(page.getByTestId('notify-this-browser')).toHaveAttribute('data-state', /denied|unsupported/)
+  // Asked only once the panel knows this browser's state: before, "Allow" is not there yet whatever the browser says.
+  const here = page.getByTestId('notify-this-browser')
+  await expect(here).toHaveAttribute('data-state', /^(off|denied|unsupported)$/)
+  if ((await here.getAttribute('data-state')) === 'off') await page.getByTestId('notify-allow').click()
+  // Headless Chromium answers the question with no: the panel says so and where to allow them again.
+  await expect(here).toHaveAttribute('data-state', 'denied')
+  await expect(here).toContainText('not allowed')
+  await expect(page.getByTestId('notify-denied-help')).toContainText('Allow them in the site settings')
 })
 
 test('NOTES-14 AC-5 the address of a tapped notification opens the note at the changed line', async ({ page }) => {

@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import insert, select, text
+from sqlalchemy import event, insert, select, text
 
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import FOLDER_NORMAL, Account, Folder, Note
 from app.notedoc import edit
 from app.services import notes, search, tags
@@ -466,6 +467,83 @@ def test_notes9_index_fills_what_is_missing_at_the_start_and_forgets_removed_not
     with SessionLocal() as db:
         left = list(db.execute(search._sql("SELECT note_id FROM @rows")).scalars())
     assert left == [keep]
+
+
+def _unindexed(owner: Account, title: str, body: str) -> str:
+    """A note straight into the database, past the hook: the index does not know it yet."""
+    with SessionLocal() as db:
+        row = Note(owner_id=owner.id, folder_id=inbox_for(db, owner.id).id, title=title, text=body)
+        db.add(row)
+        db.commit()
+        return row.id
+
+
+def _two_writers_at_once(work) -> list[BaseException]:
+    """``work`` in two threads with their own sessions, held at a barrier right before each one's first write to the
+    index's rows: both have read that the note has no row yet when the first of them writes. Returns what failed."""
+    barrier = threading.Barrier(2, timeout=10)
+    workers: set[int] = set()
+    held: set[int] = set()
+    failed: list[BaseException] = []
+
+    def hold(_conn, _cursor, statement: str, *_args) -> None:
+        me = threading.get_ident()
+        if statement.startswith(f"INSERT INTO {search.ROWS}") and me in workers and me not in held:
+            held.add(me)
+            barrier.wait()
+
+    def run() -> None:
+        workers.add(threading.get_ident())
+        try:
+            work()
+        except BaseException as problem:  # noqa: BLE001 - handed to the test thread
+            failed.append(problem)
+
+    threads = [threading.Thread(target=run) for _ in range(2)]
+    event.listen(engine, "before_cursor_execute", hold)
+    try:
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join(30)
+    finally:
+        event.remove(engine, "before_cursor_execute", hold)
+    assert held == workers and len(held) == 2, "both writers reached the barrier"
+    return failed
+
+
+def _one_entry(note_id: str) -> None:
+    """One row for the note, one entry in the index under it, and no entry without a row."""
+    with SessionLocal() as db:
+        rows = list(db.execute(search._sql("SELECT id FROM @rows WHERE note_id = :id"), {"id": note_id}).scalars())
+        assert len(rows) == 1
+        entries = db.execute(search._sql("SELECT count(*) FROM @index WHERE rowid = :row"), {"row": rows[0]}).scalar()
+        assert entries == 1
+        everything = db.execute(search._sql("SELECT count(*) FROM @index")).scalar()
+        assert everything == db.execute(search._sql("SELECT count(*) FROM @rows")).scalar()
+
+
+def test_notes9_index_two_starts_filling_the_same_note_at_once_both_succeed(client, operator):
+    # Two starts at once (two test clients, two workers on one data folder) fill the same missing note. Before, the
+    # second one stopped its start with a unique error (seen in test_notes4_ec4_many_moves_and_deletes_...).
+    note_id = _unindexed(operator, "Kartoffelsuppe", "Zwiebeln")
+    failed = _two_writers_at_once(search.fill)
+    assert not failed, failed
+    _one_entry(note_id)
+    assert titles(find(client, "kartoffel")) == ["Kartoffelsuppe"]
+
+
+def test_notes9_index_two_sessions_writing_the_same_note_at_once_never_fail(client, operator, monkeypatch):
+    # A recognition that finished (``reindex``) while another session indexes the same note: neither write is lost to
+    # a unique error.
+    note_id = _unindexed(operator, "Rechnung Strom", "Abschlag")
+    logged: list[str] = []
+    monkeypatch.setattr(search.logger, "exception", lambda message, *args: logged.append(message % args))
+    failed = _two_writers_at_once(lambda: search.reindex(note_id))
+    assert not failed, failed
+    assert logged == []
+    _one_entry(note_id)
+    assert titles(find(client, "abschlag")) == ["Rechnung Strom"]
 
 
 def test_notes9_a_failing_index_never_keeps_a_note_from_being_saved(client, operator, monkeypatch):
