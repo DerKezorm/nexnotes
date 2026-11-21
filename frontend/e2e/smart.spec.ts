@@ -100,7 +100,7 @@ test('NOTES-7 AC-5 NOTES-9 AC-6 "Save as smart folder" on the search makes one w
   await note(page, `Invoice kitchen ${stamp}`, 'kitchen')
   await page.setViewportSize({ width: 1500, height: 900 })
   await page.goto(`/search?q=${encodeURIComponent(`invoice ${stamp}`)}&tag=bath${stamp}&period=week`)
-  await expect(page.getByTestId('search-count')).toHaveText('1 hit')
+  await expect(page.getByTestId('search-count')).toHaveText('1 result')
   await page.getByTestId('search-save-smart').click()
   await expect(page).toHaveURL(/\/smart\/new$/)
   await expect(page.getByTestId('smart-kind')).toHaveCount(3)

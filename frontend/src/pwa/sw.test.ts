@@ -343,6 +343,16 @@ describe('NOTES-23 AC-5 the share target', () => {
     expect(api.readShare(form({}, Array.from({ length: 30 }, (_, i) => new File(['x'], `f${i}.txt`)))).files).toHaveLength(20)
   })
 
+  it('NOTES-23 EC-3 a text shared without a file carries no file: the empty part of the file field is none', () => {
+    const { api } = load()
+    // What a browser sends for a file field with nothing chosen: one part without name and bytes.
+    const nothing = new File([], '', { type: 'application/octet-stream' })
+    const empty = new File([], 'empty.txt', { type: 'text/plain' })
+    expect(api.readShare(form({ text: 'Milch' }, [nothing])).files).toEqual([])
+    // A real file that happens to be empty stays: the page says so (the server refuses it).
+    expect(api.readShare(form({ text: 'Milch' }, [nothing, empty])).files).toEqual([empty])
+  })
+
   it('NOTES-23 AC-5 keeps what was shared in memory only and sends the page to "Save to nexnotes"', async () => {
     const world = load()
     const photo = new File(['picture'], 'photo.jpg', { type: 'image/jpeg' })

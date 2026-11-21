@@ -126,7 +126,17 @@ test.describe('NOTES-23 on a phone', () => {
     await page.reload()
     await expect(page.getByRole('heading', { name: 'No connection' })).toBeVisible()
     await expect(page.getByText('Writing without network works in the iPhone and iPad app.')).toBeVisible()
+    // The page asks by itself as soon as the network is back. For "Try again" to be the one that brings the app back,
+    // the server stays out of reach a moment longer (that first question fails), then answers again.
+    let asked = 0
+    await page.route('**/api/setup', (route) => {
+      asked += 1
+      return route.abort('internetdisconnected')
+    })
     await context.setOffline(false)
+    await expect.poll(() => asked).toBeGreaterThan(0)
+    await expect(page.getByTestId('offline-retry')).toBeEnabled()
+    await page.unroute('**/api/setup')
     await page.getByRole('button', { name: 'Try again' }).click()
     await expect(page.getByTestId('offline')).toHaveCount(0)
   })

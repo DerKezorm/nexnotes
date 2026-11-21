@@ -132,9 +132,11 @@ function readShare(form) {
   const text = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '')
   let url = text(form.get('url'), 4000).trim()
   if (!/^https?:\/\/\S+$/i.test(url)) url = ''
+  // A file field with nothing chosen still sends one part: no name, no bytes. That is no file.
   const files = form
     .getAll('files')
     .filter((item) => item && typeof item === 'object' && typeof item.size === 'number' && typeof item.name === 'string')
+    .filter((item) => item.name !== '' || item.size > 0)
     .slice(0, SHARE_MAX_FILES)
   return { title: text(form.get('title'), 1000), text: text(form.get('text'), SHARE_MAX_TEXT), url, files }
 }

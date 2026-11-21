@@ -41,6 +41,12 @@ test('NOTES-6 EC-1 all notes of an account without notes show the empty state, l
     await member.setViewportSize({ width, height: 900 })
     await member.emulateMedia({ colorScheme: scheme })
     await member.goto('/')
+    if (width < 768) {
+      // A phone starts with the folders (NOTES-23 AC-1); "All notes" is one step from there.
+      await expect(member).toHaveURL(/\/folders$/)
+      await member.getByRole('link', { name: /^All notes/ }).click()
+      await expect(member).toHaveURL(/\/$/)
+    }
     await expectEmptyState(member)
   }
   // A new note left empty goes away again when its tab closes (NOTES-3 EC-4; another list keeps it open, NOTES-8

@@ -107,5 +107,7 @@ test('NOTES-20 AC-7 a program connects through the consent page with read only o
   await expect(row.getByTestId('mcp-key-meta')).toContainText('connected program')
   await row.getByTestId('mcp-revoke').click()
   await page.getByTestId('mcp-revoke-confirm').click()
+  // Revoked once the server said so (the row is gone), not while the request is still on its way.
+  await expect(page.getByTestId('mcp-key').filter({ hasText: 'E2E program' })).toHaveCount(0)
   expect((await rpc(page.request, access, 'ping')).status()).toBe(401)
 })

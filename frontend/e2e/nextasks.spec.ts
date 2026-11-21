@@ -84,9 +84,13 @@ test.afterAll(async () => {
 
 async function connect(page: Page): Promise<void> {
   expect((await page.request.put('/api/settings', { data: { connections_local_network: true }, headers: TAB })).status()).toBe(200)
+  // Connected already, to this worker's stand-in: nothing to do. A stand-in of an earlier worker (a new worker after a
+  // failed test listens on another port) is disconnected first, or every later test would talk to nobody.
+  const now = (await (await page.request.get('/api/nextasks', { headers: TAB })).json()) as { connected: boolean; url?: string }
+  if (now.connected && now.url === address) return
+  if (now.connected) expect((await page.request.delete('/api/nextasks', { headers: TAB })).status()).toBe(204)
   await page.goto('/settings/connections')
   const card = page.locator('#nextasks')
-  if (await card.getByTestId('nextasks-connected').isVisible()) return
   await card.getByLabel('Address of nextasks').fill(address)
   await card.getByLabel('API key').fill(TOKEN)
   await card.getByTestId('nextasks-connect').click()
@@ -116,7 +120,8 @@ test('NOTES-19 AC-1 AC-2 AC-3 AC-6 one line goes with a due day, gets its mark, 
   await connect(page)
   const id = await newNote(page, '- [ ] Confirm grey silicone\n- [ ] Have the basin taken off')
   await page.goto(`/notes/${id}`)
-  await page.getByText('Have the basin taken off').click()
+  // In the note itself: the list beside it shows the same words in the note's preview.
+  await page.getByTestId('note-body').getByText('Have the basin taken off', { exact: true }).click()
   await page.getByTestId('nextasks-send').click()
   await expect(page.getByTestId('nextasks-line')).toHaveText('Have the basin taken off')
   await expect(page.getByTestId('nextasks-list')).toHaveValue(LIST)
