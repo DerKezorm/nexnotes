@@ -53,8 +53,9 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function code(error: unknown): string {
-  return error instanceof ApiError ? error.code : 'internal_error'
+/** The refusal itself, so that its sentence gets the values the server sent along. */
+function code(error: unknown): ApiError | string {
+  return error instanceof ApiError ? error : 'internal_error'
 }
 
 export function AboutPage() {
@@ -64,7 +65,7 @@ export function AboutPage() {
   const operator = me?.role === 'operator'
   const [about, setAbout] = useState<About | null>(null)
   const [updates, setUpdates] = useState<Updates | null>(null)
-  const [problem, setProblem] = useState<string | null>(null)
+  const [problem, setProblem] = useState<ApiError | string | null>(null)
   const [busy, setBusy] = useState(false)
 
   const load = useCallback(() => {

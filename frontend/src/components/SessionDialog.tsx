@@ -8,8 +8,8 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ApiError, authApi, type Methods } from '../api/client'
-import { AuthField, Problem, waysIn } from '../pages/AuthPages'
+import { authApi, type Methods } from '../api/client'
+import { AuthField, Problem, troubleOf, waysIn, type Trouble } from '../pages/AuthPages'
 import { useAuth } from '../state/auth'
 import { Dialog } from './Dialog'
 import { ProviderButtons } from './ProviderButtons'
@@ -21,7 +21,7 @@ export function SessionDialog() {
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [step, setStep] = useState<'password' | 'code'>('password')
-  const [problem, setProblem] = useState<string | null>(null)
+  const [problem, setProblem] = useState<Trouble>(null)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -59,7 +59,7 @@ export function SessionDialog() {
       setStep('password')
       resume(await authApi.me())
     } catch (error) {
-      setProblem(error instanceof ApiError ? error.code : 'internal_error')
+      setProblem(troubleOf(error))
     } finally {
       setBusy(false)
     }
@@ -77,7 +77,7 @@ export function SessionDialog() {
         }}
       >
         <p className="text-sm text-mist-300">{t('session.expiredText')}</p>
-        <Problem code={problem} />
+        <Problem problem={problem} />
         {step === 'code' ? (
           <AuthField label={t('auth.code.label')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus />
         ) : (

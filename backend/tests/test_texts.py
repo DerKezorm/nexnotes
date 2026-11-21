@@ -119,3 +119,14 @@ def test_a_body_too_large_says_the_limit_its_sentence_names(client: TestClient, 
     assert refused.status_code == 413
     assert refused.json()["detail"] == {"code": "too_large", "message": "The request is too large.",
                                         "max_mb": MAX_BODY // (1024 * 1024)}
+
+
+def test_notes2_ac3_every_refusal_with_a_placeholder_sends_its_value(client: TestClient, operator: Account) -> None:
+    # The sentences "at least {{minimum}} characters" and "larger than allowed ({{max_mb}} MB)" need their number from
+    # the server; without it the page showed the bare placeholder.
+    from app.services import locales
+
+    short = client.put("/api/auth/password", json={"current": "correct horse battery", "new": "eleven char"})
+    assert short.status_code == 422 and short.json()["detail"]["minimum"] == 12
+    big = client.put("/api/locales/fr", content=b" " * (locales.MAX_BYTES + 1))
+    assert big.status_code == 413 and big.json()["detail"]["max_mb"] == 0.5
