@@ -7,7 +7,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
-import { api } from './api/client'
+import { api, ApiError } from './api/client'
 import i18n from './i18n'
 import { AuthProvider, SIGNED_IN_AGAIN_EVENT } from './state/auth'
 
@@ -307,5 +307,19 @@ describe('the operator never sets another password (NOTES-2 AC-7)', () => {
     await settle()
     expect(notice).toBe(false)
     expect(document.querySelector('[data-testid="reset-notice"]')).toBeNull()
+  })
+})
+
+describe('an operator from a provider confirms with a fresh sign-in there', () => {
+  it('NOTES-2 AC-7 a refusal for an old sign-in offers the operator\'s providers, asking them for a new sign-in', async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('location', { ...window.location, assign, pathname: '/settings/accounts', search: '' })
+    const { Feedback } = await import('./pages/settings/ui')
+    await render(<Feedback problem={new ApiError(403, 'fresh_sign_in_required', { minutes: 10, providers: [{ slug: 'sso', label: 'Pocket ID' }] })} />)
+    expect(box.textContent).toContain(i18n.t('errors.fresh_sign_in_required', { minutes: 10 }))
+    const button = box.querySelector<HTMLButtonElement>('[data-testid="sign-in-again"] button')!
+    expect(button.textContent).toBe(i18n.t('oidc.login.button', { name: 'Pocket ID' }))
+    await act(async () => button.click())
+    expect(assign).toHaveBeenCalledWith('/api/oidc/sso/start?next=%2Fsettings%2Faccounts&fresh=1')
   })
 })

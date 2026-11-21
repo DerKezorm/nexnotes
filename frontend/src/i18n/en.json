@@ -189,6 +189,7 @@
     "empty": "This is where you will connect iPhone and iPad, nextasks and AI tools (MCP), and manage the vault password."
   },
   "errors": {
+    "fresh_sign_in_required": "For this, sign in at your provider once more first: operator acts need a sign-in from the last {{minutes}} minutes. You come back here afterwards.",
     "internal_error": "That did not work.",
     "account_blocked": "This account is blocked. Ask the operator.",
     "account_locked": "Too many wrong passwords. The account waits a quarter of an hour.",

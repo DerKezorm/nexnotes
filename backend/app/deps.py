@@ -9,18 +9,20 @@ from __future__ import annotations
 
 import ipaddress
 import logging
+from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .config import get_settings
 from .db import SessionLocal, get_db
 from .errors import detail, error
-from .models import OPERATOR, SIGN_IN_PASSWORD
+from .models import OPERATOR, SIGN_IN_PASSWORD, AuthSession, OidcLink, OidcProvider, utcnow
 from .models import Account as AccountRow
-from .security import SESSION_COOKIE, account_out, brake, session_account, session_owner
+from .security import SESSION_COOKIE, account_out, brake, hash_token, session_account, session_owner
 from .services import accounts, apitokens, logs, totp
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -212,13 +214,44 @@ def reauth_succeeded(request: Request, db: Session, account: AccountRow) -> None
     accounts.note_success(db, account)
 
 
+#: How old the session of an operator who signs in through a provider may be for an operator act.
+OPERATOR_FRESH_MINUTES = 10
+
+
+def _fresh_from_provider(request: Request, db: Session, row: AccountRow) -> None:
+    """An operator without a password here proves it is still them by a sign-in at the provider younger than
+    ``OPERATOR_FRESH_MINUTES``: the browser session must be that new. Otherwise the refusal names the operator's
+    providers, and the page sends the browser there with ``fresh=1`` (``prompt=login``, ``max_age=0``) and back.
+    A token (a paired device, an MCP key) is never enough."""
+    cookie = request.cookies.get(SESSION_COOKIE)
+    session = None
+    if cookie and not _bearer(request):
+        session = db.scalar(select(AuthSession).where(AuthSession.token_hash == hash_token(cookie)))
+    if (session is not None and session.account_id == row.id
+            and utcnow() - session.created_at <= timedelta(minutes=OPERATOR_FRESH_MINUTES)):
+        return
+    providers = [
+        {"slug": entry.slug, "label": entry.label}
+        for entry in db.scalars(
+            select(OidcProvider)
+            .join(OidcLink, OidcLink.provider_id == OidcProvider.id)
+            .where(OidcLink.account_id == row.id, OidcProvider.enabled.is_(True))
+            .order_by(OidcProvider.position, OidcProvider.id)
+        )
+    ]
+    raise error("fresh_sign_in_required", "Sign in at your provider again first: operator acts need a sign-in from the "
+                f"last {OPERATOR_FRESH_MINUTES} minutes.", 403, minutes=OPERATOR_FRESH_MINUTES, providers=providers)
+
+
 def confirm_operator(request: Request, db: Session, operator: AccountRow, password: str) -> None:
     """The operator's password once more, before an act a stolen session must not be enough for: carrying a backup
-    away, giving another account a password, taking its second factor, changing a role, deleting an account. An
-    operator who signs in through the provider has no password here and is not asked."""
+    away or bringing one back, making a reset link for another account, taking its second factor, changing a role,
+    blocking or deleting an account. An operator who signs in through a provider has no password here; it needs a
+    sign-in at the provider from the last few minutes instead (``_fresh_from_provider``)."""
     row = db.get(AccountRow, operator.id)
     assert row is not None
     if row.sign_in != SIGN_IN_PASSWORD:
+        _fresh_from_provider(request, db, row)
         return
     reauth_guard(request, row)
     if not accounts.check_password(row, password):

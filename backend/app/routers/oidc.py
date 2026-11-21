@@ -36,9 +36,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Annotated, Any
-from urllib.parse import quote
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
 
 from fastapi import APIRouter, Path, Query, Request, Response
 from fastapi.responses import RedirectResponse
@@ -237,6 +237,16 @@ def remove_provider(provider_id: Annotated[int, Path(ge=1)], operator: OperatorA
 # --- Start and return --------------------------------------------------------------------------------------------
 
 
+def ask_again(url: str) -> str:
+    """The provider's address with ``prompt=login`` and ``max_age=0`` (OpenID Connect Core 3.1.2.1): a fresh sign-in,
+    not the provider's running session. The shared module builds the address; the app only adds to its query."""
+    parts = urlsplit(url)
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True)
+             if key not in ("prompt", "max_age")]
+    query += [("prompt", "login"), ("max_age", "0")]
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 def _brake_key(request: Request) -> str:
     return "oidc:" + client_ip(request)
 
@@ -248,6 +258,9 @@ async def start(
     invite: Annotated[str | None, Query(max_length=64, pattern=r"^[A-Za-z0-9_-]+$")] = None,
     # No length rule here: a ``next`` too long or not one of ours is dropped by ``safe_next``, never a JSON refusal.
     next_path: Annotated[str | None, Query(alias="next")] = None,
+    # The operator signs in again for an operator act (``deps.confirm_operator``): the provider is asked to ask for
+    # the credentials again instead of passing a running session through.
+    fresh: bool = False,
 ) -> RedirectResponse:
     # Public: this is the sign-in button. Failures land on the sign-in page with a code. ``next`` is the page the
     # button was pressed for (a direct link); only a page of nexnotes' own goes along.
@@ -259,6 +272,8 @@ async def start(
             target = await flow.begin(s, slug, request_base=_base(request), invite=invite)
         except OidcError as exc:
             return _redirect(flow.refused(exc, None), request, landing=landing)
+    if fresh:
+        target = replace(target, location=ask_again(target.location))
     response = _redirect(target, request)
     cookie = target.cookie
     if landing:

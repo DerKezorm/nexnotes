@@ -10,6 +10,7 @@ import { ApiError } from '../../api/client'
 import { Dialog } from '../../components/Dialog'
 import { errorText, problemText } from '../../lib/errors'
 import { copyText } from '../../lib/copy'
+import { go, startAddress } from '../../lib/providers'
 
 /** A card with its symbol in a small box, a title and a line of explanation. */
 export function Card({ icon: Icon, title, text, children, id }: { icon: LucideIcon; title: string; text?: string; children: ReactNode; id?: string }) {
@@ -187,11 +188,29 @@ export function Feedback({ problem, done = null }: { problem: Trouble; done?: st
           {typeof problem === 'string' ? errorText(problem) : problemText(problem)}
         </p>
       )}
+      {problem instanceof ApiError && problem.code === 'fresh_sign_in_required' && <SignInAgain providers={problem.values.providers} />}
       {done && (
         <p role="status" className="text-sm text-ok-500">
           {done}
         </p>
       )}
+    </div>
+  )
+}
+
+/** An operator who signs in through a provider confirms an operator act with a fresh sign-in there: a button per
+ * provider of the account, back to this page afterwards (the server asks the provider for `prompt=login`). */
+function SignInAgain({ providers }: { providers: unknown }) {
+  const { t } = useTranslation()
+  const list = Array.isArray(providers) ? (providers as { slug: string; label: string }[]) : []
+  const here = window.location.pathname + window.location.search
+  return (
+    <div className="mt-2 flex flex-wrap gap-2" data-testid="sign-in-again">
+      {list.map((provider) => (
+        <button key={provider.slug} type="button" className="nn-btn nn-btn-ghost h-8 px-3 text-xs" onClick={() => go(startAddress(provider.slug, { next: here, fresh: true }))}>
+          {t('oidc.login.button', { name: provider.label })}
+        </button>
+      ))}
     </div>
   )
 }

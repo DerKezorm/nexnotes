@@ -20,6 +20,7 @@ let handler: (method: string, path: string, body: unknown) => Answer | undefined
 const VALUES: Record<string, Record<string, unknown>> = {
   password_too_short: { minimum: 12 },
   too_large: { max_mb: 100 },
+  fresh_sign_in_required: { minutes: 10, providers: [] },
 }
 const WITH_PLACEHOLDER = Object.entries({ ...en.errors, ...de.errors })
   .filter(([, text]) => /\{\{/.test(String(text)))

@@ -22,7 +22,7 @@ from app.security import SESSION_COOKIE
 from app.services import accounts, apitokens, content
 
 from . import oidc_helpers
-from .conftest import PASSWORD, make_account, new_client, sign_in
+from .conftest import PASSWORD, TAB, make_account, new_client, sign_in
 from .oidc_helpers import FakeProvider, configure, error_in, fresh_browser, location, sign_in_via_oidc
 
 provider = oidc_helpers.provider
@@ -563,3 +563,55 @@ def test_notes2_ac7_making_a_reset_link_asks_for_the_operators_password_and_is_f
     assert wrong.status_code == 401 and _code(wrong) == "wrong_password"
     with new_client(anna) as member:
         assert member.post(f"/api/accounts/{operator.id}/reset-link", json={"current_password": PASSWORD}).status_code == 403
+
+
+def test_notes2_ac7_an_operator_from_a_provider_confirms_operator_acts_with_a_fresh_sign_in_there(
+    client: TestClient, operator: Account, provider: FakeProvider
+) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    from app.models import AuthSession
+
+    configure(client, provider)
+    boss = fresh_browser()
+    assert location(sign_in_via_oidc(boss, provider, sub="p-boss", preferred_username="boss")) == "/"
+    with SessionLocal() as db:
+        row = db.scalar(select(Account).where(Account.name == "boss"))
+        assert row is not None and row.sign_in == "oidc"
+        row.role = OPERATOR
+        db.commit()
+        boss_id = row.id
+    anna = make_account("anna")
+    # Just signed in at the provider: the act goes through without a password.
+    assert boss.post(f"/api/accounts/{anna.id}/block", json={}).status_code == 204
+    # Eleven minutes later a stolen session is not enough any more.
+    with SessionLocal() as db:
+        for session in db.scalars(select(AuthSession).where(AuthSession.account_id == boss_id)):
+            session.created_at = utcnow() - timedelta(minutes=11)
+        db.commit()
+    assert boss.get("/api/auth/me").status_code == 200
+    for refused in (
+        boss.post(f"/api/accounts/{anna.id}/unblock", json={}),
+        boss.post(f"/api/accounts/{anna.id}/reset-link", json={}),
+        boss.put(f"/api/accounts/{anna.id}/role", json={"role": "operator"}),
+        boss.request("DELETE", f"/api/accounts/{anna.id}", json={}),
+    ):
+        assert refused.status_code == 403 and _code(refused) == "fresh_sign_in_required"
+        assert refused.json()["detail"]["minutes"] == 10
+        assert refused.json()["detail"]["providers"] == [{"slug": "sso", "label": "Test SSO"}]
+    assert _row("anna").blocked_at is not None
+    # The way back asks the provider for a new sign-in, not its running session; afterwards the act goes through.
+    target = oidc_helpers.start(boss, fresh="1", next="/settings/accounts")
+    asked = parse_qs(urlsplit(target).query)
+    assert asked["prompt"] == ["login"] and asked["max_age"] == ["0"]
+    assert "prompt" not in parse_qs(urlsplit(oidc_helpers.start(fresh_browser())).query)
+    assert location(oidc_helpers.come_back(boss, provider, target)) == "/settings/accounts"
+    assert boss.post(f"/api/accounts/{anna.id}/unblock", json={}).status_code == 204
+    # A token of the operator is never enough, fresh or not.
+    with SessionLocal() as db:
+        row = db.get(Account, boss_id)
+        assert row is not None
+        _device, token = apitokens.make(db, row, "iPhone")
+    device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {token}", **TAB})
+    refused = device.post(f"/api/accounts/{anna.id}/block", json={})
+    assert refused.status_code == 403 and _code(refused) == "fresh_sign_in_required"

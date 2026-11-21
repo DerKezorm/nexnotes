@@ -189,6 +189,7 @@
     "empty": "Hier verbindest du später iPhone und iPad, nextasks und KI-Werkzeuge (MCP) und verwaltest das Tresor-Passwort."
   },
   "errors": {
+    "fresh_sign_in_required": "Melde dich dafür zuerst noch einmal bei deinem Anbieter an: Betreiber-Handlungen brauchen eine Anmeldung aus den letzten {{minutes}} Minuten. Danach kommst du hierher zurück.",
     "internal_error": "Das hat nicht geklappt.",
     "account_blocked": "Dieses Konto ist gesperrt. Wende dich an den Betreiber.",
     "account_locked": "Zu viele falsche Passwörter. Das Konto wartet eine Viertelstunde.",
