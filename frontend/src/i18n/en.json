@@ -575,7 +575,7 @@
     "oauth_pkce": "The program does not sign in the safe way (PKCE). It cannot connect.",
     "oauth_redirect": "This return address is not registered for the program.",
     "oauth_response_type": "The program asks in a way nexnotes does not speak.",
-    "origin_refused": "MCP is not for web pages.",
+    "origin_refused": "This interface is for programs, not for web pages.",
     "protocol_version": "This MCP version is not spoken here.",
     "slow_down": "Too many requests with this key. Wait a minute.",
     "smart_folder_exists": "There is already a smart folder named “{{name}}”. Choose another name.",
@@ -1847,7 +1847,7 @@
       "readHint": "Search, read, list folders and tags.",
       "write": "Read and write",
       "writeHint": "Also make notes, add to them, tick items off, move them, make folders and put notes into the trash.",
-      "make": "Make key"
+      "make": "Create key"
     },
     "consent": {
       "title": "Connect “{{name}}”?",

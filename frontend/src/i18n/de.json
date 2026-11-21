@@ -575,7 +575,7 @@
     "oauth_pkce": "Das Programm meldet sich nicht auf dem sicheren Weg an (PKCE). Es kann sich nicht verbinden.",
     "oauth_redirect": "Diese Rücksprungadresse ist für das Programm nicht hinterlegt.",
     "oauth_response_type": "Das Programm fragt auf eine Art, die nexnotes nicht spricht.",
-    "origin_refused": "MCP ist nicht für Webseiten.",
+    "origin_refused": "Diese Schnittstelle ist für Programme, nicht für Webseiten.",
     "protocol_version": "Diese MCP-Fassung spricht nexnotes nicht.",
     "slow_down": "Zu viele Anfragen mit diesem Schlüssel. Warte eine Minute.",
     "smart_folder_exists": "Einen intelligenten Ordner „{{name}}“ gibt es schon. Wähle einen anderen Namen.",
