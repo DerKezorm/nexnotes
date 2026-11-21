@@ -485,6 +485,23 @@ describe('NOTES-3 AC-14 AC-15 room on a wide screen', () => {
   })
 })
 
+describe('NOTES-3 AC-1 the placeholder', () => {
+  it('NOTES-3 AC-1 "Start writing" shows in an empty note only, never on an empty paragraph between written ones', () => {
+    const editor = makeEditor()
+    const shown = () => [...editor.view.dom.querySelectorAll('[data-placeholder]')].map((node) => node.getAttribute('data-placeholder')).filter(Boolean)
+    editor.commands.focus()
+    expect(shown()).toEqual(['Start writing'])
+    editor.commands.setContent('<p>one</p><p></p><p>two</p>')
+    // The cursor in the empty paragraph in the middle.
+    editor.commands.setTextSelection(6)
+    expect(editor.state.selection.$from.parent.textContent).toBe('')
+    expect(shown()).toEqual([])
+    editor.commands.setContent('<p></p>')
+    editor.commands.focus()
+    expect(shown()).toEqual(['Start writing'])
+  })
+})
+
 describe('NOTES-3 EC-3 pasting', () => {
   const word = `<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>p.MsoNormal { color: red }</style><script>alert('x')</script></head>
     <body><!--[if gte mso 9]>junk<![endif]--><h1 style="color:blue" class="MsoTitle">Plan</h1><p class="MsoNormal" style="font-size: 30pt"><b>bold</b> and <span style="font-family: Comic Sans">plain</span><o:p></o:p></p>

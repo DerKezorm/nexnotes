@@ -408,7 +408,8 @@ export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}
         return { nodeName: 'span', class: 'collaboration-carets__selection', style: `background-color: ${look.color}40`, 'data-user': look.label }
       },
     }),
-    Placeholder.configure({ placeholder, showOnlyCurrent: true, includeChildren: false }),
+    // "Start writing …" only in a note whose text is empty: never on an empty paragraph between written ones.
+    Placeholder.configure({ placeholder: ({ editor }) => (editor.isEmpty ? placeholder : ''), showOnlyCurrent: true, includeChildren: false }),
     LinkOpener,
     noteEditing(t, hooks),
     // Tags (NOTES-5): painted and suggested, never a node or a mark of their own.
