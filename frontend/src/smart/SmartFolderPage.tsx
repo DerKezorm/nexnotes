@@ -25,6 +25,7 @@ import { NoteList } from '../notes/NoteList'
 import { hrefIn } from '../notes/workspace'
 import type { ListMode } from '../notes/list/api'
 import type { ListSource } from '../notes/list/useNoteList'
+import { PhoneListWays } from '../pwa/phone'
 import { smartApi, type Broken, type SmartAnswer, type SmartFolder } from './api'
 import { asksAttachments, asksSharedWithMe, describe, smartName } from './conditions'
 import { useFolderName } from './folderName'
@@ -129,6 +130,7 @@ export function SmartFolderPage() {
   if (missing)
     return (
       <div className={'flex flex-col gap-3 ' + padding} data-testid="smart-missing">
+        <PhoneListWays />
         <h1 className="text-2xl font-bold">{t('smart.missingTitle')}</h1>
         <p className="text-sm text-mist-500">{t('smart.missingText')}</p>
       </div>
@@ -192,6 +194,7 @@ export function SmartFolderPage() {
 
   return (
     <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="smart-page">
+      <PhoneListWays />
       {answer && answer.folder.id === id && answer.broken.length > 0 && <BrokenNote broken={answer.broken} folderId={id} />}
       <NoteList
         heading={name || ' '}

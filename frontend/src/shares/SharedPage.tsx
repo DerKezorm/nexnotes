@@ -19,6 +19,7 @@ import { noteHref } from '../notes/newNote'
 import { NoteList } from '../notes/NoteList'
 import { hrefIn } from '../notes/workspace'
 import { FolderBell } from '../notify/NotifyBell'
+import { PhoneListWays } from '../pwa/phone'
 import { sharesApi, sharesChanged, type SharedFolder, type ShareNotice, type WithMeItem } from './api'
 import { noticeText, useWithMe } from './withMe'
 
@@ -77,6 +78,7 @@ export function SharedPage() {
 
   return (
     <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="shared-page">
+      <PhoneListWays />
       <div className="flex flex-col gap-1">
         <h1 className="text-2xl font-bold">{t('shares.page.title')}</h1>
         <p className="text-[13.5px] text-mist-400">{t('shares.page.text')}</p>
@@ -175,6 +177,7 @@ export function SharedFolderPage() {
     ) : undefined
   return (
     <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="shared-folder-page">
+      <PhoneListWays to="/shared" label={t('shares.page.title')} />
       <NoteList
         folderId={folder.id}
         heading={folder.name}

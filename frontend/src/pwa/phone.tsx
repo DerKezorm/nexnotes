@@ -8,6 +8,8 @@ import { ChevronLeft, Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { useNewNote } from '../notes/newNote'
+
 /** "‹ <name>" at the top of a view: back to the one before it. */
 export function PhoneBack({ to, label }: { to: string; label: string }) {
   return (
@@ -32,5 +34,21 @@ export function PhoneNewNote({ onClick, label, disabled = false }: { onClick: ()
     >
       <Plus className="h-[22px] w-[22px]" strokeWidth={2.6} aria-hidden />
     </button>
+  )
+}
+
+/**
+ * The ways of a list that is no folder (a smart folder, "Mit mir geteilt", a tag, the search; NOTES-23 AC-1), as the
+ * folders' lists have them: "‹ Ordner" back to the phone's page of folders (or `to`), and "New note", which goes into
+ * the inbox there: such a list is no place (NOTES-4 AC-9, `useNewNote`).
+ */
+export function PhoneListWays({ to = '/folders', label }: { to?: string; label?: string }) {
+  const { t } = useTranslation()
+  const { start, busy } = useNewNote()
+  return (
+    <>
+      <PhoneBack to={to} label={label ?? t('folders.section')} />
+      <PhoneNewNote onClick={start} disabled={busy} label={t('folders.page.newNote', { name: t('folders.inbox.name') })} />
+    </>
   )
 }

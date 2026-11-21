@@ -66,7 +66,7 @@ from sqlalchemy.orm import Session, defer
 from ..db import SessionLocal, engine
 from ..errors import error
 from ..models import FOLDER_INBOX, Account, Folder, Note
-from ..models_attachments import Attachment, AttachmentRef
+from ..models_attachments import Attachment, AttachmentMention, AttachmentRef
 from ..models_shares import Share, SharePin
 from ..models_tags import NoteTag
 from . import tags
@@ -1156,9 +1156,15 @@ def condition_clause(db: Session, asked: Asked, index: int, condition: dict[str,
     if kind == "tasks":
         return and_(not_(_locked()), Note.tasks_total > func.coalesce(Note.tasks_done, 0))
     if kind == "attachment":
+        # The same attachments the gallery shows (``attachments.gallery``): only the note's owner's, and in a note of
+        # somebody else one from another note of the owner only if the owner put it there (NOTES-13, ``vouched``).
+        unvouched = exists().where(AttachmentMention.note_id == Note.id,
+                                   AttachmentMention.attachment_id == Attachment.id,
+                                   AttachmentMention.vouched.is_(False))
         found = exists().where(AttachmentRef.note_id == Note.id, Attachment.id == AttachmentRef.attachment_id,
                                Attachment.owner_id == Note.owner_id,
-                               Attachment.kind.in_(ATTACHMENT_TYPES[condition["type"]]))
+                               Attachment.kind.in_(ATTACHMENT_TYPES[condition["type"]]),
+                               or_(Note.owner_id == account.id, Attachment.note_id == Note.id, not_(unvouched)))
         return and_(not_(_locked()), found)
     if kind == "shared":
         return _shared_by(account) if condition["op"] == "by_me" else Note.owner_id != account.id

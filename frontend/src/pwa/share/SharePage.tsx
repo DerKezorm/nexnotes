@@ -24,7 +24,7 @@ import { problemText } from '../../lib/errors'
 import { useTitle } from '../../lib/title'
 import { notesApi, notesChanged } from '../../notes/api'
 import { newNoteId, noteHref } from '../../notes/newNote'
-import { cleanTitle } from '../../editor/title'
+import { cleanTitle, MAX_TITLE } from '../../editor/title'
 import { unreachable, useAuth } from '../../state/auth'
 import { hostOf, shareMarkdown, shareOrigin, splitShared, suggestShareTitle, type Shared } from './compose'
 import { doneShared, takeShared } from './take'
@@ -109,6 +109,9 @@ function ShareForm({ id, shared, offlineNow, lang, onDone }: { id: string; share
   const tooLarge = maxMb === null ? [] : files.filter((item) => item.file.size > maxMb * MB)
   const keep = files.filter((item) => !tooLarge.includes(item))
   const cleaned = cleanTitle(title)
+  // The server keeps 120 characters of a title (`notedoc`): the field takes no more and says so before it is full.
+  const titleLength = Array.from(title).length
+  const nearFull = titleLength >= MAX_TITLE - 20
 
   const save = async () => {
     if (!cleaned) {
@@ -212,14 +215,22 @@ function ShareForm({ id, shared, offlineNow, lang, onDone }: { id: string; share
           </p>
         ))}
         <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
-          <span>
-            {t('pwa.share.titleLabel')} <span className="font-normal text-mist-500">{t('pwa.share.titleHint')}</span>
+          <span className="flex items-baseline justify-between gap-3">
+            <span>
+              {t('pwa.share.titleLabel')} <span className="font-normal text-mist-500">{t('pwa.share.titleHint')}</span>
+            </span>
+            {nearFull && (
+              <span id="share-title-count" aria-live="polite" className={'shrink-0 font-normal tabular-nums ' + (titleLength >= MAX_TITLE ? 'text-warn-500' : 'text-mist-500')} data-testid="share-title-count">
+                {t('pwa.share.titleCount', { chars: titleLength, max: MAX_TITLE })}
+              </span>
+            )}
           </span>
           <input
             type="text"
             required
             value={title}
-            maxLength={1000}
+            maxLength={MAX_TITLE}
+            aria-describedby={nearFull ? 'share-title-count' : undefined}
             onChange={(event) => setTitle(event.target.value)}
             className="nn-field min-h-12 text-base"
             data-testid="share-title"
