@@ -53,7 +53,7 @@ from ..notedoc import doc as notedoc
 from ..notedoc import schema as s
 from ..notedoc.markdown import to_plain
 from ..notedoc.room import CLOSE_LOCKED
-from . import attachments, content, history, notes, settings_service, tags
+from . import attachments, content, history, notes, settings_service, shares, tags
 
 logger = logging.getLogger("nexnotes.vault")
 
@@ -81,7 +81,7 @@ UNLOCK = "unlock"
 STEPS = (LOCK, UNLOCK)
 #: The kind of an attachment of a locked note: the server knows nothing of its content.
 SEALED_KIND = "sealed"
-#: Further ways a note is shared with others (NOTES-13 adds its own): such a note cannot be locked (NOTES-13 EC-3).
+#: Further ways a note counts as shared besides ``shares.lock_refused`` (NOTES-13): such a note cannot be locked (EC-3).
 SHARE_CHECKS: list[Callable[[Session, Note], bool]] = []
 
 
@@ -346,7 +346,8 @@ async def lock_start(account: Account, note_id: str) -> dict[str, Any]:
         note = _own_note(db, account, note_id)
         if note.locked:
             raise error("note_locked", "The note is locked.", 409)
-        if any(check(db, note) for check in SHARE_CHECKS):
+        if shares.lock_refused(db, note_id) or any(check(db, note) for check in SHARE_CHECKS):
+            # Shared with somebody, itself or through a folder, or with a read link: sharing ends first (NOTES-13 EC-3).
             raise error("note_shared", "Stop sharing the note before locking it.", 409)
         running = pending_of(db, note_id)
         if running is not None and running.step != LOCK:

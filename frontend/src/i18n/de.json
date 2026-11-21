@@ -540,6 +540,13 @@
     "export_pdf_busy": "Gerade entsteht schon ein PDF. Versuch es in ein paar Sekunden noch einmal.",
     "export_waiting": "Ein anderer Export von dir wartet schon. Starte den nächsten, sobald er läuft.",
     "export_no_room": "Auf dem Server ist gerade nicht genug Platz für diesen Export.",
+    "link_expiry_too_soon": "Ein Link gilt mindestens bis morgen.",
+    "link_expiry_too_late": "Wähle ein früheres Datum.",
+    "person_not_found": "Diese Person ist kein Mitglied dieses Servers.",
+    "share_inbox": "Den Eingang kannst du nicht teilen.",
+    "share_links_off": "Links zum Lesen hat der Betreiber abgeschaltet.",
+    "share_locked": "Eine gesperrte Notiz lässt sich nicht teilen.",
+    "share_self": "Mit dir selbst kannst du nicht teilen.",
     "vault_missing": "Es gibt noch keinen Tresor. Er entsteht beim ersten Sperren einer Notiz.",
     "vault_exists": "Der Tresor ist schon eingerichtet.",
     "vault_wrong": "Das Tresor-Passwort stimmt nicht.",
@@ -579,7 +586,6 @@
       "style": "Symbol und Farbe …",
       "move": "Verschieben …",
       "share": "Teilen …",
-      "shareLater": "kommt mit dem Teilen",
       "export": "Exportieren",
       "exportLater": "kommt mit dem Export",
       "trash": "In den Papierkorb"
@@ -1591,6 +1597,73 @@
     "locked": "Die Notiz ist gesperrt. Ihr Text wird nicht erkannt.",
     "loading": "Wird geladen …",
     "picture": "Seite des Anhangs"
+  },
+  "shares": {
+    "menu": "Teilen …",
+    "dialog": {
+      "title": "„{{title}}“ teilen",
+      "people": "Mit Personen auf diesem Server",
+      "search": "Name oder E-Mail",
+      "searchLabel": "Person suchen",
+      "found": "Gefundene Personen",
+      "right": "Recht von {{name}}",
+      "remove": "{{name}} entfernen",
+      "through": "{{name}} über den Ordner „{{folder}}“ ({{level}})",
+      "onlyYouNote": "Nur du entscheidest, wer die Notiz sieht. Andere können sie nicht weiterteilen.",
+      "onlyYouFolder": "Nur du entscheidest, wer den Ordner sieht. Andere können ihn nicht weiterteilen.",
+      "done": "Fertig"
+    },
+    "level": {
+      "read": "lesen",
+      "write": "bearbeiten"
+    },
+    "link": {
+      "title": "Link zum Lesen, ohne Konto",
+      "switch": "Link zum Lesen",
+      "address": "Adresse des Links",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "hidden": "Der Link ist aktiv. Seine Adresse zeigt nexnotes nur beim Anlegen.",
+      "renew": "Neuen Link anlegen (der alte gilt dann nicht mehr)",
+      "valid": "Gültig bis",
+      "until": "Letzter Tag des Links",
+      "untilText": "bis {{date}}",
+      "revoke": "Link widerrufen"
+    },
+    "links": {
+      "title": "Links zum Lesen",
+      "text": "Links, mit denen jemand ohne Konto eine deiner Notizen lesen kann.",
+      "none": "Du hast keine Links zum Lesen.",
+      "expired": "abgelaufen am {{date}}"
+    },
+    "mark": {
+      "with": "geteilt mit {{names}}",
+      "fromRead": "von {{name}} · lesen",
+      "fromWrite": "von {{name}} · bearbeiten"
+    },
+    "ended": "„{{title}}“ ist nicht mehr da: {{name}} hat das Teilen beendet.",
+    "ownerGone": "„{{title}}“ ist nicht mehr da: das Konto von {{name}} wurde gelöscht.",
+    "nowRead": "{{name}} hat dein Recht geändert: du kannst diese Notiz jetzt nur noch lesen.",
+    "page": {
+      "title": "Mit mir geteilt",
+      "text": "Notizen und Ordner, die andere dir freigegeben haben. Sie gehören weiter ihnen.",
+      "from": "von {{name}}",
+      "folder_one": "Ordner · {{count}} Notiz",
+      "folder_other": "Ordner · {{count}} Notizen",
+      "note": "Notiz",
+      "changed": "geändert {{date}}",
+      "leave": "Verlassen",
+      "dismiss": "Ausblenden",
+      "empty": "Noch hat niemand etwas mit dir geteilt.",
+      "back": "Zurück zu „Mit mir geteilt“"
+    },
+    "move": {
+      "title": "Nicht mehr geteilt?",
+      "one": "„{{title}}“ liegt in einem geteilten Ordner. Woanders ist sie nicht mehr geteilt mit: {{people}}.",
+      "many_one": "{{count}} Notiz liegt in einem geteilten Ordner. Woanders ist sie nicht mehr geteilt mit: {{people}}.",
+      "many_other": "{{count}} Notizen liegen in einem geteilten Ordner. Woanders sind sie nicht mehr geteilt mit: {{people}}.",
+      "go": "Verschieben"
+    }
   },
   "vault": {
     "password": "Tresor-Passwort",

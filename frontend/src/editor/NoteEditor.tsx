@@ -20,7 +20,7 @@
  */
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import { Copy, Ellipsis, History, Trash2, Upload, WifiOff } from 'lucide-react'
+import { Copy, Ellipsis, History, Share2, Trash2, Upload, WifiOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -33,6 +33,7 @@ import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
 import { historyHref } from '../history/href'
 import { RestoreWatch } from '../history/RestoreWatch'
+import { ShareDialog } from '../shares/ShareDialog'
 import { problemText } from '../lib/errors'
 import { pageTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
@@ -158,6 +159,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const [linkOpen, setLinkOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [exportOpen, setExportOpen] = useState(false)
+  const [shareOpen, setShareOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   const [textWidth] = useTextWidth()
   const [outlineShown] = useOutlineShown()
@@ -246,6 +248,16 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
     if (!sealed && onLocked && (status === 'locked' || headLocked)) onLocked()
   }, [sealed, onLocked, status, headLocked])
   const editable = !stopped && (head?.can_write ?? true)
+  // A member who only reads gets no toolbar at all (NOTES-13 AC-4).
+  const writable = head?.can_write ?? true
+  // Writing became reading while the note is open (NOTES-13 AC-5): said once.
+  const wrote = useRef<boolean | null>(null)
+  useEffect(() => {
+    if (!head) return
+    if (wrote.current === true && !head.can_write && !head.deleted_at && head.owner && head.owner.id !== myId)
+      showNotice({ text: t('shares.nowRead', { name: head.owner.name }) })
+    wrote.current = head.can_write
+  }, [head, myId, t])
 
   const extensions = useMemo(
     () =>
@@ -491,6 +503,14 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const lastStep = head && !shared ? head.path[head.path.length - 1] : undefined
   const pathTarget = lastStep ? (lastStep.inbox ? '/inbox' : `/folder/${encodeURIComponent(lastStep.id)}`) : null
   const changedBy = head?.updated_by && head.updated_by.id !== myId ? head.updated_by.name : ''
+  const sharedMark = shared && head?.owner
+    ? t(head.level === 'write' ? 'shares.mark.fromWrite' : 'shares.mark.fromRead', { name: head.owner.name })
+    : head?.shared_with?.length
+      ? t('shares.mark.with', { names: head.shared_with.join(', ') })
+      : ''
+  const stoppedText = status === 'forbidden' && shared && head?.owner
+    ? t('shares.ended', { title: shownTitle || head.title || t('notes.untitled'), name: head.owner.name })
+    : t(`editor.stopped.${status}`)
   let saved: { text: string; tone: string }
   if (stopped) saved = { text: '', tone: '' }
   else if (pending > 0 && status !== 'online') saved = { text: t('editor.waiting', { count: pending }), tone: 'text-warn-500' }
@@ -511,7 +531,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       )}
       {stopped && (
         <div role="alert" data-testid="stopped-bar" className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-[13.5px] font-medium text-warn-500" style={{ background: 'rgb(251 146 60 / 0.14)' }}>
-          <span>{t(`editor.stopped.${status}`)}</span>
+          <span>{stoppedText}</span>
           {stoppedExtra?.(status as LiveStatus)}
           {status === 'gone' && head?.can_write && (
             <button type="button" className="nn-btn nn-btn-ghost h-8 px-3" onClick={() => void restore()}>
@@ -524,11 +544,11 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
           buttons are never cut off (NOTES-12 AC-5). Not even "More" beside them (a narrow side with someone else in
           the note): they go below the tools. */}
       <div className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
-        <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
+        <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
-          <NotePinButton noteId={noteId} head={head} disabled={!head?.can_write} />
+          <NotePinButton noteId={noteId} head={head} />
           <span className="relative">
             <button
               type="button"
@@ -547,6 +567,21 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
                 {titleCheck && (
                   <button type="button" role="menuitem" className="nn-menu-item" onClick={() => void titleOk()}>
                     {t('notes.titleOk')}
+                  </button>
+                )}
+                {head?.can_share && !sealed && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="nn-menu-item"
+                    data-testid="note-share"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setShareOpen(true)
+                    }}
+                  >
+                    <Share2 className="h-4 w-4" aria-hidden />
+                    {t('shares.menu')}
                   </button>
                 )}
                 {!sealed && (
@@ -661,6 +696,14 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
               </span>
             </>
           )}
+          {sharedMark && (
+            <>
+              <span aria-hidden>·</span>
+              <span className="rounded-md bg-ink-800 px-1.5 py-0.5 text-mist-300" data-testid="note-shared-mark">
+                {sharedMark}
+              </span>
+            </>
+          )}
           {saved.text && (
             <>
               <span aria-hidden>·</span>
@@ -705,13 +748,24 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       )}
       </div>
 
-      {editor && (
+      {editor && writable && (
         <div className="fixed inset-x-0 z-30 md:hidden" style={{ bottom: inset }}>
           <Toolbar editor={editor} onLink={() => setLinkOpen(true)} compact />
         </div>
       )}
 
       {linkOpen && editor && <LinkDialog editor={editor} onClose={() => setLinkOpen(false)} />}
+      {shareOpen && head && (
+        <ShareDialog
+          kind="note"
+          id={noteId}
+          title={shownTitle || head.title}
+          onClose={() => {
+            setShareOpen(false)
+            loadHead()
+          }}
+        />
+      )}
       {exportOpen && head && (
         <ExportDialog
           note={{ id: noteId, title: head.title }}

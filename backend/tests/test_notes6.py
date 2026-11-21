@@ -153,7 +153,7 @@ def test_notes6_ac8_a_color_from_the_fixed_row(client, operator):
         assert theirs.put(f"/api/notes/{note['id']}/color", json={"color": "red"}).status_code == 404
 
 
-def test_notes6_ac6_ac8_who_only_reads_a_shared_note_neither_pins_nor_colors_it(client, operator, monkeypatch):
+def test_notes6_ac6_ac8_who_only_reads_a_shared_note_pins_it_for_itself_and_never_colors_it(client, operator, monkeypatch):
     note = new_note(client, title="Elternabend")
     reader = make_account("reader")
     writer = make_account("writer")
@@ -168,14 +168,15 @@ def test_notes6_ac6_ac8_who_only_reads_a_shared_note_neither_pins_nor_colors_it(
     with new_client(reader) as theirs:
         # The note is there for them to read ...
         assert theirs.get(f"/api/notes/{note['id']}").status_code == 200
-        # ... but neither pinned nor colored by them.
-        assert theirs.put(f"/api/notes/{note['id']}/pin", json={"pinned": True}).status_code == 404
+        # ... pinned for themselves only (NOTES-13: each member pins for itself), never colored by them.
+        assert theirs.put(f"/api/notes/{note['id']}/pin", json={"pinned": True}).status_code == 200
         assert theirs.put(f"/api/notes/{note['id']}/color", json={"color": "red"}).status_code == 404
     assert stored(note["id"]).pinned_at is None and stored(note["id"]).color in ("", None)
-    # Who may write passes the same check (where pin and color live with sharing is NOTES-13's call).
+    # Who may write colors the note for everyone; the pin stays the writer's own.
     with new_client(writer) as theirs:
         assert theirs.put(f"/api/notes/{note['id']}/pin", json={"pinned": True}).status_code == 200
         assert theirs.put(f"/api/notes/{note['id']}/color", json={"color": "red"}).status_code == 200
+    assert stored(note["id"]).pinned_at is None and stored(note["id"]).color == "red"
 
 
 def test_notes6_ec8_a_pinned_note_comes_back_pinned_from_the_trash(client, operator):

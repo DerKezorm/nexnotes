@@ -540,6 +540,13 @@
     "export_pdf_busy": "A PDF is being made already. Try again in a few seconds.",
     "export_waiting": "Another export of yours is waiting already. Start the next one once it runs.",
     "export_no_room": "The server does not have enough room for this export right now.",
+    "link_expiry_too_soon": "A link runs at least until tomorrow.",
+    "link_expiry_too_late": "Choose an earlier date.",
+    "person_not_found": "This person is not a member of this server.",
+    "share_inbox": "The inbox cannot be shared.",
+    "share_links_off": "The operator switched read links off.",
+    "share_locked": "A locked note cannot be shared.",
+    "share_self": "You cannot share with yourself.",
     "vault_missing": "There is no vault yet. It comes with the first note you lock.",
     "vault_exists": "The vault is set up already.",
     "vault_wrong": "The vault password is wrong.",
@@ -579,7 +586,6 @@
       "style": "Symbol and color …",
       "move": "Move …",
       "share": "Share …",
-      "shareLater": "comes with sharing",
       "export": "Export",
       "exportLater": "comes with export",
       "trash": "Move to trash"
@@ -1591,6 +1597,73 @@
     "locked": "The note is locked. Its text is not recognized.",
     "loading": "Loading …",
     "picture": "Page of the attachment"
+  },
+  "shares": {
+    "menu": "Share …",
+    "dialog": {
+      "title": "Share “{{title}}”",
+      "people": "With people on this server",
+      "search": "Name or email",
+      "searchLabel": "Find a person",
+      "found": "People found",
+      "right": "Right of {{name}}",
+      "remove": "Remove {{name}}",
+      "through": "{{name}} through the folder “{{folder}}” ({{level}})",
+      "onlyYouNote": "Only you decide who sees the note. Others cannot share it further.",
+      "onlyYouFolder": "Only you decide who sees the folder. Others cannot share it further.",
+      "done": "Done"
+    },
+    "level": {
+      "read": "read",
+      "write": "edit"
+    },
+    "link": {
+      "title": "Link to read, no account needed",
+      "switch": "Read link",
+      "address": "Address of the link",
+      "copy": "Copy",
+      "copied": "Copied",
+      "hidden": "The link is active. nexnotes shows its address only when it is created.",
+      "renew": "Create a new link (the old one stops working)",
+      "valid": "Valid until",
+      "until": "Last day of the link",
+      "untilText": "until {{date}}",
+      "revoke": "Revoke link"
+    },
+    "links": {
+      "title": "Read links",
+      "text": "Links that let somebody without an account read one of your notes.",
+      "none": "You have no read links.",
+      "expired": "expired on {{date}}"
+    },
+    "mark": {
+      "with": "shared with {{names}}",
+      "fromRead": "from {{name}} · read only",
+      "fromWrite": "from {{name}} · can edit"
+    },
+    "ended": "“{{title}}” is not here any more: {{name}} stopped sharing it.",
+    "ownerGone": "“{{title}}” is not here any more: the account of {{name}} was deleted.",
+    "nowRead": "{{name}} changed your right: you can only read this note now.",
+    "page": {
+      "title": "Shared with me",
+      "text": "Notes and folders others shared with you. They stay theirs.",
+      "from": "from {{name}}",
+      "folder_one": "Folder · {{count}} note",
+      "folder_other": "Folder · {{count}} notes",
+      "note": "Note",
+      "changed": "changed {{date}}",
+      "leave": "Leave",
+      "dismiss": "Dismiss",
+      "empty": "Nobody has shared anything with you yet.",
+      "back": "Back to “Shared with me”"
+    },
+    "move": {
+      "title": "No longer shared?",
+      "one": "“{{title}}” is in a shared folder. Anywhere else it is no longer shared with: {{people}}.",
+      "many_one": "{{count}} note is in a shared folder. Anywhere else it is no longer shared with: {{people}}.",
+      "many_other": "{{count}} notes are in a shared folder. Anywhere else they are no longer shared with: {{people}}.",
+      "go": "Move"
+    }
   },
   "vault": {
     "password": "Vault password",

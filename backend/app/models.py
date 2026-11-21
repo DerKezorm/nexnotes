@@ -358,6 +358,11 @@ class Note(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
     #: Went to the trash with its folder (NOTES-4 AC-5): the mark of that deletion, ``None`` for a note deleted alone.
     deleted_batch: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    #: Who put it in the trash, when that was somebody it was shared with (NOTES-13 AC-8, NOTES-15 AC-6); ``None``
+    #: for the owner itself.
+    deleted_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
+    )
     #: Pinned since (NOTES-6 AC-6); ``None`` when not. Kept through the trash: a note comes back pinned (EC-8).
     pinned_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     #: The note's color (NOTES-6 AC-8): a key of ``FOLDER_COLORS``, empty for none.

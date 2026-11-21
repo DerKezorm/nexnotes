@@ -13,7 +13,7 @@ import { SymbolPicker } from '../components/SymbolPicker'
 import { problemText } from '../lib/errors'
 import { foldersApi, type Folder, type Impact } from './api'
 import { FolderMark } from './FolderMark'
-import { notesMoved } from './actions'
+import { mayMoveNotes, notesMoved } from './actions'
 import { ColorField } from './ColorField'
 import { colorOf } from './palette'
 import { flatten, refreshFolders, revealFolder, setFolderOpen, subtreeOf, useFolders } from './store'
@@ -250,7 +250,14 @@ export function MoveDialog({ what, onClose, onMoved }: { what: MoveWhat; onClose
     setProblem('')
     try {
       if (folder) await foldersApi.move(picked.id, [folder.id])
-      else await foldersApi.move(picked.id, [], notes)
+      else {
+        // Out of a shared folder: asked first (NOTES-13 EC-2).
+        if (!(await mayMoveNotes(notes, picked.id))) {
+          setBusy(false)
+          return
+        }
+        await foldersApi.move(picked.id, [], notes)
+      }
       if (picked.id) revealFolder(picked.id)
       if (folder && picked.id) setFolderOpen(picked.id, true)
       await refreshFolders()

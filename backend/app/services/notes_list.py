@@ -32,6 +32,7 @@ from ..errors import error
 from ..models import Account, Folder, Note, NoteListView, NoteUpdate, utcnow
 from ..notedoc import doc as notedoc
 from ..notedoc import schema as s
+from ..notedoc.room import Access
 from . import notes
 from .folders import FOLDER_COLORS
 
@@ -147,13 +148,22 @@ def _note_changed(_mapper: Any, _connection: Any, target: Note) -> None:
 
 
 def folder_key(db: Session, account: Account, folder_id: str | None) -> str:
-    """The key of a list: ``all``, or the id of one of the account's own folders (else ``folder_not_found``)."""
+    """The key of a list: ``all``, or the id of one of the account's own folders or of a folder shared with it
+    (NOTES-13; else ``folder_not_found``)."""
     if not folder_id or folder_id == ALL:
         return ALL
     folder = db.get(Folder, folder_id) if len(folder_id) <= 36 else None
-    if folder is None or folder.owner_id != account.id or folder.deleted_at is not None:
+    if notes.folder_right(db, account, folder) not in (Access.WRITE, Access.READ):
         raise error("folder_not_found", "The folder does not exist.", 404)
+    assert folder is not None
     return folder.id
+
+
+def _own_folder(db: Session, account: Account, key: str) -> bool:
+    if key == ALL:
+        return True
+    folder = db.get(Folder, key)
+    return folder is not None and folder.owner_id == account.id
 
 
 def shared_ids(db: Session, account: Account) -> set[str]:
@@ -184,6 +194,11 @@ def _notes(db: Session, account: Account, key: str) -> tuple[list[Any], list[Any
     """Own and shared notes of a list, alive, as rows of ``_COLUMNS``."""
     own_query = (select(*_COLUMNS).where(Note.owner_id == account.id, Note.deleted_at.is_(None))
                  .order_by(*_NEWEST_FIRST))
+    if key != ALL and not _own_folder(db, account, key):
+        # A folder somebody shared (NOTES-13 AC-2): its notes the sharing feature lets the account read.
+        others = shared_ids(db, account)
+        return [], list(db.execute(select(*_COLUMNS).where(Note.folder_id == key, Note.id.in_(others),
+                                                           Note.deleted_at.is_(None)).order_by(*_NEWEST_FIRST)))
     if key != ALL:
         return list(db.execute(own_query.where(Note.folder_id == key))), []
     own = list(db.execute(own_query))
@@ -279,6 +294,9 @@ def stamp(db: Session, account: Account, folder_id: str | None) -> str:
     """Changes whenever the list would show something else: how many, the newest change, the newest listed change."""
     key = folder_key(db, account, folder_id)
     query = select(func.count(), func.max(Note.updated_at), func.max(Note.listed_at)).where(Note.deleted_at.is_(None))
+    if not _own_folder(db, account, key):
+        theirs = db.execute(query.where(Note.folder_id == key, Note.id.in_(shared_ids(db, account)))).one()
+        return "|".join([str(theirs[0]), _iso(theirs[1]), _iso(theirs[2])])
     own = db.execute(query.where(Note.owner_id == account.id,
                                  *(() if key == ALL else (Note.folder_id == key,)))).one()
     parts = [str(own[0]), _iso(own[1]), _iso(own[2])]
@@ -325,8 +343,27 @@ def save_view(db: Session, account: Account, folder_id: str | None, wanted: dict
 # --- Pins and colors ----------------------------------------------------------------------------------------------
 
 
+#: Pins of notes others shared: each member pins them for itself (NOTES-13), the owner's pin stays the note's own.
+#: ``(db, account, note, pinned)`` stores it, ``(db, account, note)`` reads it.
+PERSONAL_PIN: list[Callable[..., Any]] = []
+
+
+def pinned_for(db: Session, account: Account, note: Note) -> bool:
+    if note.owner_id != account.id and PERSONAL_PIN:
+        return bool(PERSONAL_PIN[0](db, account, note))
+    return note.pinned_at is not None
+
+
 def set_pinned(db: Session, account: Account, note_id: str, pinned: bool) -> Note:
-    note = notes.note_for(db, account, note_id, write=True)
+    """Pinning is the member's own look at its list: whoever may read a note may pin it. A note of somebody else is
+    pinned for this member only (NOTES-13); the owner's pin is the note's."""
+    note = notes.note_for(db, account, note_id)
+    if note.owner_id != account.id:
+        if not PERSONAL_PIN:
+            raise error("not_found", "Not found.", 404)
+        PERSONAL_PIN[0](db, account, note, pinned)
+        db.commit()
+        return note
     if pinned and note.pinned_at is None:
         note.pinned_at = utcnow()
     elif not pinned:

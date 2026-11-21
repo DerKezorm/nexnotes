@@ -105,7 +105,8 @@ test('NOTES-10 AC-1 AC-2 AC-3 AC-4 AC-12 choose files: a picture in its sizes an
   const picture = page.locator('figure.nn-picture')
   await expect(picture.locator('img')).toBeVisible()
   await expect(page.getByTestId('attachment-caption')).toContainText('Wohnzimmer.png ·')
-  expect(await picture.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(200)
+  // The picture is drawn by the media worker; it may still be on its way when the element shows.
+  await expect.poll(() => picture.locator('img').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBe(200)
   // Sizes: medium from the start, then small and full width.
   const width = async () => (await picture.boundingBox())!.width
   const medium = await width()

@@ -9,6 +9,8 @@ import './notes/register'
 import './folders'
 // "Anhänge" right after the inbox among the places (drawing "Seitenleiste").
 import './attachments'
+// "Mit mir geteilt" right after the inbox, before "Anhänge" (drawing "Seitenleiste"); sharing (NOTES-13).
+import './shares'
 // The recognised text of pictures, scans and PDFs: their large view, and hits of the search in them.
 import './ocr'
 import './search'

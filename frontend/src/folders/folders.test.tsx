@@ -269,7 +269,7 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     expect(indent(14)).toBeLessThan(125)
   })
 
-  it('NOTES-4 AC-12 the menu offers all seven entries; share waits for its feature, export is there (NOTES-17)', async () => {
+  it('NOTES-4 AC-12 NOTES-13 AC-1 the menu offers all seven entries; share opens the share dialog, export is there (NOTES-17)', async () => {
     await render()
     act(() => void row('Haushalt').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
     const menu = document.querySelector('[role="menu"]')!
@@ -277,9 +277,11 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     expect(entries.map((entry) => entry.firstElementChild!.textContent)).toEqual([
       'New subfolder', 'Rename', 'Symbol and color …', 'Move …', 'Share …', 'Export', 'Move to trash',
     ])
-    expect(entries.filter((entry) => entry.getAttribute('aria-disabled') === 'true').map((entry) => entry.firstElementChild!.textContent)).toEqual(['Share …'])
+    expect(entries.filter((entry) => entry.getAttribute('aria-disabled') === 'true')).toEqual([])
     click(entries[4])
-    expect(document.querySelector('[role="menu"]')).not.toBeNull()
+    await settle()
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+    expect(document.querySelector('[role="dialog"][aria-label="Share “Haushalt”"]')).not.toBeNull()
   })
 
   it('NOTES-17 AC-4 "Export" in the menu of a folder opens the export with this folder chosen', async () => {

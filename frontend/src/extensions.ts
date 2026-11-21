@@ -9,6 +9,7 @@
  * - `SIDEBAR_SECTIONS`: entries of the sidebar between the name and the account (new note, search, inbox, folders,
  *   smart folders, tags, trash), in the order of the drawing "Seitenleiste".
  * - `CONNECTION_SECTIONS`: cards of Settings, Connections (devices, nextasks, MCP keys, vault password).
+ * - `ACCOUNT_SECTIONS`: cards at the end of "Mein Konto" (the read links of the member, NOTES-13 AC-13).
  * - `SHELL_BANNERS`: bars over every page of the signed-in shell (the full storage of the attachments, NOTES-10).
  * - `SHELL_PARTS`: things over every page of the signed-in app, beside the page itself (the notices of exports).
  */
@@ -22,5 +23,6 @@ export const FEATURE_ROUTES: FeatureRoute[] = []
 export const LIST_LAYOUT: { element: ReactNode | null } = { element: null }
 export const SIDEBAR_SECTIONS: Section[] = []
 export const CONNECTION_SECTIONS: Section[] = []
+export const ACCOUNT_SECTIONS: Section[] = []
 export const SHELL_BANNERS: Section[] = []
 export const SHELL_PARTS: Section[] = []
