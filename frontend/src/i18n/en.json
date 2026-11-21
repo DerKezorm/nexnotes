@@ -439,7 +439,7 @@
   },
   "errors": {
     "folder_not_found": "This folder does not exist.",
-    "fresh_sign_in_required": "For this, sign in at your provider once more first: operator acts need a sign-in from the last {{minutes}} minutes. You come back here afterwards.",
+    "fresh_sign_in_required": "For this, sign in at your provider once more first: this needs a sign-in from the last {{minutes}} minutes. You come back here afterwards.",
     "internal_error": "That did not work.",
     "account_blocked": "This account is blocked. Ask the operator.",
     "account_locked": "Too many wrong passwords. The account waits a quarter of an hour.",
@@ -554,6 +554,10 @@
     "vault_changed": "The vault password was changed. Enter the new one.",
     "vault_count": "The number of locked notes changed. Have another look.",
     "vault_not_understood": "Confirm that a forgotten password cannot be reset.",
+    "vault_format": "This page encrypts in a format the server does not take. Reload the page.",
+    "vault_stale": "The note was saved elsewhere meanwhile. Try once more.",
+    "vault_weak_kdf": "The server asks for a key derivation that is too weak. nexnotes does not open the vault that way, so that your password does not become easier to guess. Tell the operator.",
+    "vault_rollback": "The server delivers an older state of this note than the one you saw already. nexnotes does not show it. Close the note and open it again; if it stays so, tell the operator.",
     "note_not_locked": "The note is not locked.",
     "note_shared": "The note is shared. Stop sharing it first, then it can be locked.",
     "note_busy": "The note is being locked or unlocked right now.",
@@ -1728,7 +1732,12 @@
       "submit_one": "Start anew, delete {{count}} note",
       "submit_other": "Start anew, delete {{count}} notes",
       "done_one": "The new vault is ready. {{count}} locked note was deleted.",
-      "done_other": "The new vault is ready. {{count}} locked notes were deleted."
+      "done_other": "The new vault is ready. {{count}} locked notes were deleted.",
+      "confirm": "Confirm it is you",
+      "account": "Your account's password",
+      "code": "Code of your second factor",
+      "accountMissing": "Enter your account's password.",
+      "provider": "For this you sign in at your provider once more; the sign-in may be {{minutes}} minutes old at most."
     },
     "section": {
       "title": "Vault",

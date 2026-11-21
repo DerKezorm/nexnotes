@@ -214,7 +214,8 @@ def reauth_succeeded(request: Request, db: Session, account: AccountRow) -> None
     accounts.note_success(db, account)
 
 
-#: How old the session of an operator who signs in through a provider may be for an operator act.
+#: How old the session of an account that signs in through a provider may be for an operator act or another act a
+#: stolen session must not be enough for (a new vault, NOTES-16 EC-2).
 OPERATOR_FRESH_MINUTES = 10
 
 
@@ -239,7 +240,7 @@ def _fresh_from_provider(request: Request, db: Session, row: AccountRow) -> None
             .order_by(OidcProvider.position, OidcProvider.id)
         )
     ]
-    raise error("fresh_sign_in_required", "Sign in at your provider again first: operator acts need a sign-in from the "
+    raise error("fresh_sign_in_required", "Sign in at your provider again first: this needs a sign-in from the "
                 f"last {OPERATOR_FRESH_MINUTES} minutes.", 403, minutes=OPERATOR_FRESH_MINUTES, providers=providers)
 
 
@@ -258,3 +259,44 @@ def confirm_operator(request: Request, db: Session, operator: AccountRow, passwo
         reauth_failed(request, db, row)
         raise error("wrong_password", "The current password is wrong.", 401)
     reauth_succeeded(request, db, row)
+
+
+def _second_factor_ok(row: AccountRow, code: str) -> bool:
+    """A code of the account's second factor, or one of its recovery codes (used up), as at sign-in."""
+    typed = totp.normalize_code(code or "")
+    if len(typed) == totp.DIGITS and typed.isdigit():
+        try:
+            seed = totp.open_seed(row.totp_secret_enc)
+        except totp.SeedUnreadable:
+            return False
+        step = totp.verify_code(seed, typed, after_step=row.totp_last_step)
+        if step is None:
+            return False
+        row.totp_last_step = step
+        return True
+    remaining = totp.use_recovery(row.totp_recovery, typed) if typed else None
+    if remaining is None:
+        return False
+    row.totp_recovery = remaining
+    return True
+
+
+def confirm_fresh(request: Request, db: Session, account: AccountRow, password: str, code: str) -> None:
+    """The member proves once more that it is them, before an act that destroys what a stolen session must not be
+    able to destroy (a new vault takes every locked note, NOTES-16 EC-2): the account's password and, when it has
+    one, a code of its second factor; an account that signs in through a provider needs a sign-in there from the last
+    ``OPERATOR_FRESH_MINUTES`` (``prompt=login``). Wrong answers count like those at sign-in."""
+    row = db.get(AccountRow, account.id)
+    assert row is not None
+    if row.sign_in != SIGN_IN_PASSWORD:
+        _fresh_from_provider(request, db, row)
+        return
+    reauth_guard(request, row)
+    if not accounts.check_password(row, password):
+        reauth_failed(request, db, row)
+        raise error("wrong_password", "The current password is wrong.", 401)
+    if row.totp_secret_enc and not _second_factor_ok(row, code):
+        reauth_failed(request, db, row)
+        raise error("totp_code_wrong", "The code is not right.", 401, field="code")
+    reauth_succeeded(request, db, row)
+    db.commit()

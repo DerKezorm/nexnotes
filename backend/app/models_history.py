@@ -41,6 +41,10 @@ class NoteVersion(Base):
     #: The version of a locked note (NOTES-16): ``state`` is encrypted on the member's device; the server reads
     #: nothing of it but its title and times.
     sealed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    #: How a locked note's version is sealed (format 2 of the vault): the revision of the note's content it was
+    #: (the server keeps the content as a version when a newer one comes), or ``None`` when the device sealed it for
+    #: its id at locking.
+    sealed_rev: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class NoteEdit(Base):

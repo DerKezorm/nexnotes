@@ -6,9 +6,12 @@ with WebCrypto (``frontend/src/vault/crypto.ts``) and the iOS app will do with C
   (``nexnotes vault auth v1``).
 - The vault key is 32 random bytes, wrapped with AES-256-GCM (AAD ``nexnotes vault key v1|<account>``).
 - Each note has its own key: HKDF-SHA-256 of the vault key with ``nexnotes note v1|<note>``.
-- A sealed part: ``0x01``, a 12-byte nonce, the ciphertext with its tag; AAD ``nexnotes sealed v1|note|<note>`` for the
-  content and the versions, ``nexnotes sealed v1|attachment|<note>|<attachment>`` for an attachment, whose plain
-  bytes are the length of a JSON header (4 bytes, big-endian), the header ``{"name", "mime"}`` and the file.
+- A sealed part (format 2): ``0x02``, a 12-byte nonce, the ciphertext with its tag. The AAD says what and where:
+  ``nexnotes sealed v2|content|<note>|<rev>`` for the note's content at a revision (it keeps that AAD when the server
+  moves it into the history), ``nexnotes sealed v2|version|<note>|<version id>`` for a version sealed at locking,
+  ``nexnotes sealed v2|attachment|<note>|<attachment>`` for an attachment, whose plain bytes are the length of a JSON
+  header (4 bytes, big-endian), the header ``{"name", "mime"}`` and the file. The wrapped vault key is sealed the same
+  way with ``nexnotes vault key v1|<account>``.
 """
 
 from __future__ import annotations
@@ -28,7 +31,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from fastapi.testclient import TestClient
 
 ITERATIONS = 600_000
-FORMAT = b"\x01"
+FORMAT = bytes([2])
 
 
 def b64(data: bytes) -> str:
@@ -51,8 +54,8 @@ def derive(password: str, salt: bytes, iterations: int = ITERATIONS) -> tuple[by
     return _hkdf(master, "nexnotes vault kek v1"), _hkdf(master, "nexnotes vault auth v1")
 
 
-def seal(key: bytes, data: bytes, aad: str) -> bytes:
-    nonce = os.urandom(12)
+def seal(key: bytes, data: bytes, aad: str, nonce: bytes | None = None) -> bytes:
+    nonce = nonce or os.urandom(12)
     return FORMAT + nonce + AESGCM(key).encrypt(nonce, data, aad.encode())
 
 
@@ -65,12 +68,22 @@ def note_key(vault_key: bytes, note_id: str) -> bytes:
     return _hkdf(vault_key, f"nexnotes note v1|{note_id}")
 
 
-def note_aad(note_id: str) -> str:
-    return f"nexnotes sealed v1|note|{note_id}"
+def content_aad(note_id: str, rev: int) -> str:
+    return f"nexnotes sealed v2|content|{note_id}|{rev}"
+
+
+def version_aad(note_id: str, version_id: int) -> str:
+    return f"nexnotes sealed v2|version|{note_id}|{version_id}"
+
+
+def sealed_version_aad(note_id: str, version: dict[str, Any]) -> str:
+    """The AAD of a version as the server gives it: bound to a revision of the content, or to its id."""
+    rev = version.get("sealed_rev", version.get("rev"))
+    return content_aad(note_id, rev) if rev is not None else version_aad(note_id, version["id"])
 
 
 def attachment_aad(note_id: str, attachment_id: str) -> str:
-    return f"nexnotes sealed v1|attachment|{note_id}|{attachment_id}"
+    return f"nexnotes sealed v2|attachment|{note_id}|{attachment_id}"
 
 
 def pack(name: str, mime: str, data: bytes) -> bytes:
@@ -148,9 +161,9 @@ class Device:
         assert start.status_code == 200, start.text
         body = start.json()
         key = self.nkey(note_id)
-        parts: dict[str, bytes] = {"content": seal(key, unb64(body["state"]), note_aad(note_id))}
+        parts: dict[str, bytes] = {"content": seal(key, unb64(body["state"]), content_aad(note_id, body["rev"]))}
         for version in body["versions"]:
-            parts[f"version:{version['id']}"] = seal(key, unb64(version["state"]), note_aad(note_id))
+            parts[f"version:{version['id']}"] = seal(key, unb64(version["state"]), version_aad(note_id, version["id"]))
         for attachment_id in body["attachments"]:
             info = self.client.get(f"/api/attachments/{attachment_id}").json()
             data = self.client.get(f"/api/attachments/{attachment_id}/file").content
@@ -169,12 +182,27 @@ class Device:
         answer = self.client.get(f"/api/vault/notes/{note_id}")
         assert answer.status_code == 200, answer.text
         body = answer.json()
-        return unseal(self.nkey(note_id), unb64(body["content"]), note_aad(note_id)), body["rev"]
+        return unseal(self.nkey(note_id), unb64(body["content"]), content_aad(note_id, body["rev"])), body["rev"]
+
+    def open_version(self, note_id: str, version: dict[str, Any]) -> bytes:
+        """A version as ``GET /api/notes/<id>/history/<vid>`` gives it, opened."""
+        return unseal(self.nkey(note_id), unb64(version["content_sealed"]), sealed_version_aad(note_id, version))
 
     def save(self, note_id: str, state: bytes, base_rev: int, title: str = "", **extra: Any) -> Any:
-        return self.client.post("/api/vault/save", json={
-            "note": note_id, "content": b64(seal(self.nkey(note_id), state, note_aad(note_id))),
-            "base_rev": base_rev, "epoch": extra.pop("epoch", self.epoch), "title": title, **extra})
+        """Saves the way the browser does: sealed for the revision after ``base_rev``; when the note has a newer one
+        (``vault_stale``), sealed once more for the one after that, still on ``base_rev`` (EC-5)."""
+        rev = extra.pop("rev", base_rev + 1)
+        epoch = extra.pop("epoch", self.epoch)
+        retry = extra.pop("retry", True)
+        while True:
+            answer = self.client.post("/api/vault/save", json={
+                "note": note_id, "content": b64(seal(self.nkey(note_id), state, content_aad(note_id, rev))),
+                "base_rev": base_rev, "rev": rev, "epoch": epoch, "title": title, **extra})
+            detail = answer.json().get("detail") if answer.status_code == 409 else None
+            if retry and isinstance(detail, dict) and detail.get("code") == "vault_stale":
+                rev, retry = detail["rev"] + 1, False
+                continue
+            return answer
 
     def unlock(self, note_id: str) -> dict[str, Any]:
         """"Sperre aufheben" the way the browser does it."""
@@ -182,9 +210,10 @@ class Device:
         assert start.status_code == 200, start.text
         body = start.json()
         key = self.nkey(note_id)
-        parts = {"content": unseal(key, unb64(body["content"]), note_aad(note_id))}
+        parts = {"content": unseal(key, unb64(body["content"]), content_aad(note_id, body["rev"]))}
         for version in body["versions"]:
-            parts[f"version:{version['id']}"] = unseal(key, unb64(version["content"]), note_aad(note_id))
+            parts[f"version:{version['id']}"] = unseal(key, unb64(version["content"]),
+                                                       sealed_version_aad(note_id, version))
         names: dict[str, str] = {}
         for attachment_id in body["attachments"]:
             sealed = self.client.get(f"/api/attachments/{attachment_id}/file").content

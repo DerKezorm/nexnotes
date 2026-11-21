@@ -46,6 +46,8 @@ export type Version = Omit<VersionItem, 'current'> & {
   can_restore: boolean
   /** A locked note's version as the device encrypted it (base64). */
   content_sealed?: string
+  /** Format 2 of the vault: the revision of the content the version was sealed for, `null` for its id. */
+  sealed_rev?: number | null
 }
 
 export type LastRestore = { id: number; at: string; version_at: string; authors: Author[] } | null

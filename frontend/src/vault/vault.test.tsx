@@ -14,11 +14,11 @@ import * as Y from 'yjs'
 import i18n from '../i18n'
 import { AuthProvider } from '../state/auth'
 import { accountChanged, followAccount, forgetAccount } from '../state/account'
-import { attachmentAad, derive, fromB64, makeVault, noteAad, noteKey, packAttachment, rewrapVault, seal, toB64, unpackAttachment, unseal, unwrapVault, KDF_ITERATIONS, type Kdf } from './crypto'
+import { attachmentAad, checkKdf, contentAad, derive, fromB64, KDF_ALLOWED, makeVault, noteKey, packAttachment, rewrapVault, seal, toB64, unpackAttachment, unseal, unwrapVault, versionAad, WeakKdfError, KDF_ITERATIONS, type Kdf } from './crypto'
 import { ChangePasswordDialog, ForgotDialog, LockDialog, UnlockCard } from './dialogs'
 import { LockedNote } from './LockedNote'
 import { SealedProvider } from './provider'
-import { AUTO_LOCK_MS, forgetVault, hold, isOpen, lockVault, setClock, takeKey, touch, vaultKey } from './session'
+import { AUTO_LOCK_MS, forgetVault, hold, isOpen, lockVault, openVault, revSeen, setClock, takeKey, touch, vaultKey } from './session'
 import './register'
 
 const ACCOUNT = 7
@@ -143,18 +143,25 @@ describe('the cryptography', () => {
     doc.getText('title').insert(0, 'Haushalt')
     doc.getXmlFragment('body').insert(0, [new Y.XmlText('WLAN geheim')])
     const state = Y.encodeStateAsUpdate(doc) as Uint8Array<ArrayBuffer>
-    const sealed = await seal(await noteKey(made.key, 'n1'), state, noteAad('n1'))
-    const plain = await unseal(await noteKey(opened, 'n1'), sealed, noteAad('n1'))
+    const sealed = await seal(await noteKey(made.key, 'n1'), state, contentAad('n1', 1))
+    const plain = await unseal(await noteKey(opened, 'n1'), sealed, contentAad('n1', 1))
     const back = new Y.Doc()
     Y.applyUpdate(back, plain)
     expect(back.getText('title').toString()).toBe('Haushalt')
     expect(new TextDecoder().decode(sealed)).not.toContain('geheim')
     // Another note's key, another place, a changed byte: nothing opens.
-    await expect(unseal(await noteKey(opened, 'n2'), sealed, noteAad('n1'))).rejects.toThrow()
-    await expect(unseal(await noteKey(opened, 'n1'), sealed, noteAad('n2'))).rejects.toThrow()
+    await expect(unseal(await noteKey(opened, 'n2'), sealed, contentAad('n1', 1))).rejects.toThrow()
+    await expect(unseal(await noteKey(opened, 'n1'), sealed, contentAad('n2', 1))).rejects.toThrow()
+    // Another revision, or a version: format 2 binds the content to its revision and kind.
+    await expect(unseal(await noteKey(opened, 'n1'), sealed, contentAad('n1', 2))).rejects.toThrow()
+    await expect(unseal(await noteKey(opened, 'n1'), sealed, versionAad('n1', 1))).rejects.toThrow()
     const broken = sealed.slice()
     broken[broken.length - 1] ^= 1
-    await expect(unseal(await noteKey(opened, 'n1'), broken, noteAad('n1'))).rejects.toThrow()
+    await expect(unseal(await noteKey(opened, 'n1'), broken, contentAad('n1', 1))).rejects.toThrow()
+    // Format 1 is not read.
+    const old = sealed.slice()
+    old[0] = 1
+    await expect(unseal(await noteKey(opened, 'n1'), old, contentAad('n1', 1))).rejects.toThrow()
   })
 
   it('NOTES-16 EC-1 a wrong password opens nothing, and every seal has its own nonce', async () => {
@@ -165,7 +172,7 @@ describe('the cryptography', () => {
     const key = await noteKey(made.key, 'n1')
     const data = new TextEncoder().encode('gleich') as Uint8Array<ArrayBuffer>
     const nonces = new Set<string>()
-    for (let i = 0; i < 50; i++) nonces.add(toB64((await seal(key, data, noteAad('n1'))).slice(1, 13)))
+    for (let i = 0; i < 50; i++) nonces.add(toB64((await seal(key, data, contentAad('n1', 1))).slice(1, 13)))
     expect(nonces.size).toBe(50)
   })
 
@@ -174,9 +181,14 @@ describe('the cryptography', () => {
     const kdf: Kdf = { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000, salt: toB64(Uint8Array.from({ length: 16 }, (_, i) => i)) }
     const { kek, auth } = await derive(PASSWORD, kdf)
     expect(toB64(auth)).toBe('JRORMaItQVOTPJoW3Ef0nnb552SFJt/mi6gbKi//jvs=')
-    const vault = await unwrapVault(kek, 'AQcHBwcHBwcHBwcHB2uYq195Bav/93xmWPh2D1sdf63zmmkp/DB/aqvEQP1JrYoN/h4af0uJNWt59v9R3w==', 7)
-    const plain = await unseal(await noteKey(vault, 'note-1'), fromB64('AQcHBwcHBwcHBwcHB9lc9TGo2OAv4aqCNDH2RELAytw2r1xmmE2BhlUl'), noteAad('note-1'))
-    expect(new TextDecoder().decode(plain)).toBe('Geheim äöü')
+    const vault = await unwrapVault(kek, 'AgcHBwcHBwcHBwcHB2uYq195Bav/93xmWPh2D1sdf63zmmkp/DB/aqvEQP1JrYoN/h4af0uJNWt59v9R3w==', 7)
+    const key = await noteKey(vault, 'note-1')
+    const content = fromB64('AgcHBwcHBwcHBwcHB9lc9TGo2OAv4aqCNDHXhJ5v08wwqRaZQr47Erz2')
+    expect(new TextDecoder().decode(await unseal(key, content, contentAad('note-1', 3)))).toBe('Geheim äöü')
+    const version = fromB64('AgcHBwcHBwcHBwcHB9hY7ie026fMhs33QU71F8AoLkDF7BPb02Wv+FMUIQ==')
+    expect(new TextDecoder().decode(await unseal(key, version, versionAad('note-1', 42)))).toBe('Fassung äöü')
+    await expect(unseal(key, content, contentAad('note-1', 2))).rejects.toThrow()
+    await expect(unseal(key, content, 'nexnotes sealed v1|note|note-1')).rejects.toThrow()
   })
 
   it('NOTES-16 AC-5 a new password wraps the same vault key', async () => {
@@ -185,8 +197,30 @@ describe('the cryptography', () => {
     const next = await rewrapVault(old.kek, made.wrapped_key, 'neues Passwort', ACCOUNT)
     const fresh = await derive('neues Passwort', next.kdf)
     const reopened = await unwrapVault(fresh.kek, next.wrapped_key, ACCOUNT)
-    const sealed = await seal(await noteKey(made.key, 'n1'), new Uint8Array([1, 2, 3]), noteAad('n1'))
-    expect([...(await unseal(await noteKey(reopened, 'n1'), sealed, noteAad('n1')))]).toEqual([1, 2, 3])
+    const sealed = await seal(await noteKey(made.key, 'n1'), new Uint8Array([1, 2, 3]), contentAad('n1', 1))
+    expect([...(await unseal(await noteKey(reopened, 'n1'), sealed, contentAad('n1', 1)))]).toEqual([1, 2, 3])
+  })
+
+  it('NOTES-16 AC-7 a derivation weaker than the page takes is refused before the password is used', async () => {
+    const good: Kdf = { name: 'PBKDF2', hash: 'SHA-256', iterations: 600_000, salt: toB64(new Uint8Array(16)) }
+    expect(checkKdf(good)).toEqual(good)
+    expect(KDF_ALLOWED.map((entry) => [entry.name, entry.hash, entry.minIterations, entry.minSalt])).toEqual([['PBKDF2', 'SHA-256', 600_000, 16]])
+    const weaker = [
+      { ...good, iterations: 1 },
+      { ...good, iterations: 599_999 },
+      { ...good, iterations: 600_000.5 },
+      { ...good, iterations: '600000' },
+      { ...good, hash: 'SHA-1' },
+      { ...good, name: 'scrypt' },
+      { ...good, salt: toB64(new Uint8Array(15)) },
+      { ...good, salt: '' },
+      { ...good, salt: '%%%' },
+      null,
+    ]
+    for (const kdf of weaker) {
+      expect(() => checkKdf(kdf)).toThrow(WeakKdfError)
+      await expect(derive(PASSWORD, kdf as Kdf)).rejects.toThrow(WeakKdfError)
+    }
   })
 
   it('NOTES-16 AC-2 an attachment carries its name and type inside, encrypted', async () => {
@@ -275,7 +309,7 @@ describe('the dialogs', () => {
         setup = body
         return { status: 201, body: { set_up: true, epoch: 1, locked_notes: 0, locked_all: 0 } }
       }
-      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(new Y.Doc()) as Uint8Array<ArrayBuffer>), versions: [], attachments: [], epoch: 1 } }
+      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(new Y.Doc()) as Uint8Array<ArrayBuffer>), rev: 1, versions: [], attachments: [], epoch: 1 } }
       if (path.startsWith('/api/vault/stage')) return { status: 200, body: { part: 'content', size: 1 } }
       if (method === 'POST' && path.endsWith('/lock')) return { status: 200, body: { id: 'n1', locked: true, rev: 1 } }
       return undefined
@@ -310,7 +344,7 @@ describe('the dialogs', () => {
     const staged: Record<string, Uint8Array> = {}
     const routes = vaultRoutes(server)
     handler = (method, path, body) => {
-      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(doc) as Uint8Array<ArrayBuffer>), versions: [], attachments: [], epoch: 1 } }
+      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(doc) as Uint8Array<ArrayBuffer>), rev: 1, versions: [], attachments: [], epoch: 1 } }
       if (method === 'PUT' && path.startsWith('/api/vault/stage')) {
         staged[new URL(path, 'http://x').searchParams.get('part')!] = new Uint8Array()
         void (body as Blob).arrayBuffer().then((bytes) => (staged.content = new Uint8Array(bytes)))
@@ -327,14 +361,14 @@ describe('the dialogs', () => {
     await until(() => sent('POST', '/api/vault/notes/n1/lock').length === 2)
     await until(() => staged.content && staged.content.length > 0)
     expect(new TextDecoder().decode(staged.content)).not.toContain('Kontonummer')
-    expect(new TextDecoder().decode(await unseal(await noteKey(vaultKey()!, 'n1'), staged.content as Uint8Array<ArrayBuffer>, noteAad('n1')))).toContain('Kontonummer')
+    expect(new TextDecoder().decode(await unseal(await noteKey(vaultKey()!, 'n1'), staged.content as Uint8Array<ArrayBuffer>, contentAad('n1', 1)))).toContain('Kontonummer')
   })
 
   it('NOTES-16 AC-8 the lock dialog says "Locking …" from the first moment, never stands empty while it works', async () => {
     const { server } = await serverVault()
     const routes = vaultRoutes(server)
     handler = (method, path, body) => {
-      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(new Y.Doc()) as Uint8Array<ArrayBuffer>), versions: [], attachments: [], epoch: 1 } }
+      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(new Y.Doc()) as Uint8Array<ArrayBuffer>), rev: 1, versions: [], attachments: [], epoch: 1 } }
       if (method === 'PUT' && path.startsWith('/api/vault/stage')) return { status: 200, body: { part: 'content', size: 1 } }
       if (method === 'POST' && path.endsWith('/lock')) return { status: 200, body: { id: 'n1', locked: true, rev: 1 } }
       return routes(method, path, body)
@@ -446,14 +480,74 @@ describe('the dialogs', () => {
     type($('vault-password') as HTMLInputElement, 'ganz neues Passwort')
     type($('vault-repeat') as HTMLInputElement, 'ganz neues Passwort')
     await act(async () => ($('vault-understood') as HTMLInputElement).click())
+    // Without the account's password nothing goes to the server: a stolen session is not enough (EC-2).
+    await submit('vault-setup')
+    expect(reset).toBeNull()
+    expect(box.textContent).toContain("Enter your account's password.")
+    type($('vault-account-password') as HTMLInputElement, 'Konto-Passwort')
     await submit('vault-setup')
     await until(() => $('vault-forgot-done'))
-    expect(reset).toMatchObject({ count: 3, understood: true })
+    expect(reset).toMatchObject({ count: 3, understood: true, current_password: 'Konto-Passwort', code: '' })
     expect($('vault-forgot-done')!.textContent).toBe('The new vault is ready. 3 locked notes were deleted.')
   })
 })
 
 // --- A locked note open --------------------------------------------------------------------------------------------------
+
+describe('what a server must not be able to do', () => {
+  it('NOTES-16 AC-7 a vault naming one round of the derivation is not opened, and the page says why', async () => {
+    const { server } = await serverVault()
+    const routes = vaultRoutes(server)
+    handler = (method, path, body) => {
+      if (method === 'GET' && path === '/api/vault') return { status: 200, body: { set_up: true, kdf: { ...server.kdf, iterations: 1 }, epoch: 1, locked_notes: 1, locked_all: 1, wait: 0 } }
+      return routes(method, path, body)
+    }
+    expect(await openVault(PASSWORD)).toEqual({ ok: false, reason: 'weak' })
+    await render(<UnlockCard title="Haushalt" />)
+    type($('vault-password') as HTMLInputElement, PASSWORD)
+    await submit('vault-unlock')
+    await until(() => $('vault-message'))
+    expect($('vault-message')!.textContent).toBe(i18n.t('errors.vault_weak_kdf'))
+    // No check value ever left the page: nothing to guess the password from offline.
+    expect(calls.filter((call) => call.path === '/api/vault/unlock')).toEqual([])
+    expect(isOpen()).toBe(false)
+  })
+
+  it('NOTES-16 EC-5 a save on an older revision is sealed again for the one after the newest', async () => {
+    const { key } = await serverVault()
+    takeKey(key, 1)
+    const saves: { content: string; base_rev: number; rev: number }[] = []
+    handler = (method, path, body) => {
+      if (method === 'POST' && path === '/api/vault/save') {
+        saves.push(body as { content: string; base_rev: number; rev: number })
+        if (saves.length === 1) return { status: 409, body: { detail: { code: 'vault_stale', message: '', rev: 7 } } }
+        return { status: 200, body: { rev: 8, conflict: true } }
+      }
+      return undefined
+    }
+    const doc = new Y.Doc()
+    const provider = new SealedProvider('n1', doc, 4, await noteKey(key, 'n1'), 1, { saveDelay: 10, pollEvery: 0 })
+    doc.getText('title').insert(0, 'Liste')
+    await until(() => saves.length === 2 && provider.pending === 0)
+    expect(saves.map((save) => [save.base_rev, save.rev])).toEqual([[4, 5], [4, 8]])
+    await expect(unseal(await noteKey(key, 'n1'), fromB64(saves[1].content), contentAad('n1', 8))).resolves.toBeTruthy()
+    await expect(unseal(await noteKey(key, 'n1'), fromB64(saves[1].content), contentAad('n1', 5))).rejects.toThrow()
+    expect(provider.rev).toBe(8)
+    provider.destroy()
+  })
+
+  it('NOTES-16 AC-7 a revision older than this tab had is not shown (a server rolling back)', async () => {
+    const { key } = await serverVault()
+    takeKey(key, 1)
+    expect(revSeen('n1', 5)).toBe(true)
+    expect(revSeen('n1', 5)).toBe(true)
+    expect(revSeen('n1', 3)).toBe(false)
+    expect(revSeen('n2', 1)).toBe(true)
+    // Closed, the vault forgets what it saw.
+    await lockVault()
+    expect(revSeen('n1', 1)).toBe(true)
+  })
+})
 
 describe('a locked note open in the browser', () => {
   async function sealedNote(text: string, key: CryptoKey): Promise<string> {
@@ -462,17 +556,17 @@ describe('a locked note open in the browser', () => {
     const paragraph = new Y.XmlElement('paragraph')
     paragraph.insert(0, [new Y.XmlText(text)])
     doc.getXmlFragment('body').insert(0, [paragraph])
-    return toB64(await seal(await noteKey(key, 'n1'), Y.encodeStateAsUpdate(doc) as Uint8Array<ArrayBuffer>, noteAad('n1')))
+    return toB64(await seal(await noteKey(key, 'n1'), Y.encodeStateAsUpdate(doc) as Uint8Array<ArrayBuffer>, contentAad('n1', 1)))
   }
 
   it('NOTES-16 AC-3 EC-5 a change is saved encrypted on the revision it started from; a newer one elsewhere is loaded', async () => {
     const { key } = await serverVault()
     takeKey(key, 1)
-    const saves: { content: string; base_rev: number; title: string }[] = []
+    const saves: { content: string; base_rev: number; rev: number; title: string }[] = []
     let rev = 4
     handler = (method, path, body) => {
       if (method === 'POST' && path === '/api/vault/save') {
-        saves.push(body as { content: string; base_rev: number; title: string })
+        saves.push(body as { content: string; base_rev: number; rev: number; title: string })
         rev += 1
         return { status: 200, body: { rev, conflict: false } }
       }
@@ -485,8 +579,9 @@ describe('a locked note open in the browser', () => {
     expect(provider.pending).toBeGreaterThan(0)
     await until(() => saves.length === 1 && provider.pending === 0)
     expect(saves[0].base_rev).toBe(4)
+    expect(saves[0].rev).toBe(5)
     expect(saves[0].title).toBe('Haushalt')
-    const plain = await unseal(await noteKey(key, 'n1'), fromB64(saves[0].content), noteAad('n1'))
+    const plain = await unseal(await noteKey(key, 'n1'), fromB64(saves[0].content), contentAad('n1', 5))
     const back = new Y.Doc()
     Y.applyUpdate(back, plain)
     expect(back.getText('title').toString()).toBe('Haushalt')

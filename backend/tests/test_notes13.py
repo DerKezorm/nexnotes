@@ -578,3 +578,19 @@ def test_notes13_the_owner_writing_at_the_same_time_vouches_only_for_what_his_up
         db.add(NoteUpdate(note_id=other["id"], update=b"x", account_id=operator.id))
         db.commit()
         assert attachments.vouched_ids(db, db.get(Note, other["id"]), {"any-id-12345678901"}) == {"any-id-12345678901"}
+
+
+def test_notes13_ac5_moved_out_of_a_shared_folder_the_writer_loses_the_right_at_once(client, operator, anna, as_anna):
+    """EC-2 asks first; once moved, the writer with the note open is out now, not at the room's next round."""
+    family = make_folder(client, "Familie")
+    private = make_folder(client, "Privat")
+    note = new_note(client, title="Geschenkideen", folder_id=family)
+    share(client, "folder", family, anna, "write")
+    writer = Live(as_anna, note["id"], token_for(anna))
+    assert writer.pump(lambda: writer.synced)
+    moved = client.post("/api/folders/move", json={"target_id": private, "folder_ids": [], "note_ids": [note["id"]]})
+    assert moved.status_code == 200, moved.text
+    # Well within the five seconds after which the room would look again by itself.
+    assert writer.pump(lambda: writer.closed is not None, timeout=2.0)
+    assert writer.closed == 4403
+    assert as_anna.get(f"/api/notes/{note['id']}").status_code == 404

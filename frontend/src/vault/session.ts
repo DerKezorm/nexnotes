@@ -8,11 +8,15 @@
  *   account comes into the tab (`onAccountChange`), and when the vault changed elsewhere (`epoch`, EC-7). Before it
  *   closes, what an open note still has to save is saved (`onBeforeLock`).
  * - **Wrong passwords** are counted by the server (EC-1); `open` says how many tries are left and how long to wait.
+ * - **The derivation is checked before the password is used** (`checkKdf`): a server naming fewer rounds or less salt
+ *   than this page takes gets no check value; the vault stays closed and says why (`weak`).
+ * - **Revisions only go forward** while the vault is open (`revSeen`): the content's revision is in its AAD (format 2),
+ *   and a lower one than this tab already had is not shown, so a server cannot roll a note back unnoticed.
  */
 import { ApiError } from '../api/client'
 import { currentAccount, onAccountChange } from '../state/account'
 import { vaultApi, type VaultStatus } from './api'
-import { derive, unwrapVault } from './crypto'
+import { derive, unwrapVault, WeakKdfError } from './crypto'
 
 /** Five minutes without use (decision of 21.11.2026). */
 export const AUTO_LOCK_MS = 5 * 60 * 1000
@@ -31,6 +35,21 @@ let version = 0
 const listeners = new Set<() => void>()
 const beforeLock = new Set<() => Promise<void>>()
 let now = () => Date.now()
+/** The highest revision of each locked note this tab opened while the vault is open. */
+const seenRevs = new Map<string, number>()
+
+/** A note's content at `rev` was opened: false when this tab had a newer one already (a server rolling back). */
+export function revSeen(noteId: string, rev: number): boolean {
+  const before = seenRevs.get(noteId) ?? 0
+  if (rev < before) return false
+  seenRevs.set(noteId, rev)
+  return true
+}
+
+/** The note was locked or unlocked anew here, or is not locked any more: its revisions start again. */
+export function forgetRev(noteId: string): void {
+  seenRevs.delete(noteId)
+}
 
 function emit(): void {
   version += 1
@@ -100,6 +119,7 @@ export async function lockVault(reason: LockReason = 'manual'): Promise<void> {
   const saving = [...beforeLock].map((save) => save().catch(() => undefined))
   if (saving.length && reason !== 'account') await Promise.race([Promise.all(saving), new Promise((resolve) => setTimeout(resolve, 3000))])
   open = null
+  seenRevs.clear()
   lastReason = reason
   if (releaseTimer) clearTimeout(releaseTimer)
   releaseTimer = null
@@ -121,13 +141,21 @@ export type OpenResult =
   | { ok: false; reason: 'wrong'; left: number; wait: number }
   | { ok: false; reason: 'wait'; wait: number }
   | { ok: false; reason: 'missing' }
+  | { ok: false; reason: 'weak' }
 
 /** Opens the vault with the password (AC-3, AC-7, AC-8): the server checks the check value and counts wrong ones;
  * the wrapped key it hands out opens only here. */
 export async function openVault(password: string): Promise<OpenResult> {
   const status: VaultStatus = await vaultApi.status()
   if (!status.set_up || !status.kdf) return { ok: false, reason: 'missing' }
-  const { kek, auth } = await derive(password, status.kdf)
+  let derived: Awaited<ReturnType<typeof derive>>
+  try {
+    derived = await derive(password, status.kdf)
+  } catch (error) {
+    if (error instanceof WeakKdfError) return { ok: false, reason: 'weak' }
+    throw error
+  }
+  const { kek, auth } = derived
   try {
     const answer = await vaultApi.unlock(toB64Auth(auth))
     const key = await unwrapVault(kek, answer.wrapped_key, currentAccount() ?? 0)
@@ -148,7 +176,8 @@ function toB64Auth(auth: Uint8Array): string {
   return btoa(text)
 }
 
-/** The derivation and the check value for a password, for changing it (AC-5). */
+/** The derivation and the check value for a password, for changing it (AC-5). Throws `WeakKdfError` for a derivation
+ * this page does not take. */
 export async function checkFor(password: string): Promise<{ kek: CryptoKey; auth: string } | null> {
   const status = await vaultApi.status()
   if (!status.kdf) return null
@@ -189,6 +218,7 @@ export function setClock(clock: () => number): void {
 
 export function forgetVault(): void {
   open = null
+  seenRevs.clear()
   holders = 0
   lastReason = null
   if (releaseTimer) clearTimeout(releaseTimer)
@@ -201,6 +231,7 @@ export function forgetVault(): void {
 
 // Signing out, another account in the tab: the key goes at once, before anything of the next account is drawn.
 onAccountChange(() => {
+  seenRevs.clear()
   if (open) {
     open = null
     lastReason = 'account'

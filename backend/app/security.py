@@ -243,6 +243,11 @@ def _server_key() -> bytes:
     return hashlib.sha256(b"nexnotes-secrets:" + secret).digest()
 
 
+def server_key() -> bytes:
+    """The key derived from the server's secret, for marks only the server can make (a keyed hash)."""
+    return _server_key()
+
+
 DEVICE_COOKIE = "nexnotes_device" + get_settings().cookie_name_suffix()
 DEVICE_DAYS = 365
 

@@ -61,7 +61,7 @@ export function HistoryPage() {
       .get(noteId, shownId)
       .then(async (found) => {
         // A locked note's version (NOTES-16): opened here with the vault, or shown as closed.
-        if (found.sealed && found.content_sealed) found = { ...found, content: SEALED_HISTORY.open ? await SEALED_HISTORY.open(noteId, found.content_sealed) : null }
+        if (found.sealed && found.content_sealed) found = { ...found, content: SEALED_HISTORY.open ? await SEALED_HISTORY.open(noteId, { id: found.id, content_sealed: found.content_sealed, sealed_rev: found.sealed_rev }) : null }
         if (live) setVersion(found)
       })
       .catch((error) => live && setProblem(problemText(error)))
@@ -103,7 +103,7 @@ export function HistoryPage() {
     if (!version) return
     setBusy(true)
     try {
-      if (version.sealed && version.content_sealed && SEALED_HISTORY.restore) await SEALED_HISTORY.restore(noteId, version.id, version.content_sealed)
+      if (version.sealed && version.content_sealed && SEALED_HISTORY.restore) await SEALED_HISTORY.restore(noteId, { id: version.id, content_sealed: version.content_sealed, sealed_rev: version.sealed_rev })
       else await historyApi.restore(noteId, version.id)
       notesChanged()
       showNotice({ text: t('history.restored', { when: moment(version.created_at, lang) }) })

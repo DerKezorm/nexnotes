@@ -8,14 +8,19 @@
  * - **Open** a locked note: the password; wrong ones counted by the server, after three a wait with its countdown
  *   (EC-1); "Passwort vergessen?".
  * - **Take the lock off** (AC-4), **a new password** (AC-5), **forgotten** (EC-2: a new vault, every locked note
- *   goes, said with their number).
+ *   goes, said with their number; the account's password and second factor once more, or a fresh sign-in at its
+ *   provider, so that a stolen session cannot destroy the locked notes).
+ * - A server naming a derivation weaker than this page takes (`checkKdf`) opens nothing: the forms say so.
  */
 import { Lock, LockOpen } from 'lucide-react'
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { ApiError } from '../api/client'
 import { Dialog } from '../components/Dialog'
 import { problemText } from '../lib/errors'
+import { SignInAgain } from '../pages/settings/ui'
+import { useMe } from '../state/auth'
 import { notesChanged } from '../notes/api'
 import { clock } from './clock'
 import { changePassword, lockNote, resetVault, setUpVault, unlockNote } from './actions'
@@ -89,7 +94,8 @@ function useTries() {
     } else if (result.reason === 'wait') {
       setMessage(t('vault.unlock.tooMany'))
       startWait(result.wait)
-    } else setMessage(t('errors.vault_missing'))
+    } else if (result.reason === 'weak') setMessage(t('errors.vault_weak_kdf'))
+    else setMessage(t('errors.vault_missing'))
     return false
   }
   return { message, setMessage, waiting: left, take, startWait }
@@ -97,7 +103,7 @@ function useTries() {
 
 // --- Set up (AC-1) and lock (AC-8) ------------------------------------------------------------------------------
 
-function SetupForm({ submitLabel, onSubmit, onCancel, busy }: { submitLabel: string; onSubmit: (password: string) => void; onCancel: () => void; busy: boolean }) {
+function SetupForm({ submitLabel, onSubmit, onCancel, busy, children }: { submitLabel: string; onSubmit: (password: string) => void; onCancel: () => void; busy: boolean; children?: ReactNode }) {
   const { t } = useTranslation()
   const [password, setPassword] = useState('')
   const [again, setAgain] = useState('')
@@ -127,6 +133,7 @@ function SetupForm({ submitLabel, onSubmit, onCancel, busy }: { submitLabel: str
       <p className="text-[12.5px] text-mist-500" data-testid="vault-title-hint">
         {t('vault.titleHint')}
       </p>
+      {children}
       <div className="flex justify-end gap-2">
         <button type="button" className="nn-btn nn-btn-ghost" onClick={onCancel}>
           {t('common.cancel')}
@@ -341,7 +348,7 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
     try {
       const result = await changePassword(old, password)
       if (result === 'ok') setDone(true)
-      else setProblem(result === 'wait' ? t('vault.unlock.tooMany') : t('vault.change.wrong'))
+      else setProblem(result === 'wait' ? t('vault.unlock.tooMany') : result === 'weak' ? t('errors.vault_weak_kdf') : t('vault.change.wrong'))
     } catch (error) {
       setProblem(problemText(error))
     } finally {
@@ -387,10 +394,17 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
 
 export function ForgotDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation()
+  const me = useMe()
   const [status, setStatus] = useState<VaultStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState('')
+  const [refusal, setRefusal] = useState<ApiError | null>(null)
   const [removed, setRemoved] = useState<number | null>(null)
+  // Who it is, once more (the server asks it, deps.confirm_fresh): an account of a provider signs in there again.
+  const withPassword = !me || me.sign_in === 'password'
+  const withCode = withPassword && Boolean(me?.two_factor)
+  const [accountPassword, setAccountPassword] = useState('')
+  const [code, setCode] = useState('')
   useEffect(() => {
     vaultApi.status().then(setStatus, (error) => setProblem(problemText(error)))
   }, [])
@@ -420,24 +434,48 @@ export function ForgotDialog({ onClose }: { onClose: () => void }) {
                 busy={busy}
                 onCancel={onClose}
                 onSubmit={(password) => {
+                  if (withPassword && !accountPassword) return setProblem(t('vault.forgot.accountMissing'))
                   setBusy(true)
-                  resetVault(password, count).then(
+                  setProblem('')
+                  setRefusal(null)
+                  resetVault(password, count, { current_password: accountPassword, code }).then(
                     (gone) => {
                       setRemoved(gone)
                       notesChanged()
                     },
                     (error) => {
                       setProblem(problemText(error))
+                      setRefusal(error instanceof ApiError ? error : null)
                       setBusy(false)
+                      setAccountPassword('')
+                      setCode('')
                       vaultApi.status().then(setStatus, () => undefined)
                     },
                   )
                 }}
-              />
+              >
+                <fieldset className="flex flex-col gap-2.5 border-t border-ink-700 pt-3" data-testid="vault-forgot-confirm">
+                  <legend className="pt-1 text-[13px] font-semibold text-mist-100">{t('vault.forgot.confirm')}</legend>
+                  {withPassword ? (
+                    <>
+                      <PasswordInput label={t('vault.forgot.account')} value={accountPassword} onChange={setAccountPassword} testId="vault-account-password" />
+                      {withCode && (
+                        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-mist-100">
+                          {t('vault.forgot.code')}
+                          <input className="nn-field" value={code} inputMode="numeric" autoComplete="one-time-code" spellCheck={false} onChange={(event) => setCode(event.target.value)} data-testid="vault-account-code" />
+                        </label>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-[12.5px] leading-relaxed text-mist-400">{t('vault.forgot.provider', { minutes: 10 })}</p>
+                  )}
+                </fieldset>
+              </SetupForm>
             </>
           )
         )}
         {problem && <p className="text-sm text-bad-500">{problem}</p>}
+        {refusal?.code === 'fresh_sign_in_required' && <SignInAgain providers={refusal.values.providers} />}
       </div>
     </Dialog>
   )

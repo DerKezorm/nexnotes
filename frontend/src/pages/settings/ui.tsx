@@ -198,9 +198,10 @@ export function Feedback({ problem, done = null }: { problem: Trouble; done?: st
   )
 }
 
-/** An operator who signs in through a provider confirms an operator act with a fresh sign-in there: a button per
- * provider of the account, back to this page afterwards (the server asks the provider for `prompt=login`). */
-function SignInAgain({ providers }: { providers: unknown }) {
+/** An account that signs in through a provider confirms an operator act (or a new vault, NOTES-16 EC-2) with a fresh
+ * sign-in there: a button per provider of the account, back to this page afterwards (the server asks the provider for
+ * `prompt=login`). */
+export function SignInAgain({ providers }: { providers: unknown }) {
   const { t } = useTranslation()
   const list = Array.isArray(providers) ? (providers as { slug: string; label: string }[]) : []
   const here = window.location.pathname + window.location.search
