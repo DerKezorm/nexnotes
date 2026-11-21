@@ -170,7 +170,7 @@ describe('NOTES-2 AC-10 password confirmation', () => {
       return undefined
     }
     const { SettingsPage } = await import('./pages/SettingsPage')
-    await render(<AuthProvider><Routes><Route path="/settings" element={<SettingsPage />} /></Routes></AuthProvider>, '/settings')
+    await render(<AuthProvider><Routes><Route path="/settings/:tab" element={<SettingsPage />} /></Routes></AuthProvider>, '/settings/security')
     const row = box.querySelector<HTMLElement>('[data-testid="password-row"]')!
     const confirm = expectPair(row, i18n.t('me.password.new'))
     expect(i18n.t('auth.passwordConfirm')).toBe('Passwort bestätigen')

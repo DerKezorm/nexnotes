@@ -13,7 +13,7 @@ import { ApiError } from '../api/client'
 import { SEALED_BLOCK, type SealedBlockProps } from '../attachments/sealed'
 import { registerSender, type Sender } from '../attachments/uploads'
 import { LOCKED_VIEW, NOTE_MENU_ITEMS, type NoteMenuContext } from '../editor/noteParts'
-import { CONNECTION_SECTIONS, SHELL_PARTS } from '../extensions'
+import { ACCOUNT_SECTIONS, SHELL_PARTS } from '../extensions'
 import { SEALED_HISTORY, type SealedVersion } from '../history/sealed'
 import type { ProseNode } from '../history/api'
 import { bytes as formatBytes } from '../lib/format'
@@ -266,7 +266,8 @@ SEALED_BLOCK.render = (props) => <SealedBlock {...props} />
 registerSender(sealedSender)
 SEALED_HISTORY.open = openVersion
 SEALED_HISTORY.restore = restoreVersion
-if (!CONNECTION_SECTIONS.some((section) => section.key === 'vault')) CONNECTION_SECTIONS.push({ key: 'vault', render: () => <VaultSection /> })
+// The vault password is a password of the account: Settings, Security, after the read links.
+if (!ACCOUNT_SECTIONS.some((section) => section.key === 'vault')) ACCOUNT_SECTIONS.push({ key: 'vault', render: () => <VaultSection /> })
 if (!SHELL_PARTS.some((part) => part.key === 'vault-dialogs')) SHELL_PARTS.push({ key: 'vault-dialogs', render: () => <VaultDialogs /> })
 // The decrypted files go with the key: closed vault, another account.
 subscribe(() => {

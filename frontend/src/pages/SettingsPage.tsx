@@ -1,71 +1,45 @@
 /**
- * Settings (NOTES-2 AC-9): every account finds "My account" and "Connections"; the operator also "Server",
- * "Accounts" and "Log". The tab stands in the address (`/settings/server`), so a link can point at one; a tab someone
- * may not see falls back to "My account".
+ * Settings (NOTES-2 AC-9) in areas: "My account" (Profile, Security, Appearance, Connections) for every account, "Server"
+ * (General, Sign-in, Mail, Storage and backups, Text recognition, Accounts, Log) for the operator. Each area has its
+ * own address (`/settings/<slug>`, `areas.ts`), `/settings` is the profile. An area someone may not open, or an
+ * address of the tabs before, leads on with the address replaced, so the navigation always marks where one is.
  */
-import { Info, Plug, ScrollText, Server as ServerIcon, UserRound, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { useTitle } from '../lib/title'
 import { useAuth } from '../state/auth'
-import { AccountsTab } from './settings/AccountsTab'
-import { AccountTab } from './settings/AccountTab'
-import { ConnectionsTab } from './settings/ConnectionsTab'
-import { LogCard } from './settings/LogCard'
-import { BackupsCard, FeaturesCard, LanguagesCard, LimitsCard, MailCard, OcrCard, ProxyHint, useServerSettings } from './settings/ServerCards'
-import { SignInPart } from './settings/SignInCards'
-import { TabRow, type Tab } from './settings/ui'
-
-export type SettingsTab = 'account' | 'connections' | 'server' | 'accounts' | 'log'
-const MEMBER_TABS: SettingsTab[] = ['account', 'connections']
-const OPERATOR_TABS: SettingsTab[] = ['account', 'connections', 'server', 'accounts', 'log']
-const ICON = { account: UserRound, connections: Plug, server: ServerIcon, accounts: Users, log: ScrollText }
+import { AREAS, resolveArea } from './settings/areas'
+import { AreaContent } from './settings/SettingsAreas'
+import { SettingsJump, SettingsNav } from './settings/SettingsNav'
 
 export function SettingsPage() {
   const { t } = useTranslation()
-  useTitle(t('settings.title'))
   const { me } = useAuth()
-  const navigate = useNavigate()
   const { tab: asked } = useParams()
-  const allowed = me?.role === 'operator' ? OPERATOR_TABS : MEMBER_TABS
-  const tab: SettingsTab = asked && allowed.includes(asked as SettingsTab) ? (asked as SettingsTab) : 'account'
-  const tabs: Tab<SettingsTab>[] = allowed.map((value) => ({ value, label: t(`settings.tabs.${value}`), icon: ICON[value] }))
+  const { search } = useLocation()
+  const where = resolveArea(asked, me?.role, search)
+  const area = AREAS.find((entry) => 'area' in where && entry.slug === where.area)
+  const title = area ? t(`settings.areas.${area.key}.title`) : ''
+  useTitle(area ? `${title} · ${t('settings.title')}` : t('settings.title'))
+  if (!me) return null
+  if ('redirect' in where) return <Navigate to={where.redirect} replace />
+  if (!area) return null
   return (
-    <div className="mx-auto max-w-4xl space-y-5 px-4 py-6 sm:px-6 sm:py-8">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold tracking-tight text-mist-100">{t('settings.title')}</h1>
-        <Link to="/about" className="nn-btn-quiet inline-flex items-center gap-1.5 text-sm">
-          <Info className="h-4 w-4" aria-hidden />
-          {t('about.title')}
-        </Link>
+    <div className="@container mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+      <div className="flex flex-col gap-5 @min-[700px]:flex-row @min-[700px]:items-start @min-[700px]:gap-8">
+        <SettingsNav me={me} current={area.slug} />
+        <SettingsJump me={me} current={area.slug} />
+        <div className="min-w-0 flex-1 space-y-5" data-testid={`settings-area-${area.slug}`}>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-mist-100">{title}</h1>
+            <p className="mt-1 text-sm text-mist-400">{t(`settings.areas.${area.key}.text`)}</p>
+          </div>
+          <div className="space-y-6">
+            <AreaContent key={area.slug} area={area.slug} />
+          </div>
+        </div>
       </div>
-      <TabRow tabs={tabs} active={tab} onChange={(value) => navigate(value === 'account' ? '/settings' : `/settings/${value}`, { replace: true })} label={t('settings.title')} />
-      <div className="space-y-6 pt-1">
-        {tab === 'account' && <AccountTab />}
-        {tab === 'connections' && <ConnectionsTab />}
-        {tab === 'server' && <ServerTab />}
-        {tab === 'accounts' && <AccountsTab />}
-        {tab === 'log' && <LogCard />}
-      </div>
-    </div>
-  )
-}
-
-/** The server, for the operator: limits, storage and backups, the switches, text recognition, sign-in, mail, languages. */
-function ServerTab() {
-  const server = useServerSettings()
-  if (!server.settings) return null
-  return (
-    <div className="space-y-6" data-testid="server-tab">
-      <ProxyHint server={server} />
-      <LimitsCard server={server} />
-      <BackupsCard server={server} />
-      <FeaturesCard server={server} />
-      <OcrCard server={server} />
-      <SignInPart server={server} />
-      <MailCard server={server} />
-      <LanguagesCard />
     </div>
   )
 }

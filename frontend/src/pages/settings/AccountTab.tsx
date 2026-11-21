@@ -1,9 +1,10 @@
 /**
- * Settings, "My account" (drawing N2-Mein-Konto): Profile (name, address), Sign-in and security (the providers, the
- * password, the second factor, signing out everywhere), Language and appearance (the language travels to every
- * device of the account, the appearance stays on this device, NOTES-22 AC-2 and AC-7).
+ * Settings, "My account" (drawing N2-Mein-Konto): Profile (picture, name, address, the language, which travels to every
+ * device of the account), Sign-in and security (the providers, the password, the second factor, signing out
+ * everywhere, then the cards of the features in `ACCOUNT_SECTIONS`), Appearance (stays on this device, and the paper of
+ * new notes; NOTES-22 AC-2 and AC-7). Each area of the settings shows its `part`; without one, all of it.
  */
-import { Globe, KeyRound, Lock, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, Lock, Palette, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -29,8 +30,12 @@ const QUIET = 'nn-btn nn-btn-ghost h-8 px-3 text-xs font-medium'
 const LOUD = 'nn-btn nn-btn-accent'
 const PLAIN = 'nn-btn nn-btn-ghost'
 
-export function AccountTab() {
+/** The part of "My account" an area of the settings shows. */
+export type AccountPart = 'profile' | 'security' | 'appearance'
+
+export function AccountTab({ part }: { part?: AccountPart } = {}) {
   const { t, i18n } = useTranslation()
+  const shows = (which: AccountPart) => !part || part === which
   const { me, setMe, refresh } = useAuth()
   const [params] = useSearchParams()
   const [name, setName] = useState(me?.display_name ?? '')
@@ -83,227 +88,234 @@ export function AccountTab() {
         )}
       </div>
 
-      <Card id="profile" icon={UserRound} title={t('me.profile.title')}>
-        <div className="flex items-center gap-3" data-testid="profile-picture">
-          <Avatar accountId={me.id} name={me.display_name || me.name} stamp={me.avatar} size={56} />
-          <div className="flex flex-wrap gap-2">
-            <label className={PLAIN + ' cursor-pointer'}>
-              {me.avatar ? t('me.picture.change') : t('me.picture.add')}
-              <input
-                type="file"
-                accept="image/*"
-                className="sr-only"
-                data-testid="picture-file"
-                onChange={(event) => {
-                  const file = event.target.files?.[0]
-                  event.target.value = ''
-                  if (file) void run(async () => setMe(await authApi.avatar(file)), t('me.picture.saved'))
-                }}
-              />
-            </label>
-            {me.avatar && (
-              <button type="button" disabled={busy} className={QUIET} onClick={() => void run(async () => setMe(await authApi.removeAvatar()), t('me.picture.removed'))}>
-                {t('me.picture.remove')}
-              </button>
-            )}
-          </div>
-        </div>
-        <form
-          className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void run(async () => {
-              const saved = await authApi.profile({ display_name: name, email })
-              setName(saved.display_name)
-              setEmail(saved.email)
-              setMe(saved)
-            }, t('me.profile.saved'))
-          }}
-        >
-          <Field label={t('auth.name')} value={name} onChange={setName} autoComplete="name" maxLength={80} />
-          <Field label={t('auth.email')} value={email} onChange={setEmail} type="email" autoComplete="email" />
-          <button type="submit" disabled={busy || (name.trim() === me.display_name && email.trim() === me.email)} className={LOUD}>
-            {t('common.save')}
-          </button>
-        </form>
-        <p className="text-xs text-mist-500">{t('me.profile.role', { role: t(`roles.${me.role}`) })}</p>
-        {me.provider_email && (
-          <div data-testid="mail-offer" className="rounded-[12px] border border-accent-700/40 bg-[var(--color-accent-wash)] px-3.5 py-3 text-sm">
-            <p className="text-mist-200">{t('me.emailOffer', { address: me.provider_email })}</p>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" disabled={busy} className={LOUD} onClick={() => void run(() => authApi.takeProviderEmail(), t('me.emailTaken'))}>
-                {t('me.emailTake')}
-              </button>
-              <button type="button" disabled={busy} className={PLAIN} onClick={() => void run(() => authApi.declineProviderEmail(), t('me.emailDeclined'))}>
-                {t('me.emailDecline')}
-              </button>
+      {shows('profile') && (
+        <Card id="profile" icon={UserRound} title={t('me.profile.title')}>
+          <div className="flex items-center gap-3" data-testid="profile-picture">
+            <Avatar accountId={me.id} name={me.display_name || me.name} stamp={me.avatar} size={56} />
+            <div className="flex flex-wrap gap-2">
+              <label className={PLAIN + ' cursor-pointer'}>
+                {me.avatar ? t('me.picture.change') : t('me.picture.add')}
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="sr-only"
+                  data-testid="picture-file"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    event.target.value = ''
+                    if (file) void run(async () => setMe(await authApi.avatar(file)), t('me.picture.saved'))
+                  }}
+                />
+              </label>
+              {me.avatar && (
+                <button type="button" disabled={busy} className={QUIET} onClick={() => void run(async () => setMe(await authApi.removeAvatar()), t('me.picture.removed'))}>
+                  {t('me.picture.remove')}
+                </button>
+              )}
             </div>
           </div>
-        )}
-      </Card>
-
-      <Card id="security" icon={ShieldCheck} title={t('me.security.title')}>
-        {me.second_factor_setup_required && (
-          <p role="note" className="rounded-[9px] border border-warn-500/40 bg-warn-500/10 px-4 py-3 text-sm text-warn-500">
-            {t('me.setupFirst')}
-          </p>
-        )}
-        {providers !== null && (providers.length > 0 || me.sign_in === 'oidc') && (
-          <ul className="divide-y divide-ink-700 rounded-[12px] border border-ink-700" data-testid="my-providers" aria-label={t('oidc.account.title')}>
-            {providers.map((provider) => {
-              // The last link of an account without a password stays: it would lock the account out.
-              const lastLink = me.sign_in === 'oidc' && provider.linked && providers.filter((entry) => entry.linked).length === 1
-              return (
-                <li key={provider.slug} className="px-3 py-2.5 text-sm">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="min-w-0 flex-1 truncate font-medium text-mist-100">{provider.label}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs ${provider.linked ? 'bg-ok-500/10 text-ok-500' : 'border border-ink-700 text-mist-400'}`}>
-                      {provider.linked ? t('oidc.account.linked') : t('oidc.account.notLinked')}
-                    </span>
-                    {provider.linked && !lastLink && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        className={QUIET}
-                        onClick={() =>
-                          void run(async () => {
-                            await authApi.unlink(provider.slug)
-                            await loadProviders()
-                          }, t('me.unlinked', { name: provider.label }))
-                        }
-                      >
-                        {t('oidc.account.unlink')}
-                      </button>
-                    )}
-                    {!provider.linked && me.sign_in === 'password' && linking !== provider.slug && (
-                      <button type="button" disabled={busy} className={QUIET} onClick={() => setLinking(provider.slug)}>
-                        {t('oidc.account.link')}
-                      </button>
-                    )}
-                  </div>
-                  {lastLink && <p className="mt-1 text-xs text-mist-500">{t('oidc.account.only', { name: provider.label })}</p>}
-                  {linking === provider.slug && (
-                    <form
-                      className="mt-3 flex flex-wrap items-end gap-2"
-                      onSubmit={(event) => {
-                        event.preventDefault()
-                        setBusy(true)
-                        setProblem(null)
-                        authApi.linkStart(provider.slug, linkPassword).then(
-                          ({ url }) => go(url),
-                          (error) => {
-                            setProblem(problemText(error))
-                            setBusy(false)
-                          },
-                        )
-                      }}
-                    >
-                      <div className="min-w-0 flex-1">
-                        <Field label={t('auth.password')} value={linkPassword} onChange={setLinkPassword} type="password" autoComplete="current-password" />
-                      </div>
-                      <button type="submit" disabled={busy} className={PLAIN}>
-                        {t('oidc.account.link')}
-                      </button>
-                    </form>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
-
-        {me.sign_in === 'password' && (
-          <details className="rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm" data-testid="password-row">
-            <summary className="flex cursor-pointer list-none items-center gap-3">
-              <KeyRound className="h-4 w-4 text-mist-500" aria-hidden />
-              <span className="flex-1 font-medium text-mist-100">{t('auth.password')}</span>
-              <span className="text-xs text-mist-500">
-                {me.password_changed_at ? t('me.password.changedAt', { day: day(me.password_changed_at, i18n.language) }) : ''}
-              </span>
-              <span className={QUIET}>{t('me.password.change')}</span>
-            </summary>
-            <form
-              className="mt-3 space-y-3"
-              onSubmit={(event) => {
-                event.preventDefault()
-                if (!current) return setProblem(errorText('current_password_missing'))
-                if (!next) return setProblem(errorText('password_missing'))
-                setProblem(null)
-                if (!again.matches()) return
-                void run(async () => {
-                  await authApi.password(current, next, again.confirm)
-                  setCurrent('')
-                  setNext('')
-                  again.clear()
-                }, t('me.password.done'))
-              }}
-            >
-              <Field label={t('me.password.current')} value={current} onChange={setCurrent} type="password" autoComplete="current-password" />
-              <Field label={t('me.password.new')} value={next} onChange={setNext} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: me.min_password ?? 12 })} />
-              <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} labelClassName="font-medium text-mist-100" />
-              <button type="submit" disabled={busy} className={LOUD}>
-                {t('me.password.submit')}
-              </button>
-            </form>
-          </details>
-        )}
-
-        <div className="rounded-[12px] border border-ink-700 px-3 py-2.5">
-          <h3 className="mb-2 text-sm font-medium text-mist-100">{t('twofactor.title')}</h3>
-          <SecondFactor me={me} />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm">
-          <Lock className="h-4 w-4 text-mist-500" aria-hidden />
-          {/* At least 12rem wide: on a phone the button goes to the next line instead of squeezing the text into a
-              column one word wide. */}
-          <span className="min-w-0 grow basis-48 text-mist-300">{t('me.sessions.text')}</span>
-          <button type="button" disabled={busy} onClick={() => void run(() => authApi.logoutEverywhere(), t('me.sessions.done'))} className={QUIET}>
-            {t('me.sessions.submit')}
-          </button>
-        </div>
-      </Card>
-
-      <Card id="looks" icon={Globe} title={t('me.looks.title')}>
-        <label className="block text-sm">
-          <span className="font-medium">{t('me.looks.language')}</span> <span className="text-xs text-mist-500">{t('me.looks.languageHint')}</span>
-          <select
-            className="nn-field mt-1"
-            value={me.language}
-            data-testid="language-select"
-            onChange={(event) => {
-              const code = event.target.value
+          <form
+            className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+            onSubmit={(event) => {
+              event.preventDefault()
               void run(async () => {
-                const saved = await authApi.language(code)
+                const saved = await authApi.profile({ display_name: name, email })
+                setName(saved.display_name)
+                setEmail(saved.email)
                 setMe(saved)
-                await changeLanguage(code || browserLanguage(), !!code)
-              }, '')
+              }, t('me.profile.saved'))
             }}
           >
-            <option value="">{t('me.looks.browser')}</option>
-            {languages.map((option) => (
-              <option key={option.code} value={option.code}>
-                {option.added ? `${option.name} ${t('me.looks.byOperator')}` : option.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="text-sm">
-          <span className="font-medium">{t('me.looks.appearance')}</span> <span className="text-xs text-mist-500">{t('me.looks.appearanceHint')}</span>
-          <div className="mt-1.5">
-            <ThemeSwitcher withWords />
+            <Field label={t('auth.name')} value={name} onChange={setName} autoComplete="name" maxLength={80} />
+            <Field label={t('auth.email')} value={email} onChange={setEmail} type="email" autoComplete="email" />
+            <button type="submit" disabled={busy || (name.trim() === me.display_name && email.trim() === me.email)} className={LOUD}>
+              {t('common.save')}
+            </button>
+          </form>
+          <p className="text-xs text-mist-500">{t('me.profile.role', { role: t(`roles.${me.role}`) })}</p>
+          {me.provider_email && (
+            <div data-testid="mail-offer" className="rounded-[12px] border border-accent-700/40 bg-[var(--color-accent-wash)] px-3.5 py-3 text-sm">
+              <p className="text-mist-200">{t('me.emailOffer', { address: me.provider_email })}</p>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button type="button" disabled={busy} className={LOUD} onClick={() => void run(() => authApi.takeProviderEmail(), t('me.emailTaken'))}>
+                  {t('me.emailTake')}
+                </button>
+                <button type="button" disabled={busy} className={PLAIN} onClick={() => void run(() => authApi.declineProviderEmail(), t('me.emailDeclined'))}>
+                  {t('me.emailDecline')}
+                </button>
+              </div>
+            </div>
+          )}
+          <label className="block text-sm">
+            <span className="font-medium">{t('me.looks.language')}</span> <span className="text-xs text-mist-500">{t('me.looks.languageHint')}</span>
+            <select
+              className="nn-field mt-1"
+              value={me.language}
+              data-testid="language-select"
+              onChange={(event) => {
+                const code = event.target.value
+                void run(async () => {
+                  const saved = await authApi.language(code)
+                  setMe(saved)
+                  await changeLanguage(code || browserLanguage(), !!code)
+                }, '')
+              }}
+            >
+              <option value="">{t('me.looks.browser')}</option>
+              {languages.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.added ? `${option.name} ${t('me.looks.byOperator')}` : option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </Card>
+      )}
+
+      {shows('security') && (
+        <Card id="security" icon={ShieldCheck} title={t('me.security.title')}>
+          {me.second_factor_setup_required && (
+            <p role="note" className="rounded-[9px] border border-warn-500/40 bg-warn-500/10 px-4 py-3 text-sm text-warn-500">
+              {t('me.setupFirst')}
+            </p>
+          )}
+          {providers !== null && (providers.length > 0 || me.sign_in === 'oidc') && (
+            <ul className="divide-y divide-ink-700 rounded-[12px] border border-ink-700" data-testid="my-providers" aria-label={t('oidc.account.title')}>
+              {providers.map((provider) => {
+                // The last link of an account without a password stays: it would lock the account out.
+                const lastLink = me.sign_in === 'oidc' && provider.linked && providers.filter((entry) => entry.linked).length === 1
+                return (
+                  <li key={provider.slug} className="px-3 py-2.5 text-sm">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="min-w-0 flex-1 truncate font-medium text-mist-100">{provider.label}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-xs ${provider.linked ? 'bg-ok-500/10 text-ok-500' : 'border border-ink-700 text-mist-400'}`}>
+                        {provider.linked ? t('oidc.account.linked') : t('oidc.account.notLinked')}
+                      </span>
+                      {provider.linked && !lastLink && (
+                        <button
+                          type="button"
+                          disabled={busy}
+                          className={QUIET}
+                          onClick={() =>
+                            void run(async () => {
+                              await authApi.unlink(provider.slug)
+                              await loadProviders()
+                            }, t('me.unlinked', { name: provider.label }))
+                          }
+                        >
+                          {t('oidc.account.unlink')}
+                        </button>
+                      )}
+                      {!provider.linked && me.sign_in === 'password' && linking !== provider.slug && (
+                        <button type="button" disabled={busy} className={QUIET} onClick={() => setLinking(provider.slug)}>
+                          {t('oidc.account.link')}
+                        </button>
+                      )}
+                    </div>
+                    {lastLink && <p className="mt-1 text-xs text-mist-500">{t('oidc.account.only', { name: provider.label })}</p>}
+                    {linking === provider.slug && (
+                      <form
+                        className="mt-3 flex flex-wrap items-end gap-2"
+                        onSubmit={(event) => {
+                          event.preventDefault()
+                          setBusy(true)
+                          setProblem(null)
+                          authApi.linkStart(provider.slug, linkPassword).then(
+                            ({ url }) => go(url),
+                            (error) => {
+                              setProblem(problemText(error))
+                              setBusy(false)
+                            },
+                          )
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <Field label={t('auth.password')} value={linkPassword} onChange={setLinkPassword} type="password" autoComplete="current-password" />
+                        </div>
+                        <button type="submit" disabled={busy} className={PLAIN}>
+                          {t('oidc.account.link')}
+                        </button>
+                      </form>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+
+          {me.sign_in === 'password' && (
+            <details className="rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm" data-testid="password-row">
+              <summary className="flex cursor-pointer list-none items-center gap-3">
+                <KeyRound className="h-4 w-4 text-mist-500" aria-hidden />
+                <span className="flex-1 font-medium text-mist-100">{t('auth.password')}</span>
+                <span className="text-xs text-mist-500">
+                  {me.password_changed_at ? t('me.password.changedAt', { day: day(me.password_changed_at, i18n.language) }) : ''}
+                </span>
+                <span className={QUIET}>{t('me.password.change')}</span>
+              </summary>
+              <form
+                className="mt-3 space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  if (!current) return setProblem(errorText('current_password_missing'))
+                  if (!next) return setProblem(errorText('password_missing'))
+                  setProblem(null)
+                  if (!again.matches()) return
+                  void run(async () => {
+                    await authApi.password(current, next, again.confirm)
+                    setCurrent('')
+                    setNext('')
+                    again.clear()
+                  }, t('me.password.done'))
+                }}
+              >
+                <Field label={t('me.password.current')} value={current} onChange={setCurrent} type="password" autoComplete="current-password" />
+                <Field label={t('me.password.new')} value={next} onChange={setNext} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: me.min_password ?? 12 })} />
+                <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} labelClassName="font-medium text-mist-100" />
+                <button type="submit" disabled={busy} className={LOUD}>
+                  {t('me.password.submit')}
+                </button>
+              </form>
+            </details>
+          )}
+
+          <div className="rounded-[12px] border border-ink-700 px-3 py-2.5">
+            <h3 className="mb-2 text-sm font-medium text-mist-100">{t('twofactor.title')}</h3>
+            <SecondFactor me={me} />
           </div>
-        </div>
-        <div className="text-sm">
-          <span className="font-medium">{t('me.looks.paper')}</span> <span className="text-xs text-mist-500">{t('me.looks.paperHint')}</span>
-          <div className="mt-1.5">
-            <PaperPicker value={paperOf(me.paper)} onChange={(paper) => void run(async () => setMe(await authApi.paper(paper)), '')} />
+
+          <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm">
+            <Lock className="h-4 w-4 text-mist-500" aria-hidden />
+            {/* At least 12rem wide: on a phone the button goes to the next line instead of squeezing the text into a
+                column one word wide. */}
+            <span className="min-w-0 grow basis-48 text-mist-300">{t('me.sessions.text')}</span>
+            <button type="button" disabled={busy} onClick={() => void run(() => authApi.logoutEverywhere(), t('me.sessions.done'))} className={QUIET}>
+              {t('me.sessions.submit')}
+            </button>
           </div>
-        </div>
-      </Card>
-      {ACCOUNT_SECTIONS.map((section) => (
-        <div key={section.key}>{section.render()}</div>
-      ))}
+        </Card>
+      )}
+
+      {shows('appearance') && (
+        <Card id="looks" icon={Palette} title={t('me.looks.title')}>
+          <div className="text-sm">
+            <span className="font-medium">{t('me.looks.appearance')}</span> <span className="text-xs text-mist-500">{t('me.looks.appearanceHint')}</span>
+            <div className="mt-1.5">
+              <ThemeSwitcher withWords />
+            </div>
+          </div>
+          <div className="text-sm">
+            <span className="font-medium">{t('me.looks.paper')}</span> <span className="text-xs text-mist-500">{t('me.looks.paperHint')}</span>
+            <div className="mt-1.5">
+              <PaperPicker value={paperOf(me.paper)} onChange={(paper) => void run(async () => setMe(await authApi.paper(paper)), '')} />
+            </div>
+          </div>
+        </Card>
+      )}
+      {shows('security') &&
+        ACCOUNT_SECTIONS.map((section) => (
+          <div key={section.key}>{section.render()}</div>
+        ))}
     </div>
   )
 }

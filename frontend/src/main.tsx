@@ -19,9 +19,9 @@ import './tags'
 import './smart'
 import './history'
 import './export'
-// MCP keys for AI tools and the consent page of connecting programs (NOTES-20); before the vault in Connections.
+// MCP keys for AI tools and the consent page of connecting programs (NOTES-20), in Settings, Connections.
 import './mcp/register'
-// Locked notes: their view in the editor's place, the menu entries, the part of Settings, Connections.
+// Locked notes: their view in the editor's place, the menu entries, the vault password in Settings, Security.
 import './vault'
 // Notifications (NOTES-14): the bell of a shared note, the service worker, Web Push.
 import './notify'
