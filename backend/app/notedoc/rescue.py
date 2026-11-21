@@ -52,6 +52,8 @@ class Applied:
     at: int | None
     #: An element lost a child (not only text): the shape may need ``doc.repair``.
     structural: bool = False
+    #: The top-level blocks inside which an element lost a child (where ``doc.repair`` has to look).
+    touched: list[int] = field(default_factory=list)
     #: The update decoded, when it was needed.
     decoded: Update | None = None
 
@@ -67,7 +69,7 @@ def apply(doc: Doc, update: bytes) -> Applied:
     """Applies an update and watches what it did."""
     seen: dict[str, Any] = {}
     positions: list[int] = []
-    structural: list[bool] = []
+    structural: list[int] = []
 
     def on_transaction(event: Any) -> None:
         seen["before"] = event.before_state
@@ -81,7 +83,7 @@ def apply(doc: Doc, update: bytes) -> Applied:
             if not any("delete" in step for step in delta if isinstance(step, dict)):
                 continue
             if not isinstance(event.target, XmlText):
-                structural.append(True)
+                structural.append(int(path[0]) if path else -1)
             if path:
                 positions.append(int(path[0]) + 1)
                 continue
@@ -107,7 +109,7 @@ def apply(doc: Doc, update: bytes) -> Applied:
     deleted = decode_delete_set(seen.get("deleted", b""))
     changed = bool(deleted) or seen.get("before", before_state) != seen.get("after", before_state)
     return Applied(changed=changed, deleted=deleted, at=min(positions) if positions else None,
-                   structural=bool(structural))
+                   structural=bool(structural), touched=sorted({index for index in structural if index >= 0}))
 
 
 def redundant(update: bytes, state_before: bytes) -> bool:

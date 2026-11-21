@@ -501,7 +501,7 @@ class Rooms:
                 # one change of the server that goes to everyone after the update.
                 with recording(room.doc) as made:
                     restored = room.rescuer.after(room.doc, payload, applied, whole_before)
-                    mended = repair(room.doc) if applied.structural else 0
+                    mended = repair(room.doc, applied.touched) if applied.structural else 0
                 if restored or mended:
                     rescue = merged(made)
                 if restored:

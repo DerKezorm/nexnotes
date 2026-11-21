@@ -481,15 +481,23 @@ _NEEDS_BLOCK = frozenset({s.BLOCKQUOTE, s.TABLE_CELL, s.TABLE_HEADER})
 _ITEMS = frozenset({s.LIST_ITEM, s.TASK_ITEM})
 
 
-def repair(doc: Doc) -> int:
+def repair(doc: Doc, blocks: Iterable[int] | None = None) -> int:
     """Fixes shapes the browser's schema refuses and concurrent changes can leave behind (two people deleting the last
     items of a checklist, a cell emptied from two sides). The browser would drop such a node and what is in it; the
-    server adds what is missing instead: an empty item, an empty paragraph. Only a table without rows goes. Returns
-    the number of fixes; call it inside the transaction whose update carries them."""
+    server adds what is missing instead: an empty item, an empty paragraph. Only a table without rows goes. With
+    ``blocks``, only those top-level blocks are looked at (the ones a change touched). Returns the number of fixes;
+    call it inside the transaction whose update carries them."""
     body = body_of(doc)
     fixes = 0
     with doc.transaction():
-        fixes += _repair_children(body)
+        if blocks is None:
+            fixes += _repair_children(body)
+        else:
+            # From the last to the first, so a table that goes does not move the others.
+            for index in sorted(set(blocks), reverse=True):
+                if 0 <= index < len(body.children):
+                    fixed, _gone = _repair_child(body, index)
+                    fixes += fixed
         if len(body.children) == 0:
             body.children.append(XmlElement(s.PARAGRAPH))
             fixes += 1
@@ -504,31 +512,38 @@ def _repair_children(parent: XmlFragment | XmlElement) -> int:
     fixes = 0
     index = 0
     while index < len(parent.children):
-        child = parent.children[index]
-        index += 1
-        if not isinstance(child, XmlElement):
-            continue
-        tag = child.tag or ""
-        if tag in s.TEXTBLOCKS or tag in (s.CODE_BLOCK, s.HORIZONTAL_RULE, s.HARD_BREAK):
-            continue
-        fixes += _repair_children(child)
-        if tag in s.LISTS and not _elements(child):
-            item = child.children.append(XmlElement(s.LISTS[tag], _element_attrs(s.LISTS[tag], {})))
-            item.children.append(XmlElement(s.PARAGRAPH))
-            fixes += 1
-        elif tag in _ITEMS:
-            first = _elements(child)
-            if not first or first[0].tag != s.PARAGRAPH:
-                child.children.insert(0, XmlElement(s.PARAGRAPH))
-                fixes += 1
-        elif tag in _NEEDS_BLOCK and not _elements(child):
-            child.children.append(XmlElement(s.PARAGRAPH))
-            fixes += 1
-        elif tag == s.TABLE and not any(row.tag == s.TABLE_ROW for row in _elements(child)):
-            index -= 1
-            del parent.children[index]
-            fixes += 1
+        fixed, gone = _repair_child(parent, index)
+        fixes += fixed
+        if not gone:
+            index += 1
     return fixes
+
+
+def _repair_child(parent: XmlFragment | XmlElement, index: int) -> tuple[int, bool]:
+    """Mends one child and what is inside it; returns the fixes and whether the child went."""
+    child = parent.children[index]
+    if not isinstance(child, XmlElement):
+        return 0, False
+    tag = child.tag or ""
+    if tag in s.TEXTBLOCKS or tag in (s.CODE_BLOCK, s.HORIZONTAL_RULE, s.HARD_BREAK):
+        return 0, False
+    fixes = _repair_children(child)
+    if tag in s.LISTS and not _elements(child):
+        item = child.children.append(XmlElement(s.LISTS[tag], _element_attrs(s.LISTS[tag], {})))
+        item.children.append(XmlElement(s.PARAGRAPH))
+        return fixes + 1, False
+    if tag in _ITEMS:
+        first = _elements(child)
+        if not first or first[0].tag != s.PARAGRAPH:
+            child.children.insert(0, XmlElement(s.PARAGRAPH))
+            return fixes + 1, False
+    elif tag in _NEEDS_BLOCK and not _elements(child):
+        child.children.append(XmlElement(s.PARAGRAPH))
+        return fixes + 1, False
+    elif tag == s.TABLE and not any(row.tag == s.TABLE_ROW for row in _elements(child)):
+        del parent.children[index]
+        return fixes + 1, True
+    return fixes, False
 
 
 # --- Reading the document -----------------------------------------------------------------------------------------
