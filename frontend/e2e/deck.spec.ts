@@ -1,5 +1,6 @@
 /**
- * NOTES-21 in a real browser against the real server: a key for nexdeck made under Settings, Connections, the card's
+ * NOTES-21 in a real browser against the real server: a key for nexdeck (since NOTES-25 an API token) made under
+ * Settings, Connections, the card's
  * reads and a tick from the card arriving in the note open in the browser. nexdeck's server is played by
  * `page.request` with nothing but the key (no cookie of the page counts there, no `Origin` is sent). The card itself
  * is nexdeck's; this checks what nexnotes gives it. The page is the operator of global-setup.ts.
@@ -10,13 +11,13 @@ const TAB = { 'X-Nexnotes-Client': 'tab-e2e-deck000000' }
 
 async function makeKey(page: Page, name: string, level: 'read' | 'write'): Promise<string> {
   await page.goto('/settings/connections')
-  await page.getByTestId('deck-new').click()
+  await page.getByTestId('tokens-new').click()
   await page.getByRole('dialog').getByRole('textbox').fill(name)
-  await page.getByTestId(`deck-level-${level}`).check()
-  await page.getByTestId('deck-make').click()
-  await expect(page.getByTestId('deck-made')).toContainText(name)
-  const token = (await page.getByTestId('deck-token').textContent())!.trim()
-  expect(token).toMatch(/^nn_deck_/)
+  await page.getByTestId(`token-level-${level}`).check()
+  await page.getByTestId('token-make').click()
+  await expect(page.getByTestId('tokens-made')).toContainText(name)
+  const token = (await page.getByTestId('tokens-secret').textContent())!.trim()
+  expect(token).toMatch(/^nn_api_/)
   return token
 }
 
@@ -45,10 +46,10 @@ test('NOTES-21 AC-1 AC-2 AC-5 a card reads the pinned notes, one checklist, and 
 
   // The last use shows in the list; revoked, the card is turned away at once (EC-3).
   await page.goto('/settings/connections')
-  const row = page.getByTestId('deck-key').filter({ hasText: name })
-  await expect(row.getByTestId('deck-key-meta')).not.toContainText('never used')
-  await row.getByTestId('deck-revoke').click()
-  await page.getByTestId('deck-revoke-confirm').click()
+  const row = page.getByTestId('token-row').filter({ hasText: name })
+  await expect(row).not.toContainText('never used')
+  await row.getByTestId('token-revoke').click()
+  await page.getByTestId('tokens-revoke-confirm').click()
   // Asked once the server confirmed the revoke (the row is gone), not while the request is still on its way.
   await expect(row).toHaveCount(0)
   expect((await page.request.get('/api/v1/me', { headers: auth })).status()).toBe(401)

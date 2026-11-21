@@ -132,6 +132,7 @@ export function FeaturesCard({ server }: { server: Server }) {
       <Toggle label={t('server.linkPreviews')} hint={t('server.linkPreviewsHint')} checked={s.link_previews} onChange={(link_previews) => void server.save({ link_previews })} />
       <Toggle label={t('server.shareLinks')} hint={t('server.shareLinksHint')} checked={s.share_links} onChange={(share_links) => void server.save({ share_links })} />
       <Toggle label={t('server.mcp')} hint={t('server.mcpHint')} checked={s.mcp_enabled} onChange={(mcp_enabled) => void server.save({ mcp_enabled })} />
+      <Toggle label={t('server.api')} hint={t('server.apiHint')} checked={s.api_enabled !== false} onChange={(api_enabled) => void server.save({ api_enabled })} />
       <Toggle
         label={t('server.localNetwork')}
         hint={t('server.localNetworkHint')}

@@ -39,6 +39,9 @@ DEFAULTS: dict[str, Any] = {
     "share_links": True,
     #: Members may make keys for MCP tools, and the tools may ask (NOTES-20).
     "mcp_enabled": True,
+    #: Members may make API tokens and programs may ask under ``/api/v1/`` (NOTES-25 AC-5), the nexdeck card too.
+    #: On from the start; the MCP switch stays its own.
+    "api_enabled": True,
     #: A member's connection (their own nextasks, NOTES-19) may point into the operator's own network (LAN, VPN):
     #: closed from the start, as in nexmail, because then every member can make nexnotes ask an address there.
     "connections_local_network": False,

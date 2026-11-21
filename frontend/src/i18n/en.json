@@ -578,7 +578,6 @@
     "webpush_keys": "The browser sent no valid keys for notifications.",
     "key_invalid": "This MCP key is not valid (any more).",
     "mcp_off": "The operator has switched MCP off.",
-    "mcp_too_many_keys": "An account can have at most {{max}} MCP keys. Revoke one first.",
     "oauth_client": "This program is not registered here. Start connecting in the program again.",
     "oauth_pkce": "The program does not sign in the safe way (PKCE). It cannot connect.",
     "oauth_redirect": "This return address is not registered for the program.",
@@ -596,7 +595,6 @@
     "item_changed": "This item is not like that any more. Load the note again.",
     "note_format": "This note is in a format this server does not know.",
     "note_trashed": "This note is in the trash.",
-    "dashboard_too_many_keys": "An account can have at most {{max}} keys for nexdeck.",
     "nextasks_not_connected": "nextasks is not connected. Connect it under Settings, Connections.",
     "nextasks_address_invalid": "This is not an address of nextasks. It starts with http:// or https://.",
     "nextasks_address_local": "This address is in the local network. The operator has to allow that first under Settings, Server.",
@@ -612,7 +610,9 @@
     "nextasks_slow_down": "nextasks asks for fewer requests. Try again in {{seconds}} seconds.",
     "nextasks_not_found": "nextasks does not know this.",
     "nextasks_task_gone": "This task is no longer in nextasks.",
-    "list_style_unknown": "Choose list, cards, compact or tiles."
+    "list_style_unknown": "Choose list, cards, compact or tiles.",
+    "api_off": "The operator has switched the API off.",
+    "tokens_too_many": "An account can have at most {{max}} API tokens. Revoke one first."
   },
   "folders": {
     "section": "Folders",
@@ -1130,7 +1130,9 @@
     "logMore": "Load older",
     "logRequestHint": "Show only this request",
     "localNetwork": "Connections into the local network",
-    "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there."
+    "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there.",
+    "api": "API for members",
+    "apiHint": "Members make API tokens; programs and the nexdeck card read with them. Off: every request under /api/v1/ is refused, the tokens stay."
   },
   "session": {
     "again": "Sign in again",
@@ -1907,37 +1909,12 @@
     "notSharedFolder": "Notifications are for shared folders: share the folder first, then they tell you when others change something in it."
   },
   "mcp": {
-    "section": {
-      "title": "MCP keys for AI tools",
-      "text": "With a key an AI tool reads your notes and, if you want, writes them too. It never sees more than you.",
-      "new": "New key",
-      "none": "No key yet.",
-      "off": "The operator has switched MCP off. Your keys rest, and no new key can be made.",
-      "address": "Address for the tool",
-      "header": "The tool sends the key as “Authorization: Bearer …”. Programs that connect themselves sign in with your consent and show up here too.",
-      "made": "“{{name}}” made · visible only now",
-      "lastUsed": "last used {{when}}",
-      "neverUsed": "never used",
-      "connector": "connected program",
-      "revoke": "Revoke",
-      "revokeTitle": "Revoke “{{name}}”?",
-      "revokeText": "The tool is out at once. What it wrote stays.",
-      "count": "{{count}} of {{max}} keys"
-    },
-    "level": {
-      "read": "read only",
-      "write": "read and write"
-    },
     "dialog": {
-      "title": "New MCP key",
-      "name": "Name",
-      "namePlaceholder": "e.g. Shopping list from the chat",
       "right": "Right",
       "read": "Read only",
       "readHint": "Search, read, list folders and tags.",
       "write": "Read and write",
-      "writeHint": "Also make notes, add to them, tick items off, move them, make folders and put notes into the trash.",
-      "make": "Create key"
+      "writeHint": "Also make notes, add to them, tick items off, move them, make folders and put notes into the trash."
     },
     "consent": {
       "title": "Connect “{{name}}”?",
@@ -2131,35 +2108,84 @@
       "remove": "Remove mark"
     }
   },
-  "deck": {
+  "tokens": {
     "section": {
       "title": "API tokens",
-      "text": "An API token lets a program read your pinned notes and single checklists and, if you want, tick items off. For example the nexdeck card. It never sees locked notes.",
+      "text": "An API token lets a program read your notes and, if you want, write them: n8n, Home Assistant, a script or the nexdeck card. It never may more than your account. It never sees locked notes.",
+      "new": "New API token",
+      "none": "No API token yet.",
+      "off": "The operator switched the API off. Existing tokens work again once it is switched on.",
+      "made": "“{{name}}” made",
+      "once": "Copy the token now. It is shown only this once.",
       "address": "Address for programs",
-      "none": "No key yet.",
-      "new": "New key",
-      "made": "“{{name}}” made · visible only now",
-      "lastUsed": "last {{when}}",
+      "header": "Programs send the token as “Authorization: Bearer …”, AI tools to …/api/mcp.",
+      "docs": "API documentation",
+      "lastUsed": "last used {{when}}",
       "neverUsed": "never used",
       "revoke": "Revoke",
       "revokeTitle": "Revoke “{{name}}”?",
-      "revokeText": "The card shows nothing new from now on and cannot tick anything off.",
-      "count": "{{count}} of {{max}} keys"
+      "revokeText": "The program is shut out at once. What it wrote stays.",
+      "count": "{{count}} of {{max}} tokens",
+      "blocked": "Blocked by the operator"
     },
     "level": {
-      "read": "show only",
-      "write": "show and tick off"
+      "read": "read only",
+      "write": "read and write"
+    },
+    "access": {
+      "api": "API",
+      "mcp": "MCP",
+      "card": "nexdeck card"
+    },
+    "legacy": {
+      "mcp": "MCP only (older key)",
+      "card": "nexdeck card only (older token)"
+    },
+    "list": {
+      "foldersAll": "all notes",
+      "folders_one": "{{count}} folder",
+      "folders_other": "{{count}} folders"
+    },
+    "expiry": {
+      "on": "Expires on {{date}}",
+      "expired": "Expired",
+      "never": "Never expires"
     },
     "dialog": {
       "title": "New API token",
       "name": "Name",
-      "namePlaceholder": "e.g. tablet in the kitchen",
+      "namePlaceholder": "e.g. n8n weather report",
       "right": "Right",
-      "read": "Show only",
-      "readHint": "Show pinned notes and checklists on the card.",
-      "write": "Show and tick off",
-      "writeHint": "Also tick checklist items off right on the card.",
-      "make": "Create key"
+      "read": "Read only",
+      "readHint": "Read notes, folders, tags, search, attachments and the trash.",
+      "write": "Read and write",
+      "writeHint": "Also tick checklists and, once that comes, make and change notes.",
+      "mcp": "Also for AI tools (MCP)",
+      "mcpHint": "The token then also works at …/api/mcp.",
+      "mcpOff": "The operator has switched MCP off.",
+      "folders": "Folders",
+      "foldersAll": "All notes",
+      "foldersSome": "Only these folders …",
+      "expiry": "Expires",
+      "days_30": "30 days",
+      "days_90": "90 days",
+      "days_365": "1 year",
+      "never": "Never",
+      "make": "Make token"
+    },
+    "connectors": {
+      "title": "Connected AI tools",
+      "text": "Programs that connected themselves with your consent. They work as you, never with more.",
+      "none": "No program connected yet."
+    },
+    "admin": {
+      "title": "API tokens of all accounts",
+      "text": "Per token the account, name, right, access, run-out and last use. Never the token, never titles or contents.",
+      "none": "No account has an API token yet.",
+      "connector": "connected AI tool",
+      "block": "Block",
+      "blockTitle": "Block “{{name}}”?",
+      "blockText": "The token stops working at once. The account sees it as “Blocked by the operator”."
     }
   }
 }

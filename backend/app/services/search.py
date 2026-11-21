@@ -1103,6 +1103,9 @@ def _pinned(account: Account) -> ColumnElement[bool]:
                     Note.id.in_(select(SharePin.note_id).where(SharePin.account_id == account.id))))
 
 
+pinned_by = _pinned
+
+
 @dataclass
 class Asked:
     """What the conditions are asked with: the account, the device's zone, the moment, and what was found to point

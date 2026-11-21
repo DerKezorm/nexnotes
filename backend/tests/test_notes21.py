@@ -15,7 +15,7 @@ from app.main import app
 from app.models import Account, ApiToken, Note
 from app.models_history import NoteEdit
 from app.notedoc import edit
-from app.services import dashboard
+from app.services import apibrake, apitokens, dashboard
 
 from .conftest import make_account, new_client
 from .notes_live import Live
@@ -36,7 +36,8 @@ def program() -> TestClient:
 
 
 def make_key(client: TestClient, level: str = "read", name: str = "Küche") -> str:
-    made = client.post("/api/dashboard/keys", json={"name": name, "level": level})
+    # Since NOTES-25 a card reads with an ordinary API token (AC-3 there: no new card keys).
+    made = client.post("/api/tokens", json={"name": name, "level": level})
     assert made.status_code == 201, made.text
     return made.json()["token"]
 
@@ -78,30 +79,30 @@ SHOPPING = "- [ ] Milch\n- [ ] Tomaten\n- [x] Brot\n- [ ] Eier"
 
 
 def test_notes21_ac1_a_member_makes_a_key_for_nexdeck_to_read_or_to_tick_and_sees_it_once(client, operator):
-    made = client.post("/api/dashboard/keys", json={"name": "Küche", "level": "write"})
+    made = client.post("/api/tokens", json={"name": "Küche", "level": "write"})
     assert made.status_code == 201, made.text
     token = made.json()["token"]
-    assert token.startswith("nn_deck_") and made.json()["key"]["level"] == "write"
-    listing = client.get("/api/dashboard/keys").json()
-    assert token not in str(listing) and listing["keys"][0]["name"] == "Küche"
-    assert listing["keys"][0]["last_used_at"] is None
+    assert token.startswith("nn_api_") and made.json()["made"]["level"] == "write"
+    listing = client.get("/api/tokens").json()
+    assert token not in str(listing) and listing["tokens"][0]["name"] == "Küche"
+    assert listing["tokens"][0]["last_used_at"] is None
     with SessionLocal() as db:
-        row = db.scalar(select(ApiToken).where(ApiToken.kind == "dashboard"))
+        row = db.scalar(select(ApiToken).where(ApiToken.kind == "api"))
         assert row is not None and row.token_hash == hashlib.sha256(token.encode()).hexdigest()
     me = get(token, "/api/v1/me")
     assert me.status_code == 200
     assert me.json()["app"] == "nexnotes" and me.json()["level"] == "write" and "check" in me.json()["features"]
     # The last use shows in the list.
-    assert client.get("/api/dashboard/keys").json()["keys"][0]["last_used_at"] is not None
-    assert client.post("/api/dashboard/keys", json={"name": "x", "level": "admin"}).status_code == 422
-    assert client.post("/api/dashboard/keys", json={"name": "  ", "level": "read"}).status_code == 422
+    assert client.get("/api/tokens").json()["tokens"][0]["last_used_at"] is not None
+    assert client.post("/api/tokens", json={"name": "x", "level": "admin"}).status_code == 422
+    assert client.post("/api/tokens", json={"name": "  ", "level": "read"}).status_code == 422
 
 
 def test_notes21_ac1_an_account_holds_at_most_twenty_keys(client, operator):
-    for number in range(dashboard.MAX_KEYS):
+    for number in range(apitokens.MAX_TOKENS):
         make_key(client, name=f"k{number}")
-    too_many = client.post("/api/dashboard/keys", json={"name": "one more", "level": "read"})
-    assert too_many.status_code == 409 and code(too_many) == "dashboard_too_many_keys"
+    too_many = client.post("/api/tokens", json={"name": "one more", "level": "read"})
+    assert too_many.status_code == 409 and code(too_many) == "tokens_too_many"
 
 
 def test_notes21_ac1_a_card_key_opens_the_card_only_and_the_card_takes_no_other_token(client, operator):
@@ -115,8 +116,6 @@ def test_notes21_ac1_a_card_key_opens_the_card_only_and_the_card_takes_no_other_
                          headers={"Authorization": f"Bearer {token}"})
         assert mcp.status_code == 401
     # The other way round: an MCP key or a device token is no card key, a session cookie neither.
-    from app.services import apitokens
-
     with SessionLocal() as db:
         _row, mcp_key = apitokens.make(db, db.get(Account, operator.id), "mcp", kind="mcp", level="write")
         _row, device = apitokens.make(db, db.get(Account, operator.id), "iPhone", kind="device")
@@ -200,10 +199,10 @@ def test_notes21_ac2_a_card_of_a_checklist_ticks_an_item_in_nexnotes(client, ope
     assert [task.checked for task in edit.list_tasks(stored_doc(note["id"]))] == [False, True, True, False]
     # Opened again from the card.
     assert tick(token, note["id"], 1, checked=False, text="Tomaten").json()["tasks"]["done"] == 1
-    # The history names the key, not only the person.
+    # The history names the token, not only the person (an API token since NOTES-25, AC-22 there).
     with SessionLocal() as db:
         vias = {row.via for row in db.scalars(select(NoteEdit).where(NoteEdit.note_id == note["id"]))}
-    assert "nexdeck:Küchen-Tablet" in vias
+    assert "api:Küchen-Tablet" in vias
     # An item that says something else by now is left alone.
     changed = tick(token, note["id"], 0, text="Butter")
     assert changed.status_code == 409 and code(changed) == "item_changed"
@@ -339,8 +338,8 @@ def test_notes21_ec3_a_revoked_key_or_one_that_only_reads_leaves_the_items_as_th
     assert get(reads, f"/api/v1/notes/{note['id']}").json()["can_check"] is False
     refused = tick(reads, note["id"], 0, text="Milch")
     assert refused.status_code == 403 and code(refused) == "token_reads_only"
-    key_id = client.get("/api/dashboard/keys").json()["keys"][1]["id"]
-    assert client.delete(f"/api/dashboard/keys/{key_id}").status_code == 204
+    key_id = client.get("/api/tokens").json()["tokens"][1]["id"]
+    assert client.delete(f"/api/tokens/{key_id}").status_code == 204
     revoked = tick(writes, note["id"], 0, text="Milch")
     assert revoked.status_code == 401 and code(revoked) == "token_invalid"
     assert code(get(writes, "/api/v1/dashboard")) == "token_invalid"
@@ -355,8 +354,8 @@ def test_notes21_ec3_a_revoked_key_or_one_that_only_reads_leaves_the_items_as_th
     assert code(tick(writes, theirs["id"], 0)) == "not_allowed"
     # Somebody else cannot revoke the key.
     with new_client(anna) as as_anna:
-        own = client.get("/api/dashboard/keys").json()["keys"][-1]["id"]
-        assert as_anna.delete(f"/api/dashboard/keys/{own}").status_code == 404
+        own = client.get("/api/tokens").json()["tokens"][-1]["id"]
+        assert as_anna.delete(f"/api/tokens/{own}").status_code == 404
 
 
 # --- The walls ----------------------------------------------------------------------------------------------------
@@ -377,7 +376,7 @@ def test_notes21_wrong_keys_are_slowed_per_sender_and_many_requests_per_key(clie
 
     brake.forget()
     token = make_key(client)
-    monkeypatch.setattr(dashboard, "PER_MINUTE", 3)
+    monkeypatch.setattr(apibrake, "PER_MINUTE", 3)
     for _ in range(3):
         assert get(token, "/api/v1/me").status_code == 200
     fast = get(token, "/api/v1/me")

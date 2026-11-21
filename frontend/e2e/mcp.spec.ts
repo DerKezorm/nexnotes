@@ -1,5 +1,6 @@
 /**
- * NOTES-20 in a real browser against the real server: a key made under Settings, Connections, shown once with
+ * NOTES-20 in a real browser against the real server: a key (since NOTES-25 an API token with "Also for AI tools
+ * (MCP)") made under Settings, Connections, shown once with
  * "Copy", listed with its right and last use and revoked (AC-1, AC-5, AC-9); a note an AI tool makes over MCP lands
  * in the inbox with where it came from and "check title" (AC-4, AC-6); a program connects through the consent page
  * (AC-7). The page is the operator of global-setup.ts. The tool is played by `page.request`, which sends no `Origin`,
@@ -27,7 +28,7 @@ async function tool(request: APIRequestContext, token: string, name: string, arg
 }
 
 async function makeKey(page: Page, name: string, level: 'read' | 'write'): Promise<string> {
-  const made = await page.request.post('/api/mcp/keys', { data: { name, level }, headers: TAB })
+  const made = await page.request.post('/api/tokens', { data: { name, level, mcp: true }, headers: TAB })
   expect(made.status()).toBe(201)
   return (await made.json()).token as string
 }
@@ -36,27 +37,27 @@ test('NOTES-20 AC-1 AC-5 AC-9 a key is made with a name and a right, shown once,
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const name = `E2E key ${Date.now()}`
   await page.goto('/settings/connections')
-  await expect(page.getByTestId('mcp-address')).toContainText('/api/mcp')
-  await page.getByTestId('mcp-new').click()
+  await page.getByTestId('tokens-new').click()
   await page.getByRole('dialog').getByRole('textbox').fill(name)
-  await page.getByTestId('mcp-level-write').check()
-  await page.getByTestId('mcp-make').click()
-  await expect(page.getByTestId('mcp-made')).toContainText(name)
-  const token = (await page.getByTestId('mcp-token').textContent())!.trim()
-  expect(token).toMatch(/^nn_mcp_/)
-  await page.getByTestId('mcp-copy').click()
-  await expect(page.getByTestId('mcp-copy')).toHaveText('Copied')
+  await page.getByTestId('token-level-write').check()
+  await page.getByTestId('token-mcp').check()
+  await page.getByTestId('token-make').click()
+  await expect(page.getByTestId('tokens-made')).toContainText(name)
+  const token = (await page.getByTestId('tokens-secret').textContent())!.trim()
+  expect(token).toMatch(/^nn_api_/)
+  await page.getByTestId('tokens-copy').click()
+  await expect(page.getByTestId('tokens-copy')).toHaveText('Copied')
   // The key works, and its use shows in the list.
   expect((await rpc(page.request, token, 'ping')).status()).toBe(200)
   await page.reload()
-  await expect(page.getByTestId('mcp-made')).toHaveCount(0)
+  await expect(page.getByTestId('tokens-made')).toHaveCount(0)
   await expect(page.locator('body')).not.toContainText(token)
-  const row = page.getByTestId('mcp-key').filter({ hasText: name })
-  await expect(row.getByTestId('mcp-key-meta')).toContainText('read and write')
-  await expect(row.getByTestId('mcp-key-meta')).not.toContainText('never used')
-  await row.getByTestId('mcp-revoke').click()
-  await page.getByTestId('mcp-revoke-confirm').click()
-  await expect(page.getByTestId('mcp-key').filter({ hasText: name })).toHaveCount(0)
+  const row = page.getByTestId('token-row').filter({ hasText: name })
+  await expect(row.getByTestId('token-meta')).toContainText('read and write · API · MCP')
+  await expect(row).not.toContainText('never used')
+  await row.getByTestId('token-revoke').click()
+  await page.getByTestId('tokens-revoke-confirm').click()
+  await expect(page.getByTestId('token-row').filter({ hasText: name })).toHaveCount(0)
   expect((await rpc(page.request, token, 'ping')).status()).toBe(401)
 })
 
@@ -104,11 +105,12 @@ test('NOTES-20 AC-7 a program connects through the consent page with read only o
   const names = ((await listed.json()).result.tools as { name: string }[]).map((each) => each.name)
   expect(names).toContain('create_note')
   await page.goto('/settings/connections')
-  const row = page.getByTestId('mcp-key').filter({ hasText: 'E2E program' })
-  await expect(row.getByTestId('mcp-key-meta')).toContainText('connected program')
-  await row.getByTestId('mcp-revoke').click()
-  await page.getByTestId('mcp-revoke-confirm').click()
+  // Under "Connected AI tools", apart from the tokens (NOTES-25 AC-4).
+  const row = page.getByTestId('connector-row').filter({ hasText: 'E2E program' })
+  await expect(row).toBeVisible()
+  await row.getByTestId('connector-revoke').click()
+  await page.getByTestId('tokens-revoke-confirm').click()
   // Revoked once the server said so (the row is gone), not while the request is still on its way.
-  await expect(page.getByTestId('mcp-key').filter({ hasText: 'E2E program' })).toHaveCount(0)
+  await expect(page.getByTestId('connector-row').filter({ hasText: 'E2E program' })).toHaveCount(0)
   expect((await rpc(page.request, access, 'ping')).status()).toBe(401)
 })

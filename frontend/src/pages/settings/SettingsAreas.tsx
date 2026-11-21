@@ -3,6 +3,7 @@
  * themselves stay in their files (`AccountTab`, `ConnectionsTab`, `ServerCards`, `SignInCards`, `AccountsTab`,
  * `LogCard`, `AboutArea`); an area only picks them.
  */
+import { AllTokensCard } from '../../tokens/AllTokensCard'
 import { AboutArea } from './AboutArea'
 import { AccountsTab } from './AccountsTab'
 import { AccountTab } from './AccountTab'
@@ -23,7 +24,12 @@ export function AreaContent({ area }: { area: AreaSlug }) {
     case 'connections':
       return <ConnectionsTab />
     case 'accounts':
-      return <AccountsTab />
+      return (
+        <div className="space-y-6">
+          <AccountsTab />
+          <AllTokensCard />
+        </div>
+      )
     case 'log':
       return <LogCard />
     case 'about':

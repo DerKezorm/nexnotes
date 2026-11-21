@@ -432,6 +432,9 @@ async def token(request: Request) -> JSONResponse:
             brought = apitokens.digest(form.get("refresh_token", ""))
             key = db.scalar(select(ApiToken).where(ApiToken.refresh_hash == brought, ApiToken.client_id == client.id,
                                                    ApiToken.kind == TOKEN_MCP))
+            if key is not None and key.blocked_at is not None:
+                # The operator blocked the connector (NOTES-25 AC-27): no new token for it.
+                return _oauth_error("invalid_grant", "The refresh token is not valid (any more).")
             if key is None:
                 # A refresh token traded in already, however many changes ago: whoever brings it has a copy. The
                 # whole connector ends, for the thief and the program alike; its member signs it in again

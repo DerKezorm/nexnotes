@@ -1,29 +1,8 @@
-/** MCP keys and connectors over the server (`backend/app/routers/mcp.py`, `routers/oauth.py`, NOTES-20). */
+/** The consent page of a connecting program over the server (`backend/app/routers/oauth.py`, NOTES-20). Keys and
+ * connectors are listed and revoked with the API tokens (`src/tokens/`, NOTES-25). */
 import { api } from '../api/client'
 
 export type McpLevel = 'read' | 'write'
-
-export type McpKey = {
-  id: number
-  name: string
-  level: McpLevel
-  prefix: string
-  /** `key`: made here by hand; `connector`: a program that signed in with the member's consent (OAuth). */
-  kind: 'key' | 'connector'
-  created_at: string | null
-  last_used_at: string | null
-}
-
-export type McpKeys = {
-  /** The operator's switch (AC-8): off, no key works and none can be made. */
-  allowed: boolean
-  /** Where a tool sends its requests (`…/api/mcp`). */
-  address: string
-  max_keys: number
-  keys: McpKey[]
-}
-
-export type MadeKey = { key: McpKey; token: string }
 
 export type ConsentAsk = {
   client_id: string
@@ -34,9 +13,6 @@ export type ConsentAsk = {
 }
 
 export const mcpApi = {
-  keys: () => api<McpKeys>('/api/mcp/keys'),
-  make: (name: string, level: McpLevel) => api<MadeKey>('/api/mcp/keys', { method: 'POST', body: { name, level } }),
-  revoke: (id: number) => api<void>(`/api/mcp/keys/${id}`, { method: 'DELETE' }),
   consentInfo: (ask: ConsentAsk) =>
     api<{ client_name: string; redirect_host: string }>('/api/oauth/authorize', {
       query: { client_id: ask.client_id, redirect_uri: ask.redirect_uri, code_challenge: ask.code_challenge, code_challenge_method: ask.code_challenge_method },

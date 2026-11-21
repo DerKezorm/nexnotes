@@ -324,6 +324,7 @@ def me(account: Account, db: DbSession) -> dict[str, Any]:
         "upload_max_mb": settings_service.upload_max_mb(db),
         "share_links": bool(settings_service.get(db, "share_links")),
         "mcp_enabled": bool(settings_service.get(db, "mcp_enabled")),
+        "api_enabled": bool(settings_service.get(db, "api_enabled")),
         "min_password": MIN_PASSWORD,
         # The paper new notes start on (NOTES-3 AC-17): the account's own, not in the operator's list of accounts.
         "paper": notes_service.default_paper(account),

@@ -271,9 +271,13 @@ def _shown_label(spellings: dict[str, tuple[int, int]]) -> str:
     return min(spellings.items(), key=lambda item: (-item[1][0], -item[1][1], item[0]))[0]
 
 
-def summary(db: Session, account: Account, keys: Iterable[str] | None = None) -> dict[str, dict[str, Any]]:
-    """Per tag the account sees: shown label, number of notes. Limited to ``keys`` when given."""
+def summary(db: Session, account: Account, keys: Iterable[str] | None = None,
+            within: ColumnElement[bool] | None = None) -> dict[str, dict[str, Any]]:
+    """Per tag the account sees: shown label, number of notes. Limited to ``keys`` when given, and to the notes
+    ``within`` holds for (the folders of an API token, NOTES-25 AC-7)."""
     where = [visible(account.id)]
+    if within is not None:
+        where.append(within)
     wanted = list(keys) if keys is not None else None
     if wanted is not None:
         where.append(NoteTag.key.in_(wanted))
@@ -288,9 +292,9 @@ def summary(db: Session, account: Account, keys: Iterable[str] | None = None) ->
             for key, found in spellings.items()}
 
 
-def list_tags(db: Session, account: Account) -> list[dict[str, Any]]:
+def list_tags(db: Session, account: Account, within: ColumnElement[bool] | None = None) -> list[dict[str, Any]]:
     """Every tag the account sees, the most frequent first (AC-2, EC-4)."""
-    found = summary(db, account).values()
+    found = summary(db, account, within=within).values()
     return sorted(found, key=lambda tag: (-tag["count"], sort_key(tag["label"])))
 
 

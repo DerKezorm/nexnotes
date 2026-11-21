@@ -11,6 +11,7 @@ refuses (the browser would drop it, and with it what is inside).
 
 from __future__ import annotations
 
+import hashlib
 import re
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator
@@ -108,6 +109,15 @@ def change(doc: Doc, edit: Callable[[Doc], Any]) -> tuple[Any, bytes | None]:
     with recording(doc) as made:
         result = edit(doc)
     return result, merged(made)
+
+
+def state_tag(doc: Doc) -> str:
+    """The state of the document as a short text (the ``etag`` of the API, NOTES-25 AC-9): the same for the same
+    content wherever the document was loaded, different after any change. The state vector alone would miss a change
+    that only deletes (Yjs counts no new clock for it); the update against the own state vector holds exactly the
+    deletions, so both together say everything."""
+    vector = doc.get_state()
+    return hashlib.sha256(vector + doc.get_update(vector)).hexdigest()[:32]
 
 
 # --- Title --------------------------------------------------------------------------------------------------------

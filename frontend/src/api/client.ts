@@ -160,6 +160,7 @@ export type Me = {
   upload_max_mb?: number
   share_links?: boolean
   mcp_enabled?: boolean
+  api_enabled?: boolean
   min_password?: number
   /** The password was set through the operator's reset link; the page says so until it is put away. */
   password_reset_notice?: boolean
@@ -241,6 +242,8 @@ export type ServerSettings = {
   link_previews: boolean
   share_links: boolean
   mcp_enabled: boolean
+  /** Members may make API tokens and programs ask under /api/v1/ (NOTES-25 AC-5). */
+  api_enabled?: boolean
   /** Members' connections (their own nextasks, NOTES-19) may point into the own network. */
   connections_local_network: boolean
   ocr_languages: string[]

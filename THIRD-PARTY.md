@@ -10,6 +10,7 @@ fetched by the package managers alone: files that lie in this repository or go i
 | Noto Emoji, emoji in PDFs | `backend/app/fonts/NotoEmoji.ttf` | Google LLC | OFL-1.1 | `backend/app/fonts/OFL-notoemoji.txt` |
 | Lucide icons, the symbols of notes drawn into PDFs (SVG, written from `lucide-react`) | `backend/app/export_icons.json` | Lucide Contributors, Cole Bemis (Feather) | ISC | `frontend/public/licenses/lucide.txt` |
 | Inter for the interface (`@fontsource-variable/inter`) | in the built frontend | The Inter Project Authors | OFL-1.1 | `frontend/public/licenses/fonts.txt` |
+| Swagger UI, the page of the API description at `/api/v1/docs` (`swagger-ui-dist`) | `api-docs/` in the built frontend | SmartBear Software | Apache-2.0 | `api-docs/LICENSE`, `api-docs/NOTICE` beside it |
 
 ## Python packages with a binary inside
 

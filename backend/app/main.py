@@ -21,7 +21,7 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
-from .routers import about, auth, export, folders, health, history, invites, oidc, trash
+from .routers import about, api_v1, auth, export, folders, health, history, invites, oidc, trash
 from .routers import accounts as accounts_router
 from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
@@ -29,6 +29,7 @@ from .routers import backups as backups_router
 from .routers import locales as locales_router
 from .routers import logs as logs_router
 from .routers import mcp as mcp_router
+from .routers import nextasks as nextasks_router
 from .routers import notes as notes_router
 from .routers import notes_list as notes_list_router
 from .routers import notify as notify_router
@@ -38,9 +39,8 @@ from .routers import search as search_router
 from .routers import settings as settings_router
 from .routers import shares as shares_router
 from .routers import smart_folders as smart_folders_router
-from .routers import nextasks as nextasks_router
-from .routers import dashboard as dashboard_router
 from .routers import tags as tags_router
+from .routers import tokens as tokens_router
 from .routers import totp as totp_router
 from .routers import vault as vault_router
 from .security import HashingBusy, purge_sessions
@@ -58,7 +58,7 @@ ROUTERS = [
 #: The vault comes early: its start puts the locked notes into the hooks the others read at their own start.
 FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, search_router, history, trash,
                          notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
-                         mcp_router, oauth_router, smart_folders_router, nextasks_router, dashboard_router]
+                         mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:
@@ -209,9 +209,14 @@ async def _plain_http_error(request: Request, exc: StarletteHTTPException) -> JS
 
 
 app.add_exception_handler(Exception, unhandled_error)
+# The API for programs answers its own way (NOTES-25): codes with their status, ``fields`` for a query it cannot read.
+app.add_exception_handler(api_v1.Refused, api_v1.refused)
+app.add_exception_handler(api_v1.apiv1.BadInput, api_v1.bad_input)
 
 for module in ROUTERS + FEATURE_ROUTERS:
     app.include_router(module.router)
+app.include_router(api_v1.router)
+app.include_router(api_v1.docs_router)
 
 # The shared sign-in module learns who it runs in before the first request (vendor/nexoidc).
 oidc_store.configure()

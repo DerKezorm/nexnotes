@@ -1,4 +1,4 @@
-"""MCP over HTTP (``POST /api/mcp``, NOTES-20) and the MCP keys of an account.
+"""MCP over HTTP (``POST /api/mcp``, NOTES-20). Keys and API tokens are made and revoked in ``routers/tokens.py``.
 
 The protocol is JSON-RPC 2.0 as MCP's "Streamable HTTP" transport has it, without streams: every request gets its
 answer as ``application/json``, a notification gets 202. No session is kept; each request names its key in
@@ -9,7 +9,8 @@ Walls, in this order:
 1. A request that carries an ``Origin`` is refused (EC-4). Browsers send one, MCP clients do not: no web page can talk
    to this with a key it guessed or stole, and DNS rebinding goes nowhere. The session cookie counts for nothing here.
 2. The operator's switch (``mcp_enabled``, AC-8).
-3. A valid MCP key of an account that may sign in (EC-5); wrong keys count per sender like wrong passwords.
+3. A valid MCP key, or an API token that may be used here (NOTES-25 AC-4), of an account that may sign in (EC-5);
+   wrong keys count per sender like wrong passwords.
 4. The key's rate (EC-2).
 5. The size of the body and the shape of the arguments.
 
@@ -20,20 +21,17 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Annotated, Any
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, Path, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..db import SessionLocal
-from ..deps import Account, DbSession, client_ip
-from ..errors import error
-from ..models import TOKEN_MCP, ApiToken
+from ..deps import client_ip
 from ..security import brake as sign_in_brake
-from ..services import apitokens, logs, mcp
+from ..services import logs, mcp
 from ..services.mcp import Caller, ToolError
 from . import oauth
 
@@ -164,44 +162,3 @@ async def endpoint(request: Request) -> Response:
 def no_stream() -> Response:
     # No server-sent stream: every answer comes with its request.
     return Response(status_code=405, headers={"Allow": "POST"})
-
-
-# --- Keys, through the interface ----------------------------------------------------------------------------------
-
-
-class KeyIn(BaseModel):
-    name: str = Field(min_length=1, max_length=100)
-    level: str = Field(pattern="^(read|write)$")
-
-
-@router.get("/api/mcp/keys", summary="The account's MCP keys and connectors (name, right, last use)")
-def keys(account: Account, db: DbSession, request: Request) -> dict[str, Any]:
-    return {"allowed": mcp.allowed(db), "address": oauth.base_url(request, db) + "/api/mcp",
-            "max_keys": mcp.MAX_KEYS, "keys": [mcp.key_out(row) for row in mcp.keys_of(db, account.id)]}
-
-
-@router.post("/api/mcp/keys", status_code=201, summary="A new MCP key; the key itself is shown this once")
-def make_key(body: KeyIn, account: Account, db: DbSession) -> dict[str, Any]:
-    if not mcp.allowed(db):
-        raise error("mcp_off", "The operator has switched MCP off.", 403)
-    name = " ".join(body.name.split())
-    if not name:
-        raise error("invalid_input", "The input is not valid.", 422, fields=["name"])
-    if mcp.count_keys(db, account.id) >= mcp.MAX_KEYS:
-        raise error("mcp_too_many_keys", f"An account holds at most {mcp.MAX_KEYS} MCP keys.", 409,
-                    max=mcp.MAX_KEYS)
-    row, token = apitokens.make(db, account, name, kind=TOKEN_MCP, level=body.level)
-    logger.info("MCP key made key_id=%s level=%s", row.id, row.level)
-    return {"key": mcp.key_out(row), "token": token}
-
-
-@router.delete("/api/mcp/keys/{key_id}", status_code=204, summary="Revoke an MCP key: it stops at once")
-def revoke_key(key_id: Annotated[int, Path(ge=1, le=2**62)], account: Account, db: DbSession) -> Response:
-    row = db.get(ApiToken, key_id)
-    if row is None or row.account_id != account.id or row.kind != TOKEN_MCP:
-        raise error("not_found", "Not found.", 404)
-    db.delete(row)
-    db.commit()
-    logger.info("MCP key revoked key_id=%s", key_id)
-    return Response(status_code=204)
-

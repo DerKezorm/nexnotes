@@ -32,6 +32,7 @@
     "react-dom": "^19.2.0",
     "react-i18next": "^16.2.4",
     "react-router-dom": "^7.9.5",
+    "swagger-ui-dist": "5.34.1",
     "y-protocols": "^1.0.7",
     "y-websocket": "^3.1.0",
     "yjs": "^13.6.33"

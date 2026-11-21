@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -64,8 +64,28 @@ function serviceWorker(): Plugin {
   }
 }
 
+/** Swagger UI for the description of the API (NOTES-25 AC-25) beside the built files, with its licence: the page at
+ * `/api/v1/docs` loads nothing from the internet. Its own start script and styles are in `public/api-docs/`. */
+function apiDocs(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'api-docs',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    writeBundle() {
+      const root = new URL('./', import.meta.url)
+      const target = new URL(outDir.replace(/\\/g, '/') + '/api-docs/', root)
+      const source = new URL('node_modules/swagger-ui-dist/', root)
+      mkdirSync(target, { recursive: true })
+      for (const name of ['swagger-ui-bundle.js', 'swagger-ui.css', 'LICENSE', 'NOTICE']) copyFileSync(new URL(name, source), new URL(name, target))
+    },
+  }
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss(), iconWithChecksum(), serviceWorker()],
+  plugins: [react(), tailwindcss(), iconWithChecksum(), serviceWorker(), apiDocs()],
   build: {
     rollupOptions: {
       output: {

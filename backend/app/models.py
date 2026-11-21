@@ -269,6 +269,9 @@ TOKEN_DEVICE = "device"
 TOKEN_MCP = "mcp"
 #: A key nexdeck reads a member's card with (NOTES-21), valid under ``/api/v1/`` only.
 TOKEN_DASHBOARD = "dashboard"
+#: An API token (NOTES-25): ``/api/v1/`` with its level, ``/api/mcp`` too when ``allow_mcp``, limited to folders when
+#: ``folder_ids`` names some. The two kinds above stay valid as they were but are no longer made.
+TOKEN_API = "api"
 
 
 class ApiToken(Base):
@@ -296,6 +299,12 @@ class ApiToken(Base):
     refresh_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     refresh_old_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     signed_in_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: An API token may also be used at ``/api/mcp`` (NOTES-25 AC-4); off from the start.
+    allow_mcp: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
+    #: The folders an API token is limited to, with everything below them (NOTES-25 AC-7); ``None`` for all notes.
+    folder_ids: Mapped[Any] = mapped_column(JSON, nullable=True)
+    #: The operator blocked the token (NOTES-25 AC-27): it answers like none from then on.
+    blocked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
 
 #: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.

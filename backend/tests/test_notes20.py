@@ -107,58 +107,69 @@ def markdown_of(note_id: str) -> str:
 # --- AC-1, AC-5, AC-9: keys --------------------------------------------------------------------------------------
 
 
+def mcp_list(client: TestClient) -> list[dict]:
+    """What the member's list shows for MCP: tokens that open MCP, and connected programs (NOTES-25 AC-2)."""
+    listing = client.get("/api/tokens").json()
+    return [entry for entry in listing["tokens"] if "mcp" in entry["access"]] + listing["connectors"]
+
+
+def make_mcp(client: TestClient, name: str, level: str):
+    """A key for MCP as members make it since NOTES-25: an API token with "Auch für KI-Werkzeuge (MCP)"."""
+    return client.post("/api/tokens", json={"name": name, "level": level, "mcp": True})
+
+
 def test_notes20_ac1_a_member_makes_a_key_with_a_name_and_a_right_and_sees_it_once(client, operator):
-    made = client.post("/api/mcp/keys", json={"name": "Einkaufsliste per Chat", "level": "read"})
+    made = make_mcp(client, "Einkaufsliste per Chat", "read")
     assert made.status_code == 201, made.text
     token = made.json()["token"]
-    assert token.startswith("nn_mcp_") and len(token) > 40
-    assert made.json()["key"]["name"] == "Einkaufsliste per Chat" and made.json()["key"]["level"] == "read"
+    assert token.startswith("nn_api_") and len(token) > 40
+    assert made.json()["made"]["name"] == "Einkaufsliste per Chat" and made.json()["made"]["level"] == "read"
     # Never again: the list has no key, the database only its SHA-256.
-    listing = client.get("/api/mcp/keys").json()
-    assert token not in str(listing) and "token" not in listing["keys"][0]
+    listing = client.get("/api/tokens").json()
+    assert token not in str(listing) and "token" not in listing["tokens"][0]
     with SessionLocal() as db:
-        row = db.scalar(select(ApiToken).where(ApiToken.kind == "mcp"))
+        row = db.scalar(select(ApiToken).where(ApiToken.kind == "api"))
         assert row is not None and row.token_hash == hashlib.sha256(token.encode()).hexdigest()
         assert token not in str([getattr(row, column.name) for column in ApiToken.__table__.columns])
     # The address to give the tool comes with the list.
-    assert listing["address"].endswith("/api/mcp")
+    assert listing["address"].startswith("http")
     # The key works, with the right chosen; "read and write" is the other choice, nothing else.
     assert rpc(client, token, "ping").json()["result"] == {}
-    assert client.post("/api/mcp/keys", json={"name": "x", "level": "admin"}).status_code == 422
-    assert client.post("/api/mcp/keys", json={"name": "   ", "level": "write"}).status_code == 422
-    write = client.post("/api/mcp/keys", json={"name": "Laptop", "level": "write"})
-    assert write.status_code == 201 and write.json()["key"]["level"] == "write"
+    assert client.post("/api/tokens", json={"name": "x", "level": "admin", "mcp": True}).status_code == 422
+    assert client.post("/api/tokens", json={"name": "   ", "level": "write", "mcp": True}).status_code == 422
+    write = make_mcp(client, "Laptop", "write")
+    assert write.status_code == 201 and write.json()["made"]["level"] == "write"
 
 
 def test_notes20_ac1_an_account_holds_at_most_twenty_keys(client, operator):
-    for number in range(mcp.MAX_KEYS):
-        assert client.post("/api/mcp/keys", json={"name": f"k{number}", "level": "read"}).status_code == 201
-    too_many = client.post("/api/mcp/keys", json={"name": "one more", "level": "read"})
-    assert too_many.status_code == 409 and too_many.json()["detail"]["code"] == "mcp_too_many_keys"
+    for number in range(apitokens.MAX_TOKENS):
+        assert make_mcp(client, f"k{number}", "read").status_code == 201
+    too_many = make_mcp(client, "one more", "read")
+    assert too_many.status_code == 409 and too_many.json()["detail"]["code"] == "tokens_too_many"
 
 
 def test_notes20_ac5_a_revoked_key_stops_at_once(client, operator, anna, as_anna):
-    made = client.post("/api/mcp/keys", json={"name": "Desk", "level": "write"}).json()
+    made = make_mcp(client, "Desk", "write").json()
     token = made["token"]
     assert rpc(client, token, "ping").status_code == 200
     # Nobody else revokes it.
-    assert as_anna.delete(f"/api/mcp/keys/{made['key']['id']}").status_code == 404
+    assert as_anna.delete(f"/api/tokens/{made['made']['id']}").status_code == 404
     assert rpc(client, token, "ping").status_code == 200
-    assert client.delete(f"/api/mcp/keys/{made['key']['id']}").status_code == 204
+    assert client.delete(f"/api/tokens/{made['made']['id']}").status_code == 204
     gone = rpc(client, token, "tools/list")
     assert gone.status_code == 401 and gone.json()["detail"]["code"] == "key_invalid"
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
 
 
 def test_notes20_ac9_the_list_names_each_key_its_right_and_its_last_use(client, operator, anna):
-    read = client.post("/api/mcp/keys", json={"name": "Skript Wochenplan", "level": "read"}).json()
-    client.post("/api/mcp/keys", json={"name": "Assistent", "level": "write"})
+    read = make_mcp(client, "Skript Wochenplan", "read").json()
+    make_mcp(client, "Assistent", "write")
     key_for(anna, name="Not mine")
-    listing = client.get("/api/mcp/keys").json()["keys"]
+    listing = mcp_list(client)
     assert [(key["name"], key["level"], key["last_used_at"]) for key in listing] == [
         ("Skript Wochenplan", "read", None), ("Assistent", "write", None)]
     assert rpc(client, read["token"], "ping").status_code == 200
-    used = {key["name"]: key["last_used_at"] for key in client.get("/api/mcp/keys").json()["keys"]}
+    used = {key["name"]: key["last_used_at"] for key in mcp_list(client)}
     assert used["Skript Wochenplan"] is not None and used["Assistent"] is None
 
 
@@ -414,11 +425,11 @@ def _refresh(program: TestClient, client_id: str, refresh_token: str) -> Any:
 def test_notes20_ac7_a_connector_signs_in_with_oauth_choosing_read_or_read_and_write(client, operator):
     tokens, client_id = _connect(client, "read")
     assert tool_names(client, tokens["access_token"]) == READ_TOOLS
-    listed = client.get("/api/mcp/keys").json()["keys"]
+    listed = mcp_list(client)
     assert [(key["name"], key["level"], key["kind"]) for key in listed] == [("Chat program", "read", "connector")]
     # Signing in again with read and write gives the same connector more.
     tokens, _ = _connect(client, "write", client_id)
-    assert len(client.get("/api/mcp/keys").json()["keys"]) == 1
+    assert len(mcp_list(client)) == 1
     assert tool_names(client, tokens["access_token"]) == READ_TOOLS | WRITE_TOOLS
     made = ok(client, tokens["access_token"], "create_note", text="Einkaufsliste\n\n- [ ] Nudeln")
     assert stored(made["id"]).origin == "mcp:Chat program"
@@ -434,7 +445,7 @@ def test_notes20_ac7_a_connector_signs_in_with_oauth_choosing_read_or_read_and_w
                                                      "refresh_token": tokens["refresh_token"]})
     assert stolen.status_code == 400
     assert rpc(client, fresh.json()["access_token"], "ping").status_code == 401
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
 
 
 def test_notes20_ac7_any_spent_refresh_token_brought_again_ends_the_connector(client, operator):
@@ -449,7 +460,7 @@ def test_notes20_ac7_any_spent_refresh_token_brought_again_ends_the_connector(cl
     assert stolen.status_code == 400 and stolen.json()["error"] == "invalid_grant"
     assert rpc(client, third["access_token"], "ping").status_code == 401
     assert _refresh(program, client_id, third["refresh_token"]).status_code == 400
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
 
 
 def test_notes20_ac7_only_the_last_spent_tokens_are_kept_and_go_with_their_connector(client, operator):
@@ -462,8 +473,8 @@ def test_notes20_ac7_only_the_last_spent_tokens_are_kept_and_go_with_their_conne
         refresh = _refresh(program, client_id, refresh).json()["refresh_token"]
     with SessionLocal() as db:
         assert len(db.scalars(select(OAuthSpent)).all()) == oauth.SPENT_KEPT
-    key_id = client.get("/api/mcp/keys").json()["keys"][0]["id"]
-    assert client.delete(f"/api/mcp/keys/{key_id}").status_code in (200, 204)
+    key_id = mcp_list(client)[0]["id"]
+    assert client.delete(f"/api/tokens/{key_id}").status_code in (200, 204)
     with SessionLocal() as db:
         assert db.scalars(select(OAuthSpent)).all() == []
 
@@ -478,7 +489,7 @@ def test_notes20_ac7_a_refresh_token_spent_before_the_update_still_ends_the_conn
         db.commit()
     assert _refresh(_program(), client_id, old).status_code == 400
     assert rpc(client, tokens["access_token"], "ping").status_code == 401
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
 
 
 def test_notes20_ac7_a_code_traded_twice_ends_the_tokens_it_gave(client, operator):
@@ -495,7 +506,7 @@ def test_notes20_ac7_a_code_traded_twice_ends_the_tokens_it_gave(client, operato
     assert again.status_code == 400 and again.json()["error"] == "invalid_grant"
     assert rpc(client, access, "ping").status_code == 401
     assert _refresh(program, client_id, traded.json()["refresh_token"]).status_code == 400
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
     # Brought under another program's name, a spent code ends nothing: that is not its connector.
     code, verifier = _agree(client, client_id, redirect, "read")
     tokens = _trade(program, client_id, code, verifier, redirect).json()
@@ -511,7 +522,7 @@ def test_notes20_ac7_a_code_is_traded_only_with_the_return_address_it_was_given_
     code, verifier = _agree(client, client_id, given, "write")
     wrong = _trade(program, client_id, code, verifier, other)
     assert wrong.status_code == 400 and wrong.json()["error"] == "invalid_grant"
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
 
 
 def test_notes20_ac7_a_blocked_account_trades_no_code(client, operator):
@@ -529,7 +540,7 @@ def test_notes20_ac7_a_blocked_account_trades_no_code(client, operator):
     with SessionLocal() as db:
         db.get(Account, operator.id).blocked_at = None
         db.commit()
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
 
 
 def test_notes20_ac7_a_declined_sign_in_gives_no_code_and_strange_return_addresses_are_refused(client, operator):
@@ -553,7 +564,7 @@ def test_notes20_ac7_a_declined_sign_in_gives_no_code_and_strange_return_address
                                                      "client_id": client_id, "redirect_uri": redirect,
                                                      "code_verifier": _pkce()[0]})
     assert stolen.status_code == 400 and stolen.json()["error"] == "invalid_grant"
-    assert client.get("/api/mcp/keys").json()["keys"] == []
+    assert mcp_list(client) == []
     # The consent needs the member's own session; a key is not enough.
     assert TestClient(app, base_url="http://testserver").get("/api/oauth/authorize", params=asked).status_code == 401
 
@@ -567,9 +578,9 @@ def test_notes20_ac8_switched_off_every_tool_is_turned_away_and_no_key_is_made(c
     assert client.put("/api/settings", json={"mcp_enabled": False}).status_code == 200
     off = rpc(client, token, "tools/call", {"name": "create_note", "arguments": {"text": "x"}})
     assert off.status_code == 403 and off.json()["detail"]["code"] == "mcp_off"
-    made = client.post("/api/mcp/keys", json={"name": "Desk", "level": "read"})
+    made = make_mcp(client, "Desk", "read")
     assert made.status_code == 403 and made.json()["detail"]["code"] == "mcp_off"
-    assert client.get("/api/mcp/keys").json()["allowed"] is False
+    assert client.get("/api/tokens").json()["mcp_allowed"] is False
     assert client.get("/.well-known/oauth-authorization-server").status_code == 404
     assert client.post("/api/oauth/register", json={"redirect_uris": ["https://a.example/cb"]}).status_code == 403
     with SessionLocal() as db:

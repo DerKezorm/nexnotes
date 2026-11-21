@@ -21,10 +21,10 @@ import './history'
 import './export'
 // The member's own nextasks (NOTES-19): its card in Settings, Connections, "An nextasks" in an open note.
 import './nextasks/register'
-// MCP keys for AI tools and the consent page of connecting programs (NOTES-20), in Settings, Connections.
+// The consent page of connecting AI programs (NOTES-20).
 import './mcp/register'
-// API tokens for programs such as the nexdeck card (NOTES-21), after the MCP keys in Connections.
-import './dashboard/register'
+// API tokens for programs, AI tools and the nexdeck card (NOTES-25), in Settings, Connections.
+import './tokens/register'
 // Locked notes: their view in the editor's place, the menu entries, the vault password in Settings, Security.
 import './vault'
 // Notifications (NOTES-14): the bell of a shared note, the service worker, Web Push.
