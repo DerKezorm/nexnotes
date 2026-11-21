@@ -213,8 +213,16 @@ def test_notes18_ec3_a_caf_from_an_iphone_is_taken_and_given_out_as_what_it_is(c
 @needs_ffmpeg
 def test_notes18_a_film_is_no_recording(client, operator, tmp_path):
     note = new_note(client, title="Film")
-    answer = send(client, note["id"], video_of(tmp_path), "film.mp4", "recording")
+    # A film with sound: the sound alone does not make it a recording.
+    target = tmp_path / "film.mp4"
+    subprocess.run([FFMPEG, "-v", "error", "-y", "-f", "lavfi", "-i", "testsrc=duration=2:size=160x120:rate=10",
+                    "-f", "lavfi", "-i", "sine=frequency=440:duration=2", "-pix_fmt", "yuv420p", "-c:v", "libx264",
+                    "-c:a", "aac", "-shortest", str(target)], check=True, capture_output=True, timeout=60)
+    answer = send(client, note["id"], target.read_bytes(), "film.mp4", "recording")
     assert answer.status_code == 422 and answer.json()["detail"]["code"] == "attachment_wrong_kind"
+    # A film without sound neither.
+    answer = send(client, note["id"], video_of(tmp_path), "stumm.mp4", "recording")
+    assert answer.status_code == 422
 
 
 # --- Transcripts --------------------------------------------------------------------------------------------------
