@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { NoteIcon } from '../components/NoteIcon'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { NOTES_CHANGED_EVENT } from '../notes/api'
@@ -129,7 +130,10 @@ export function TagPage() {
               className="flex justify-between gap-3.5 border-b border-ink-800 px-2.5 py-3 hover:bg-ink-850"
             >
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-[14.5px] font-semibold text-mist-100">{note.title || t('notes.untitled')}</span>
+                <span className="flex min-w-0 items-center gap-1.5 text-[14.5px] font-semibold text-mist-100">
+                  <NoteIcon icon={note.icon} color={note.color} />
+                  <span className="truncate">{note.title || t('notes.untitled')}</span>
+                </span>
                 {note.preview && <span className="truncate text-[12.5px] text-mist-500">{note.preview}</span>}
               </span>
               <span className="shrink-0 text-[12.5px] whitespace-nowrap text-mist-500" data-testid="tag-note-where">

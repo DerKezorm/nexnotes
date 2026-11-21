@@ -601,6 +601,42 @@ describe('the pages (NOTES-4 AC-7, AC-9, AC-13, AC-14, EC-5, EC-6)', () => {
     expect(box.querySelectorAll('[data-note]')).toHaveLength(2)
   })
 
+  it('NOTES-4 AC-7 NOTES-3 AC-18 an inbox card shows the note\'s symbol in its colour; without one, where it came from', async () => {
+    const now = new Date().toISOString()
+    const card = (id: string, origin: string, look: { icon?: string; color?: string } = {}): InboxNote => ({ id, title: id, preview: '', origin, title_check: false, created_at: now, updated_at: now, icon: '', color: '', ...look })
+    inboxNotes = [
+      card('Trip', 'share:Safari', { icon: 'plane', color: 'teal' }),
+      card('Shared', 'share:Safari'),
+      card('Spoken', 'dictation'),
+      card('Asked', 'mcp:Desktop'),
+      card('Quick', 'shortcut'),
+      card('Deck', 'nexdeck'),
+      card('Typed', '', { color: 'rose' }),
+    ]
+    await render('/inbox')
+    const marks = [...box.querySelectorAll<HTMLElement>('[data-testid="inbox-card"]')].map((element) => element.querySelector<HTMLElement>('[data-testid="inbox-mark"]')!)
+    expect(marks).toHaveLength(7)
+    // With a symbol: the symbol in the note's colour on a tint of it, no sign of the origin.
+    const symbol = marks[0].querySelector<HTMLElement>('[data-testid="note-icon"]')!
+    expect(symbol.dataset.icon).toBe('plane')
+    expect((symbol.firstElementChild as HTMLElement).style.color).not.toBe('currentcolor')
+    expect(marks[0].style.background).toContain('color-mix')
+    expect(marks[0].querySelector('[data-testid="inbox-origin-icon"]')).toBeNull()
+    // Without: a quiet sign of the origin, never the inbox's tray again.
+    expect(marks.slice(1).map((mark) => mark.querySelector<HTMLElement>('[data-testid="inbox-origin-icon"]')?.dataset.origin)).toEqual(['share', 'dictation', 'mcp', 'shortcut', 'nexdeck', 'here'])
+    expect(box.querySelector('[data-testid="inbox-card"] .lucide-inbox')).toBeNull()
+    expect(marks[6].style.background).toContain('color-mix')
+    const texts = [...box.querySelectorAll('[data-testid="inbox-card"]')].map((element) => element.textContent)
+    expect(texts[4]).toContain('Via a shortcut')
+    expect(texts[5]).toContain('From nexdeck')
+    expect(texts[6]).toContain('Created here')
+    // "File" names the note with its symbol too.
+    click(button('File', box.querySelector('[data-testid="inbox-card"]')!))
+    await settle()
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.querySelector('h2 [data-testid="note-icon"]')?.getAttribute('data-icon')).toBe('plane')
+  })
+
   it('NOTES-4 EC-6 an empty inbox explains what it is for', async () => {
     await render('/inbox')
     expect(box.querySelector('[data-testid="inbox-empty"]')!.textContent).toContain('Whatever you capture quickly lands here')

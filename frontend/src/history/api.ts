@@ -19,6 +19,9 @@ export type VersionItem = {
 
 export type VersionPage = {
   versions: VersionItem[]
+  /** The note's symbol and colour for the head (NOTES-3 AC-18); empty for none. */
+  icon?: string
+  color?: string
   /** The id to ask for the next page with (`before`), or null at the end (EC-5). */
   next: number | null
   /** Written since the newest version: the note itself is newer than every version. */

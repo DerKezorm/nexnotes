@@ -536,6 +536,8 @@
         "dictation": "Diktat",
         "mcp": "Über MCP von „{{source}}“",
         "mcpAny": "Über MCP",
+        "shortcut": "Über einen Kurzbefehl",
+        "nexdeck": "Aus nexdeck",
         "here": "Hier angelegt",
         "other": "Schnell festgehalten"
       }

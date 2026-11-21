@@ -74,8 +74,8 @@ export function useFolderActions() {
     node,
     act,
     create: (parentId: string | null) => setOpen({ kind: 'create', parentId }),
-    moveNotes: (noteIds: string[], from: string | null, options: { title?: string; sortIn?: boolean; onMoved?: (target: string | null) => void } = {}) =>
-      setOpen({ kind: 'move', what: { noteIds, from, noteTitle: options.title, sortIn: options.sortIn }, onMoved: options.onMoved }),
+    moveNotes: (noteIds: string[], from: string | null, options: { title?: string; icon?: string; color?: string; sortIn?: boolean; onMoved?: (target: string | null) => void } = {}) =>
+      setOpen({ kind: 'move', what: { noteIds, from, noteTitle: options.title, noteIcon: options.icon, noteColor: options.color, sortIn: options.sortIn }, onMoved: options.onMoved }),
   }
 }
 

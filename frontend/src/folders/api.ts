@@ -23,6 +23,10 @@ export type InboxNote = {
   title_check: boolean
   created_at: string
   updated_at: string
+  /** The note's symbol and colour, as in the lists (NOTES-3 AC-18); empty for none. */
+  icon?: string
+  color?: string
+  paper?: string
 }
 
 export type Impact = { notes: number; folders: number; trash_days: number }

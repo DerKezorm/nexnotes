@@ -8,6 +8,9 @@ export type TagInfo = { key: string; label: string; count: number }
 export type TagNote = {
   id: string
   title: string
+  /** The note's symbol and colour (NOTES-3 AC-18); empty for none. */
+  icon?: string
+  color?: string
   preview: string
   updated_at: string | null
   mine: boolean

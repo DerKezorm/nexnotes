@@ -8,6 +8,9 @@ export type TrashItem = {
   kind: 'note' | 'folder'
   id: string
   title: string
+  /** Its symbol and colour (NOTES-3 AC-18); empty for none. */
+  icon?: string
+  color?: string
   deleted_at: string
   expires_at: string
   /** Whole days left by the server's clock, rounded up. */

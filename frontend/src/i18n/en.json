@@ -536,6 +536,8 @@
         "dictation": "Dictation",
         "mcp": "Via MCP from “{{source}}”",
         "mcpAny": "Via MCP",
+        "shortcut": "Via a shortcut",
+        "nexdeck": "From nexdeck",
         "here": "Created here",
         "other": "Captured quickly"
       }
