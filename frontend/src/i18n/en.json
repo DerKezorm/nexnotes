@@ -525,6 +525,7 @@
     "storage_limit_reached": "Your storage is full. New attachments only once there is room.",
     "attachment_id_taken": "This attachment belongs to another note already.",
     "attachment_empty": "The file is empty.",
+    "attachment_wrong_kind": "The file is not what it was sent as.",
     "upload_broken": "The upload broke off. The attachment is still missing.",
     "export_expired": "The export was ready for 24 hours and is gone now. Start it again.",
     "export_not_ready": "The export is not ready yet.",
