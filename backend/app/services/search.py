@@ -301,32 +301,41 @@ def ensure_schema(db: Session | None = None) -> None:
                 connection.execute(text(f'DROP TABLE IF EXISTS "{name}"'))
                 logger.info("Old search index dropped table=%s", name)
         _create(connection.execute)
-        _secure_delete(connection)
+        was_secure = _secure_delete_was_on(connection)
+    if was_secure:
+        _leave_secure_delete()
     _ready = True
 
 
-#: Whether the index overwrites what it deletes (FTS5 ``secure-delete``, SQLite 3.44 and later).
-_secure = False
-
-
-def _secure_delete(connection: Any) -> None:
-    """Entries of a deleted or rewritten row are removed from the index at once, not only marked: the content of a
-    note locked in the vault (NOTES-16) leaves nothing behind in the index's pages. Older SQLite: merged after each
-    lock instead (``forget_deleted``)."""
-    global _secure
+def _secure_delete_was_on(connection: Any) -> bool:
+    """Whether the index still runs with FTS5 ``secure-delete``, as versions before this one set it."""
     try:
-        connection.execute(_sql("INSERT INTO @index(@index, rank) VALUES('secure-delete', 1)"))
-        _secure = True
-    except Exception:  # noqa: BLE001 - an SQLite before 3.44 knows no such option
-        _secure = False
-        logger.info("The search index cannot overwrite deleted entries; it is merged after each lock instead")
+        value = connection.execute(_sql("SELECT v FROM @index_config WHERE k = 'secure-delete'")).scalar()
+    except Exception:  # noqa: BLE001 - no such row or table: the option was never set
+        return False
+    return bool(value)
+
+
+def _leave_secure_delete() -> None:
+    """FTS5 ``secure-delete`` breaks the index: a row rewritten often (a long note, each save) and then deleted leaves
+    the index "malformed" (SQLite 3.50; PRAGMA integrity_check says so, and a backup of such a database is refused as
+    damaged). The index runs without it; what deleted rows leave in it goes when it is merged after a lock
+    (``forget_deleted``), and freed pages are overwritten (``PRAGMA secure_delete``). An index the option broke
+    already is built anew from the texts it keeps; once, as the option is turned off."""
+    with engine.begin() as connection:
+        connection.execute(_sql("INSERT INTO @index(@index, rank) VALUES('secure-delete', 0)"))
+    try:
+        with engine.begin() as connection:
+            connection.execute(_sql("INSERT INTO @index(@index, rank) VALUES('integrity-check', 0)"))
+        return
+    except Exception as exc:  # noqa: BLE001 - SQLite says "malformed" as an error
+        logger.warning("The search index was damaged and is built anew: %s", exc.__class__.__name__)
+    with engine.begin() as connection:
+        connection.execute(_sql("INSERT INTO @index(@index) VALUES('rebuild')"))
 
 
 def forget_deleted() -> None:
-    """After a note was locked: without ``secure-delete`` the index is merged into one segment, which drops what was
-    deleted from it."""
-    if _secure:
-        return
+    """After a note was locked: the index is merged into one segment, which drops what was deleted from it."""
     with engine.begin() as connection:
         connection.execute(_sql("INSERT INTO @index(@index) VALUES('optimize')"))
 

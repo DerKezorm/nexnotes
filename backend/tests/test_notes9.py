@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 import threading
 import time
 import uuid
@@ -562,6 +563,56 @@ def test_notes9_hook_registers_once(client, operator):
     search.register_hooks()
     search.register_hooks()
     assert notes.TEXT_WRITTEN.count(search.index_note) == 1
+
+
+def index_problems() -> list[str]:
+    """What SQLite's check says of the database, the search index included; ``["ok"]`` when whole."""
+    with engine.connect() as connection:
+        return [row[0] for row in connection.exec_driver_sql("PRAGMA integrity_check").fetchall()]
+
+
+def rewrite_long_note_and_delete(client) -> str:
+    """A long note saved a hundred times, then deleted for good and dropped from the index: what broke the index under
+    FTS5 ``secure-delete`` (SQLite 3.50: "malformed inverted index"). Returns the title of a note left beside it."""
+    new_note(client, "Bleibt", "Kartoffel")
+    long_note = new_note(client, "Handbuch", "Kapitel")
+    words = ["milch", "brot", "eier", "kapitel", "notiz", "einkauf", "termin", "rechnung"]
+    chance = random.Random(1)
+    for _ in range(100):
+        put_text(long_note, "Handbuch", " ".join(chance.choice(words) for _ in range(1000)))
+    with SessionLocal() as db:
+        db.delete(db.get(Note, long_note))
+        db.commit()
+    search._cleanup()
+    return "Bleibt"
+
+
+def test_notes9_index_a_long_note_saved_often_and_then_deleted_leaves_the_index_whole(client, operator):
+    kept = rewrite_long_note_and_delete(client)
+    assert index_problems() == ["ok"]
+    assert titles(find(client, "kartoffel")) == [kept]
+
+
+def break_index_like_before(client) -> None:
+    """The index as versions before this one left it: FTS5 ``secure-delete`` on, and broken by it."""
+    with engine.begin() as connection:
+        connection.execute(search._sql("INSERT INTO @index(@index, rank) VALUES('secure-delete', 1)"))
+    rewrite_long_note_and_delete(client)
+    assert any("search_index" in line for line in index_problems())
+
+
+def test_notes9_index_broken_by_secure_delete_is_built_anew_at_the_start(client, operator):
+    try:
+        break_index_like_before(client)
+    finally:
+        search.ensure_schema()
+    assert index_problems() == ["ok"]
+    with engine.connect() as connection:
+        assert connection.execute(search._sql("SELECT v FROM @index_config WHERE k = 'secure-delete'")).scalar() == 0
+    assert titles(find(client, "kartoffel")) == ["Bleibt"]
+    # Once: a whole index is not built again at the next start.
+    with engine.connect() as connection:
+        assert search._secure_delete_was_on(connection) is False
 
 
 def test_notes9_older_index_versions_are_dropped(client, operator):
