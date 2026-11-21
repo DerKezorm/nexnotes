@@ -4,6 +4,7 @@
  * note of 30,000 words, deleting with "Undo", leaving without a title. The page is the operator of global-setup.ts.
  */
 import { expect, test, type Browser, type Page, type WebSocketRoute } from '@playwright/test'
+import { OPERATOR } from './global-setup'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-notes000' }
 const LIVE = /\/api\/notes\/[^/]+\/live$/
@@ -162,6 +163,9 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which i
   await page.keyboard.press('Enter')
   await page.keyboard.type('Dentist Tuesday 15:30 confirm, bring the booklet')
   await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  // Typed at once after Enter: every key in the text, none in the title.
+  await expect(page.getByTestId('note-title')).toHaveValue('')
+  await expect(body(page)).toHaveText('Dentist Tuesday 15:30 confirm, bring the booklet')
   const id = page.url().split('/notes/')[1].split('?')[0]
   await page.getByRole('link', { name: 'All notes' }).click()
   const dialog = page.getByTestId('leave-dialog')
@@ -170,13 +174,49 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which i
   await page.getByTestId('leave-take').click()
   await expect(page).not.toHaveURL(/\/notes\//)
   await expect.poll(async () => (await head(page, id)).title_check).toBe(true)
-  const row = page.getByTestId('note-row').filter({ hasText: 'Dentist Tuesday 15:30 confirm' })
+  // This very note's row (a repeated run leaves notes of the same words behind).
+  const row = page.locator(`[data-testid="note-row"][href="/notes/${id}"]`)
+  await expect(row).toContainText('Dentist Tuesday 15:30 confirm')
   await expect(row).toContainText('Check title')
   // "Title OK" takes the mark away (AC-10).
   await row.click()
   await page.getByTestId('title-ok').click()
   await expect(page.getByTestId('title-check')).toHaveCount(0)
   expect((await head(page, id)).title_check).toBe(false)
+})
+
+test("NOTES-3 AC-9 the browser's back button asks too and goes back only with the suggestion", async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('new-note').click()
+  await expect(page.getByTestId('note-title')).toBeFocused()
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('Pick up the parcel at the post office')
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  const here = page.url()
+  const id = here.split('/notes/')[1].split('?')[0]
+  const dialog = page.getByTestId('leave-dialog')
+  await page.goBack()
+  await expect(dialog).toBeVisible()
+  await expect(page).toHaveURL(here)
+  // "Enter a title": the note stays, the cursor in the title.
+  await page.getByTestId('leave-type').click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL(here)
+  await expect(page.getByTestId('note-title')).toBeFocused()
+  // Back once more: the suggestion, and the step back is made.
+  await page.goBack()
+  await expect(dialog).toBeVisible()
+  await expect(page.getByTestId('leave-suggestion')).toHaveText('Pick up the parcel at the post office')
+  await page.getByTestId('leave-take').click()
+  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect.poll(async () => (await head(page, id)).title).toBe('Pick up the parcel at the post office')
+  // Forward again: the note has its title now, nothing asks.
+  await page.goForward()
+  await expect(page).toHaveURL(here)
+  await expect(page.getByTestId('note-title')).toHaveValue('Pick up the parcel at the post office')
+  await page.goBack()
+  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect(dialog).toHaveCount(0)
 })
 
 test('NOTES-3 EC-4 a new note left without title and text leaves nothing behind', async ({ page }) => {
@@ -187,4 +227,103 @@ test('NOTES-3 EC-4 a new note left without title and text leaves nothing behind'
   await page.getByRole('link', { name: 'All notes' }).click()
   await expect(page.getByTestId('leave-dialog')).toHaveCount(0)
   await expect.poll(async () => ((await (await page.request.get('/api/notes')).json()) as Head[]).length).toBe(before)
+})
+
+/** Connections the page opened to a note's live room. */
+function countLive(page: Page): () => number {
+  let opened = 0
+  page.on('websocket', (ws) => {
+    if (LIVE.test(new URL(ws.url()).pathname)) opened++
+  })
+  return () => opened
+}
+
+test('NOTES-12 EC-2 a note in the trash opened by its address says so, offers it back and does not reconnect', async ({ page }) => {
+  const note = await makeNote(page, { title: `Binned ${Date.now()}`, markdown: 'in the trash already' })
+  expect((await page.request.delete(`/api/notes/${note.id}`, { headers: TAB })).status()).toBe(204)
+  const opened = countLive(page)
+  await page.goto(`/notes/${note.id}`)
+  const stopped = page.getByTestId('stopped-bar')
+  await expect(stopped).toContainText('This note was deleted and is in the trash.')
+  await expect(page.getByTestId('note-editor')).toHaveAttribute('data-status', 'gone')
+  await expect(page.getByTestId('note-title')).toHaveAttribute('readonly', '')
+  await expect(page.getByTestId('note-saved')).toHaveCount(0)
+  // The room said 4404 once; nothing knocks again.
+  await page.waitForTimeout(2500)
+  expect(opened()).toBe(1)
+  await stopped.getByRole('button', { name: 'Restore from the trash' }).click()
+  await expect(stopped).toHaveCount(0)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  await expect(page.getByTestId('note-title')).toHaveValue(note.title)
+  await expect(body(page)).toContainText('in the trash already')
+})
+
+test('NOTES-12 EC-2 a note deleted while the connection was away says so on the way back, nothing claims to wait', async ({ page }) => {
+  const note = await makeNote(page, { title: 'Deleted behind my back', markdown: 'start' })
+  let offline = false
+  const sockets: WebSocketRoute[] = []
+  await page.routeWebSocket(LIVE, (ws) => {
+    if (offline) {
+      ws.close({ code: 4000, reason: 'tunnel' })
+      return
+    }
+    sockets.push(ws)
+    ws.connectToServer()
+  })
+  await page.goto(`/notes/${note.id}`)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  offline = true
+  for (const ws of sockets) await ws.close({ code: 4000, reason: 'tunnel' })
+  await expect(page.getByTestId('offline-bar')).toBeVisible()
+  await body(page).click()
+  await page.keyboard.type(' written away')
+  await expect(page.getByTestId('note-saved')).toHaveText(/changes? waiting/)
+  // Meanwhile the note goes to the trash (another window, another device).
+  expect((await page.request.delete(`/api/notes/${note.id}`, { headers: TAB })).status()).toBe(204)
+  offline = false
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.getByTestId('stopped-bar')).toContainText('This note was deleted and is in the trash.')
+  await expect(page.getByTestId('offline-bar')).toHaveCount(0)
+  await expect(page.getByTestId('note-saved')).toHaveCount(0)
+  await expect(page.getByTestId('note-editor')).toHaveAttribute('data-status', 'gone')
+  const opened = sockets.length
+  await page.waitForTimeout(2500)
+  expect(sockets.length).toBe(opened)
+})
+
+test('NOTES-12 EC-5 a session ended while the connection was away ends the note with a hint, not with waiting for ever', async ({ browser }) => {
+  // A browser of its own with a session of its own, so that signing it out leaves the other tests' session alone.
+  const context = await browser.newContext({ storageState: undefined })
+  const page = await context.newPage()
+  const signed = await page.request.post('/api/auth/login', { data: OPERATOR, headers: TAB })
+  expect(signed.ok()).toBe(true)
+  const note = await makeNote(page, { title: 'Session goes', markdown: 'start' })
+  let offline = false
+  const sockets: WebSocketRoute[] = []
+  await page.routeWebSocket(LIVE, (ws) => {
+    if (offline) {
+      ws.close({ code: 4000, reason: 'tunnel' })
+      return
+    }
+    sockets.push(ws)
+    ws.connectToServer()
+  })
+  await page.goto(`/notes/${note.id}`)
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  offline = true
+  for (const ws of sockets) await ws.close({ code: 4000, reason: 'tunnel' })
+  await body(page).click()
+  await page.keyboard.type(' never arrives')
+  await expect(page.getByTestId('note-saved')).toHaveText(/changes? waiting/)
+  expect((await page.request.post('/api/auth/logout', { headers: TAB })).status()).toBe(204)
+  offline = false
+  await page.evaluate(() => window.dispatchEvent(new Event('online')))
+  await expect(page.getByTestId('note-editor')).toHaveAttribute('data-status', 'forbidden')
+  await expect(page.getByTestId('stopped-bar')).toContainText('You no longer have access to this note. What has not arrived is not saved.')
+  await expect(page.getByTestId('offline-bar')).toHaveCount(0)
+  await expect(page.getByTestId('note-saved')).toHaveCount(0)
+  const opened = sockets.length
+  await page.waitForTimeout(2500)
+  expect(sockets.length).toBe(opened)
+  await context.close()
 })

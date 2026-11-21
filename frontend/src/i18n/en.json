@@ -256,8 +256,10 @@
       "rowUp": "Move row up"
     },
     "tasks": {
+      "checkbox": "Tick off: {{text}}",
       "count": "{{done}} of {{count}}",
-      "doneToBottom": "Done to the bottom"
+      "doneToBottom": "Done to the bottom",
+      "empty": "empty item"
     },
     "textLabel": "Text of the note",
     "titleLabel": "Title",

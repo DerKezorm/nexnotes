@@ -200,11 +200,12 @@ class SimClient:
 
     # --- awareness ----------------------------------------------------------------------------------------------------
 
-    def announce(self, state: str) -> None:
+    def announce(self, state: str, *, client: int | None = None, clock: int = 1) -> None:
+        """An awareness update for one client: this one's own unless ``client`` names another."""
         inner = Encoder()
         inner.write_var_uint(1)
-        inner.write_var_uint(self.doc.client_id)
-        inner.write_var_uint(1)
+        inner.write_var_uint(self.doc.client_id if client is None else client)
+        inner.write_var_uint(clock)
         inner.write_var_string(state)
         data = inner.to_bytes()
         self._send(bytes([YMessageType.AWARENESS]) + write_var_uint(len(data)) + data)

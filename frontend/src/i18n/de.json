@@ -256,8 +256,10 @@
       "rowUp": "Zeile nach oben"
     },
     "tasks": {
+      "checkbox": "Punkt abhaken: {{text}}",
       "count": "{{done}} von {{count}}",
-      "doneToBottom": "Erledigtes nach unten"
+      "doneToBottom": "Erledigtes nach unten",
+      "empty": "leerer Punkt"
     },
     "textLabel": "Text der Notiz",
     "titleLabel": "Titel",

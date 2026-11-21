@@ -8,7 +8,7 @@ import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'
 
 import i18n from '../i18n'
-import { caretLook, colorFor, OWN_COLOR, PERSON_COLORS, presenceFromAwareness, presenceOf, presenceSentence } from './presence'
+import { caretLook, colorFor, colorsFor, OWN_COLOR, PERSON_COLORS, presenceFromAwareness, presenceOf, presenceSentence } from './presence'
 import { PresenceBar } from './PresenceBar'
 
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
@@ -40,6 +40,32 @@ describe('presence', () => {
     return import(/* @vite-ignore */ fsName).then((fs) => {
       expect((fs as Files).readFileSync('src/editor/editor.css', 'utf-8')).toMatch(/caret-color: var\(--color-accent-500\)/)
     })
+  })
+
+  it('NOTES-12 AC-6 people whose places in the row meet still get colours of their own in one note, the same in every window', () => {
+    // 1, 9 and 17 share a place (modulo 8); with 2 and 3 next to them in the row.
+    const everyone = [1, 9, 17, 2, 3]
+    const colors = colorsFor(everyone)
+    expect(new Set(colors.values()).size).toBe(everyone.length)
+    for (const color of colors.values()) expect(PERSON_COLORS).toContain(color)
+    // The lowest id keeps its place; the others take the next free one along the row.
+    expect(colors.get(1)).toBe(PERSON_COLORS[1])
+    expect(colors.get(2)).toBe(PERSON_COLORS[2])
+    expect(colors.get(3)).toBe(PERSON_COLORS[3])
+    expect(colors.get(9)).toBe(PERSON_COLORS[4])
+    expect(colors.get(17)).toBe(PERSON_COLORS[5])
+    // Every window counts the same people, so 17 looks alike to 1 and to 9.
+    const seenBy = (me: number) => presenceOf(states(everyone.map((account, index) => [index + 1, account, `P${account}`])), everyone.indexOf(me) + 1, me)
+    const of = (presence: ReturnType<typeof presenceOf>, account: number) => presence.people.find((person) => person.accountId === account)?.color
+    expect(of(seenBy(1), 17)).toBe(colors.get(17))
+    expect(of(seenBy(9), 17)).toBe(colors.get(17))
+    expect(new Set(seenBy(1).people.map((person) => person.color)).size).toBe(4)
+    expect(caretLook({ accountId: 17, name: 'P17' }, 1, 'you, other window', everyone).color).toBe(colors.get(17))
+    // Without anybody sharing its place, a person has the same colour in every note.
+    expect(colorFor(5, [1, 2])).toBe(colorFor(5, [6, 20]))
+    expect(colorFor(5)).toBe(PERSON_COLORS[5])
+    // Nine people: the row starts again, never honey.
+    expect(new Set(colorsFor([1, 2, 3, 4, 5, 6, 7, 8, 9]).values()).size).toBe(PERSON_COLORS.length)
   })
 
   it('NOTES-12 AC-5 the others at the top: initials and who is here too', async () => {

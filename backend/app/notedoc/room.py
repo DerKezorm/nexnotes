@@ -23,7 +23,10 @@ What the room does:
   (``NoteStore.fold`` with the state, the title and the plain text).
 * **Text for search** is refreshed ``summary_delay`` seconds after a change (``NoteStore.summary``).
 * **Awareness** (who is here, where the caret is) is passed on and remembered; when a connection goes, the others are
-  told its clients left.
+  told its clients left. It is bound to the connection: ``user.accountId`` and ``user.name`` are replaced by the
+  connection's own, and a client id another connection announced is not taken (only another connection of the same
+  account may take it over, the same window coming back), so nobody appears as someone else or removes someone else's
+  presence. At most ``MAX_AWARENESS_CLIENTS`` client ids per connection.
 * **Concurrent deletion:** text typed into a paragraph that someone else deleted at the same time comes back as a
   paragraph of its own (``rescue.py``, EC-1), and shapes the schema refuses after concurrent deletions (a checklist
   without items) are mended (``doc.repair``), both as a change of the server after the update.
@@ -46,9 +49,9 @@ Hooking it into the app (one ``Rooms`` per process, nexnotes runs one worker)::
     async def live(socket: WebSocket, note_id: str):
         account, session = authenticate(socket)          # cookie session, like the REST API
         access = right_for(account, note_id)             # "write" / "read" / none
+        await socket.accept()                            # first: a close before it reaches a browser as 1006
         if access is None:
             await socket.close(CLOSE_FORBIDDEN); return
-        await socket.accept()
         await rooms.serve(socket, note_id, account_id=account.id, name=account.name,
                           can_write=access == "write", session=session)
 
@@ -70,6 +73,7 @@ from __future__ import annotations
 
 import asyncio
 import enum
+import json
 import logging
 import time
 from collections.abc import Awaitable, Callable
@@ -432,15 +436,18 @@ class Rooms:
         elif kind == YMessageType.AWARENESS:
             if len(message) > s.MAX_AWARENESS:
                 raise _Close(CLOSE_TOO_LARGE)
-            clients = _awareness_clients(message[1:])
-            if clients is None:
+            entries = _awareness_entries(message[1:])
+            if entries is None:
                 raise _Close(CLOSE_BAD)
-            if len(peer.clients | set(clients)) > s.MAX_AWARENESS_CLIENTS:
+            kept = _own_awareness(room, peer, entries)
+            if len(peer.clients | {client for client, _, _ in kept}) > s.MAX_AWARENESS_CLIENTS:
                 raise _Close(CLOSE_BAD)
-            for client in clients:
+            if not kept:
+                return
+            for client, clock, state in kept:
                 peer.clients.add(client)
-                room.awareness[client] = message
-            await room.send(message, skip=peer)
+                room.awareness[client] = _awareness_message([(client, clock, state)])
+            await room.send(_awareness_message(kept), skip=peer)
         elif kind == MESSAGE_QUERY_AWARENESS:
             for data in list(room.awareness.values()):
                 await _send(peer, data)
@@ -584,18 +591,62 @@ def fold_stored(state: bytes | None, updates: list[bytes]) -> Folded:
 # --- awareness ----------------------------------------------------------------------------------------------------
 
 
-def _awareness_clients(message: bytes) -> list[int] | None:
-    """The client ids an awareness update speaks for (count, then id, clock, state per client); None when broken."""
+#: One client's entry of an awareness update: client id, clock, state (a JSON object, or ``None`` when it left).
+AwarenessEntry = tuple[int, int, "dict[str, Any] | None"]
+
+
+def _awareness_entries(message: bytes) -> list[AwarenessEntry] | None:
+    """The entries of an awareness update (count, then id, clock, state as JSON per client); None when broken or when a
+    state is neither an object nor ``null``."""
     try:
         decoder = Decoder(read_message(message))
-        clients = []
+        entries: list[AwarenessEntry] = []
         for _ in range(decoder.read_var_uint()):
-            clients.append(decoder.read_var_uint())
-            decoder.read_var_uint()
-            decoder.read_var_string()
-        return clients
+            client = decoder.read_var_uint()
+            clock = decoder.read_var_uint()
+            state = json.loads(decoder.read_var_string())
+            if state is not None and not isinstance(state, dict):
+                return None
+            entries.append((client, clock, state))
+        return entries
     except Exception:  # noqa: BLE001 - a malformed awareness message
         return None
+
+
+def _own_awareness(room: Room, peer: Peer, entries: list[AwarenessEntry]) -> list[AwarenessEntry]:
+    """What a connection may say about who is here: only its own clients, and only as the account it is.
+
+    * ``user.accountId`` and ``user.name`` are the connection's own, whatever the browser wrote: nobody shows up as
+      someone else, or as "du, anderes Fenster" of the one looking (NOTES-12 AC-5, EC-8).
+    * A client id another connection announced is not this one's: its entries are dropped, so nobody moves or removes
+      the presence of another person. Another connection of the same account may take it over: that is the same
+      window coming back before the room noticed its old connection broke."""
+    kept: list[AwarenessEntry] = []
+    for client, clock, state in entries:
+        owner = next((other for other in room.peers if other is not peer and client in other.clients), None)
+        if owner is not None:
+            if owner.account_id != peer.account_id:
+                logger.warning("Awareness for a client of another connection dropped note=%s account=%s",
+                               room.note_id, peer.account_id)
+                continue
+            owner.clients.discard(client)
+        if state is not None:
+            user = state.get("user")
+            state = {**state, "user": {**(user if isinstance(user, dict) else {}),
+                                       "accountId": peer.account_id, "name": peer.name}}
+        kept.append((client, clock, state))
+    return kept
+
+
+def _awareness_message(entries: list[AwarenessEntry]) -> bytes:
+    inner = Encoder()
+    inner.write_var_uint(len(entries))
+    for client, clock, state in entries:
+        inner.write_var_uint(client)
+        inner.write_var_uint(clock)
+        inner.write_var_string(json.dumps(state, ensure_ascii=False, separators=(",", ":")))
+    data = inner.to_bytes()
+    return bytes([YMessageType.AWARENESS]) + write_var_uint(len(data)) + data
 
 
 def _awareness_clock(message: bytes, wanted: int) -> int:
@@ -613,10 +664,4 @@ def _awareness_clock(message: bytes, wanted: int) -> int:
 
 
 def _awareness_gone(client: int, clock: int) -> bytes:
-    inner = Encoder()
-    inner.write_var_uint(1)
-    inner.write_var_uint(client)
-    inner.write_var_uint(clock)
-    inner.write_var_string("null")
-    data = inner.to_bytes()
-    return bytes([YMessageType.AWARENESS]) + write_var_uint(len(data)) + data
+    return _awareness_message([(client, clock, None)])

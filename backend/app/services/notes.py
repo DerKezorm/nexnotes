@@ -269,10 +269,13 @@ def nudge_all() -> None:
 
 
 async def shutdown() -> None:
-    """At a stop: every room folded, every connection told to come back (NOTES-12 EC-7)."""
-    for task in list(_leaving):
-        task.cancel()
+    """At a stop: every room folded, every connection told to come back (NOTES-12 EC-7). Only this loop's own: the
+    tests run several apps at once (a second client, a real server), and one stopping must not cancel what waits in
+    another's loop (from another thread, too)."""
     loop = asyncio.get_running_loop()
+    for task in list(_leaving):
+        if task.get_loop() is loop:
+            task.cancel()
     found = _rooms.pop(loop, None)
     if found is not None:
         await found.shutdown()
@@ -370,7 +373,8 @@ def copy_title(title: str, suffix: str) -> str:
 
 async def duplicate(account: Account, note_id: str) -> Note:
     """A copy in the same folder with "(Kopie)" after the title (NOTES-3 AC-7): the text as it is now, a new document
-    with its own history."""
+    with its own history. The copy is the copier's own: from a folder of somebody else (a note shared with them,
+    NOTES-13) it goes into the copier's inbox, never into the other's folder."""
 
     def read(doc: Any) -> tuple[str, dict[str, Any]]:
         return notedoc.title_of(doc), notedoc.to_json(doc)
@@ -383,6 +387,9 @@ async def duplicate(account: Account, note_id: str) -> Note:
     title = copy_title(title, copy_suffix(account))
     document = notedoc.new_doc(title, body)
     with SessionLocal() as db:
+        folder = db.get(Folder, folder_id) if folder_id else None
+        if folder is None or folder.owner_id != account.id:
+            folder_id = inbox_for(db, account.id).id
         now = utcnow()
         note = Note(owner_id=account.id, folder_id=folder_id, title=title, origin=origin,
                     ydoc=document.get_update(), text=to_plain(document), created_at=now, updated_at=now,
@@ -510,6 +517,9 @@ async def after_last_left(note_id: str, grace: float | None = None) -> None:
             await suggest(note_id)
     except notedoc.FormatError:
         return
+    except Exception:
+        # A task nobody awaits: without this its failure (a database lock that did not end) would vanish unseen.
+        logger.exception("Tidying a note after the last one left failed note=%s", note_id)
 
 
 def schedule_after_leave(note_id: str) -> None:

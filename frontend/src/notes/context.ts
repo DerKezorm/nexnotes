@@ -1,7 +1,7 @@
 /**
  * Leaving a note. An open note without a title may not be left inside nexnotes (NOTES-3 AC-9): the editor puts up a
- * guard (`setLeaveGuard`), every way out inside the app asks it first (`tryLeave`), and the editor catches links
- * anywhere on the page too.
+ * guard (`setLeaveGuard`), every way out inside the app asks it first (`tryLeave`), the editor catches links
+ * anywhere on the page too, and the browser's back and forward buttons (`setPopGuard`).
  */
 
 /** Answers whether leaving must wait; if it must, it calls `proceed` itself once the member decided. */
@@ -11,6 +11,25 @@ let guard: LeaveGuard | null = null
 
 export function setLeaveGuard(next: LeaveGuard | null): void {
   guard = next
+}
+
+/** Answers whether a step of the browser's back or forward button is the open note's to handle (true: the router
+ * never sees it). */
+export type PopGuard = (event: PopStateEvent) => boolean
+
+let popGuard: PopGuard | null = null
+
+export function setPopGuard(next: PopGuard | null): void {
+  popGuard = next
+}
+
+// Listening from the moment this module loads, before the router (BrowserRouter, no data router, so no `useBlocker`)
+// adds its own listener: listeners on the window run in the order they came, and once the router has the event the
+// page has moved on (the note unmounted, its guard gone).
+if (typeof window !== 'undefined') {
+  window.addEventListener('popstate', (event) => {
+    if (popGuard?.(event)) event.stopImmediatePropagation()
+  })
 }
 
 /** Leaves at once, or after the open note had its say. */

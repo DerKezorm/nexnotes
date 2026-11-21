@@ -23,6 +23,7 @@ from app.notedoc.room import (
     CLOSE_TOO_LARGE,
     Access,
     Rooms,
+    _awareness_entries,
     fold_stored,
 )
 
@@ -346,6 +347,106 @@ def test_notes12_awareness_is_passed_on_and_gone_clients_are_said_goodbye():
         a.disconnect()
         await world.settle()
         assert any(message.endswith(b"null") for message in b.awareness.values())
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def _seen(client) -> dict[int, dict | None]:
+    """What a connection learned about who is here: the last state per client id."""
+    states: dict[int, dict | None] = {}
+    for message in client.awareness.values():
+        for client_id, _clock, state in _awareness_entries(message[1:]) or []:
+            states[client_id] = state
+    return states
+
+
+def test_notes12_ac5_ec8_awareness_names_the_account_of_the_connection_not_what_the_browser_wrote():
+    async def scenario():
+        world = World()
+        a, b = await _pair(world)
+        # a claims to be b (whose other window it would then be) under another name.
+        a.announce('{"user":{"accountId":2,"name":"Chef <b>vom</b> Dienst","color":"#f2c14e"},"cursor":{"x":1}}')
+        await world.settle()
+        state = _seen(b)[1001]
+        assert state["user"]["accountId"] == 1
+        assert state["user"]["name"] == "a"
+        assert state["cursor"] == {"x": 1}
+        # Who comes later is told the same.
+        late = world.client("c", 3, client_id=3003)
+        late.connect()
+        await world.settle()
+        assert _seen(late)[1001]["user"] == {"accountId": 1, "name": "a", "color": "#f2c14e"}
+        # A state that is not an object is not an awareness state.
+        a.announce('"just a string"')
+        await world.settle()
+        assert a.closed == [CLOSE_BAD]
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_notes12_awareness_for_a_client_of_another_person_is_dropped_and_cannot_remove_them():
+    async def scenario():
+        world = World()
+        a, b = await _pair(world)
+        b.announce('{"user":{"name":"b"}}')
+        await world.settle()
+        watcher = world.client("c", 3, client_id=3003)
+        watcher.connect()
+        await world.settle()
+        assert _seen(watcher)[2002]["user"]["accountId"] == 2
+        # a speaks for b's client: moving it, then removing it.
+        a.announce('{"user":{"name":"b"},"cursor":"moved"}', client=2002, clock=5)
+        a.announce("null", client=2002, clock=6)
+        await world.settle()
+        assert _seen(watcher)[2002] == {"user": {"name": "b", "accountId": 2}}
+        assert a.closed == []
+        room = world.rooms.room_of("note")
+        assert _awareness_entries(room.awareness[2002][1:])[0][2]["user"]["accountId"] == 2
+        # a leaving says goodbye for its own clients only.
+        a.disconnect()
+        await world.settle()
+        assert _seen(watcher)[2002] is not None
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_notes12_ec8_the_same_account_may_take_over_its_own_client_coming_back():
+    async def scenario():
+        world = World()
+        a, b = await _pair(world)
+        a.announce('{"user":{"name":"a"}}')
+        await world.settle()
+        # The same window back on a new connection before the room noticed the old one broke.
+        again = world.client("a2", 1, client_id=4004)
+        again.connect()
+        await world.settle()
+        again.announce('{"user":{"name":"a"},"cursor":"back"}', client=1001, clock=2)
+        await world.settle()
+        assert _seen(b)[1001]["cursor"] == "back"
+        a.disconnect()
+        await world.settle()
+        assert _seen(b)[1001] is not None  # the old connection's goodbye no longer covers it
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_notes12_one_connection_speaks_for_at_most_max_awareness_clients():
+    async def scenario():
+        world = World()
+        a, b = await _pair(world)
+        for client in range(1, s.MAX_AWARENESS_CLIENTS + 1):
+            a.announce('{"user":{"name":"a"}}', client=10_000 + client)
+        await world.settle()
+        assert a.closed == []
+        assert len(_seen(b)) == s.MAX_AWARENESS_CLIENTS
+        a.announce('{"user":{"name":"a"}}', client=10_000 + s.MAX_AWARENESS_CLIENTS + 1)
+        await world.settle()
+        assert a.closed == [CLOSE_BAD]
+        assert b.closed == []
         await world.rooms.shutdown()
 
     asyncio.run(scenario())

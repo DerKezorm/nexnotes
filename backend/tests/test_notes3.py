@@ -2,18 +2,21 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
+from collections import defaultdict
 
 import pytest
 from fastapi.testclient import TestClient
 from pycrdt import XmlFragment
 
-from app.db import SessionLocal
+from app.db import BUSY_SECONDS, SessionLocal
 from app.models import FOLDER_NORMAL, Account, Folder, Note, NoteUpdate
 from app.notedoc import doc as notedoc
 from app.notedoc import edit
 from app.notedoc.markdown import to_plain
+from app.notedoc.room import Access
 from app.security import start_session
 from app.services import content, notes
 from app.services.inbox import inbox_for
@@ -185,6 +188,27 @@ def test_notes3_ac7_the_copy_title_stays_within_120_characters(client, operator)
     assert len(title) <= 120 and title.endswith(" (Kopie)")
 
 
+def test_notes3_ac7_a_copy_of_somebody_else_s_note_goes_into_the_own_inbox(client, operator, monkeypatch):
+    """Ready for sharing (NOTES-13): the copy belongs to who made it, never into a folder of the note's owner."""
+    kitchen = folder(operator, "Kitchen")
+    note = new_note(client, folder_id=kitchen, title="Shared shopping", markdown="- [ ] Milk")
+    other = make_account("other")
+    monkeypatch.setattr(notes, "ACCESS_RULES", [lambda _db, account, _note: Access.READ if account.id == other.id
+                                                else None])
+    theirs = new_client(other)
+    answer = theirs.post(f"/api/notes/{note['id']}/duplicate")
+    assert answer.status_code == 201
+    made = answer.json()
+    with SessionLocal() as db:
+        assert made["folder_id"] == inbox_for(db, other.id).id
+        copy = db.get(Note, made["id"])
+        assert copy.owner_id == other.id
+        assert db.get(Folder, copy.folder_id).owner_id == other.id
+    assert notedoc.to_json(stored_doc(made["id"])) == notedoc.to_json(stored_doc(note["id"]))
+    # The owner's own copy stays beside the note.
+    assert client.post(f"/api/notes/{note['id']}/duplicate").json()["folder_id"] == kitchen
+
+
 # --- AC-8 ---------------------------------------------------------------------------------------------------------
 
 
@@ -201,18 +225,58 @@ def test_notes3_ac8_the_head_names_folder_path_created_and_changed(client, opera
 # --- AC-9, AC-10, EC-4, EC-5, EC-12 -------------------------------------------------------------------------------
 
 
-def test_notes3_ac10_a_tab_closed_without_a_title_gets_the_suggestion(client, operator):
+@pytest.fixture
+def after_leave(monkeypatch: pytest.MonkeyPatch) -> dict[str, threading.Event]:
+    """Set per note once the work after the last one left (``notes.after_last_left``) is over: a test waits for that
+    event, not for a guessed time. Its bound is ``AFTER_LEAVE_BOUND``."""
+    done: dict[str, threading.Event] = defaultdict(threading.Event)
+    real = notes.after_last_left
+
+    async def watched(note_id: str, grace: float | None = None) -> None:
+        try:
+            await real(note_id, grace)
+        finally:
+            done[note_id].set()
+
+    monkeypatch.setattr(notes, "after_last_left", watched)
+    return done
+
+
+#: How long the work after leaving may take: it writes to SQLite, and a write waits up to ``BUSY_SECONDS`` for another
+#: writer's lock (the app's own margin); a check giving up sooner (it was 8 s) fails on a wait the app takes as normal.
+AFTER_LEAVE_BOUND = BUSY_SECONDS + 5
+
+
+def test_notes3_ac10_a_tab_closed_without_a_title_gets_the_suggestion(client, operator, after_leave):
     note = new_note(client)
     live = Live(client, note["id"], token_for(operator))
     assert live.pump(lambda: live.synced)
     edit.append_paragraph(live.doc, "Dentist Tuesday 15:30 confirm, bring the booklet.")
     live.settle(0.2)
     live.close()
-    assert wait_for(lambda: stored(note["id"]).title == "Dentist Tuesday 15:30 confirm")
+    assert after_leave[note["id"]].wait(AFTER_LEAVE_BOUND), "the work after leaving never ended"
+    assert stored(note["id"]).title == "Dentist Tuesday 15:30 confirm"
     assert stored(note["id"]).title_check is True
     assert notedoc.title_of(stored_doc(note["id"])) == "Dentist Tuesday 15:30 confirm"
     item = client.get("/api/notes").json()[0]
     assert item["title_check"] is True
+
+
+def test_notes3_ac10_another_app_stopping_meanwhile_does_not_cancel_the_suggestion(client, operator, monkeypatch,
+                                                                                 after_leave):
+    """The wait after the last one left belongs to its own loop: another app in the same process stopping (a second
+    test client, a real server in a thread) does not cancel it."""
+    monkeypatch.setattr(notes, "LEAVE_GRACE", 2.0)  # still waiting while the other app starts and stops
+    note = new_note(client)
+    live = Live(client, note["id"], token_for(operator))
+    assert live.pump(lambda: live.synced)
+    edit.append_paragraph(live.doc, "Return the drill to the neighbour")
+    live.settle(0.2)
+    live.close()
+    with new_client(operator):  # starts and stops an app of its own while the suggestion waits
+        pass
+    assert after_leave[note["id"]].wait(AFTER_LEAVE_BOUND), "the work after leaving never ended"
+    assert stored(note["id"]).title == "Return the drill to the neighbour"
 
 
 def test_notes3_ac9_taking_the_suggestion_marks_it_for_checking(client, operator):
@@ -362,15 +426,9 @@ def test_notes3_the_accounts_side_counts_the_notes(client, operator):
 
 def test_notes3_live_connections_from_another_site_are_refused(client, operator):
     note = new_note(client)
-    from app.security import SESSION_COOKIE
-
-    headers = {"cookie": f"{SESSION_COOKIE}={token_for(operator)}", "origin": "https://evil.example"}
-    from starlette.websockets import WebSocketDisconnect
-
-    with pytest.raises(WebSocketDisconnect) as closed, client.websocket_connect(
-            f"/api/notes/{note['id']}/live", headers=headers):
-        pass
-    assert closed.value.code == 4403
+    for origin in ("https://evil.example", "null", "http://testserver.evil.example"):
+        assert refused(client, note["id"], token_for(operator), origin=origin) == 4403
+    assert refused(client, note["id"], token_for(operator), origin="http://testserver") == 0
 
 
 def test_notes3_the_body_of_a_new_note_is_one_empty_paragraph(client, operator):

@@ -265,6 +265,8 @@ describe('a note on the page', () => {
     expect(document.activeElement).toBe(title)
     await act(async () => {
       title.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      // In the same tick, not a frame later: a key typed at once goes into the text, not the title.
+      expect(document.activeElement?.closest('[data-testid="note-body"]')).not.toBeNull()
     })
     await settle(40)
     expect(document.activeElement?.closest('[data-testid="note-body"]')).not.toBeNull()
@@ -422,6 +424,30 @@ describe('a note on the page', () => {
     await settle(30)
     expect(calls.some((call) => call.method === 'POST' && call.path === '/api/notes/n1/restore')).toBe(true)
     expect(where).toBe('/notes/n1')
+  })
+
+  it('NOTES-3 AC-6 the "Undo" after deleting a note stays ten seconds, not less and not more', async () => {
+    // Only the timers the notice uses run on a clock of the test's own; the rest goes on in real time.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'], shouldAdvanceTime: true })
+    try {
+      notes.set('n1', note('n1', { title: 'Throw away' }))
+      await render('/notes/n1')
+      await act(async () => $('note-menu')!.click())
+      await act(async () => $('note-delete')!.click())
+      await settle(30)
+      const notice = () => document.querySelector('[data-testid="folder-notice"]')
+      expect(notice()?.textContent).toContain('Note moved to the trash.')
+      await act(async () => {
+        vi.advanceTimersByTime(9_800)
+      })
+      expect(notice()?.querySelector('button')?.textContent).toBe('Undo')
+      await act(async () => {
+        vi.advanceTimersByTime(400)
+      })
+      expect(notice()).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('NOTES-3 AC-7 duplicating opens the copy, in the same folder with "(Copy)"', async () => {
