@@ -838,7 +838,9 @@ def sweep_pages() -> int:
         try:
             if not entry.is_file():
                 continue
-            if entry.name.split("-", 1)[0] not in known or entry.stat().st_mtime < oldest:
+            # <id>-<page>-<width>.webp; an id may hold "-" itself. A half-written page begins with a dot.
+            owner = entry.name.rsplit("-", 2)[0]
+            if entry.name.startswith(".") or owner not in known or entry.stat().st_mtime < oldest:
                 entry.unlink()
                 removed += 1
         except OSError:

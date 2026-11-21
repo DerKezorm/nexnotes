@@ -17,11 +17,11 @@ from sqlalchemy import func, select
 from app.db import SessionLocal
 from app.models import Note
 from app.models_ocr import AttachmentText, WorkJob
-from app.services import media, ocr, sketches, tags, workqueue
+from app.services import attachments, media, ocr, sketches, tags, workqueue
 
 from .conftest import make_account, new_client
 from .test_notes3 import new_note
-from .test_notes10 import add_blocks, block, pdf_of
+from .test_notes10 import add_blocks, block, pdf_of, upload
 from .test_notes11 import (  # noqa: F401 - the fixtures of NOTES-11 apply here too
     attach,
     close_connections,
@@ -161,7 +161,10 @@ def drawer(monkeypatch: pytest.MonkeyPatch) -> Drawer:
 
 def test_notes11_ac3_a_drawn_page_comes_from_disk_the_next_time(client, operator, drawer):
     note = new_note(client, title="PDF")
-    row = attach(client, note["id"], pdf_of(3), "Drei.pdf", operator.id)
+    # An id with dashes in it, as token_urlsafe makes one now and then.
+    answer = upload(client, note["id"], pdf_of(3), "Drei.pdf", "a-b-c-d" + attachments.new_id()[7:])
+    assert answer.status_code == 201, answer.text
+    row = answer.json()
     for width in (1400, 1300, 1400):
         answer = client.get(f"/api/attachments/{row['id']}/pages/2", params={"width": width})
         assert answer.status_code == 200 and answer.headers["content-type"] == "image/webp"
