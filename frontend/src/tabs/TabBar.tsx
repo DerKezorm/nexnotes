@@ -7,7 +7,7 @@
  * Tabs can be dragged into another order or onto the right edge of the notes (AC-1), and the keyboard moves through
  * them as through any row of tabs (EC-7).
  */
-import { Ban, Lock, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
+import { Ban, List, Lock, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -43,9 +43,13 @@ type Props = {
   split: boolean
   /** A note is open on the page (not the list alone at "/"). */
   open: boolean
+  /** Beside two notes: the button "List", for the column (`pressed`) or the drawer (`expanded`, `controls`). */
+  listToggle?: ListToggle
 }
 
-export function TabBar({ state, metas, split, open }: Props) {
+export type ListToggle = { pressed?: boolean; expanded?: boolean; controls?: string; onToggle: (button: HTMLElement) => void }
+
+export function TabBar({ state, metas, split, open, listToggle }: Props) {
   const { t } = useTranslation()
   const tree = useFolders()
   const { openFolderId, targetFolderId } = useCurrentFolder()
@@ -53,10 +57,10 @@ export function TabBar({ state, metas, split, open }: Props) {
   const list = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState<string | null>(null)
   const focused = focusedKey(state)
-  // The buttons after the tabs: their padding (4), "new tab" (30), "end split" (4 + 30), and the count with its gap
-  // ("6 von 6" in 12 px with its padding, 4 + 52). When the tabs would not keep their least width in two rows
-  // otherwise, the count goes (it is in the tooltip of "new tab" then) before the titles do.
-  const buttons = 4 + 30 + (state.right ? 34 : 0)
+  // The buttons after the tabs: their padding (4), "new tab" (30), "list" and "end split" (4 + 30 each), and the count
+  // with its gap ("6 von 6" in 12 px with its padding, 4 + 52). When the tabs would not keep their least width in two
+  // rows otherwise, the count goes (it is in the tooltip of "new tab" then) before the titles do.
+  const buttons = 4 + 30 + (state.right ? 34 : 0) + (listToggle ? 34 : 0)
   const mins = state.tabs.map((tab) => tabMin(split && (tab.key === state.left || tab.key === state.right)))
   const full = tabRows(mins, width, buttons + 56)
   const compact = full.fits ? full : tabRows(mins, width, buttons)
@@ -227,6 +231,25 @@ export function TabBar({ state, metas, split, open }: Props) {
       >
         <Plus className="h-4 w-4" aria-hidden />
       </button>
+      {listToggle && (
+        <button
+          type="button"
+          aria-label={t('tabs.list')}
+          title={t('tabs.listHint')}
+          aria-pressed={listToggle.pressed}
+          aria-expanded={listToggle.expanded}
+          aria-controls={listToggle.expanded ? listToggle.controls : undefined}
+          data-list-toggle=""
+          data-testid="tab-list-toggle"
+          className={
+            'flex h-[30px] w-[30px] items-center justify-center rounded-lg hover:bg-ink-800 hover:text-mist-100 ' +
+            (listToggle.pressed || listToggle.expanded ? 'bg-ink-800 text-accent-400' : 'text-mist-300')
+          }
+          onClick={(event) => listToggle.onToggle(event.currentTarget)}
+        >
+          <List className="h-4 w-4" aria-hidden />
+        </button>
+      )}
       {state.right && (
         <button
           type="button"

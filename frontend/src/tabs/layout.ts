@@ -27,8 +27,22 @@ export const TAB_DRAG = 'application/x-nexnotes-tab'
 /** The narrowest a side gets: a line of text still reads. */
 export const MIN_PANE = 340
 export const SEPARATOR = 12
-/** Beside two notes the list stays only while each of them keeps this much. */
-export const ROOMY_PANE = 480
+/**
+ * Beside two notes the list stands as a column while each side keeps its least width (`MIN_PANE`) and the line between
+ * them; a side's outline opens as a panel over its text then. With less room the list is a drawer over the left note,
+ * opened by the sidebar or the button "List" (21.11.2026).
+ */
+export const SPLIT_ROOM = 2 * MIN_PANE + SEPARATOR
+
+/** How the list stands beside the open notes: a column, a drawer over the left note, or not at all (one note and too
+ * little room: it gives way to the note, as before). */
+export type ListStand = 'column' | 'drawer' | 'none'
+
+/** Where the list goes beside the notes in `width` pixels of page, the list `listWidth` wide. */
+export function listStand(split: boolean, width: number, listWidth: number): ListStand {
+  if (!split) return width - listWidth >= MIN_PANE ? 'column' : 'none'
+  return width - listWidth >= SPLIT_ROOM ? 'column' : 'drawer'
+}
 
 /** The narrowest a tab gets: `TAB_MIN`, and the side's label on top for the two on show beside each other. */
 export function tabMin(labelled: boolean): number {

@@ -11,7 +11,7 @@
 import { Editor } from '@tiptap/core'
 import { act as reactAct, Fragment, useEffect, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { Link, MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { it as vitestIt } from 'vitest'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
@@ -37,7 +37,7 @@ import { openNoteBeside, openNoteInNewTab, showTab } from './open'
 import { startNewNote } from '../notes/newNote'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabs, tabsNow } from './store'
-import { rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
+import { listStand, MIN_PANE, rowsFor, SEPARATOR, SIDE_LABEL, SPLIT_ROOM, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
@@ -211,6 +211,10 @@ type Store<T> = { run: <R>(store: T, body: () => R) => R; getStore: () => T | un
 const hooksName = 'node:async_hooks'
 const { AsyncLocalStorage } = (await import(/* @vite-ignore */ hooksName)) as { AsyncLocalStorage: new <T>() => Store<T> }
 const running = new AsyncLocalStorage<number>()
+/** The app's style sheet as written (the test setup draws no CSS). */
+const fsName = 'node:fs'
+const { readFileSync } = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (file: string, encoding: string) => string }
+const sheetStyles = readFileSync('src/styles/index.css', 'utf-8')
 let generation = 0
 
 function stillRunning(): void {
@@ -247,6 +251,25 @@ function it(name: string, body: () => Promise<void> | void): void {
 }
 let where = ''
 let width = 1400
+
+/** A folder of the sidebar's tree, as `FolderTree.tsx` draws it: a treeitem that a click or Enter opens. */
+function TreeFolder({ id }: { id: string }) {
+  const navigate = useNavigate()
+  return (
+    <div
+      role="treeitem"
+      tabIndex={0}
+      data-folder={id}
+      data-testid={`tree-${id}`}
+      onClick={() => navigate(`/folder/${id}`)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') navigate(`/folder/${id}`)
+      }}
+    >
+      {id}
+    </div>
+  )
+}
 
 function Where() {
   const location = useLocation()
@@ -312,6 +335,18 @@ async function render(path: string): Promise<void> {
       <AuthProvider>
         <MemoryRouter initialEntries={[path]}>
           <Where />
+          {/* The places of the sidebar that choose a list (as `Sidebar.tsx`: links inside the main menu). */}
+          <nav aria-label="Main menu" data-testid="places">
+            <Link to="/folder/kitchen" data-testid="place-kitchen">
+              Kitchen
+            </Link>
+            <Link to="/inbox" data-testid="place-inbox">
+              Inbox
+            </Link>
+            <div role="tree">
+              <TreeFolder id="garden" />
+            </div>
+          </nav>
           <SessionDialog />
           <PerAccount>
             <Routes>
@@ -611,7 +646,7 @@ describe('tabs in the page', () => {
     expect(leftWidth()).toBe(340)
   })
 
-  it('NOTES-6 AC-10 the list beside a note is as wide as set on this device, and still gives way to the notes', async () => {
+  it('NOTES-6 AC-10 the list beside a note is as wide as set on this device, and still leaves the notes their widths', async () => {
     await render('/notes/soup')
     const handle = $('column-handle-list')!
     const column = () => handle.parentElement!
@@ -624,10 +659,19 @@ describe('tabs in the page', () => {
     await act(async () => handle.dispatchEvent(new MouseEvent('pointerup', {})))
     expect(column().style.width).toBe('560px')
     expect(localStorage.getItem(prefKey('column.list', 1))).toBe('560')
-    // Two notes beside it would get less than 480 px each: the list gives way, the notes keep their widths (NOTES-8).
+    // Two notes beside it keep 414 px each, more than their least 340 px: the list stays as a column (NOTES-8 AC-9).
     await act(async () => openNoteBeside('shop'))
     await idle()
-    expect($('note-list')).toBeNull()
+    expect($('list-column')!.style.width).toBe('560px')
+    expect(pane('right')).not.toBeNull()
+    // Narrower, the two would get less: the list gives way to a drawer, the notes keep their widths.
+    await act(async () => unmountPage())
+    width = 1200
+    box.remove()
+    await render('/notes/shop')
+    expect($('list-column')).toBeNull()
+    expect($('list-drawer')).toBeNull()
+    expect(pane('left')).not.toBeNull()
     expect(pane('right')).not.toBeNull()
     // One note again: the list comes back as wide as set; a double click on its edge resets it.
     await act(async () => tabs.endSplit())
@@ -1457,6 +1501,203 @@ describe('tabs in the page', () => {
     await act(async () => $('tab-close', blankTab)!.click())
     expect($('leave-dialog')).not.toBeNull()
     expect($$('tab')).toHaveLength(2)
+  })
+})
+
+describe('the list beside two notes', () => {
+  /** Two notes side by side, the right one used last, in a page `px` wide. */
+  async function twoNotes(px: number): Promise<void> {
+    width = px
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('shop'))
+    await idle()
+  }
+  const drawer = () => $('list-drawer')
+  const toggle = () => $('tab-list-toggle')!
+  const focusedPane = () => box.querySelector('[data-testid="tab-pane"][data-focused="true"]') as HTMLElement
+  const escape = async () => {
+    const target = (document.activeElement as HTMLElement | null) ?? document.body
+    await act(async () => void target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+  }
+
+  it('NOTES-8 AC-9 the list stands as a column beside two notes while both keep their 340 px, else it is a drawer', () => {
+    expect(SPLIT_ROOM).toBe(2 * MIN_PANE + SEPARATOR)
+    expect(listStand(true, 300 + SPLIT_ROOM, 300)).toBe('column')
+    expect(listStand(true, 300 + SPLIT_ROOM - 1, 300)).toBe('drawer')
+    // One note: as before, the list gives way to the note, never a drawer.
+    expect(listStand(false, 300 + MIN_PANE, 300)).toBe('column')
+    expect(listStand(false, 300 + MIN_PANE - 1, 300)).toBe('none')
+  })
+
+  it('NOTES-8 AC-9 with room the column stands between sidebar and notes; "List" hides and shows it, kept on this device', async () => {
+    await twoNotes(300 + SPLIT_ROOM)
+    expect($('list-column')!.style.width).toBe('300px')
+    expect($('note-list')).not.toBeNull()
+    expect(pane('left')).not.toBeNull()
+    expect(pane('right')).not.toBeNull()
+    expect(toggle().getAttribute('aria-label')).toBe('List')
+    expect(toggle().getAttribute('aria-pressed')).toBe('true')
+    expect(toggle().hasAttribute('aria-expanded')).toBe(false)
+    await act(async () => toggle().click())
+    expect($('list-column')).toBeNull()
+    expect(toggle().getAttribute('aria-pressed')).toBe('false')
+    expect(localStorage.getItem(prefKey('splitList', 1))).toBe('off')
+    // Kept after a reload on this device.
+    forgetPrefs()
+    await reload('/notes/shop')
+    expect($('list-column')).toBeNull()
+    expect(toggle().getAttribute('aria-pressed')).toBe('false')
+    // Hidden, a list chosen in the sidebar still shows: in the drawer.
+    await act(async () => $('place-kitchen')!.click())
+    await idle()
+    expect(drawer()).not.toBeNull()
+    await act(async () => toggle().click())
+    expect(drawer()).toBeNull()
+    expect($('list-column')).not.toBeNull()
+    expect(toggle().getAttribute('aria-pressed')).toBe('true')
+    expect(localStorage.getItem(prefKey('splitList', 1))).toBeNull()
+    // One note: no button, the list as always.
+    await act(async () => tabs.endSplit())
+    await idle()
+    expect($('tab-list-toggle')).toBeNull()
+    expect($('list-column')).not.toBeNull()
+  })
+
+  it('NOTES-8 AC-9 too narrow for the column: a folder chosen in the sidebar opens the drawer over the left note, the same one again too', async () => {
+    await twoNotes(300 + SPLIT_ROOM - 1)
+    expect($('list-column')).toBeNull()
+    expect(drawer()).toBeNull()
+    expect(toggle().getAttribute('aria-expanded')).toBe('false')
+    expect(toggle().hasAttribute('aria-pressed')).toBe(false)
+    const kitchen = $('place-kitchen')!
+    kitchen.focus()
+    await act(async () => kitchen.click())
+    await idle()
+    expect(where).toBe('/folder/kitchen?note=shop')
+    // Right beside the sidebar, over the left note, as wide as the list's column, with the folder's list.
+    const open = drawer()!
+    expect(open.style.width).toBe('300px')
+    expect(open.className).toContain('left-0')
+    expect($('folder-list', open)).not.toBeNull()
+    expect(toggle().getAttribute('aria-expanded')).toBe('true')
+    expect(toggle().getAttribute('aria-controls')).toBe(open.id)
+    // Both notes stay as they were.
+    expect(pane('left')!.dataset.note).toBe('soup')
+    expect(pane('right')!.dataset.note).toBe('shop')
+    // Escape closes it, the focus goes back to the folder that opened it.
+    await escape()
+    expect(drawer()).toBeNull()
+    expect(document.activeElement).toBe(kitchen)
+    // The same folder again changes no address and opens it all the same.
+    await act(async () => kitchen.click())
+    expect(drawer()).not.toBeNull()
+    // Another list (the inbox) keeps it open with that list.
+    await act(async () => $('place-inbox')!.click())
+    await idle()
+    expect($('inbox-list', drawer()!)).not.toBeNull()
+    // A click beside it (on the left note) closes it.
+    await act(async () => void pane('left')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(drawer()).toBeNull()
+    // A folder of the tree, chosen with Enter, then again with Enter (no new address): open both times, the focus
+    // goes back to it.
+    const garden = $('tree-garden')!
+    garden.focus()
+    const enter = () => garden.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))
+    await act(async () => void enter())
+    await idle()
+    expect(where).toBe('/folder/garden?note=soup')
+    expect(drawer()).not.toBeNull()
+    await escape()
+    expect(drawer()).toBeNull()
+    expect(document.activeElement).toBe(garden)
+    await act(async () => void enter())
+    expect(drawer()).not.toBeNull()
+    await act(async () => void garden.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(drawer()).not.toBeNull()
+    await escape()
+    // A list chosen another way (the folder named over the note; the search as one types) opens it too.
+    const path = pane('left')!.querySelector('[data-testid="note-path"]') as HTMLAnchorElement
+    await act(async () => path.click())
+    await idle()
+    expect(where).toBe('/folder/kitchen?note=soup')
+    expect($('folder-list', drawer()!)).not.toBeNull()
+  })
+
+  it('NOTES-8 AC-9 a note chosen in the drawer opens on the side used last and closes it; "List" opens it with the focus inside', async () => {
+    await twoNotes(900)
+    expect(focusedPane().dataset.side).toBe('right')
+    await act(async () => toggle().click())
+    await idle()
+    const open = drawer()!
+    expect(document.activeElement).toBe(open)
+    expect($('note-list', open)).not.toBeNull()
+    const gift = open.querySelector('[data-note="gift"] [data-testid="note-row"]') as HTMLAnchorElement
+    await act(async () => gift.click())
+    await idle()
+    expect(drawer()).toBeNull()
+    expect(focusedPane().dataset.side).toBe('right')
+    expect(pane('right')!.dataset.note).toBe('gift')
+    expect(pane('left')!.dataset.note).toBe('soup')
+    expect(where).toBe('/notes/gift')
+    // "List" again closes what it opened, and Escape gives the focus back to it.
+    await act(async () => toggle().click())
+    expect(drawer()).not.toBeNull()
+    await act(async () => toggle().click())
+    expect(drawer()).toBeNull()
+    await act(async () => toggle().click())
+    await escape()
+    expect(drawer()).toBeNull()
+    expect(document.activeElement).toBe(toggle())
+  })
+
+  it('NOTES-8 AC-3 AC-9 Alt-click and the menu work in the drawer and keep it open', async () => {
+    await twoNotes(900)
+    await act(async () => toggle().click())
+    await idle()
+    const link = (id: string) => drawer()!.querySelector(`[data-note="${id}"] [data-testid="note-row"]`) as HTMLAnchorElement
+    const alt = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, altKey: true })
+    await act(async () => void link('pack').dispatchEvent(alt))
+    expect(alt.defaultPrevented).toBe(true)
+    await until(() => expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping', 'Packing list']))
+    expect(drawer()).not.toBeNull()
+    // The list's menu: a press inside it is no click beside the drawer.
+    const row = drawer()!.querySelector('[data-note="bath"]') as HTMLElement
+    await act(async () => void row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })))
+    const menu = $('note-item-menu')!
+    await act(async () => void menu.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(drawer()).not.toBeNull()
+    // Escape closes the menu first, the drawer stays.
+    const item = menu.querySelector('[role^="menuitem"]') as HTMLElement
+    await act(async () => void item.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+    expect($('note-item-menu')).toBeNull()
+    expect(drawer()).not.toBeNull()
+  })
+
+  it('NOTES-8 AC-1 two notes side by side: the side used last has a honey frame, the other is dimmed; a click there makes it the one at once', async () => {
+    await twoNotes(1400)
+    expect(pane('right')!.dataset.split).toBe('active')
+    expect(pane('left')!.dataset.split).toBe('passive')
+    await act(async () => void pane('left')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect(pane('left')!.dataset.split).toBe('active')
+    expect(pane('right')!.dataset.split).toBe('passive')
+    // The focus does the same, by keyboard.
+    await act(async () => void (pane('right')!.querySelector('[data-testid="note-title"]') as HTMLElement).focus())
+    expect(pane('right')!.dataset.split).toBe('active')
+    expect(pane('left')!.dataset.split).toBe('passive')
+    // What the marks look like: a calm frame of 2 px in honey, the other side's sheet on the page's gray, its tools quieter.
+    expect(sheetStyles).toMatch(/\[data-split='active'\] \.nn-sheet \{\s*outline: 2px solid var\(--color-accent-500\);/)
+    expect(sheetStyles).toMatch(/\[data-split='passive'\] \.nn-sheet \{\s*background-color: var\(--color-ink-950\);/)
+    expect(sheetStyles).toMatch(/\[data-split='passive'\] \[data-testid='editor-head'\] \{\s*opacity: 0\.75;/)
+    // One side with the switcher (a narrow window), and one note alone: no marks.
+    await act(async () => unmountPage())
+    width = 600
+    box.remove()
+    await render('/notes/shop')
+    expect(pane('left')!.hasAttribute('data-split')).toBe(false)
+    expect(pane('right')!.hasAttribute('data-split')).toBe(false)
+    await act(async () => tabs.endSplit())
+    await idle()
+    expect(pane('left')!.hasAttribute('data-split')).toBe(false)
   })
 })
 

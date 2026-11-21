@@ -8,6 +8,8 @@
  *   and closing the tab. No longer there for this account at all (deleted for good, sharing ended, EC-6): the side
  *   says so instead of an editor. Ended while the note was on show here, the side keeps the editor's sentence that
  *   names who ended it (NOTES-13 AC-5); only on this page, never in what the tabs remember.
+ * - Two sides on show: the sheet of the side used last has a honey frame, the other side is dimmed (its sheet on the
+ *   page's gray, its toolbar quieter); a click or the focus in it makes it the side used last at once (21.11.2026).
  */
 import { Ban } from 'lucide-react'
 import { useCallback, useState, type CSSProperties } from 'react'
@@ -28,13 +30,15 @@ type Props = {
   focused: boolean
   /** The honey line on top: two sides on show, this the one used last. */
   line: boolean
+  /** Two sides on show: this one used last (`active`, framed) or the other (`passive`, dimmed). */
+  standing?: 'active' | 'passive'
   /** Out of view for now (a narrow window shows one side with the switcher, EC-2); the editor stays connected. */
   hidden: boolean
   fresh: boolean
   style: CSSProperties
 }
 
-export function TabPane({ tab, side, meta, focused, line, hidden, fresh, style }: Props) {
+export function TabPane({ tab, side, meta, focused, line, standing, hidden, fresh, style }: Props) {
   const { t } = useTranslation()
   const onGuard = useCallback((guard: LeaveGuard | null) => setTabGuard(tab.key, guard), [tab.key])
   const [ended, setEnded] = useState<{ note: string; said: string } | null>(null)
@@ -51,6 +55,7 @@ export function TabPane({ tab, side, meta, focused, line, hidden, fresh, style }
       data-side={side}
       data-note={tab.note}
       data-focused={focused}
+      data-split={standing}
       onPointerDownCapture={take}
       onFocusCapture={take}
       style={{ ...style, borderTopColor: line ? 'var(--color-accent-500)' : 'transparent' }}
