@@ -1,0 +1,57 @@
+{
+  "title": "Case highlight",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "highlight",
+                "attrs": {
+                  "color": null
+                }
+              }
+            ],
+            "text": "default"
+          },
+          {
+            "type": "text",
+            "text": " "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "highlight",
+                "attrs": {
+                  "color": "green"
+                }
+              }
+            ],
+            "text": "green"
+          },
+          {
+            "type": "text",
+            "text": " "
+          },
+          {
+            "type": "text",
+            "marks": [
+              {
+                "type": "highlight",
+                "attrs": {
+                  "color": "rose"
+                }
+              }
+            ],
+            "text": "rose"
+          }
+        ]
+      }
+    ]
+  }
+}
