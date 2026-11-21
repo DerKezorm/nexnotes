@@ -35,35 +35,51 @@ function watchProblems(page: Page): string[] {
 test('NOTES-4 AC-1 AC-3 AC-5 folders made in the sidebar, one dragged onto another, trashed and brought back', async ({ page }) => {
   const problems = watchProblems(page)
   const stamp = Date.now().toString(36)
+  const work = `Work ${stamp}`
+  const projects = `Projects ${stamp}`
   await page.goto('/')
   await page.getByRole('button', { name: 'New folder at the top' }).click()
-  await page.getByRole('dialog').getByRole('textbox', { name: 'Folder name' }).fill(`Work ${stamp}`)
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Folder name' }).fill(work)
   await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click()
-  await expect(row(page, `Work ${stamp}`)).toBeVisible()
+  await expect(row(page, work)).toBeVisible()
+  // The server has it before the next step asks for it (the row may come before the answer).
+  await expect.poll(async () => (await tree(page)).folders.some((f) => f.name === work)).toBe(true)
+  const workId = (await tree(page)).folders.find((f) => f.name === work)!.id
 
-  await row(page, `Work ${stamp}`).click({ button: 'right' })
+  await row(page, work).click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'New subfolder' }).click()
-  await page.getByRole('dialog').getByRole('textbox', { name: 'Folder name' }).fill('Projects')
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Folder name' }).fill(projects)
   await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click()
-  await expect(row(page, 'Projects')).toBeVisible()
+  await expect(row(page, projects)).toBeVisible()
+  await expect.poll(async () => (await tree(page)).folders.find((f) => f.name === projects)?.parent_id).toBe(workId)
 
   const home = `Home ${stamp}`
   await make(page, home)
   await page.reload()
-  await row(page, home).dragTo(row(page, `Work ${stamp}`))
-  await expect.poll(async () => (await tree(page)).folders.find((f) => f.name === home)?.parent_id).toBe(
-    (await tree(page)).folders.find((f) => f.name === `Work ${stamp}`)?.id,
-  )
+  await expect(row(page, home)).toBeVisible()
+  await expect(row(page, work)).toBeVisible()
+  // The browser's own drag and drop: a drop that came before the tree was ready to take it is made again, until the
+  // server says the folder moved (a second drop onto the same folder changes nothing).
+  await expect(async () => {
+    await row(page, home).dragTo(row(page, work))
+    expect((await tree(page)).folders.find((f) => f.name === home)?.parent_id).toBe(workId)
+  }).toPass({ timeout: 15_000 })
 
-  await row(page, `Work ${stamp}`).click({ button: 'right' })
+  await row(page, work).click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'Move to trash' }).click()
   await expect(page.getByRole('dialog')).toContainText('With 2 subfolders and 0 notes.')
   await page.getByRole('dialog').getByRole('button', { name: 'Move to trash' }).click()
-  await expect(page.getByRole('status')).toContainText(`“Work ${stamp}” with 0 notes moved to the trash.`)
-  await expect(row(page, `Work ${stamp}`)).toHaveCount(0)
-  await page.getByRole('status').getByRole('button', { name: 'Undo' }).click()
-  await expect(row(page, `Work ${stamp}`)).toBeVisible()
-  expect((await tree(page)).folders.filter((f) => f.name === 'Projects' || f.name === home)).toHaveLength(2)
+  // The notice of this deletion, not any other status line of the page.
+  const notice = page.getByRole('status').filter({ hasText: 'moved to the trash' })
+  await expect(notice).toContainText(`“${work}” with 0 notes moved to the trash.`)
+  await expect(row(page, work)).toHaveCount(0)
+  await expect.poll(async () => (await tree(page)).folders.some((f) => f.id === workId)).toBe(false)
+  await notice.getByRole('button', { name: 'Undo' }).click()
+  await expect(row(page, work)).toBeVisible()
+  // Back on the server with both subfolders, not only on the page.
+  await expect
+    .poll(async () => (await tree(page)).folders.filter((f) => f.name === projects || f.name === home).map((f) => f.parent_id))
+    .toEqual([workId, workId])
   expect(problems).toEqual([])
 })
 

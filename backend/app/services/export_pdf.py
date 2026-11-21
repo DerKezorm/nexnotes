@@ -39,8 +39,58 @@ ICONS = APP_DIR / "export_icons.json"
 
 #: Tests set this: Typst runs in the test's own process (a process for every PDF only costs time there).
 INLINE = False
-#: Two PDFs at a time; a third waits.
-_SLOTS = threading.BoundedSemaphore(2)
+#: PDFs set at the same time in the whole server.
+RUNNING = 2
+#: PDFs that may wait for one of those places; one more is answered "busy" at once.
+WAITING = 8
+#: How long a PDF waits for its place before it is answered "busy".
+WAIT_SECONDS = 30.0
+#: How soon a refused request should ask again.
+RETRY_AFTER_SECONDS = 5
+
+
+class PdfBusy(Exception):
+    """No place for this PDF: the account sets one already, or too many wait."""
+
+
+class Gate:
+    """The places for setting PDFs (finding of the NOTES-17 review: waiting PDFs held the threads every request needs).
+
+    Nothing here blocks: ``admit`` lets a request in line or refuses it at once (one PDF per account, at most
+    ``RUNNING + WAITING`` in line), ``take`` takes a place to set when one is free and says so. A request in line waits
+    for its place outside every thread (``routers/export.py``), and only a request with a place goes into one.
+    """
+
+    def __init__(self, running: int, waiting: int) -> None:
+        self.running = running
+        self.waiting = waiting
+        self._lock = threading.Lock()
+        self._in_line: set[object] = set()
+        self._busy = 0
+
+    def admit(self, key: object) -> None:
+        with self._lock:
+            if key in self._in_line or len(self._in_line) >= self.running + self.waiting:
+                raise PdfBusy
+            self._in_line.add(key)
+
+    def take(self) -> bool:
+        with self._lock:
+            if self._busy >= self.running:
+                return False
+            self._busy += 1
+            return True
+
+    def give_back(self) -> None:
+        with self._lock:
+            self._busy -= 1
+
+    def leave(self, key: object) -> None:
+        with self._lock:
+            self._in_line.discard(key)
+
+
+GATE = Gate(RUNNING, WAITING)
 #: A picture larger than this is named, not drawn.
 MAX_PICTURE = 40 * 1024 * 1024
 
@@ -455,16 +505,15 @@ def document(data: NoteData, labels: dict[str, str], language: str, root: Path) 
 
 
 def build(data: NoteData, labels: dict[str, str], language: str) -> bytes:
-    """Sets the PDF of one note."""
+    """Sets the PDF of one note. The caller holds a place of ``GATE``."""
     with tempfile.TemporaryDirectory(prefix="nexnotes-pdf-") as temp:
         root = Path(temp)
         main = root / "main.typ"
         main.write_text(document(data, labels, language, root), "utf-8")
         run = compile_here if INLINE else compile_apart
-        with _SLOTS:
-            try:
-                output = run(main, fonts=FONTS, packages=root / "packages", fmt="pdf", ppi=144.0)
-            except TypesetFailed as exc:
-                raise error("typeset_failed", "The PDF could not be set.", 500) from exc
+        try:
+            output = run(main, fonts=FONTS, packages=root / "packages", fmt="pdf", ppi=144.0)
+        except TypesetFailed as exc:
+            raise error("typeset_failed", "The PDF could not be set.", 500) from exc
     assert isinstance(output, bytes)
     return output

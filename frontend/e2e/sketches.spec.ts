@@ -200,9 +200,12 @@ test('NOTES-18 AC-3 AC-4 AC-5 AC-7 EC-4 EC-6 a recording plays with its text rea
   await expect(player).toHaveAttribute('data-playing', 'true')
   await page.keyboard.press('Space')
   await expect(player).toHaveAttribute('data-playing', 'false')
+  // ArrowLeft goes 5 s back, at most to the start: the recording may stand before its fifth second here.
   const before = await audio.evaluate((element: HTMLAudioElement) => element.currentTime)
+  const back = Math.max(0, before - 5)
   await page.keyboard.press('ArrowLeft')
-  await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.currentTime)).toBeLessThan(before - 4)
+  await expect.poll(() => audio.evaluate((element: HTMLAudioElement) => element.currentTime)).toBeLessThan(back + 0.3)
+  expect(await audio.evaluate((element: HTMLAudioElement) => element.currentTime)).toBeGreaterThanOrEqual(Math.max(0, back - 0.3))
   await page.reload()
   await expect(page.getByTestId('recording').first().getByTestId('recording-speed-2')).toHaveAttribute('aria-checked', 'true')
 })

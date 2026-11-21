@@ -29,9 +29,14 @@ ENV PYTHONUNBUFFERED=1 \
 WORKDIR /app
 
 # curl for the healthcheck, gosu to drop root at start, ffmpeg (with ffprobe) for the length and the picture of an
-# attached video.
+# attached video. Tesseract reads the text of pictures, scans and PDFs, with the nine languages the settings offer
+# (German and English from the start): all of them are in the image, nothing is loaded at run time. The language data
+# are Debian's fast models, about 39 MB together with the one for the orientation of a page; Tesseract and its
+# libraries add about 8 MB on top of what ffmpeg brings already.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl gosu ffmpeg \
+        tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita \
+        tesseract-ocr-nld tesseract-ocr-por tesseract-ocr-pol tesseract-ocr-tur \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./

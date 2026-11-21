@@ -119,10 +119,11 @@ test('NOTES-10 AC-1 AC-2 AC-3 AC-4 AC-12 choose files: a picture in its sizes an
   const full = await width()
   expect(small).toBeLessThan(medium)
   expect(medium).toBeLessThan(full)
+  // Large: the view with the recognised text (NOTES-11).
   await page.getByTestId('attachment-open-large').click()
-  await expect(page.getByTestId('attachment-lightbox')).toBeVisible()
+  await expect(page.getByTestId('ocr-viewer')).toBeVisible()
   await page.keyboard.press('Escape')
-  await expect(page.getByTestId('attachment-lightbox')).toHaveCount(0)
+  await expect(page.getByTestId('ocr-viewer')).toHaveCount(0)
   // The PDF with its pages and the picture of its first page.
   const sheet = page.getByTestId('attachment-pdf')
   await expect(sheet).toContainText('PDF · 12 pages')

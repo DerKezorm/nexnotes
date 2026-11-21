@@ -64,6 +64,7 @@ def _paragraphs(live: Live) -> list[XmlElement]:
             if isinstance(child, XmlElement) and child.tag == "paragraph"]
 
 
+@pytest.mark.timing
 def test_notes12_ac1_what_one_window_types_shows_in_the_other_within_a_second(client, operator):
     note = new_note(client, markdown="hello")
     laptop = Live(client, note["id"], token_for(operator))

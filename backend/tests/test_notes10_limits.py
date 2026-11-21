@@ -21,6 +21,7 @@ import pytest
 from PIL import Image
 from sqlalchemy import select
 
+from app import worker_limits
 from app.db import SessionLocal
 from app.models import Account
 from app.models_attachments import AttachmentMention
@@ -220,7 +221,7 @@ def test_notes10_the_media_worker_stops_a_task_past_its_seconds(probes):
         media_worker.run("os:system", "echo nein", seconds=5)
 
 
-def test_notes10_ec6_at_most_two_media_workers_at_once(probes):
+def test_notes10_ec6_at_most_two_workers_at_once_previews_and_recognition_together(probes):
     answers: list[tuple[int, float, float]] = []
 
     def one() -> None:
@@ -233,7 +234,7 @@ def test_notes10_ec6_at_most_two_media_workers_at_once(probes):
         thread.join()
     assert len(answers) == 5
     at_once = max(sum(1 for _, began, ended in answers if began <= moment < ended) for _, moment, _ in answers)
-    assert at_once <= media_worker.WORKERS == 2
+    assert at_once <= worker_limits.WORKERS == 2
     assert len({pid for pid, _, _ in answers}) <= 2
 
 
@@ -600,3 +601,16 @@ def test_notes10_an_id_of_another_owner_in_one_s_own_note_stays_not_found_and_ou
         assert other.get(f"/api/attachments/{row['id']}").status_code == 404
         assert other.get(f"/api/attachments/{row['id']}/file").status_code == 404
         assert other.get(f"/api/notes/{own['id']}/attachments").json()["items"] == []
+
+
+def test_notes10_previews_and_recognition_share_their_two_worker_places():
+    from app.services import ocr
+
+    with worker_limits.slot(), worker_limits.slot():
+        started = time.monotonic()
+        with pytest.raises(ocr.EngineFailed) as busy:
+            ocr.spawn({"op": "probe", "megabytes": 1}, timeout=30, wait=0.2)
+        assert busy.value.code == "busy" and time.monotonic() - started < 5
+        with pytest.raises(TimeoutError), worker_limits.slot(0.1):
+            pass
+    assert ocr.spawn({"op": "probe", "megabytes": 1}, timeout=30)["taken"] == MB

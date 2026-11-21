@@ -711,6 +711,7 @@ def test_notes10_ec9_an_empty_gallery_says_so(client, operator):
                       "items": []}
 
 
+@pytest.mark.timing
 def test_notes10_ac7_the_gallery_of_400_attachments_filters_counts_sorts_and_names_the_note(client, operator):
     notes_made = [new_note(client, title=f"Notiz {index}") for index in range(4)]
     other = make_account("anna")
@@ -918,6 +919,7 @@ def test_notes10_ec5_a_page_that_is_no_page_or_does_not_answer_gives_no_card(cli
     assert card(client, note["id"], "https://moebel.example.com/riesig")["preview"] is None
 
 
+@pytest.mark.timing
 def test_notes10_ec11_without_internet_the_link_stays_plain_at_once(client, operator, monkeypatch):
     note = new_note(client, title="Offline")
 

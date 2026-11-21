@@ -286,6 +286,7 @@ def test_notes9_ec2_no_hits_names_the_count_without_filters(client, operator):
 # --- EC-4 ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 def test_notes9_ec4_ten_thousand_notes_two_thousand_hits_under_half_a_second(client, operator):
     with SessionLocal() as db:
         inbox = inbox_for(db, operator.id).id
@@ -389,6 +390,7 @@ def test_notes9_ec5_too_long_a_query_is_refused_not_cut(client, operator):
 # --- EC-6 ---------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 def test_notes9_ec6_a_change_from_a_second_session_is_found_within_seconds(client, operator):
     from .test_notes3 import token_for, wait_for
 
@@ -583,6 +585,7 @@ def _median_time(run, rounds: int = 25) -> float:
     return sorted(times)[len(times) // 2]
 
 
+@pytest.mark.timing
 def test_notes9_ec7_the_time_of_a_search_tells_nothing_about_other_accounts_notes(client, operator):
     """A word that stands in 4,000 notes of another account takes no longer to look for than a word that stands
     nowhere: the account is part of the index query, not a filter after it."""
@@ -624,6 +627,7 @@ def test_notes9_ac7_more_than_sixteen_terms_are_refused_not_cut(client, operator
                                                              "maximum": search.TERMS_MAX}
 
 
+@pytest.mark.timing
 def test_notes9_ec5_a_phrase_too_long_is_refused_and_one_at_the_limit_stays_quick(client, operator):
     phrase = ("Strom und Gas fuer das ganze Haus " * 4)[:search.TERM_CHARS_MAX].strip()
     _bulk(operator, 4000, lambda number: f"{number}: " + "Strom und Gas fuer das ganze Haus " * 5)
@@ -642,6 +646,7 @@ def test_notes9_ec5_a_phrase_too_long_is_refused_and_one_at_the_limit_stays_quic
     assert client.get("/api/search", params={"q": "x" * (search.TERM_CHARS_MAX + 1)}).status_code == 422
 
 
+@pytest.mark.timing
 def test_notes9_ec4_a_note_of_460_kb_costs_no_more_than_a_short_one(client, operator):
     """Excerpt and marks fold only the piece around the first hit, not the whole text."""
     filler = "Ärger über die Größe der Rückstände, " * 12_800
@@ -728,3 +733,28 @@ def test_notes9_ac1_the_first_hit_of_a_long_text_is_the_one_marked():
             assert bool(whole) == bool(quick), needle
             if whole:
                 assert quick[0] == whole[0], needle
+
+
+def test_notes9_the_cleaning_round_before_the_index_exists_says_nothing_of_a_missing_table(client, operator,
+                                                                                          monkeypatch, caplog):
+    """A first start on an empty data folder: the cleaning round can come before the search made its tables (finding
+    of the NOTES-17 review, "no such table: search_rows_v3"). It finds nothing to clean, and says no error."""
+    from app.services import cleanup
+
+    with SessionLocal() as db:
+        db.execute(text(f'DROP TABLE IF EXISTS "{search.INDEX}"'))
+        db.execute(text(f'DROP TABLE IF EXISTS "{search.ROWS}"'))
+        db.commit()
+    monkeypatch.setattr(search, "_ready", False)
+    try:
+        with caplog.at_level("ERROR"):
+            cleanup.run_once()
+        assert "Cleaning up failed" not in caplog.text and "no such table" not in caplog.text
+    finally:
+        search.ensure_schema()
+    # With its tables there, the round cleans the index as before.
+    keep = tagged_note(client, "Bleibt", "da")
+    assert find(client, "bleibt")["total"] == 1
+    search._cleanup()
+    with SessionLocal() as db:
+        assert list(db.execute(search._sql("SELECT note_id FROM @rows")).scalars()) == [keep]

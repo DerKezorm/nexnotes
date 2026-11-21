@@ -24,6 +24,7 @@ import './attachments.css'
 import { fileUrl, thumbUrl, viewUrl, type AttachmentInfo, type LinkCard } from './api'
 import { downloadFile, duration, hostOf, IMAGE_SIZES, openFile, openLink, WIDTH, type ImageSize } from './open'
 import { useAttachment } from './info'
+import { largeViewFor } from './large'
 import { cancelUpload, retryUpload, useUpload, type Upload } from './uploads'
 
 /** What a block can do with its attachment; nothing of it in an old version or a note one only reads. */
@@ -62,8 +63,8 @@ export function AttachmentBlock({ noteId, id, name, size, nodeType, actions }: {
   let inner: ReactNode
   if (upload) inner = <UploadCard upload={upload} onRemove={actions.editable ? actions.onRemove : undefined} kind={nodeType} />
   else if (!info) inner = <MissingCard name={shownName} loaded={loaded} kind={nodeType} onRemove={actions.editable ? actions.onRemove : undefined} />
-  else if (['image', 'scan', 'drawing', 'linkimage'].includes(info.kind)) inner = <PictureBlock info={info} size={size ?? 'medium'} actions={actions} />
-  else if (info.kind === 'pdf') inner = <PdfCard info={info} actions={actions} />
+  else if (['image', 'scan', 'drawing', 'linkimage'].includes(info.kind)) inner = <PictureBlock info={info} noteId={noteId} size={size ?? 'medium'} actions={actions} />
+  else if (info.kind === 'pdf') inner = <PdfCard info={info} noteId={noteId} actions={actions} />
   else if (info.kind === 'video') inner = <VideoBlock info={info} actions={actions} />
   else inner = <FileCard info={info} actions={actions} />
   return (
@@ -163,9 +164,15 @@ function MissingCard({ name, loaded, kind, onRemove }: { name: string; loaded: b
   )
 }
 
-function PictureBlock({ info, size, actions }: { info: AttachmentInfo; size: ImageSize; actions: BlockActions }) {
+function PictureBlock({ info, noteId, size, actions }: { info: AttachmentInfo; noteId: string; size: ImageSize; actions: BlockActions }) {
   const { t, i18n } = useTranslation()
-  const [large, setLarge] = useState(false)
+  const [large, setLargeHere] = useState(false)
+  // Another feature's large view (NOTES-11: the text beside the picture) when there is one.
+  const setLarge = (open: boolean) => {
+    const view = largeViewFor()
+    if (open && view && info.kind !== 'linkimage') view(info, noteId)
+    else setLargeHere(open)
+  }
   const [sizeMenu, setSizeMenu] = useState(false)
   const sizeButton = useRef<HTMLButtonElement>(null)
   const source = info.view ? viewUrl(info.id) : fileUrl(info.id)
@@ -257,8 +264,9 @@ export function Lightbox({ info, onClose }: { info: AttachmentInfo; onClose: () 
   )
 }
 
-function PdfCard({ info, actions }: { info: AttachmentInfo; actions: BlockActions }) {
+function PdfCard({ info, noteId, actions }: { info: AttachmentInfo; noteId: string; actions: BlockActions }) {
   const { t, i18n } = useTranslation()
+  const view = largeViewFor()
   const details = [t('attachments.kind.pdf'), ...(info.pages ? [t('attachments.pages', { count: info.pages })] : []), bytes(info.size, i18n.language)].join(' · ')
   return (
     <div className={'relative flex gap-3 p-3 ' + card} data-testid="attachment-pdf">
@@ -272,6 +280,11 @@ function PdfCard({ info, actions }: { info: AttachmentInfo; actions: BlockAction
           <span className="text-[12.5px] text-accent-400">{t('attachments.browse')}</span>
         </span>
       </button>
+      {view && (
+        <button type="button" className="nn-btn-quiet self-end rounded px-1 text-[12.5px] text-mist-400 hover:text-mist-100" onClick={() => view(info, noteId)} data-testid="attachment-pdf-large">
+          {t('attachments.openLargeShort')}
+        </button>
+      )}
       <Remove onRemove={actions.editable ? actions.onRemove : undefined} />
     </div>
   )

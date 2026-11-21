@@ -194,6 +194,7 @@ def test_notes5_ac3_ec4_the_page_shows_own_and_shared_notes_with_folder_and_date
     assert client.get(f"/api/notes/{theirs['id']}").status_code == 200
 
 
+@pytest.mark.timing
 def test_notes5_ec5_five_hundred_tags_come_in_one_quick_answer(client, account):
     words = [f"tag{index:03d}x" for index in range(500)]
     # tag000x stands in 20 notes, tag001x in 19 … so that the order is known; the rest once.

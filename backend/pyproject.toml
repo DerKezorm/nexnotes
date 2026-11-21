@@ -25,3 +25,6 @@ extend-immutable-calls = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+markers = [
+    "timing: measures time against a limit; runs serially on its own (pytest -m timing), skipped in parallel workers",
+]

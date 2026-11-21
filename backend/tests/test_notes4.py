@@ -725,6 +725,7 @@ def test_notes4_ec4_many_moves_and_deletes_from_two_devices_never_hide_a_note(cl
 # --- EC-8 Many folders ------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 def test_notes4_ec8_five_hundred_folders_load_in_one_query_and_quickly(client: TestClient, operator: Account) -> None:
     with SessionLocal() as db:
         inbox = inbox_for(db, operator.id)

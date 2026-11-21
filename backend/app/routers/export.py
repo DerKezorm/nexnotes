@@ -3,21 +3,27 @@
 
 from __future__ import annotations
 
+import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
-from fastapi import APIRouter, FastAPI, Query, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
+from starlette.concurrency import run_in_threadpool
 
 from ..db import SessionLocal
 from ..deps import Account, DbSession
-from ..errors import error
-from ..services import export
+from ..errors import detail, error
+from ..services import export, export_pdf
+
+#: How often a PDF in line looks whether a place to set it is free.
+PDF_POLL_SECONDS = 0.05
 
 
 @asynccontextmanager
@@ -46,9 +52,39 @@ def note_markdown(note_id: str, account: Account) -> Response:
     return Response(body, media_type=kind, headers=headers)
 
 
-@router.get("/notes/{note_id}/pdf", summary="One note as PDF")
-def note_pdf(note_id: str, account: Account) -> Response:
-    name, body = export.note_pdf(account, note_id)
+def _pdf_busy() -> HTTPException:
+    return HTTPException(status_code=429, headers={"Retry-After": str(export_pdf.RETRY_AFTER_SECONDS)},
+                         detail=detail("export_pdf_busy", "A PDF is being made already. Try again in a moment."))
+
+
+@asynccontextmanager
+async def _pdf_place(account_id: int) -> AsyncIterator[None]:
+    """A place to set a PDF, or 429 at once. In line it waits here, in the event loop: no thread of the pool waits
+    for a place, so a pile of PDF requests never keeps the server's other requests waiting."""
+    gate = export_pdf.GATE
+    try:
+        gate.admit(account_id)
+    except export_pdf.PdfBusy as exc:
+        raise _pdf_busy() from exc
+    try:
+        deadline = time.monotonic() + export_pdf.WAIT_SECONDS
+        while not gate.take():
+            if time.monotonic() >= deadline:
+                raise _pdf_busy()
+            await asyncio.sleep(PDF_POLL_SECONDS)
+        try:
+            yield
+        finally:
+            gate.give_back()
+    finally:
+        gate.leave(account_id)
+
+
+@router.get("/notes/{note_id}/pdf", summary="One note as PDF; one at a time per account, 429 when busy",
+            responses={429: {"description": "A PDF of the account is being made, or too many wait"}})
+async def note_pdf(note_id: str, account: Account) -> Response:
+    async with _pdf_place(account.id):
+        name, body = await run_in_threadpool(export.note_pdf, account, note_id)
     return Response(body, media_type="application/pdf",
                     headers={"Content-Disposition": _disposition(name), "Cache-Control": "no-store"})
 

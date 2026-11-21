@@ -28,7 +28,7 @@ from ..db import SessionLocal
 from ..deps import Account, DbSession
 from ..errors import error
 from ..models_attachments import Attachment
-from ..services import attachments, linkpreview, notes, settings_service
+from ..services import attachments, linkpreview, notes, ocr, settings_service
 
 logger = logging.getLogger("nexnotes.attachments")
 
@@ -88,9 +88,16 @@ async def upload(
     attachment_id: Annotated[str, Query(alias="id", max_length=32)],
     name: Annotated[str, Query(max_length=1000)] = "",
     role: Annotated[str | None, Query(alias="as", max_length=20)] = None,
+    text: Annotated[str | None, Query(pattern="^device$")] = None,
 ) -> dict[str, Any]:
-    """``as`` (NOTES-18, from the iOS app): ``drawing``, ``drawing-data``, ``recording`` or ``transcript``; the content
-    must be what it says (``attachment_wrong_kind``). Without it the content alone decides."""
+    """``as`` from the iOS app: ``drawing``, ``drawing-data``, ``recording`` or ``transcript`` (NOTES-18), the content
+    must be what it says (``attachment_wrong_kind``); ``scan`` (NOTES-11 AC-5) makes a picture a scan. Without it the
+    content alone decides. ``text=device`` says the recognised text comes afterwards (``PUT
+    /api/attachments/{id}/text``). Scan and text are read by the recognition when the row is written."""
+    scan = role == "scan"
+    if scan:
+        role = None
+    hints = ocr.HINTS.set(ocr.Hints(device=text == "device", scan=scan))
     declared_text = request.headers.get("content-length")
     declared = int(declared_text) if declared_text and declared_text.isdigit() else None
     started: attachments.Upload | Attachment | None = None
@@ -109,6 +116,7 @@ async def upload(
         logger.info("An upload broke off note=%s", note_id)
         raise error("upload_broken", "The upload broke off.", 400) from None
     finally:
+        ocr.HINTS.reset(hints)
         # Through, refused or broken off: what it claimed of the storage is free again.
         if isinstance(started, attachments.Upload):
             attachments.release(started)

@@ -56,6 +56,8 @@ export default defineConfig({
         NEXNOTES_DATA_DIR: DATA_DIR,
         NEXNOTES_FRONTEND_DIST: path.resolve('dist'),
         NEXNOTES_DISABLE_BACKGROUND: '1',
+        // The work queue runs all the same: attachments are read for their text (NOTES-11, ocr.spec.ts).
+        NEXNOTES_WORK_QUEUE: '1',
         NEXNOTES_ARGON2_TIME: '1',
         NEXNOTES_ARGON2_MEMORY_KIB: '8192',
         NEXNOTES_ARGON2_PARALLELISM: '1',

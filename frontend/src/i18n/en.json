@@ -530,11 +530,16 @@
     "attachment_id_taken": "This attachment belongs to another note already.",
     "attachment_empty": "The file is empty.",
     "attachment_wrong_kind": "The file is not what it was sent as.",
+    "text_not_possible": "This attachment carries no text.",
+    "note_locked": "The note is locked.",
     "upload_broken": "The upload broke off. The attachment is still missing.",
     "export_expired": "The export was ready for 24 hours and is gone now. Start it again.",
     "export_not_ready": "The export is not ready yet.",
     "export_not_failed": "Only an export that broke off can be started again.",
-    "typeset_failed": "The PDF could not be made."
+    "typeset_failed": "The PDF could not be made.",
+    "export_pdf_busy": "A PDF is being made already. Try again in a few seconds.",
+    "export_waiting": "Another export of yours is waiting already. Start the next one once it runs.",
+    "export_no_room": "The server does not have enough room for this export right now."
   },
   "folders": {
     "section": "Folders",
@@ -1552,5 +1557,25 @@
       "transcriptMissing": "The text is not there yet.",
       "cannotPlay": "Your browser cannot play this format."
     }
+  },
+  "ocr": {
+    "showText": "Show text",
+    "hideText": "Hide text",
+    "title": "Recognized text",
+    "pageOf": "Page {{page}} of {{pages}}",
+    "previous": "Previous page",
+    "next": "Next page",
+    "copy": "Copy",
+    "copied": "Copied",
+    "insert": "Insert into the note",
+    "inserted": "Inserted into the note",
+    "pending": "Text is still being recognized. Search finds it as soon as it is done.",
+    "pendingPages_one": "Page {{pages}}: text is still being recognized. Search finds it as soon as it is done.",
+    "pendingPages_other": "Pages {{pages}}: text is still being recognized. Search finds it as soon as it is done.",
+    "none": "No text recognized",
+    "unavailable": "Text recognition is not set up on this server.",
+    "locked": "The note is locked. Its text is not recognized.",
+    "loading": "Loading …",
+    "picture": "Page of the attachment"
   }
 }
