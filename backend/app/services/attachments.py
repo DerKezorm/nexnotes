@@ -10,21 +10,25 @@ attachment today (``sync_refs``, a hook on the text).
 **Coming in** (``begin``, ``receive``, ``finish``): only who may write the note; the id comes from the browser, which
 puts the block into the note at once and uploads after it (the same id twice is the same file). The operator's limit
 per file (``upload_max_mb``) is checked against the length the browser declares and again while the body comes; the
-account's storage (``Account.storage_limit`` against everything ``content.counts`` counts) before and while it comes.
-A full storage takes no attachment; writing goes on (EC-1). The body goes to a work file (``.up-…``, never in a
-backup) and is renamed only once it is whole and prepared.
+account's storage (``Account.storage_limit`` against everything ``content.counts`` counts) before and while it comes,
+with what the owner's other uploads in progress have claimed (``begin`` claims the declared length, ``release``
+gives it back), and once more under the lock that puts the file in place (``finish``): uploads at once never take
+more than the storage has. A full storage takes no attachment; writing goes on (EC-1). The body goes to a work file
+(``.up-…``, never in a backup) and is renamed only once it is whole and prepared. What it is, is read in a worker
+with limits of memory and time (``media.prepare``); a file past them stays a file without a preview.
 
 **Going out**: only to whoever may read the note the attachment belongs to, or a note of the same owner that names it
-(a copied note, a block pasted into another note). Everyone else gets the same "not found" as for one that is not
-there (``readable``). The headers are the router's (``routers/attachments.py``).
+or named it (a copied note, a block pasted into another note, a version in its history). Everyone else gets the same
+"not found" as for one that is not there (``readable``). The headers are the router's (``routers/attachments.py``).
 
 **Going away.** Removing a block from a note takes nothing away at once: the history keeps what its versions name
 (NOTES-15 AC-3, AC-4). An attachment goes
 
-* when its note goes for good (``trash.PURGE_HOOKS``), unless another note of the same owner names it: then it moves
-  there;
-* when no note names it any more, no version of its note does either, and a day has passed (for undo in an open
-  editor): checked when versions are thinned (``history.VERSIONS_PURGED_HOOKS``) and in the cleanup round;
+* when its note goes for good (``trash.PURGE_HOOKS``), unless another note of the same owner names it, or named it
+  and a version of it still does (``attachment_mentions``): then it moves there;
+* when no note names it any more, no version of any note of its owner that named it does either, and a day has
+  passed (for undo in an open editor): checked when versions are thinned (``history.VERSIONS_PURGED_HOOKS``) and in
+  the cleanup round;
 * as a file without a row (its account gone for good, an upload that broke off) in the cleanup round.
 Files go only after the commit that removed their row.
 
@@ -47,7 +51,7 @@ import re
 import secrets
 import threading
 from collections.abc import AsyncIterator, Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -58,7 +62,7 @@ from sqlalchemy.orm import Session
 
 from ..errors import error
 from ..models import Account, Note, NoteUpdate, utcnow
-from ..models_attachments import Attachment, AttachmentRef
+from ..models_attachments import Attachment, AttachmentMention, AttachmentRef
 from ..notedoc import doc as notedoc
 from ..notedoc import schema as s
 from ..notedoc.room import Access
@@ -91,8 +95,11 @@ VIEW = ".view"
 THUMB = ".thumb"
 _ID = re.compile(s.ATTACHMENT_ID)
 _CHUNK = MB
-#: Renaming files into place and writing the row, for one upload at a time (the same id twice at once).
+#: Renaming files into place and writing the row, for one upload at a time (the same id twice at once, the storage).
 _placing = threading.Lock()
+#: Bytes the uploads in progress have claimed of their owner's storage: owner, upload, bytes.
+_claimed: dict[int, dict[str, int]] = {}
+_claiming = threading.Lock()
 
 
 class AttachmentError(Exception):
@@ -161,6 +168,16 @@ def _room_for(db: Session, owner_id: int) -> tuple[int | None, int, int | None]:
     return max(0, limit - taken), taken, limit
 
 
+def has_room(db: Session, owner_id: int, size: int) -> bool:
+    """Whether ``size`` more bytes fit into the owner's storage, with what uploads in progress have claimed."""
+    room, _taken, _limit = _room_for(db, owner_id)
+    if room is None:
+        return True
+    with _claiming:
+        claimed = sum(_claimed.get(owner_id, {}).values())
+    return size <= room - claimed
+
+
 # --- Coming in ----------------------------------------------------------------------------------------------------
 
 
@@ -178,6 +195,8 @@ class Upload:
     limit: int | None
     #: What the device means the file to be (NOTES-18, ``sketches.ROLES``); ``None``: whatever its content is.
     role: str | None = None
+    #: The upload's claim on the storage (``_claimed``).
+    token: str = field(default_factory=lambda: secrets.token_hex(8))
 
 
 def _too_large(name: str, size: int, max_mb: int) -> AttachmentError:
@@ -191,13 +210,13 @@ def _full(taken: int, limit: int | None) -> AttachmentError:
 
 
 def existing(db: Session, attachment_id: str, note_id: str) -> Attachment | None:
-    """The attachment of this id when it is there already for this note (an upload sent twice); ``attachment_id_taken``
-    when the id belongs to another note."""
+    """The attachment of this id when it is there already for this note (an upload sent twice); "not found" when the id
+    belongs to another note, as for any attachment one may not see."""
     found = db.get(Attachment, attachment_id)
     if found is None:
         return None
     if found.note_id != note_id:
-        raise AttachmentError("attachment_id_taken", "This attachment id is taken.", 409)
+        raise AttachmentError("not_found", "Not found.", 404)
     return found
 
 
@@ -221,10 +240,37 @@ def begin(db: Session, account: Account, note_id: str, attachment_id: str, name:
     if declared is not None and declared > max_bytes:
         raise _too_large(clean, declared, max_mb)
     room, taken, limit = _room_for(db, note.owner_id)
-    if room is not None and (room <= 0 or (declared is not None and declared > room)):
-        raise _full(taken, limit)
-    return Upload(attachment_id=attachment_id, note_id=note.id, owner_id=note.owner_id, uploader_id=account.id,
-                  name=clean, max_bytes=max_bytes, room=room, taken=taken, limit=limit, role=role)
+    upload = Upload(attachment_id=attachment_id, note_id=note.id, owner_id=note.owner_id, uploader_id=account.id,
+                    name=clean, max_bytes=max_bytes, room=room, taken=taken, limit=limit, role=role)
+    if room is not None:
+        with _claiming:
+            claims = _claimed.setdefault(note.owner_id, {})
+            free = room - sum(claims.values())
+            if free <= 0 or (declared is not None and declared > free):
+                raise _full(taken, limit)
+            claims[upload.token] = declared or 0
+    return upload
+
+
+def _room_left(upload: Upload, size: int) -> None:
+    """The upload has received ``size`` bytes: past the room the owner had, less what the other uploads claimed, it
+    stops. (An upload without a declared length claims nothing; ``finish`` decides between such ones.)"""
+    if upload.room is None:
+        return
+    with _claiming:
+        others = sum(value for token, value in _claimed.get(upload.owner_id, {}).items() if token != upload.token)
+    if size + others > upload.room:
+        raise _full(upload.taken, upload.limit)
+
+
+def release(upload: Upload) -> None:
+    """The upload is through, refused or broken off: its claim goes."""
+    with _claiming:
+        claims = _claimed.get(upload.owner_id)
+        if claims is not None:
+            claims.pop(upload.token, None)
+            if not claims:
+                _claimed.pop(upload.owner_id, None)
 
 
 async def receive(upload: Upload, chunks: AsyncIterator[bytes]) -> Path:
@@ -240,8 +286,7 @@ async def receive(upload: Upload, chunks: AsyncIterator[bytes]) -> Path:
             received += len(chunk)
             if received > upload.max_bytes:
                 raise _too_large(upload.name, received, upload.max_bytes // MB)
-            if upload.room is not None and received > upload.room:
-                raise _full(upload.taken, upload.limit)
+            _room_left(upload, received)
             waiting.append(chunk)
             if sum(map(len, waiting)) >= _CHUNK:
                 await asyncio.to_thread(sink.write, b"".join(waiting))
@@ -263,8 +308,8 @@ def _write(path: Path, data: bytes) -> None:
 
 
 def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
-    """Prepares the received file (``media.prepare``), puts its files in place and writes its row. Returns the
-    attachment and whether it is new."""
+    """Prepares the received file (``media.prepare``, in a worker), checks the owner's storage once more, puts its
+    files in place and writes its row. Returns the attachment and whether it is new."""
     from ..db import SessionLocal
 
     try:
@@ -278,6 +323,15 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
             found = existing(db, upload.attachment_id, upload.note_id)
             if found is not None:
                 return found, False
+            # Uploads at once each checked their own bytes: here, one at a time, against what is taken now.
+            owner = db.get(Account, upload.owner_id)
+            limit = owner.storage_limit if owner is not None else None
+            if limit is not None:
+                coming = len(prepared.redrawn) if prepared.redrawn is not None else work.stat().st_size
+                coming += sum(len(data) for data in (prepared.view, prepared.thumb) if data is not None)
+                taken = used(db, upload.owner_id)
+                if taken + coming > limit:
+                    raise _full(taken, limit)
             target = path_of(upload.attachment_id)
             if prepared.redrawn is not None:
                 _write(target, prepared.redrawn)
@@ -295,7 +349,7 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
                              size=size, stored=stored, width=prepared.width, height=prepared.height,
                              pages=prepared.pages, duration_ms=prepared.duration_ms,
                              has_view=prepared.view is not None, has_thumb=prepared.thumb is not None,
-                             inline=prepared.inline, unref_at=utcnow())
+                             inline=prepared.inline, preview_failed=prepared.preview_failed, unref_at=utcnow())
             db.add(row)
             try:
                 db.flush()
@@ -319,16 +373,15 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
 
 
 def _prepare(work: Path, role: str | None) -> media.Prepared:
-    """What the file is: by its content alone, or (NOTES-18) checked against the role the device gave."""
-    if role is None:
-        return media.prepare(work)
-    from . import sketches
+    """What the file is: by its content alone, or (NOTES-18) checked against the role the device gave. Read in a worker
+    (``media.prepare``); a file with a role that the worker cannot read is not what it was sent as."""
+    from . import media_worker, sketches
 
     try:
-        return sketches.prepare(work, role)
-    except sketches.WrongKind as exc:
+        return media.prepare(work, role)
+    except (sketches.WrongKind, media_worker.MediaFailed) as exc:
         logger.info("An upload is not what its role says role=%s reason=%s", role, exc)
-        raise AttachmentError("attachment_wrong_kind", "The file is not what it was sent as.", 422, role=role)             from None
+        raise AttachmentError("attachment_wrong_kind", "The file is not what it was sent as.", 422, role=role) from None
 
 
 def store_bytes(db: Session, note_id: str, owner_id: int, kind: str, name: str, data: bytes,
@@ -352,13 +405,18 @@ def _can_read(db: Session, account: Account, note: Note | None) -> bool:
 
 def readable(db: Session, account: Account, attachment: Attachment) -> bool:
     """Whether the account may open the attachment: it may read the note it belongs to, or a note of the same owner
-    that names it."""
+    that names it or named it (its history shows it)."""
     if _can_read(db, account, db.get(Note, attachment.note_id)):
         return True
-    others = db.scalars(select(Note).join(AttachmentRef, AttachmentRef.note_id == Note.id)
-                        .where(AttachmentRef.attachment_id == attachment.id, Note.owner_id == attachment.owner_id,
-                               Note.id != attachment.note_id))
+    others = db.scalars(select(Note).where(Note.id.in_(_naming(attachment.id)), Note.owner_id == attachment.owner_id,
+                                           Note.id != attachment.note_id))
     return any(_can_read(db, account, note) for note in others)
+
+
+def _naming(attachment_id: str) -> Any:
+    """The notes that name the attachment or named it, as a subquery."""
+    return (select(AttachmentRef.note_id).where(AttachmentRef.attachment_id == attachment_id)
+            .union(select(AttachmentMention.note_id).where(AttachmentMention.attachment_id == attachment_id)))
 
 
 def get_for(db: Session, account: Account, attachment_id: str) -> Attachment:
@@ -384,15 +442,17 @@ def out(attachment: Attachment) -> dict[str, Any]:
         "view": attachment.has_view,
         "thumb": attachment.has_thumb,
         "inline": attachment.inline,
+        "preview_failed": attachment.preview_failed,
         "created_at": attachment.created_at.isoformat() if attachment.created_at else None,
     }
 
 
 def of_note(db: Session, account: Account, note_id: str) -> list[dict[str, Any]]:
-    """Every attachment the note names today or was attached to it: what the blocks of an open note draw. Ids the
-    note names that belong to another owner are left out."""
+    """Every attachment the note names today, named in its history or was attached to it: what the blocks of an open
+    note and of its versions draw. Ids the note names that belong to another owner are left out."""
     note = notes.note_for(db, account, note_id)
-    named = select(AttachmentRef.attachment_id).where(AttachmentRef.note_id == note.id)
+    named = (select(AttachmentRef.attachment_id).where(AttachmentRef.note_id == note.id)
+             .union(select(AttachmentMention.attachment_id).where(AttachmentMention.note_id == note.id)))
     rows = db.scalars(select(Attachment).where((Attachment.note_id == note.id)
                                                | (Attachment.id.in_(named) & (Attachment.owner_id == note.owner_id)))
                       .order_by(Attachment.created_at, Attachment.id))
@@ -460,6 +520,14 @@ def sync_refs(db: Session, note: Note) -> None:
                 old[found].position = position
             else:
                 db.add(AttachmentRef(note_id=note.id, attachment_id=found, position=position))
+        new = set(ids) - set(old)
+        if new:
+            # Its versions may name them from now on (NOTES-15 AC-3): remembered for as long as the note lives.
+            known = set(db.scalars(select(AttachmentMention.attachment_id)
+                                   .where(AttachmentMention.note_id == note.id,
+                                          AttachmentMention.attachment_id.in_(new))))
+            for found in new - known:
+                db.add(AttachmentMention(note_id=note.id, attachment_id=found))
         db.flush()
         _mark_referenced(db, set(old) ^ set(ids))
     except Exception:
@@ -498,18 +566,36 @@ def _after_commit(db: Session, ids: list[str]) -> None:
 
 def _purging(db: Session, note_ids: list[str]) -> None:
     """Notes about to go for good (``trash.PURGE_HOOKS``): their attachments go too, unless another note of the same
-    owner names one; then it moves there."""
+    owner names one, or a version of one still does (NOTES-15 AC-3); then it moves there (to one that names it today
+    first), and the cleanup decides about it as about any other."""
     rows = list(db.scalars(select(Attachment).where(Attachment.note_id.in_(note_ids))))
     if not rows:
         return
     going = set(note_ids)
     gone: list[str] = []
+    versions: dict[str, set[str]] = {}
     for row in rows:
         other = db.scalar(select(AttachmentRef.note_id).join(Note, Note.id == AttachmentRef.note_id)
                           .where(AttachmentRef.attachment_id == row.id, Note.owner_id == row.owner_id,
                                  AttachmentRef.note_id.not_in(going)).limit(1))
+        if other is None:
+            for candidate in db.scalars(select(AttachmentMention.note_id)
+                                        .join(Note, Note.id == AttachmentMention.note_id)
+                                        .where(AttachmentMention.attachment_id == row.id,
+                                               Note.owner_id == row.owner_id,
+                                               AttachmentMention.note_id.not_in(going))):
+                if candidate not in versions:
+                    versions[candidate] = _named_by_versions(db, candidate, set())
+                if "*" in versions[candidate] or row.id in versions[candidate]:
+                    other = candidate
+                    break
         if other is not None:
             row.note_id = other
+            if row.unref_at is None and db.scalar(select(AttachmentRef.note_id)
+                                                  .where(AttachmentRef.attachment_id == row.id,
+                                                         AttachmentRef.note_id.not_in(going)).limit(1)) is None:
+                # Kept only by a version: from now on no note names it.
+                row.unref_at = utcnow()
         else:
             gone.append(row.id)
             db.delete(row)
@@ -536,29 +622,45 @@ def _named_by_versions(db: Session, note_id: str, skip: set[int]) -> set[str]:
 
 
 def collect(db: Session, note_ids: Iterable[str] | None = None, skip_versions: Iterable[int] = ()) -> int:
-    """Removes attachments no note names for longer than ``GRACE`` and no version of their note names either (but
-    those in ``skip_versions``, which are about to go). The caller commits. Returns how many went."""
+    """Removes attachments no note names for longer than ``GRACE`` and no version of a note of their owner that named
+    them names either (but those in ``skip_versions``, which are about to go). With ``note_ids`` only the attachments
+    of those notes or named by them. The caller commits. Returns how many went."""
     query = select(Attachment).where(Attachment.unref_at.is_not(None), Attachment.unref_at < utcnow() - GRACE)
     if note_ids is not None:
         wanted = list(set(note_ids))
         if not wanted:
             return 0
-        query = query.where(Attachment.note_id.in_(wanted))
-    by_note: dict[str, list[Attachment]] = {}
-    for row in db.scalars(query):
-        by_note.setdefault(row.note_id, []).append(row)
+        mentioned = select(AttachmentMention.attachment_id).where(AttachmentMention.note_id.in_(wanted))
+        query = query.where(Attachment.note_id.in_(wanted) | Attachment.id.in_(mentioned))
+    rows = list(db.scalars(query))
+    if not rows:
+        return 0
+    ids = [row.id for row in rows]
+    named = set(db.scalars(select(AttachmentRef.attachment_id).where(AttachmentRef.attachment_id.in_(ids))))
+    holders: dict[str, list[str]] = {row.id: [row.note_id] for row in rows}
+    owners = {row.id: row.owner_id for row in rows}
+    for note_id, attachment_id, owner_id in db.execute(
+        select(AttachmentMention.note_id, AttachmentMention.attachment_id, Note.owner_id)
+        .join(Note, Note.id == AttachmentMention.note_id).where(AttachmentMention.attachment_id.in_(ids))
+    ):
+        if owner_id == owners[attachment_id] and note_id not in holders[attachment_id]:
+            holders[attachment_id].append(note_id)
     skip = set(skip_versions)
+    versions: dict[str, set[str]] = {}
     gone: list[str] = []
-    for note_id, rows in by_note.items():
-        kept = _named_by_versions(db, note_id, skip)
-        if "*" in kept:
+    for row in rows:
+        if row.id in named:
             continue
-        named = set(db.scalars(select(AttachmentRef.attachment_id)
-                               .where(AttachmentRef.attachment_id.in_([row.id for row in rows]))))
-        for row in rows:
-            if row.id not in kept and row.id not in named:
-                gone.append(row.id)
-                db.delete(row)
+        kept = False
+        for note_id in holders[row.id]:
+            if note_id not in versions:
+                versions[note_id] = _named_by_versions(db, note_id, skip)
+            if "*" in versions[note_id] or row.id in versions[note_id]:
+                kept = True
+                break
+        if not kept:
+            gone.append(row.id)
+            db.delete(row)
     db.flush()
     _after_commit(db, gone)
     return len(gone)

@@ -6,6 +6,9 @@ document, which names it by its id only.
 
 ``attachment_refs`` says which notes name which attachment today, in the order of their text. It follows the document
 (``services/attachments.sync_refs``, a hook on the text) and is what the gallery, the lists and the rights read.
+
+``attachment_mentions`` says which notes have ever named an attachment: today, or in a version of their history. It
+only grows (a note gone for good takes its rows along) and tells whose versions keep an attachment (NOTES-15 AC-3).
 """
 
 from __future__ import annotations
@@ -54,6 +57,9 @@ class Attachment(Base):
     #: Whether the file itself may be shown in the page (a picture drawn anew, a PDF, a video); everything else is
     #: only downloaded.
     inline: Mapped[bool] = mapped_column(default=False)
+    #: Reading it went past the limits of the media worker (memory, time, pixels): a file to download without a
+    #: preview, whatever its content (``services/media_worker.py``).
+    preview_failed: Mapped[bool] = mapped_column(default=False)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     #: Since when no note names it (``None`` while one does): kept for the history, and for a while for "undo".
     unref_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
@@ -69,3 +75,13 @@ class AttachmentRef(Base):
     #: No foreign key: a note names an attachment the moment it is dropped in, before its upload is through.
     attachment_id: Mapped[str] = mapped_column(String(32), primary_key=True)
     position: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AttachmentMention(Base):
+    """A note named an attachment at some time; its versions may still name it."""
+
+    __tablename__ = "attachment_mentions"
+    __table_args__ = (Index("ix_attachment_mentions_attachment", "attachment_id"),)
+
+    note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
+    attachment_id: Mapped[str] = mapped_column(String(32), primary_key=True)

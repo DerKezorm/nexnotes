@@ -93,6 +93,7 @@ async def upload(
     must be what it says (``attachment_wrong_kind``). Without it the content alone decides."""
     declared_text = request.headers.get("content-length")
     declared = int(declared_text) if declared_text and declared_text.isdigit() else None
+    started: attachments.Upload | Attachment | None = None
     try:
         with SessionLocal() as db:
             started = attachments.begin(db, account, note_id, attachment_id, name, declared, role)
@@ -107,6 +108,10 @@ async def upload(
         # The connection went while the file came (EC-2): nothing was kept, the page offers to upload again.
         logger.info("An upload broke off note=%s", note_id)
         raise error("upload_broken", "The upload broke off.", 400) from None
+    finally:
+        # Through, refused or broken off: what it claimed of the storage is free again.
+        if isinstance(started, attachments.Upload):
+            attachments.release(started)
     if not new:
         response.status_code = 200
     return attachments.out(row)
@@ -203,6 +208,10 @@ async def link_preview(note_id: NoteId, body: LinkIn, request: Request, account:
     picture_id = None
     if card.picture is not None:
         with SessionLocal() as db:
+            if not attachments.has_room(db, owner_id, len(card.picture)):
+                # A full storage takes no picture either: the card comes without one.
+                return {"preview": {"href": card.href, "title": card.title, "description": card.description,
+                                    "site": card.site, "image": None}, "reason": None}
             row = attachments.store_bytes(db, note_id, owner_id, attachments.LINK_PICTURE, card.site or "link",
                                           card.picture)
             db.commit()

@@ -240,12 +240,17 @@ def test_notes10_ac1_every_file_stands_where_it_was_put_and_the_same_upload_twic
         assert len(list(db.scalars(select(Attachment)))) == 3
 
 
-def test_notes10_ac1_an_id_of_another_note_is_taken_and_a_bad_id_is_refused(client, operator):
+def test_notes10_ac1_an_id_of_another_note_is_not_found_and_a_bad_id_is_refused(client, operator):
     first = new_note(client, title="eins")
     second = new_note(client, title="zwei")
     row = attached(client, first["id"], zip_of(), "a.zip")
+    # Not "taken": that would say the id exists. The same answer as for any attachment one may not see.
     taken = upload(client, second["id"], zip_of(), "a.zip", row["id"])
-    assert taken.status_code == 409 and taken.json()["detail"]["code"] == "attachment_id_taken"
+    assert taken.status_code == 404 and taken.json()["detail"]["code"] == "not_found"
+    with new_client(make_account("fremd")) as stranger:
+        theirs = new_note(stranger, title="fremd")
+        taken = upload(stranger, theirs["id"], zip_of(), "a.zip", row["id"])
+        assert taken.status_code == 404 and taken.json()["detail"]["code"] == "not_found"
     for bad in ("../../etc/passwd", "short", "a" * 40, "with space in it here"):
         answer = upload(client, first["id"], zip_of(), "a.zip", bad)
         assert answer.status_code == 422, bad
