@@ -28,9 +28,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# curl for the healthcheck, gosu to drop root at start.
+# curl for the healthcheck, gosu to drop root at start, ffmpeg (with ffprobe) for the length and the picture of an
+# attached video.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends curl gosu \
+    && apt-get install -y --no-install-recommends curl gosu ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt ./

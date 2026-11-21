@@ -106,6 +106,34 @@
       },
       "content": "block+",
       "group": ""
+    },
+    "image": {
+      "attrs": {
+        "id": null,
+        "size": "medium",
+        "name": null
+      },
+      "content": "",
+      "group": "block"
+    },
+    "attachment": {
+      "attrs": {
+        "id": null,
+        "name": null
+      },
+      "content": "",
+      "group": "block"
+    },
+    "linkPreview": {
+      "attrs": {
+        "href": null,
+        "title": null,
+        "description": null,
+        "site": null,
+        "image": null
+      },
+      "content": "",
+      "group": "block"
     }
   },
   "marks": {

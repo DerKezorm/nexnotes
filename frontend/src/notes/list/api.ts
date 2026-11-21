@@ -14,8 +14,9 @@ export type ListView = { mode: ListMode; sort: ListSort; direction: ListDirectio
 
 export const DEFAULT_VIEW: ListView = { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }
 
-/** A picture, scan or sketch of a note: the first one, and how many there are (from the attachments feature). */
-export type ListMedia = { kind: 'image' | 'scan' | 'drawing'; count: number; url?: string; text?: boolean }
+/** A picture, scan, sketch or video of a note: the first one, and how many of its kind there are, with the address of
+ * its preview (from the attachments feature, NOTES-10). */
+export type ListMedia = { kind: 'image' | 'scan' | 'drawing' | 'video'; count: number; url?: string | null; text?: boolean }
 
 /** Who a note of the account is shared with (from sharing): their names, or only how many. */
 export type ListShared = { count?: number; names?: string[] } | boolean

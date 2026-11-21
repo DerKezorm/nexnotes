@@ -2,7 +2,8 @@
 
 The note's document (ProseMirror JSON, ``notedoc``) is written as Typst source, straight, not through Markdown: what a
 note can hold has a fixed form here (headings, lists, checklists with their boxes, tables, quotes, code, rules, links,
-the five highlighter colours). **Every word of a note goes to Typst as a string, never as markup** (``#"…"``), so
+the five highlighter colours, and attachments at their place: pictures in their width, files as a line, link cards as
+a small box). **Every word of a note goes to Typst as a string, never as markup** (``#"…"``), so
 nothing a note says can run as Typst code. Typst's root is a temporary folder that holds the source, the symbol and the
 pictures of the attachments, nothing else; it reads no font of the machine and nothing from the net.
 
@@ -90,11 +91,19 @@ def note_colour(color: str) -> str | None:
     return color if _HEX.match(color or "") else None
 
 
-class Writer:
-    """The body of one note as Typst."""
+#: How wide a picture stands, as in the note (NOTES-10 AC-2).
+PICTURE_WIDTHS = {"small": "33%", "medium": "62%", "full": "100%"}
 
-    def __init__(self) -> None:
+
+class Writer:
+    """The body of one note as Typst. ``files`` are the note's attachments by id with their number (the name of their
+    picture under ``root``); a block of the text that names one puts it at its place and marks it ``placed``."""
+
+    def __init__(self, files: dict[str, tuple[ExportFile, int]] | None = None, root: Path | None = None) -> None:
         self.depth = 0
+        self.files = files or {}
+        self.root = root
+        self.placed: set[str] = set()
 
     def blocks(self, nodes: list[dict[str, Any]]) -> str:
         return "\n\n".join(part for part in (self.block(node) for node in nodes) if part)
@@ -129,7 +138,43 @@ class Writer:
             return "#line(length: 100%, stroke: 0.7pt + nn-rule)"
         if kind == s.TABLE:
             return self.table(inner)
+        if kind in (s.IMAGE, s.ATTACHMENT):
+            return self.attachment(kind, attrs)
+        if kind == s.LINK_PREVIEW:
+            return self.card(attrs)
         return ""
+
+    def attachment(self, kind: str, attrs: dict[str, Any]) -> str:
+        """A picture or file of the note at its place (NOTES-10): the picture in its width with name and size under
+        it, any other file (or a picture Typst cannot draw) as a line with name and size; one that is gone by its
+        name."""
+        found = self.files.get(str(attrs.get("id") or ""))
+        if found is None:
+            name = str(attrs.get("name") or "")
+            return "#nn-file[" + words(name) + "]" if name else ""
+        file, number = found
+        self.placed.add(file.id)
+        label = words(f"{file.name} · {_size_text(file.size)}")
+        if file.kind in ("image", "drawing") and self.root is not None:
+            shown = _picture(file, self.root, number)
+            if shown:
+                width = PICTURE_WIDTHS.get(str(attrs.get("size") or ""), PICTURE_WIDTHS["medium"])
+                return (f"#nn-sized({string(shown)}, {width})\n\n"
+                        "#text(size: 8.5pt, fill: nn-muted)[" + label + "]")
+        return "#nn-file[" + label + "]"
+
+    def card(self, attrs: dict[str, Any]) -> str:
+        """The card of a link: its title as the link, the description and the site under it."""
+        href = safe_href(attrs.get("href"))
+        if not href:
+            return ""
+        title = str(attrs.get("title") or href)
+        body = "#link(" + string(href) + ")[#strong[" + words(title) + "]]"
+        description = str(attrs.get("description") or "")
+        if description:
+            body += "#linebreak()#text(size: 9pt, fill: nn-muted)[" + words(description) + "]"
+        body += "#linebreak()#text(size: 8.5pt, fill: nn-muted)[" + words(str(attrs.get("site") or href)) + "]"
+        return "#nn-card[" + body + "]"
 
     def item(self, item: dict[str, Any]) -> str:
         return self.blocks(item.get("content") or [])
@@ -244,6 +289,8 @@ PREAMBLE = r"""
 #let nn-quote(body) = block(width: 100%, inset: (left: 12pt, y: 2pt), stroke: (left: 3pt + nn-rule),
   text(fill: rgb("#3c3c48"), body))
 #let nn-picture(name) = block(above: 0.6em, below: 0.4em, image(name, width: auto, fit: "contain") )
+#let nn-sized(name, width) = block(above: 0.6em, below: 0.4em, image(name, width: width))
+#let nn-card(body) = block(width: 100%, stroke: 0.6pt + nn-rule, inset: 8pt, radius: 6pt, body)
 #let nn-file(name) = box(stroke: 0.6pt + nn-rule, inset: (x: 6pt, y: 3pt), radius: 4pt, text(size: 9.5pt, name))
 """
 
@@ -345,10 +392,14 @@ def document(data: NoteData, labels: dict[str, str], language: str, root: Path) 
     if data.locked:
         parts.append("#text(fill: nn-muted, style: \"italic\")[" + words(labels["locked"]) + "]")
         return "\n\n".join(parts) + "\n"
-    parts.append(Writer().blocks(data.document.get("content") or []))
-    if data.files:
+    numbered = {file.id: (file, number) for number, file in enumerate(data.files, start=1)}
+    writer = Writer(numbered, root)
+    parts.append(writer.blocks(data.document.get("content") or []))
+    # What no block of the text names follows the text.
+    rest = [(number, file) for number, file in enumerate(data.files, start=1) if file.id not in writer.placed]
+    if rest:
         parts.append("#heading(level: 2)[" + words(labels["attachments"]) + "]")
-        for number, file in enumerate(data.files, start=1):
+        for number, file in rest:
             shown = None
             if file.kind in ("image", "drawing"):
                 shown = _picture(file, root, number)

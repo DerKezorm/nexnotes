@@ -881,3 +881,119 @@ def test_notes17_ec8_every_note_is_asked_once_more_whatever_the_lists_say(client
     names = zip_of(client).namelist()
     assert "Gemeinsam/Lesbar im Ordner.md" in names
     assert not any("Nur gelistet" in name or "In meinem Ordner" in name for name in names)
+
+
+# --- Real attachments (NOTES-10) at their place in the text --------------------------------------------------------------
+
+
+def _attach(client, note_id: str, data: bytes, name: str) -> dict:
+    from app.services import attachments as attachment_service
+
+    answer = client.post("/api/attachments", params={"note_id": note_id, "id": attachment_service.new_id(), "name": name},
+                         content=data)
+    assert answer.status_code == 201, answer.text
+    return answer.json()
+
+
+def _blocks(note_id: str, account_id: int, *blocks: dict) -> None:
+    import asyncio
+
+    def change(doc):
+        body = notedoc.body_of(doc)
+        notedoc.write_blocks(body, len(body.children), notedoc.clean_doc({"type": "doc", "content": list(blocks)})
+                             ["content"])
+
+    asyncio.run(notes.change(note_id, change, account_id=account_id))
+
+
+def _para(text: str) -> dict:
+    return {"type": "paragraph", "content": [{"type": "text", "text": text}]}
+
+
+def _zip_bytes() -> bytes:
+    out = io.BytesIO()
+    with zipfile.ZipFile(out, "w") as archive:
+        archive.writestr("plan.txt", "Grundriss")
+    return out.getvalue()
+
+
+def _sofa(client, operator) -> tuple[str, dict, dict]:
+    note_id = new_note(client, "Sofa", "Vorher")
+    picture = _attach(client, note_id, png("green"), "Wohnzimmer.png")
+    archive = _attach(client, note_id, _zip_bytes(), "Grundriss (alt).zip")
+    gone = _attach(client, note_id, b"nicht mehr in der Notiz", "weg.txt")
+    _blocks(note_id, operator.id, {"type": "image", "attrs": {"id": picture["id"], "name": picture["name"],
+                                                              "size": "small"}},
+            _para("Dazwischen"), {"type": "attachment", "attrs": {"id": archive["id"], "name": archive["name"]}},
+            {"type": "linkPreview", "attrs": {"href": "https://moebel.example.com/sofa", "title": "Ecksofa",
+                                              "description": "Maße", "site": "moebel.example.com"}},
+            _para("Danach"))
+    del gone  # uploaded, never put into the text: not exported
+    return note_id, picture, archive
+
+
+def test_notes17_ac1_real_attachments_stand_at_their_place_in_the_markdown(client, operator):
+    note_id, picture, _archive = _sofa(client, operator)
+    answer = client.get(f"/api/export/notes/{note_id}/markdown")
+    assert answer.status_code == 200 and answer.headers["content-type"] == "application/zip"
+    zipped = zipfile.ZipFile(io.BytesIO(answer.content))
+    assert set(zipped.namelist()) == {"Sofa.md", "Sofa (Attachments)/", "Sofa (Attachments)/Wohnzimmer.png",
+                                      "Sofa (Attachments)/Grundriss (alt).zip"}
+    # The files as the server keeps them (the picture drawn anew), streamed into the ZIP.
+    assert zipped.read("Sofa (Attachments)/Wohnzimmer.png") == client.get(f"/api/attachments/{picture['id']}/file").content
+    assert zipped.read("Sofa (Attachments)/Grundriss (alt).zip") == _zip_bytes()
+    text = zipped.read("Sofa.md").decode("utf-8")
+    body = front_and_body(text)[1]
+    assert body.split("\n\n") == [
+        "# Sofa", "Vorher", "![Wohnzimmer.png](Sofa%20%28Attachments%29/Wohnzimmer.png)", "Dazwischen",
+        "[Grundriss (alt).zip](Sofa%20%28Attachments%29/Grundriss%20%28alt%29.zip)",
+        "[Ecksofa](https://moebel.example.com/sofa)", "Danach\n"]
+    assert "## Attachments" not in text and "weg.txt" not in text
+
+
+def test_notes17_ac2_real_attachments_stand_at_their_place_in_the_pdf(client, operator):
+    note_id, _picture, _archive = _sofa(client, operator)
+    heic_note = new_note(client, "HEIC", "Foto vom iPhone")
+    import pillow_heif
+    from PIL import Image
+
+    pillow_heif.register_heif_opener()
+    heic = io.BytesIO()
+    Image.new("RGB", (60, 40), "blue").save(heic, "HEIF")
+    photo = _attach(client, heic_note, heic.getvalue(), "IMG_0001.heic")
+    _blocks(heic_note, operator.id, {"type": "image", "attrs": {"id": photo["id"], "name": photo["name"]}})
+    answer = client.get(f"/api/export/notes/{note_id}/pdf")
+    assert answer.status_code == 200, answer.text
+    reader = PdfReader(io.BytesIO(answer.content))
+    assert len([image for page in reader.pages for image in page.images]) == 1
+    text = pdf_text(answer.content)
+    places = [text.index(word) for word in ("Vorher", "Wohnzimmer.png", "Dazwischen", "Grundriss (alt).zip", "Ecksofa",
+                                            "moebel.example.com", "Danach")]
+    assert places == sorted(places)
+    assert "Attachments" not in text and "weg.txt" not in text
+    # A HEIC is drawn through the picture every browser shows.
+    shown = client.get(f"/api/export/notes/{heic_note}/pdf")
+    assert shown.status_code == 200
+    assert len([image for page in PdfReader(io.BytesIO(shown.content)).pages for image in page.images]) == 1
+
+
+def test_notes17_ac4_ac7_a_folder_carries_real_attachments_and_names_their_size_before(client, operator):
+    folder = make_folder(client, "Wohnen")
+    note_id = new_note(client, "Sofa", "Vorher", folder)
+    archive = _attach(client, note_id, b"x" * 120_000, "Messung.bin")
+    _blocks(note_id, operator.id, {"type": "attachment", "attrs": {"id": archive["id"], "name": archive["name"]}})
+    size = client.get("/api/export/estimate", params={"folder_id": folder}).json()
+    assert size["notes"] == 1 and size["bytes"] >= 120_000
+    zipped = zip_of(client, folder)
+    assert zipped.read("Wohnen/Sofa (Attachments)/Messung.bin") == b"x" * 120_000
+    assert "[Messung.bin](Sofa%20%28Attachments%29/Messung.bin)" in zipped.read("Wohnen/Sofa.md").decode()
+
+
+def test_notes17_ec1_a_locked_note_takes_none_of_its_real_attachments_along(client, operator, locking):
+    note_id = new_note(client, "Tresor", "Geheimnis")
+    picture = _attach(client, note_id, png(), "pass.png")
+    _blocks(note_id, operator.id, {"type": "image", "attrs": {"id": picture["id"], "name": picture["name"]}})
+    locking.add(note_id)
+    answer = client.get(f"/api/export/notes/{note_id}/markdown")
+    assert answer.headers["content-type"].startswith("text/markdown")
+    assert "pass.png" not in answer.text and "Geheimnis" not in answer.text

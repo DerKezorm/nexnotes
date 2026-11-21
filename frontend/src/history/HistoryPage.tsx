@@ -163,7 +163,7 @@ export function HistoryPage() {
               <span className="min-w-0">{version.title || t('notes.untitled')}</span>
             </h1>
             {version.restored_from && <p className="text-[12.5px] text-mist-500">{t('history.restoredFrom', { when: moment(version.restored_from, lang) })}</p>}
-            <VersionView doc={version.content} />
+            <VersionView doc={version.content} noteId={version.note_id} />
           </article>
         ) : (
           page &&

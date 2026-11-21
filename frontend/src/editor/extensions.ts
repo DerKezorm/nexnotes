@@ -11,7 +11,9 @@
  * - pasted HTML without scripts, forms and styles (EC-3); links open with Ctrl or ⌘ in a new tab without access to
  *   nexnotes (EC-8);
  * - the placeholder and a few shortcuts (link, table, folding);
- * - tags painted in the accent colour, with suggestions while one is typed (`tags.ts`, NOTES-5).
+ * - tags painted in the accent colour, with suggestions while one is typed (`tags.ts`, NOTES-5);
+ * - attachments drawn as cards, pictures and players, and files and links taken in by dropping and pasting
+ *   (`attachments/editing.tsx`, NOTES-10).
  */
 import { Extension, type AnyExtension, type Editor } from '@tiptap/core'
 import Collaboration from '@tiptap/extension-collaboration'
@@ -30,6 +32,7 @@ import type {} from '@tiptap/extension-list'
 import type {} from '@tiptap/extension-table'
 import type {} from '@tiptap/starter-kit'
 
+import { ATTACHMENT_NODES, attachmentEditing, withAttachmentView } from '../attachments/editing'
 import { caretLook, presentAccounts, type PresenceUser } from './presence'
 import type { NoteProvider } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
@@ -117,6 +120,9 @@ const KEPT: Record<string, string[]> = {
   h1: ['data-collapsed'],
   h2: ['data-collapsed'],
   h3: ['data-collapsed'],
+  // Attachments copied from a note (NOTES-10): their blocks name the attachment by its id, nothing else.
+  figure: ['data-type', 'data-id', 'data-size', 'data-name'],
+  div: ['data-type', 'data-id', 'data-name', 'data-href', 'data-title', 'data-description', 'data-site', 'data-image'],
 }
 
 /** What is pasted keeps the formatting nexnotes knows; the rest becomes plain text; scripts, forms and styles always go
@@ -415,6 +421,8 @@ export type EditorSetup = {
   t: T
   placeholder: string
   hooks?: EditorHooks
+  /** The note the editor writes, for its attachments (NOTES-10); without it nothing can be attached. */
+  noteId?: string
 }
 
 /** A checklist's checkbox read out in the page's language (NOTES-3 EC-11), not TipTap's English. */
@@ -426,9 +434,11 @@ function withCheckboxLabel(extension: AnyExtension, t: T): AnyExtension {
 }
 
 /** Everything the editor of one note runs with. */
-export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {} }: EditorSetup): AnyExtension[] {
+export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}, noteId = '' }: EditorSetup): AnyExtension[] {
   return [
-    ...schemaExtensions().map((extension) => (extension.name === 'taskItem' ? withCheckboxLabel(extension, t) : extension)),
+    ...schemaExtensions().map((extension) =>
+      extension.name === 'taskItem' ? withCheckboxLabel(extension, t) : ATTACHMENT_NODES.includes(extension.name) ? withAttachmentView(extension, noteId) : extension,
+    ),
     Collaboration.configure({ document: doc, field: 'body' }),
     CollaborationCaret.configure({
       provider,
@@ -456,6 +466,8 @@ export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}
     noteEditing(t, hooks),
     // Tags (NOTES-5): painted and suggested, never a node or a mark of their own.
     noteTags(t),
+    // Attachments (NOTES-10): files dropped and pasted, links that become cards.
+    attachmentEditing(noteId),
   ]
 }
 

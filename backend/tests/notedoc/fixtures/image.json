@@ -1,0 +1,60 @@
+{
+  "title": "Case image",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Foto vom Platz:"
+          }
+        ]
+      },
+      {
+        "type": "image",
+        "attrs": {
+          "id": "Zx3_aB9-cD4eF5gH6iJ7kL",
+          "size": "small",
+          "name": "Wohnzimmer.heic"
+        }
+      },
+      {
+        "type": "image",
+        "attrs": {
+          "id": "Mn0pQ1rS2tU3vW4xY5zA6b",
+          "size": "medium",
+          "name": null
+        }
+      },
+      {
+        "type": "bulletList",
+        "content": [
+          {
+            "type": "listItem",
+            "content": [
+              {
+                "type": "paragraph",
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "im Punkt"
+                  }
+                ]
+              },
+              {
+                "type": "image",
+                "attrs": {
+                  "id": "Cc7dD8eE9fF0gG1hH2iI3j",
+                  "size": "full",
+                  "name": "Plan.png"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

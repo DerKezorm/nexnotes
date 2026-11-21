@@ -194,6 +194,7 @@ def safe_href(href: Any) -> str | None:
 # --- Cleaning ProseMirror JSON ------------------------------------------------------------------------------------
 
 _LANGUAGE = re.compile(r"^[A-Za-z0-9_+#.-]{1,40}$")
+_ATTACHMENT_ID = re.compile(s.ATTACHMENT_ID)
 _ORDER_TYPES = frozenset({"1", "a", "A", "i", "I"})
 _ALIGN = frozenset({"left", "center", "right"})
 
@@ -241,6 +242,46 @@ def _clean_node_attrs(kind: str, attrs: Any) -> dict[str, Any]:
     elif kind == s.CODE_BLOCK:
         language = given.get("language")
         out["language"] = language if isinstance(language, str) and _LANGUAGE.match(language) else None
+    return out
+
+
+def attachment_id(value: Any) -> str | None:
+    """An attachment's id as a document may carry it (NOTES-10), else ``None``: never a path, never anything else."""
+    return value if isinstance(value, str) and _ATTACHMENT_ID.match(value) else None
+
+
+def clean_label(value: Any, limit: int) -> str | None:
+    """A name or a line of a link card: one line, no control characters, at most ``limit`` characters; empty is
+    ``None``."""
+    if not isinstance(value, str):
+        return None
+    text = _SPACES.sub(" ", unicodedata.normalize("NFC", value))
+    text = "".join(ch for ch in text if unicodedata.category(ch) != "Cc").strip()
+    return text[:limit].rstrip() or None
+
+
+def _clean_atom(kind: str, attrs: Any) -> dict[str, Any] | None:
+    """The attributes of an attachment's block (NOTES-10), or ``None`` when it names nothing it may: a picture or file
+    without a valid id, a card without an http(s) target."""
+    given = attrs if isinstance(attrs, dict) else {}
+    out = dict(s.NODE_ATTRS[kind])
+    if kind == s.LINK_PREVIEW:
+        href = safe_href(given.get("href"))
+        if href is None or urlsplit(href).scheme.lower() not in ("http", "https"):
+            return None
+        out["href"] = href
+        out["title"] = clean_label(given.get("title"), s.MAX_CARD_TITLE)
+        out["description"] = clean_label(given.get("description"), s.MAX_CARD_TEXT)
+        out["site"] = clean_label(given.get("site"), s.MAX_NAME)
+        out["image"] = attachment_id(given.get("image"))
+        return out
+    found = attachment_id(given.get("id"))
+    if found is None:
+        return None
+    out["id"] = found
+    out["name"] = clean_label(given.get("name"), s.MAX_NAME)
+    if kind == s.IMAGE:
+        out["size"] = given.get("size") if given.get("size") in s.IMAGE_SIZES else s.IMAGE_SIZES[0]
     return out
 
 
@@ -364,6 +405,9 @@ def _clean_block(node: Any, depth: int) -> list[dict[str, Any]]:
         return [_with_attrs(kind, attrs, [{"type": s.TEXT, "text": text}] if text else None)]
     if kind == s.HORIZONTAL_RULE:
         return [{"type": s.HORIZONTAL_RULE}]
+    if kind in s.ATOMS:
+        atom = _clean_atom(kind, node.get("attrs"))
+        return [{"type": kind, "attrs": atom}] if atom is not None else []
     if kind == s.BLOCKQUOTE:
         return [_with_attrs(kind, attrs, _clean_blocks(content, depth + 1) or [_paragraph()])]
     if kind in s.LISTS:
@@ -525,7 +569,7 @@ def _repair_child(parent: XmlFragment | XmlElement, index: int) -> tuple[int, bo
     if not isinstance(child, XmlElement):
         return 0, False
     tag = child.tag or ""
-    if tag in s.TEXTBLOCKS or tag in (s.CODE_BLOCK, s.HORIZONTAL_RULE, s.HARD_BREAK):
+    if tag in s.TEXTBLOCKS or tag in (s.CODE_BLOCK, s.HORIZONTAL_RULE, s.HARD_BREAK) or tag in s.ATOMS:
         return 0, False
     fixes = _repair_children(child)
     if tag in s.LISTS and not _elements(child):
@@ -611,6 +655,27 @@ def to_json(doc: Doc) -> dict[str, Any]:
     cleaned: pass it through ``clean_doc`` before trusting its shape."""
     with doc.transaction():
         return {"type": s.DOC, "content": _read_children(body_of(doc))}
+
+
+def attachment_refs(source: Doc | dict[str, Any]) -> list[str]:
+    """The ids of the attachments a note names (NOTES-10), in the order of the text, each once: pictures, files and
+    the pictures of link cards. Only ids of the right shape; the rest is no attachment."""
+    document = to_json(source) if isinstance(source, Doc) else source
+    found: dict[str, None] = {}
+    stack = list(reversed(document.get("content") or [])) if isinstance(document, dict) else []
+    while stack:
+        node = stack.pop()
+        if not isinstance(node, dict):
+            continue
+        kind = node.get("type")
+        if kind in s.ATOMS:
+            attrs = node.get("attrs") if isinstance(node.get("attrs"), dict) else {}
+            found_id = attachment_id(attrs.get("image" if kind == s.LINK_PREVIEW else "id"))
+            if found_id:
+                found.setdefault(found_id)
+            continue
+        stack.extend(reversed(node.get("content") or []))
+    return list(found)
 
 
 def from_json(document: dict[str, Any], title: str = "") -> Doc:

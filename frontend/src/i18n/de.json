@@ -132,6 +132,101 @@
     "mainMenu": "Hauptmenü",
     "openMenu": "Menü öffnen"
   },
+  "attachments": {
+    "attach": "Anhängen",
+    "attachLabel": "Dateien anhängen",
+    "sheet": {
+      "title": "Anhängen",
+      "photo": "Foto",
+      "file": "Datei",
+      "link": "Link"
+    },
+    "link": {
+      "title": "Link anhängen",
+      "address": "Adresse",
+      "add": "Anhängen",
+      "invalid": "Das ist keine Adresse, die mit http:// oder https:// beginnt."
+    },
+    "dropHint": "Dateien hierher ziehen oder einfügen · höchstens {{max}} MB je Datei",
+    "refused": {
+      "tooLarge": "Zu groß. Höchstens {{max}} MB je Datei; das legt der Betreiber fest.",
+      "full": "Dein Speicher ist voll ({{used}} von {{limit}}). Neue Anhänge erst, wenn Platz frei ist.",
+      "hide": "Ausblenden"
+    },
+    "upload": {
+      "progress": "wird hochgeladen · {{percent}} %",
+      "waiting": "wartet",
+      "broken": "Hochladen abgebrochen, die Verbindung war weg. Der Anhang fehlt noch.",
+      "full": "Dein Speicher ist voll. Der Anhang fehlt noch.",
+      "tooLarge": "Zu groß. Höchstens {{max}} MB je Datei; das legt der Betreiber fest.",
+      "failed": "Hochladen ging nicht. Der Anhang fehlt noch.",
+      "retry": "Erneut hochladen",
+      "cancel": "Hochladen abbrechen",
+      "dismiss": "Ausblenden"
+    },
+    "missing": "Der Anhang fehlt noch.",
+    "loading": "Wird geladen …",
+    "unnamed": "Ohne Namen",
+    "remove": "Anhang entfernen",
+    "size": {
+      "label": "Größe: {{size}}",
+      "title": "Größe",
+      "small": "klein",
+      "medium": "mittel",
+      "full": "ganze Breite"
+    },
+    "openLarge": "„{{name}}“ groß öffnen",
+    "openLargeShort": "Groß öffnen",
+    "download": "Herunterladen",
+    "kind": {
+      "image": "Bild",
+      "scan": "Scan",
+      "pdf": "PDF",
+      "recording": "Aufnahme",
+      "drawing": "Skizze",
+      "video": "Video",
+      "file": "Datei"
+    },
+    "pages_one": "{{count}} Seite",
+    "pages_other": "{{count}} Seiten",
+    "browse": "Zum Blättern öffnen",
+    "openPdf": "„{{name}}“ zum Blättern öffnen",
+    "play": "„{{name}}“ abspielen",
+    "cannotPlay": "Spielt hier nicht ab",
+    "openLink": "„{{title}}“ öffnen",
+    "plainLink": "Als Link lassen",
+    "gallery": {
+      "title": "Anhänge",
+      "summary_one": "{{count}} Datei · {{size}}",
+      "summary_other": "{{count}} Dateien · {{size}}",
+      "kinds": "Art",
+      "all": "Alle",
+      "filter": {
+        "image": "Bilder",
+        "scan": "Scans",
+        "pdf": "PDFs",
+        "recording": "Aufnahmen",
+        "drawing": "Skizzen",
+        "video": "Videos",
+        "file": "Dateien"
+      },
+      "sort": {
+        "newest": "Neueste zuerst",
+        "largest": "Größte zuerst",
+        "label": "Reihenfolge"
+      },
+      "inNote": "in „{{title}}“ · {{size}}",
+      "emptyTitle": "Noch keine Anhänge",
+      "emptyText": "Zieh Fotos, PDFs, Videos oder andere Dateien in eine Notiz, füg sie ein oder wähl dort „Anhängen“. Hier findest du sie dann alle.",
+      "noneOfKind": "Keine Anhänge dieser Art.",
+      "more": "Weitere laden",
+      "failed": "Die Anhänge lassen sich gerade nicht laden."
+    },
+    "storage": {
+      "full": "Dein Speicher ist voll: {{used}} von {{limit}}. Schreiben geht weiter, neue Anhänge erst, wenn Platz frei ist.",
+      "large": "Große Anhänge ansehen"
+    }
+  },
   "auth": {
     "backToLogin": "Zur Anmeldung",
     "code": {
@@ -429,6 +524,11 @@
     "note_icon_unknown": "Wähl ein Symbol aus der Liste.",
     "avatar_too_large": "Das Bild ist zu groß (höchstens {{max_mb}} MB).",
     "avatar_not_a_picture": "Das ist kein Bild, das nexnotes annimmt (JPEG, PNG, WebP, GIF, HEIC oder AVIF).",
+    "attachment_too_large": "„{{name}}“ ist zu groß. Höchstens {{max_mb}} MB je Datei; das legt der Betreiber fest.",
+    "storage_limit_reached": "Dein Speicher ist voll. Neue Anhänge erst, wenn Platz frei ist.",
+    "attachment_id_taken": "Dieser Anhang gehört schon zu einer anderen Notiz.",
+    "attachment_empty": "Die Datei ist leer.",
+    "upload_broken": "Das Hochladen brach ab. Der Anhang fehlt noch.",
     "export_expired": "Der Export lag 24 Stunden bereit und ist jetzt gelöscht. Starte ihn neu.",
     "export_not_ready": "Der Export ist noch nicht fertig.",
     "export_not_failed": "Nur ein abgebrochener Export lässt sich neu starten.",
@@ -666,7 +766,9 @@
       "image_other": "{{count}} Fotos",
       "scanText": "Scan · Text erkannt",
       "scan_one": "{{count}} Scan",
-      "scan_other": "{{count}} Scans"
+      "scan_other": "{{count}} Scans",
+      "video_one": "{{count}} Video",
+      "video_other": "{{count}} Videos"
     },
     "menu": {
       "color": "Farbe",

@@ -7,7 +7,7 @@
  * Other lists (the search's hits) can draw their notes with it: only `item` and `href` are needed.
  */
 import { NoteIcon } from '../../components/NoteIcon'
-import { Image, Lock, MoreHorizontal, PenLine, Pin, ScanText, Users } from 'lucide-react'
+import { Image, Lock, MoreHorizontal, PenLine, Pin, ScanText, Users, Video } from 'lucide-react'
 import type { DragEvent, MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
@@ -37,7 +37,7 @@ export type NoteRowProps = {
 }
 
 export function MediaIcon({ media, className }: { media: ListMedia; className?: string }) {
-  const Icon = media.kind === 'scan' ? ScanText : media.kind === 'drawing' ? PenLine : Image
+  const Icon = media.kind === 'scan' ? ScanText : media.kind === 'drawing' ? PenLine : media.kind === 'video' ? Video : Image
   return <Icon aria-hidden className={className} strokeWidth={1.8} />
 }
 

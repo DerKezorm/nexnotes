@@ -29,7 +29,7 @@ BUILT = {
 }
 
 #: Typed errors that carry an error code to the page.
-TYPED = "Account|Avatar|Backup|Locale|Mail|Oidc|Token"
+TYPED = "Account|Attachment|Avatar|Backup|Locale|Mail|Oidc|Token"
 RAISED = re.compile(
     rf"""(?:\berror|(?:{TYPED})Error|\brefuse\w*|_to_login|_to_account|_refuse\(\d+,)\(?\s*(?:db,\s*\w+,\s*)?"""
     r'''"([a-z][a-z0-9_]+)"'''

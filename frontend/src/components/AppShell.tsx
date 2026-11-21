@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Outlet, useLocation } from 'react-router-dom'
 
 import { authApi } from '../api/client'
-import { SHELL_PARTS } from '../extensions'
+import { SHELL_BANNERS, SHELL_PARTS } from '../extensions'
 import { useColumnWidth } from '../lib/columns'
 import { useAuth } from '../state/auth'
 import { ColumnHandle } from './ColumnHandle'
@@ -57,6 +57,9 @@ export function AppShell() {
           </button>
           <Logo size={26} withWordmark />
         </header>
+        {SHELL_BANNERS.map((banner) => (
+          <div key={banner.key}>{banner.render()}</div>
+        ))}
         <main className="nn-scroll min-h-0 flex-1 overflow-y-auto">
           <Outlet />
         </main>

@@ -20,8 +20,10 @@ a ZIP are only ever made of such parts (``zip_path`` checks once more), so nothi
 (``tags.HIDDEN_NOTES``, NOTES-16) are there with their title and "locked, not exported" only (EC-1).
 
 **Attachments** (NOTES-10, NOTES-18) dock on through ``ATTACHMENT_SOURCES``: each gives the files of a note as
-``ExportFile``. Until the note format knows where they stand in the text, they follow the text: in Markdown as links
-into the note's attachment folder, in the PDF as pictures and names.
+``ExportFile`` (``services/attachments.export_files`` for NOTES-10). Those the note's text names (the blocks ``image``
+and ``attachment``) stand at their place: in Markdown as a picture or a link into the note's attachment folder, in the
+PDF as the picture or a line with name and size. Files no block names (a source that knows no place) follow the text
+under "Attachments". A link card is the link in Markdown and a small box in the PDF.
 """
 
 from __future__ import annotations
@@ -306,17 +308,25 @@ def _md_text(text: str) -> str:
 
 def note_markdown(data: NoteData, words: dict[str, str], *, attachment_dir: str | None = None,
                   attachment_names: Sequence[str] = ()) -> str:
-    """The note as a Markdown file: properties, ``# title``, the text, then its attachments as links into
-    ``attachment_dir`` (``attachment_names`` in the order of ``data.files``)."""
+    """The note as a Markdown file: properties, ``# title``, the text with its attachments at their place as links into
+    ``attachment_dir`` (``attachment_names`` in the order of ``data.files``), then the files no block of the text
+    names."""
     head = "\n".join(front_matter(data)) + "\n\n"
     if data.locked:
         title = to_markdown({"type": "doc", "content": []}, title=data.title or words["untitled"])
         return head + title + "\n*" + _md_text(words["locked"]) + "*\n"
-    body = to_markdown(data.document, title=data.title or words["untitled"])
-    if not data.files or attachment_dir is None:
+    targets: dict[str, str] = {}
+    if attachment_dir is not None:
+        targets = {file.id: link_target(attachment_dir, name)
+                   for file, name in zip(data.files, attachment_names, strict=True)}
+    body = to_markdown(data.document, title=data.title or words["untitled"],
+                       attachment_href=lambda found, _name: targets.get(found))
+    placed = set(notedoc.attachment_refs(data.document))
+    rest = [(file, name) for file, name in zip(data.files, attachment_names, strict=False) if file.id not in placed]
+    if not rest or attachment_dir is None:
         return head + body
     lines = ["", f"## {_md_text(words['attachments'])}", ""]
-    for file, name in zip(data.files, attachment_names, strict=True):
+    for file, name in rest:
         target = link_target(attachment_dir, name)
         label = _md_text(file.name or name)
         if file.kind in PICTURE_KINDS:

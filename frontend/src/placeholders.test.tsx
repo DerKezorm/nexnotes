@@ -27,6 +27,7 @@ const VALUES: Record<string, Record<string, unknown>> = {
   tag_exists: { label: 'einkauf', count: 2 },
   search_too_many_terms: { maximum: 16 },
   search_term_too_long: { maximum: 100 },
+  attachment_too_large: { name: 'Drohnenflug.mp4', size: 1468006400, max_mb: 100 },
 }
 const WITH_PLACEHOLDER = Object.entries({ ...en.errors, ...de.errors })
   .filter(([, text]) => /\{\{/.test(String(text)))

@@ -132,6 +132,101 @@
     "mainMenu": "Main menu",
     "openMenu": "Open the menu"
   },
+  "attachments": {
+    "attach": "Attach",
+    "attachLabel": "Attach files",
+    "sheet": {
+      "title": "Attach",
+      "photo": "Photo",
+      "file": "File",
+      "link": "Link"
+    },
+    "link": {
+      "title": "Attach a link",
+      "address": "Address",
+      "add": "Attach",
+      "invalid": "That is not an address starting with http:// or https://."
+    },
+    "dropHint": "Drag files here or paste them · at most {{max}} MB per file",
+    "refused": {
+      "tooLarge": "Too large. At most {{max}} MB per file; the operator sets this.",
+      "full": "Your storage is full ({{used}} of {{limit}}). New attachments only once there is room.",
+      "hide": "Hide"
+    },
+    "upload": {
+      "progress": "uploading · {{percent}} %",
+      "waiting": "waiting",
+      "broken": "Upload stopped, the connection was gone. The attachment is still missing.",
+      "full": "Your storage is full. The attachment is still missing.",
+      "tooLarge": "Too large. At most {{max}} MB per file; the operator sets this.",
+      "failed": "The upload did not work. The attachment is still missing.",
+      "retry": "Upload again",
+      "cancel": "Cancel upload",
+      "dismiss": "Hide"
+    },
+    "missing": "The attachment is still missing.",
+    "loading": "Loading …",
+    "unnamed": "No name",
+    "remove": "Remove attachment",
+    "size": {
+      "label": "Size: {{size}}",
+      "title": "Size",
+      "small": "small",
+      "medium": "medium",
+      "full": "full width"
+    },
+    "openLarge": "Open “{{name}}” large",
+    "openLargeShort": "Open large",
+    "download": "Download",
+    "kind": {
+      "image": "Picture",
+      "scan": "Scan",
+      "pdf": "PDF",
+      "recording": "Recording",
+      "drawing": "Sketch",
+      "video": "Video",
+      "file": "File"
+    },
+    "pages_one": "{{count}} page",
+    "pages_other": "{{count}} pages",
+    "browse": "Open to browse",
+    "openPdf": "Open “{{name}}” to browse",
+    "play": "Play “{{name}}”",
+    "cannotPlay": "Does not play here",
+    "openLink": "Open “{{title}}”",
+    "plainLink": "Keep as a link",
+    "gallery": {
+      "title": "Attachments",
+      "summary_one": "{{count}} file · {{size}}",
+      "summary_other": "{{count}} files · {{size}}",
+      "kinds": "Kind",
+      "all": "All",
+      "filter": {
+        "image": "Pictures",
+        "scan": "Scans",
+        "pdf": "PDFs",
+        "recording": "Recordings",
+        "drawing": "Sketches",
+        "video": "Videos",
+        "file": "Files"
+      },
+      "sort": {
+        "newest": "Newest first",
+        "largest": "Largest first",
+        "label": "Order"
+      },
+      "inNote": "in “{{title}}” · {{size}}",
+      "emptyTitle": "No attachments yet",
+      "emptyText": "Drag photos, PDFs, videos or other files into a note, paste them or choose “Attach” there. You will find them all here.",
+      "noneOfKind": "No attachments of this kind.",
+      "more": "Load more",
+      "failed": "The attachments cannot be loaded right now."
+    },
+    "storage": {
+      "full": "Your storage is full: {{used}} of {{limit}}. Writing goes on; new attachments only once there is room.",
+      "large": "See large attachments"
+    }
+  },
   "auth": {
     "backToLogin": "To the sign-in",
     "code": {
@@ -429,6 +524,11 @@
     "note_icon_unknown": "Choose a symbol from the list.",
     "avatar_too_large": "The picture is too large (at most {{max_mb}} MB).",
     "avatar_not_a_picture": "That is not a picture nexnotes accepts (JPEG, PNG, WebP, GIF, HEIC or AVIF).",
+    "attachment_too_large": "“{{name}}” is too large. At most {{max_mb}} MB per file; the operator sets this.",
+    "storage_limit_reached": "Your storage is full. New attachments only once there is room.",
+    "attachment_id_taken": "This attachment belongs to another note already.",
+    "attachment_empty": "The file is empty.",
+    "upload_broken": "The upload broke off. The attachment is still missing.",
     "export_expired": "The export was ready for 24 hours and is gone now. Start it again.",
     "export_not_ready": "The export is not ready yet.",
     "export_not_failed": "Only an export that broke off can be started again.",
@@ -666,7 +766,9 @@
       "image_other": "{{count}} photos",
       "scanText": "Scan · text recognized",
       "scan_one": "{{count}} scan",
-      "scan_other": "{{count}} scans"
+      "scan_other": "{{count}} scans",
+      "video_one": "{{count}} video",
+      "video_other": "{{count}} videos"
     },
     "menu": {
       "color": "Color",
