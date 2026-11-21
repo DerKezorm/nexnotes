@@ -14,9 +14,10 @@ back of the line (EC-6), the pages read so far are stored and the notes naming t
 NOTES-9 EC-3). Words Tesseract is not sure of are dropped, and a page with too little left is a page without text
 (EC-3). The language of a page is told from its commonest words (``language_of``).
 
-**Not read**: an attachment whose note is locked (``tags.HIDDEN_NOTES``, NOTES-16; EC-7). **Brought along**: the iOS app
-recognises scans itself and sends the text (``take_device_text``, AC-5); uploaded with ``text=device`` the server waits
-``DEVICE_WAIT`` for it before reading the file itself.
+**Not read**: an attachment whose note is locked (``tags.HIDDEN_NOTES``, NOTES-16; EC-7); when a note is locked
+after its attachments were read, their text goes (``tags.LOCK_HOOKS``, and at every start for what was missed).
+**Brought along**: the iOS app recognises scans itself and sends the text (``take_device_text``, AC-5); uploaded with
+``text=device`` the server waits ``DEVICE_WAIT`` for it before reading the file itself.
 
 **For the search**: ``texts_of`` is a text source (``search.register_text_source``): the done pages of the attachments a
 note names today, with the attachment's name, kind, page and id.
@@ -48,6 +49,7 @@ from sqlalchemy import delete, event, or_, select
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session, object_session
 
+from .. import worker_limits
 from ..config import get_settings
 from ..models import Note, utcnow
 from ..models_attachments import Attachment, AttachmentRef
@@ -80,7 +82,9 @@ PAGES_PER_TURN = 4
 MAX_PAGES = 1000
 #: Seconds Tesseract may take for one page; a page that takes longer stays without text.
 PAGE_SECONDS = 120
-#: The worker's hard memory limit in MB, Tesseract included (a job object under Windows, ``RLIMIT_AS`` elsewhere).
+#: The worker's hard memory limit in MB (``worker_limits``): under Windows for the worker and Tesseract together (a job
+#: object), under Linux for each of the two processes on its own (``RLIMIT_DATA``, which a child inherits but counts
+#: anew), so up to twice this there.
 MEMORY_MB = 1536
 #: How long the large view waits for the one worker before it says the server is busy.
 RENDER_WAIT_SECONDS = 60
@@ -131,7 +135,7 @@ def _after_insert(_mapper: Any, connection: Connection, target: Attachment) -> N
     connection.execute(AttachmentOcr.__table__.insert().values(
         attachment_id=target.id, state=OCR_DEVICE if device else OCR_QUEUED, pages=0, languages="", source="",
         error="", updated_at=now))
-    workqueue.enqueue(connection, JOB, target.id, DEVICE_WAIT if device else timedelta(0))
+    workqueue.enqueue(connection, JOB, target.id, DEVICE_WAIT if device else timedelta(0), account=target.owner_id)
     session = object_session(target)
     if session is not None:
         event.listen(session, "after_commit", lambda _session: workqueue.kick(), once=True)
@@ -230,7 +234,11 @@ def spawn(request: dict[str, Any], timeout: float, wait: float | None = None) ->
     if not _one_at_a_time.acquire(timeout=-1 if wait is None else wait):
         raise EngineFailed("busy", retry=True)
     try:
-        return _spawn(request, timeout)
+        # And one of the places shared with the media previews (``worker_limits.WORKERS`` in all).
+        with worker_limits.slot(wait):
+            return _spawn(request, timeout)
+    except TimeoutError:
+        raise EngineFailed("busy", retry=True) from None
     finally:
         _one_at_a_time.release()
 
@@ -348,6 +356,49 @@ def note_locked(db: Session, note_id: str) -> bool:
         is not None
 
 
+def _forget(db: Session, attachment_id: str) -> None:
+    """The text of an attachment of a locked note goes; it stays locked until the note is unlocked."""
+    db.execute(delete(AttachmentText).where(AttachmentText.attachment_id == attachment_id))
+    row = _state(db, attachment_id)
+    row.state, row.pages, row.source, row.updated_at = OCR_LOCKED, 0, "", utcnow()
+    workqueue.cancel(db, JOB, attachment_id)
+
+
+def lock_changed(db: Session, note_id: str, locked: bool) -> None:
+    """``tags.LOCK_HOOKS``: a note was locked (the text read of its attachments goes at once, NOTES-16 / EC-7) or
+    unlocked (they are read again)."""
+    ids = list(db.scalars(select(Attachment.id).where(Attachment.note_id == note_id, Attachment.kind.in_(KINDS))))
+    for attachment_id in ids:
+        if locked:
+            _forget(db, attachment_id)
+        else:
+            row = db.get(AttachmentOcr, attachment_id)
+            if row is not None and row.state == OCR_LOCKED:
+                row.state, row.updated_at = OCR_QUEUED, utcnow()
+                owner = db.scalar(select(Attachment.owner_id).where(Attachment.id == attachment_id))
+                workqueue.enqueue(db, JOB, attachment_id, account=owner)
+    if ids:
+        db.flush()
+        if not locked:
+            event.listen(db, "after_commit", lambda _session: workqueue.kick(), once=True)
+
+
+def forget_locked(db: Session) -> int:
+    """What was read of attachments of notes locked meanwhile goes (at the start, for a lock no hook saw)."""
+    from . import tags
+
+    if not tags.HIDDEN_NOTES:
+        return 0
+    ids = list(db.scalars(select(AttachmentOcr.attachment_id)
+                          .join(Attachment, Attachment.id == AttachmentOcr.attachment_id)
+                          .join(Note, Note.id == Attachment.note_id)
+                          .where(AttachmentOcr.state != OCR_LOCKED,
+                                 or_(*(hidden() for hidden in tags.HIDDEN_NOTES)))))
+    for attachment_id in ids:
+        _forget(db, attachment_id)
+    return len(ids)
+
+
 def notes_naming(db: Session, attachment: Attachment) -> list[str]:
     """The notes whose search the attachment's text belongs to: its own and those of the same owner that name it."""
     named = set(db.scalars(select(AttachmentRef.note_id).join(Note, Note.id == AttachmentRef.note_id)
@@ -396,13 +447,12 @@ def turn(attachment_id: str) -> workqueue.Again | None:
         if attachment is None or attachment.kind not in KINDS:
             return None
         row = _state(db, attachment_id)
-        if row.state in (OCR_DONE, OCR_FAILED) or (row.state == OCR_DEVICE and row.source == "device"):
+        if note_locked(db, attachment.note_id):
+            # EC-7: a locked note's attachments are not read; what was read before goes, also when it was done.
+            _forget(db, attachment_id)
             db.commit()
             return None
-        if note_locked(db, attachment.note_id):
-            # EC-7: a locked note's attachments are not read; what was read before goes.
-            db.execute(delete(AttachmentText).where(AttachmentText.attachment_id == attachment_id))
-            row.state, row.updated_at = OCR_LOCKED, utcnow()
+        if row.state in (OCR_DONE, OCR_FAILED, OCR_LOCKED) or (row.state == OCR_DEVICE and row.source == "device"):
             db.commit()
             return None
         chosen = chosen_languages(db)
@@ -593,27 +643,49 @@ def catch_up() -> int:
     available = engine_info(again=True).available
     queued = 0
     with SessionLocal() as db:
+        forget_locked(db)
         known = select(AttachmentOcr.attachment_id)
-        for attachment_id in db.scalars(select(Attachment.id).where(Attachment.kind.in_(KINDS),
-                                                                    Attachment.id.not_in(known))):
+        for attachment_id, owner in db.execute(select(Attachment.id, Attachment.owner_id)
+                                               .where(Attachment.kind.in_(KINDS), Attachment.id.not_in(known))):
             db.add(AttachmentOcr(attachment_id=attachment_id, state=OCR_QUEUED, updated_at=utcnow()))
-            workqueue.enqueue(db, JOB, attachment_id)
-            queued += 1
-        waiting = [OCR_QUEUED, OCR_WORKING, OCR_DEVICE] + ([OCR_UNAVAILABLE] if available else [])
-        for row in db.scalars(select(AttachmentOcr).where(AttachmentOcr.state.in_(waiting))):
-            if row.state == OCR_DEVICE and row.source == "device":
-                continue
-            if not workqueue.pending(db, JOB, row.attachment_id):
-                if row.state == OCR_UNAVAILABLE:
-                    row.state = OCR_QUEUED
-                workqueue.enqueue(db, JOB, row.attachment_id)
-                queued += 1
+            queued += workqueue.enqueue(db, JOB, attachment_id, account=owner)
+        db.flush()
+        queued += _queue_missing(db, available)
         db.commit()
     if queued:
         logger.info("Attachments queued for text recognition count=%s", queued)
         workqueue.kick()
     if not available:
         logger.warning("Tesseract is not installed: only the text a PDF carries itself is read")
+    return queued
+
+
+def _queue_missing(db: Session, available: bool) -> int:
+    """Attachments waiting to be read whose job is not in the queue (refused for a full account, lost), into it as far
+    as there is room."""
+    waiting = [OCR_QUEUED, OCR_WORKING, OCR_DEVICE] + ([OCR_UNAVAILABLE] if available else [])
+    queued = 0
+    for row, owner in db.execute(select(AttachmentOcr, Attachment.owner_id)
+                                 .join(Attachment, Attachment.id == AttachmentOcr.attachment_id)
+                                 .where(AttachmentOcr.state.in_(waiting))
+                                 .order_by(AttachmentOcr.updated_at)).all():
+        if row.state == OCR_DEVICE and row.source == "device":
+            continue
+        if not workqueue.pending(db, JOB, row.attachment_id) and workqueue.enqueue(db, JOB, row.attachment_id,
+                                                                                  account=owner):
+            if row.state == OCR_UNAVAILABLE:
+                row.state = OCR_QUEUED
+            queued += 1
+    return queued
+
+
+def refill() -> int:
+    """``workqueue.REFILL_HOOKS``: attachments refused for a full account, now that there may be room."""
+    from ..db import SessionLocal
+
+    with SessionLocal() as db:
+        queued = _queue_missing(db, engine_info().available)
+        db.commit()
     return queued
 
 
@@ -637,9 +709,17 @@ def follow_refs(db: Session, note: Note) -> None:
 def register() -> None:
     """Once per start: the handler of the queue, the text source of the search, and the hook that follows a note's
     attachments (after ``attachments.register``, whose hook it follows)."""
-    from . import attachments, notes, search
+    from . import attachments, notes, search, tags
 
     workqueue.register(JOB, turn, given_up)
+    if refill not in workqueue.REFILL_HOOKS:
+        workqueue.REFILL_HOOKS.append(refill)
+    from . import cleanup as rounds
+
+    if all(job is not sweep_pages for _, job in rounds._jobs):
+        rounds.register("pages", sweep_pages)
+    if lock_changed not in tags.LOCK_HOOKS:
+        tags.LOCK_HOOKS.append(lock_changed)
     search.register_text_source(texts_of)
     attachments.register()
     notes.on_text_written(follow_refs)
@@ -656,17 +736,116 @@ def start() -> None:
         workqueue.start()
 
 
-def render_page(attachment: Attachment, page: int, width: int) -> bytes:
-    """A page of a PDF as WebP, drawn by a worker (the large view)."""
+# --- Pages of a PDF for the large view ----------------------------------------------------------------------------
+
+#: The widths a page is drawn in; a request is drawn in the next one up, so a page has few pictures on disk.
+PAGE_WIDTHS = (400, 800, 1400, 2000, 2400)
+#: Drawn pages not asked for this long go in the cleanup round.
+PAGE_KEPT = timedelta(days=7)
+#: Pages of the large view at once: per account, and in the whole server (in line or being drawn).
+PAGES_PER_ACCOUNT = 2
+PAGES_IN_ALL = 8
+#: How often a page in line asks for the worker again.
+PAGE_RETRY_SECONDS = 0.25
+
+
+def page_width(width: int) -> int:
+    return next((step for step in PAGE_WIDTHS if step >= width), PAGE_WIDTHS[-1])
+
+
+def page_folder() -> Path:
+    """Drawn pages, kept on disk beside the data (never in a backup: they can be drawn again)."""
+    return get_settings().data_dir / "cache" / "pages"
+
+
+def page_file(attachment_id: str, page: int, width: int) -> Path:
+    _path_of(attachment_id)  # the id is checked there
+    return page_folder() / f"{attachment_id}-{page}-{page_width(width)}.webp"
+
+
+def cached_page(attachment_id: str, page: int, width: int) -> bytes | None:
+    """The page drawn before, when it is on disk."""
+    try:
+        return page_file(attachment_id, page, width).read_bytes()
+    except OSError:
+        return None
+
+
+def render_page(attachment: Attachment, page: int, width: int, wait: float | None = RENDER_WAIT_SECONDS) -> bytes:
+    """A page of a PDF as WebP (the large view): from disk when it was drawn before, else drawn by a worker and kept.
+    ``wait``: how long to wait for the worker (``EngineFailed("busy")`` after it)."""
+    known = cached_page(attachment.id, page, width)
+    if known is not None:
+        return known
+    target = page_file(attachment.id, page, width)
+    target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="nexnotes-page-", ignore_cleanup_errors=True) as folder:
         out = Path(folder) / "page.webp"
-        ENGINE_RENDER({"op": "render", "path": str(_path_of(attachment.id)), "page": page, "width": width,
-                       "out": str(out)})
-        return out.read_bytes()
+        ENGINE_RENDER({"op": "render", "path": str(_path_of(attachment.id)), "page": page,
+                       "width": page_width(width), "out": str(out), "wait": wait})
+        data = out.read_bytes()
+        temporary = target.with_name(f".{target.name}.{os.getpid()}.{threading.get_ident()}")
+        temporary.write_bytes(data)
+        os.replace(temporary, target)
+    return data
 
 
 def _render(request: dict[str, Any]) -> dict[str, Any]:
-    return spawn(request, timeout=30, wait=RENDER_WAIT_SECONDS)
+    wait = request.pop("wait", RENDER_WAIT_SECONDS)
+    return spawn(request, timeout=30, wait=wait)
+
+
+class PageLine:
+    """Who waits for a page of the large view: at most ``PAGES_PER_ACCOUNT`` per account and ``PAGES_IN_ALL`` in
+    all. Nothing here blocks; the route waits for the worker outside every thread."""
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._in_line: dict[int, int] = {}
+
+    def admit(self, account_id: int) -> bool:
+        with self._lock:
+            if self._in_line.get(account_id, 0) >= PAGES_PER_ACCOUNT or \
+                    sum(self._in_line.values()) >= PAGES_IN_ALL:
+                return False
+            self._in_line[account_id] = self._in_line.get(account_id, 0) + 1
+            return True
+
+    def leave(self, account_id: int) -> None:
+        with self._lock:
+            left = self._in_line.get(account_id, 0) - 1
+            if left > 0:
+                self._in_line[account_id] = left
+            else:
+                self._in_line.pop(account_id, None)
+
+
+PAGE_LINE = PageLine()
+
+
+def sweep_pages() -> int:
+    """The cleanup round: drawn pages of attachments that are gone, and those nobody asked for in ``PAGE_KEPT``."""
+    from ..db import SessionLocal
+
+    folder = page_folder()
+    if not folder.is_dir():
+        return 0
+    with SessionLocal() as db:
+        known = set(db.scalars(select(Attachment.id).where(Attachment.kind == "pdf")))
+    oldest = time.time() - PAGE_KEPT.total_seconds()
+    removed = 0
+    for entry in folder.iterdir():
+        try:
+            if not entry.is_file():
+                continue
+            # <id>-<page>-<width>.webp; an id may hold "-" itself. A half-written page begins with a dot.
+            owner = entry.name.rsplit("-", 2)[0]
+            if entry.name.startswith(".") or owner not in known or entry.stat().st_mtime < oldest:
+                entry.unlink()
+                removed += 1
+        except OSError:
+            logger.warning("A drawn page could not be removed")
+    return removed
 
 
 #: Draws one page (the worker's ``render``); the tests put a stand-in there.

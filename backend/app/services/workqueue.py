@@ -4,8 +4,11 @@ A feature registers a handler for its kind of work (``register("ocr", handler)``
 ``enqueue(db, "ocr", ref)``, in the transaction that makes the reason for it (an attachment's row): what is in the
 database is never forgotten, also when the server stops right after.
 
-**One at a time** (EC-1 of NOTES-11): a single worker thread takes the job that waits longest and hands it to its
-handler. The handler does a part of the work and says whether it is done (``None``) or wants another turn
+**One at a time** (EC-1 of NOTES-11): a single worker thread takes the next job and hands it to its handler. **In
+rounds per account**: the next job is the one that waited longest of the account served longest ago, so thirty
+pictures of one account do not keep another waiting thirty turns; an account has at most ``MAX_WAITING`` jobs in the
+queue, the rest come in as room frees (``REFILL_HOOKS``, asked when the queue runs dry and after a job of the account
+ends). The handler does a part of the work and says whether it is done (``None``) or wants another turn
 (``Again``): then the job goes to the back of the line, behind everything that waited meanwhile, so a long job (a PDF
 of 300 pages) never holds up the others for long (EC-6).
 
@@ -28,7 +31,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -47,6 +50,8 @@ POLL_SECONDS = 15.0
 #: The worker thread runs by itself; off (until the server's start says otherwise, and in the tests), jobs wait for
 #: ``run_pending``.
 AUTO = False
+#: Jobs one account may have waiting in the queue; more are refused by ``enqueue`` and come later through a refill.
+MAX_WAITING = 200
 
 
 @dataclass(frozen=True)
@@ -76,6 +81,11 @@ class Kind:
 
 
 HANDLERS: dict[str, Kind] = {}
+#: Put work that was refused for a full account into the queue again (each returns how many it put in).
+REFILL_HOOKS: list[Callable[[], int]] = []
+#: When each account was served last (a counter of turns): the rounds.
+_served: dict[int | None, int] = {}
+_turns = 0
 #: Set while the server goes down: handlers stop what they started (a process) and raise ``Interrupted``.
 stopping = threading.Event()
 _wake = threading.Event()
@@ -87,16 +97,24 @@ def register(kind: str, run: Handler, failed: Failed | None = None) -> None:
     HANDLERS[kind] = Kind(run=run, failed=failed)
 
 
-def enqueue(db: Session | Connection, kind: str, ref: str, delay: timedelta = timedelta(0)) -> None:
-    """``ref`` into the queue for ``kind`` (in the caller's transaction), unless it is there already. The caller wakes
-    the worker once the transaction is committed (``kick``): before, the worker would not see the job."""
+def enqueue(db: Session | Connection, kind: str, ref: str, delay: timedelta = timedelta(0),
+            account: int | None = None) -> bool:
+    """``ref`` into the queue for ``kind`` (in the caller's transaction), unless it is there already or ``account``
+    has ``MAX_WAITING`` jobs waiting (``False``: a refill puts it in later). The caller wakes the worker once the
+    transaction is committed (``kick``): before, the worker would not see the job."""
     exists = db.execute(select(WorkJob.id).where(WorkJob.kind == kind, WorkJob.ref == ref)).first()
     if exists is not None:
-        return
+        return True
+    if account is not None:
+        waiting = db.execute(select(func.count()).select_from(WorkJob)
+                             .where(WorkJob.account_id == account)).scalar() or 0
+        if waiting >= MAX_WAITING:
+            return False
     now = utcnow()
     values = {"kind": kind, "ref": ref, "state": QUEUED, "run_after": now + delay, "attempts": 0, "created_at": now,
-              "updated_at": now}
+              "updated_at": now, "account_id": account}
     db.execute(WorkJob.__table__.insert().values(**values))
+    return True
 
 
 def cancel(db: Session, kind: str, ref: str) -> None:
@@ -110,19 +128,38 @@ def pending(db: Session, kind: str, ref: str) -> bool:
 
 
 def _claim() -> tuple[int, str, str, int] | None:
-    """The job that waited longest and whose time has come, marked as running."""
+    """The next job whose time has come, marked as running: of the accounts with such a job the one served longest
+    ago, and of its jobs the one that waited longest."""
+    global _turns
     from ..db import SessionLocal
 
     with _lock, SessionLocal() as db:
-        job = db.scalars(select(WorkJob).where(WorkJob.state == QUEUED, WorkJob.run_after <= utcnow(),
-                                               WorkJob.kind.in_(list(HANDLERS)))
-                         .order_by(WorkJob.run_after, WorkJob.id).limit(1)).first()
+        due = (WorkJob.state == QUEUED, WorkJob.run_after <= utcnow(), WorkJob.kind.in_(list(HANDLERS)))
+        accounts = list(db.scalars(select(WorkJob.account_id).where(*due).distinct()))
+        if not accounts:
+            return None
+        account = min(accounts, key=lambda one: _served.get(one, -1))
+        whose = WorkJob.account_id.is_(None) if account is None else WorkJob.account_id == account
+        job = db.scalars(select(WorkJob).where(*due, whose).order_by(WorkJob.run_after, WorkJob.id).limit(1)).first()
         if job is None:
             return None
+        _turns += 1
+        _served[account] = _turns
         job.state = RUNNING
         job.updated_at = utcnow()
         db.commit()
         return job.id, job.kind, job.ref, job.attempts
+
+
+def _refill() -> int:
+    """Work refused for a full account, into the queue as far as there is room."""
+    put = 0
+    for hook in REFILL_HOOKS:
+        try:
+            put += hook()
+        except Exception:
+            logger.exception("Refilling the work queue failed")
+    return put
 
 
 def _settle(job_id: int, *, again: Again | None = None, fail: bool = False) -> None:
@@ -164,6 +201,8 @@ def _give_up(job_id: int, kind: str, ref: str, reason: str) -> None:
 def run_one() -> bool:
     """One turn of the job that waited longest. Returns whether there was one."""
     claimed = _claim()
+    if claimed is None and _refill():
+        claimed = _claim()
     if claimed is None:
         return False
     job_id, kind, ref, attempts = claimed

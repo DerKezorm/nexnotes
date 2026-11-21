@@ -106,7 +106,9 @@ def public(address: str) -> bool:
         return False
     for one in inner(ip):
         special = one.is_multicast or one.is_reserved or one.is_loopback or one.is_link_local or one.is_private
-        if special or not one.is_global:
+        # Site-local IPv6 (fec0::/10) is deprecated, so ``is_global`` still counts it in; it is a home network.
+        site_local = isinstance(one, ipaddress.IPv6Address) and one.is_site_local
+        if special or site_local or not one.is_global:
             return False
     return True
 

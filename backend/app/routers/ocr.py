@@ -5,6 +5,7 @@ of a PDF as pictures for the large view, and whether the server can recognise at
 from __future__ import annotations
 
 import asyncio
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated, Any
@@ -61,21 +62,48 @@ def device_text(attachment_id: AttachmentId, body: DeviceText, account: Account,
         raise error("text_not_possible", "This attachment carries no text.", 422)
     if ocr.note_locked(db, row.note_id):
         raise error("note_locked", "The note is locked.", 409)
+    # A picture has one page, a PDF the pages it has.
+    most = 1 if row.kind != "pdf" else min(row.pages or ocr.MAX_PAGES, ocr.MAX_PAGES)
+    if len(body.pages) > most:
+        raise error("invalid_input", "The input is not valid.", 422, fields=["pages"])
     ocr.take_device_text(db, row, [(page.text, page.language) for page in body.pages])
     return ocr.text_out(db, row)
+
+
+async def _drawn(row: Any, page: int, width: int) -> bytes:
+    """The page drawn by the worker: asked for without waiting in a thread, again and again while the worker is
+    busy, for at most ``RENDER_WAIT_SECONDS``."""
+    deadline = time.monotonic() + ocr.RENDER_WAIT_SECONDS
+    while True:
+        try:
+            return await asyncio.to_thread(ocr.render_page, row, page, width, 0)
+        except ocr.EngineFailed as exc:
+            if exc.code != "busy" or time.monotonic() >= deadline:
+                raise
+        await asyncio.sleep(ocr.PAGE_RETRY_SECONDS)
 
 
 @router.get("/attachments/{attachment_id}/pages/{page}", summary="A page of a PDF as a picture (the large view)")
 async def page_picture(attachment_id: AttachmentId, account: Account, db: DbSession,
                        page: Annotated[int, PathParam(ge=1, le=100_000)],
                        width: Annotated[int, Query(ge=200, le=2400)] = 1400) -> Response:
+    """A page drawn before comes from disk. Otherwise the request waits in line (``ocr.PAGE_LINE``: two per account)
+    for the worker, outside every thread, and then has it drawn."""
     row = attachments.get_for(db, account, attachment_id)
     if row.kind != "pdf" or page > (row.pages or 0):
         raise error("not_found", "Not found.", 404)
-    try:
-        data = await asyncio.to_thread(ocr.render_page, row, page, width)
-    except (ocr.EngineFailed, OSError) as exc:
-        raise error("not_found", "Not found.", 404) from exc
+    data = await asyncio.to_thread(ocr.cached_page, row.id, page, width)
+    if data is None:
+        if not ocr.PAGE_LINE.admit(account.id):
+            raise error("busy", "The server is busy. Try again in a moment.", 503)
+        try:
+            data = await _drawn(row, page, width)
+        except (ocr.EngineFailed, OSError) as exc:
+            if isinstance(exc, ocr.EngineFailed) and exc.code == "busy":
+                raise error("busy", "The server is busy. Try again in a moment.", 503) from exc
+            raise error("not_found", "Not found.", 404) from exc
+        finally:
+            ocr.PAGE_LINE.leave(account.id)
     return Response(data, media_type="image/webp", headers={
         "Cache-Control": "private, max-age=86400", "X-Content-Type-Options": "nosniff",
         "Content-Security-Policy": "default-src 'none'; sandbox"})

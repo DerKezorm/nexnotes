@@ -4,8 +4,9 @@ The app draws and records; the browser only shows and plays. Both arrive as atta
 role (``POST /api/attachments?...&as=<role>``) that says what the device means them to be. The role never makes a
 file into something its content is not:
 
-* ``drawing``: the picture of a sketch, a PNG the app draws of it. It must be a picture (``media.prepare``) and is drawn
-  anew like any picture, with its view and preview; its kind is ``drawing`` (gallery, lists, export as a picture).
+* ``drawing``: the picture of a sketch, a PNG the app draws of it. It must be a picture (``media.prepare_here``) and
+  is drawn anew like any picture, with its view and preview; its kind is ``drawing`` (gallery, lists, export as a
+  picture).
 * ``drawing-data``: the sketch itself (PencilKit's data), only for the app to draw on. Nothing is read of it; it is
   only ever downloaded, and neither the gallery, the search nor the export know it (kind ``drawingdata``).
 * ``recording``: sound, recognised from its first bytes (M4A/AAC, MP3, WAV, OGG, FLAC, WebM, CAF). Its length comes
@@ -15,7 +16,8 @@ file into something its content is not:
   checked and written anew with only the fields the format has.
 
 The note's document names them by id (``drawing``: ``id``, ``data``; ``recording``: ``id``, ``transcript``;
-``notedoc/schema.py``), so rights, history, cleanup and storage are those of every attachment.
+``notedoc/schema.py``), so rights, history, cleanup and storage are those of every attachment. All of it is read
+in a worker with limits of memory and time (``media.prepare``, ``media_worker``).
 
 The words of a transcript are found by the search (``search.register_text_source``: a hit names the recording) and go
 into an export as a text file beside the sound (``export.ATTACHMENT_SOURCES``).
@@ -31,7 +33,6 @@ import re
 import shutil
 import struct
 import subprocess
-import tempfile
 import threading
 import unicodedata
 from collections import OrderedDict
@@ -124,20 +125,21 @@ def _probe(path: Path) -> dict[str, Any] | None:
         return {}
 
 
-def _faststart(path: Path) -> bytes | None:
-    """An MP4/M4A with its index at the front, the sound copied as it is, without metadata; ``None`` when ffmpeg is
-    missing or fails (the file stays as it came)."""
+def _faststart(path: Path) -> Path | None:
+    """An MP4/M4A with its index at the front, the sound copied as it is, without metadata, written beside ``path``
+    (a work file of the upload, never read into memory: a recording may be hours); ``None`` when ffmpeg is missing or
+    fails (the file stays as it came)."""
     ffmpeg = shutil.which("ffmpeg")
     if ffmpeg is None:
         return None
-    with tempfile.TemporaryDirectory(prefix="nexnotes-sound-") as folder:
-        target = Path(folder) / "sound.m4a"
-        subprocess.run([ffmpeg, "-v", "error", "-nostdin", "-y", "-i", str(path), "-map", "0:a", "-c", "copy",
-                        "-map_metadata", "-1", "-map_chapters", "-1", "-movflags", "+faststart", "-f", "mp4",
-                        str(target)], capture_output=True, timeout=SOUND_SECONDS, check=False)
-        if not target.is_file() or target.stat().st_size == 0:
-            return None
-        return target.read_bytes()
+    target = path.with_name(path.name + ".m4a")
+    subprocess.run([ffmpeg, "-v", "error", "-nostdin", "-y", "-threads", "2", "-i", str(path), "-map", "0:a", "-c",
+                    "copy", "-map_metadata", "-1", "-map_chapters", "-1", "-movflags", "+faststart", "-f", "mp4",
+                    str(target)], capture_output=True, timeout=SOUND_SECONDS, check=False)
+    if not target.is_file() or target.stat().st_size == 0:
+        target.unlink(missing_ok=True)
+        return None
+    return target
 
 
 def _sound(path: Path) -> media.Prepared:
@@ -166,7 +168,8 @@ def _sound(path: Path) -> media.Prepared:
         except ValueError:
             prepared.duration_ms = None
     if form in ("m4a", "mp4"):
-        prepared.redrawn = _faststart(path)
+        written = _faststart(path)
+        prepared.redrawn_file = str(written) if written is not None else None
         prepared.mime = "audio/mp4"
     return prepared
 
@@ -200,7 +203,8 @@ def clean_transcript(data: bytes) -> dict[str, Any]:
         raise WrongKind("transcript too large")
     try:
         given = json.loads(data.decode("utf-8-sig"))
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
+        # Nested too deep for the parser is no transcript either (422, not a 500).
         raise WrongKind("no JSON") from exc
     if not isinstance(given, dict) or given.get("format") != TRANSCRIPT_FORMAT or not isinstance(given.get("words"),
                                                                                                     list):
@@ -247,7 +251,7 @@ def prepare(path: Path, role: str) -> media.Prepared:
     if kind is None:
         raise WrongKind("unknown role")
     if kind == DRAWING:
-        prepared = media.prepare(path)
+        prepared = media.prepare_here(path)
         if prepared.kind != media.IMAGE:
             raise WrongKind("a sketch is a picture")
         prepared.kind = DRAWING

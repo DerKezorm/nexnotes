@@ -24,6 +24,8 @@ export type AttachmentInfo = {
   thumb: boolean
   /** The file itself may be shown in the page (a picture drawn anew, a PDF, a video); otherwise only downloaded. */
   inline: boolean
+  /** Reading it went past the server's limits (memory, time, pixels): a file to download, without a preview. */
+  preview_failed?: boolean
   created_at: string | null
 }
 

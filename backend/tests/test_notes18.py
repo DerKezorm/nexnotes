@@ -22,7 +22,7 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models_attachments import Attachment
 from app.notedoc import doc as notedoc
-from app.services import attachments, export, search, sketches
+from app.services import attachments, export, media_worker, search, sketches
 
 from .test_notes10 import add_blocks, needs_ffmpeg, png_with_text, refs_of, row_of, run, setup  # noqa: F401
 from .test_notes10 import close_connections, video_of  # noqa: F401
@@ -202,7 +202,8 @@ def test_notes18_ec3_every_sound_has_its_type_the_browser_decides_what_it_plays(
 
 
 def test_notes18_ec3_a_caf_from_an_iphone_is_taken_and_given_out_as_what_it_is(client, operator, monkeypatch):
-    # Without ffprobe the first bytes decide; a CAF is sound only.
+    # Without ffprobe the first bytes decide; a CAF is sound only. (Read in this process: the worker would not know.)
+    monkeypatch.setattr(media_worker, "INLINE", True)
     monkeypatch.setattr(sketches.shutil, "which", lambda _name: None)
     note = new_note(client, title="CAF")
     row = sent(client, note["id"], b"caff\x00\x01\x00\x00desc" + b"\x00" * 64, "Memo.caf", "recording")

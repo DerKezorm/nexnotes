@@ -5,6 +5,17 @@ import type { Jump } from '../search/api'
 
 /** How often the view asks again while pages are still read. */
 export const ASK_EVERY_MS = 3000
+/** The longest pause between two questions while the text of the iOS app is awaited. */
+export const DEVICE_ASK_MAX_MS = 60_000
+
+/**
+ * How long the view waits before it asks again: every few seconds while the server reads pages; while it waits for
+ * the iOS app's own text (which may take minutes, or never come) twice as long each time, up to a minute.
+ */
+export function askAgainIn(state: string, round: number): number {
+  if (state === 'device') return Math.min(ASK_EVERY_MS * 2 ** round, DEVICE_ASK_MAX_MS)
+  return ASK_EVERY_MS
+}
 
 /** The text with the `nth` occurrence of the jump's text marked (AC-8). */
 export function marked(text: string, mark: Jump | null): ReactNode[] {

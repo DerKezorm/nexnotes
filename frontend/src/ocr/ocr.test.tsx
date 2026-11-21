@@ -23,7 +23,7 @@ import type { Hit } from '../search/api'
 import { attachmentOpenerFor } from '../search/registry'
 import type { AttachmentText } from './api'
 import { paragraphsOf } from './insert'
-import { ASK_EVERY_MS } from './marks'
+import { ASK_EVERY_MS, askAgainIn } from './marks'
 import './register'
 import { closeViewer } from './store'
 
@@ -261,6 +261,25 @@ describe('NOTES-11 AC-7 EC-2 what is still being read, and what has no text', ()
     await act(async () => vi.advanceTimersByTime(ASK_EVERY_MS * 3))
     await settle()
     expect(asked.filter((url) => url.endsWith('/text')).length).toBe(before + 1)
+  })
+
+  it('NOTES-11 AC-5 while the text of the iOS app is awaited the view asks ever less often, at most once a minute', async () => {
+    const scan = info('Dev1aaaaaaaaaaaaaaaaaa', 'scan', 'Brief.jpg', { thumb: true, view: true, inline: true })
+    texts[scan.id] = { id: scan.id, state: 'device', pages: 1, items: [] }
+    const { box } = await noteWith([scan], [{ type: 'image', attrs: { id: scan.id, name: scan.name } }])
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    await click('[data-testid="attachment-open-large"]', box)
+    await settle()
+    const before = asked.filter((url) => url.endsWith('/text')).length
+    // Ten minutes: every 3 s would be 200 questions; 3, 6, 12, 24, 48 s and then once a minute are 14.
+    for (let second = 0; second < 600; second += 1) await act(async () => vi.advanceTimersByTime(1000))
+    await settle()
+    const more = asked.filter((url) => url.endsWith('/text')).length - before
+    expect(more).toBeGreaterThanOrEqual(10)
+    expect(more).toBeLessThanOrEqual(16)
+    expect(askAgainIn('device', 0)).toBe(ASK_EVERY_MS)
+    expect(askAgainIn('device', 10)).toBe(60_000)
+    expect(askAgainIn('working', 10)).toBe(ASK_EVERY_MS)
   })
 
   it('NOTES-11 EC-2 a picture whose recognition failed stays a picture and says no text was recognised', async () => {

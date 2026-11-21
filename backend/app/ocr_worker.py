@@ -17,8 +17,9 @@ Input: one JSON object on standard input. Output: one JSON object on the last li
 * ``{"op": "render", "path", "page", "width", "out"}``: one page of a PDF drawn as WebP for the large view.
 
 Before it touches a file the worker puts hard limits on itself and on what it starts: ``memory_mb`` of memory and
-``cpu_seconds`` of CPU time, as a job object under Windows (everything in it killed with this process) and as
-``RLIMIT_AS`` and ``RLIMIT_CPU`` elsewhere. Without them it reads nothing (``unguarded``).
+``cpu_seconds`` of CPU time, the same way as the media previews (``worker_limits.py``, loaded by its path): a job
+object under Windows (everything in it killed with this process), ``RLIMIT_DATA``, ``RLIMIT_AS`` and ``RLIMIT_CPU``
+elsewhere. Without them it reads nothing (``unguarded``).
 
 Errors: ``{"ok": false, "error": code, "retry": bool}`` with the codes ``broken`` (not a picture or PDF that can be
 read, encrypted), ``too_large`` (past the memory limit), ``unguarded``, ``failed``.
@@ -66,70 +67,22 @@ class Refused(Exception):
         self.code = code
 
 
-#: Kept open for the life of the process: when it closes (the process ends), whatever is still in the job is killed.
-_JOB: Any = None
-
-
-def _limit_windows(megabytes: int, seconds: int) -> bool:
-    """A job object around this process and all it starts (Tesseract): at most ``megabytes`` of memory together, at
-    most ``seconds`` of CPU each, and everything killed when this process ends."""
-    global _JOB
-    import ctypes
-    from ctypes import wintypes
-
-    class Basic(ctypes.Structure):
-        _fields_ = [("PerProcessUserTimeLimit", ctypes.c_longlong), ("PerJobUserTimeLimit", ctypes.c_longlong),
-                    ("LimitFlags", wintypes.DWORD), ("MinimumWorkingSetSize", ctypes.c_size_t),
-                    ("MaximumWorkingSetSize", ctypes.c_size_t), ("ActiveProcessLimit", wintypes.DWORD),
-                    ("Affinity", ctypes.c_size_t), ("PriorityClass", wintypes.DWORD),
-                    ("SchedulingClass", wintypes.DWORD)]
-
-    class Counters(ctypes.Structure):
-        _fields_ = [(name, ctypes.c_ulonglong) for name in ("Reads", "Writes", "Others", "ReadBytes", "WriteBytes",
-                                                           "OtherBytes")]
-
-    class Extended(ctypes.Structure):
-        _fields_ = [("Basic", Basic), ("Io", Counters), ("ProcessMemoryLimit", ctypes.c_size_t),
-                    ("JobMemoryLimit", ctypes.c_size_t), ("PeakProcessMemoryUsed", ctypes.c_size_t),
-                    ("PeakJobMemoryUsed", ctypes.c_size_t)]
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
-    kernel32.CreateJobObjectW.restype = wintypes.HANDLE
-    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
-    kernel32.SetInformationJobObject.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD]
-    kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
-    job = kernel32.CreateJobObjectW(None, None)
-    if not job:
-        return False
-    limits = Extended()
-    # Process time, process memory, job memory, kill on close.
-    limits.Basic.LimitFlags = 0x0002 | 0x0100 | 0x0200 | 0x2000
-    limits.Basic.PerProcessUserTimeLimit = seconds * 10_000_000
-    limits.ProcessMemoryLimit = limits.JobMemoryLimit = megabytes * 1024 * 1024
-    if not kernel32.SetInformationJobObject(job, 9, ctypes.byref(limits), ctypes.sizeof(limits)):
-        return False
-    if not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
-        return False
-    _JOB = job
-    return True
-
-
 def _limit(megabytes: int, seconds: int) -> bool:
-    """Hard limits before any file is touched: memory and CPU time, for this process and Tesseract. Without them the
-    worker reads nothing (``unguarded``)."""
+    """Hard limits before any file is touched: memory and CPU time, for this process and Tesseract, the same way as the
+    media previews (``worker_limits.py`` beside this file). Without them the worker reads nothing (``unguarded``)."""
     if megabytes <= 0 or seconds <= 0:
         return False
-    if os.name == "nt":
-        return _limit_windows(megabytes, seconds)
-    try:
-        import resource
-    except ImportError:
+    import importlib.util
+
+    shared = Path(__file__).with_name("worker_limits.py")
+    spec = importlib.util.spec_from_file_location("nexnotes_worker_limits", shared)
+    if spec is None or spec.loader is None:
         return False
-    size = megabytes * 1024 * 1024
+    limits = importlib.util.module_from_spec(spec)
     try:
-        resource.setrlimit(resource.RLIMIT_AS, (size, size))
-        resource.setrlimit(resource.RLIMIT_CPU, (seconds, seconds + 5))
-    except (ValueError, OSError):
+        spec.loader.exec_module(limits)
+        limits.limit_self(megabytes * 1024 * 1024, seconds)
+    except (OSError, ImportError):
         return False
     return True
 
