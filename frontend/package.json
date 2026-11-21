@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
     "test": "vitest run",
-    "e2e": "vite build && playwright test"
+    "e2e": "vite build && playwright test",
+    "e2e:full": "node e2e/full.mjs"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.3.0",

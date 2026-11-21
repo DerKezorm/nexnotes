@@ -58,6 +58,7 @@ async def _pair(world: World, *, b_writes: bool = True):
     return a, b
 
 
+@pytest.mark.timing
 def test_notes12_ac1_a_change_reaches_the_other_connection_at_once():
     async def scenario():
         world = World()

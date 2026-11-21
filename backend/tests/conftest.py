@@ -44,6 +44,17 @@ MEDIA = Path(_DATA) / "attachments"
 TAB = {"X-Nexnotes-Client": "tab-tests000"}
 
 
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """A test that measures time against a limit (``@pytest.mark.timing``) says nothing beside nine other workers
+    using the machine: in a parallel run (pytest-xdist) it is skipped, ``pytest -m timing`` runs them on their own."""
+    if not os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    skip = pytest.mark.skip(reason="timing: runs on its own after the parallel run (pytest -m timing)")
+    for item in items:
+        if "timing" in item.keywords:
+            item.add_marker(skip)
+
+
 @pytest.fixture(scope="session", autouse=True)
 def schema() -> None:
     init_db()
