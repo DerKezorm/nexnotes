@@ -2,9 +2,11 @@
  * NOTES-8 in real browsers against the real server: seven tabs opened from a folder's list (Ctrl with a click and the
  * middle button), the oldest one going with a notice, the keys, and all of them back after a reload (AC-3, AC-5,
  * AC-7, EC-7); six tabs with long titles at several widths down to an iPad held upright: narrower tabs first, then two
- * rows, never a scroll bar (AC-8, EC-4); the same note on both sides (EC-1).
+ * rows, never a scroll bar (AC-8, EC-4), also with two of them side by side; the same note on both sides (EC-1), as
+ * an account with an umlaut in its name (NOTES-12: the presence carries it whole); and two accounts in two browser
+ * tabs of one browser (the cookie is shared): the second never sees anything of the first.
  */
-import { expect, test, type Page, type WebSocketRoute } from '@playwright/test'
+import { expect, test, type Browser, type BrowserContext, type Page, type WebSocketRoute } from '@playwright/test'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-tabs0000' }
 const LIVE = /\/api\/notes\/[^/]+\/live$/
@@ -23,6 +25,29 @@ async function folderWith(page: Page, name: string, titles: string[]): Promise<{
 }
 
 const row = (page: Page, title: string) => page.getByTestId('note-row').filter({ hasText: title })
+
+const PASSWORD = 'a long e2e member password'
+
+/** A member invited by the operator (`page`), with a browser of its own signed in by accepting. */
+async function member(page: Page, browser: Browser, name: string, email: string): Promise<BrowserContext> {
+  const invite = await page.request.post('/api/invites', { data: {}, headers: TAB })
+  expect(invite.status()).toBe(201)
+  const token = String((await invite.json()).link).split('/invite/')[1]
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+  const accepted = await context.request.post(`/api/invite/${token}`, { data: { display_name: name, email, password: PASSWORD }, headers: TAB })
+  expect(accepted.ok(), await accepted.text()).toBe(true)
+  return context
+}
+
+/** Errors the page itself reports (a message of the live room it could not read, say). */
+function pageErrors(page: Page): string[] {
+  const seen: string[] = []
+  page.on('console', (message) => {
+    if (message.type() === 'error') seen.push(message.text())
+  })
+  page.on('pageerror', (error) => seen.push(String(error)))
+  return seen
+}
 
 test('NOTES-8 AC-3 AC-5 AC-7 EC-7 seven tabs: the oldest goes with a notice, the keys switch, a reload brings them back', async ({ page }) => {
   const titles = ['Tab one', 'Tab two', 'Tab three', 'Tab four', 'Tab five', 'Tab six', 'Tab seven']
@@ -165,7 +190,11 @@ test('NOTES-8 AC-8 EC-4 six tabs with long titles grow narrower, then stand in t
   expect((await measure()).rows).toBe(2)
 })
 
-test('NOTES-8 EC-1 the same note on both sides: what is typed on one side shows on the other at once, offline too', async ({ page }) => {
+test('NOTES-8 EC-1 NOTES-12 the same note on both sides, as "Jürgen": typed on one side shows on the other at once, offline too; closing a side keeps the title', async ({ page: operator, browser }) => {
+  // An umlaut in the name: every presence message carries it, and must arrive whole (NOTES-12).
+  const context = await member(operator, browser, 'Jürgen', `juergen-${Date.now()}@example.com`)
+  const page = await context.newPage()
+  const errors = pageErrors(page)
   const { folder, notes } = await folderWith(page, `Twice E2E ${Date.now()}`, ['Twice open'])
   let offline = false
   const sockets: WebSocketRoute[] = []
@@ -209,4 +238,94 @@ test('NOTES-8 EC-1 the same note on both sides: what is typed on one side shows 
   await page.evaluate(() => window.dispatchEvent(new Event('online')))
   await expect(page.getByTestId('note-saved')).toHaveText(['saved', 'saved'])
   await expect.poll(async () => ((await (await page.request.get(`/api/notes/${notes[0]}`)).json()) as { preview: string }).preview, { timeout: 5000 }).toContain('and on the right offline')
+  // Both tabs named from the start.
+  await expect(page.getByTestId('tab-title')).toHaveText(['Twice open', 'Twice open'])
+
+  // Ending the split, and closing the right side: no question for a title, and the title stays as it is.
+  await page.getByTestId('tab-end-split').click()
+  await expect(right).toHaveCount(0)
+  await page.waitForTimeout(300)
+  await expect(page.getByTestId('leave-dialog')).toHaveCount(0)
+  await row(page, 'Twice open').click({ button: 'right' })
+  await page.getByTestId('menu-open-beside').click()
+  await expect(right).toHaveAttribute('data-note', notes[0])
+  await expect(right.getByTestId('note-saved')).toHaveText('saved')
+  await page.locator('[data-testid="tab"][data-side="right"]').getByTestId('tab-close').click()
+  await expect(right).toHaveCount(0)
+  await page.waitForTimeout(300)
+  await expect(page.getByTestId('leave-dialog')).toHaveCount(0)
+  await expect(page.getByTestId('tab-title')).toHaveText(['Twice open'])
+  const head = (await (await page.request.get(`/api/notes/${notes[0]}`)).json()) as { title: string; title_check: boolean }
+  expect(head.title).toBe('Twice open')
+  expect(head.title_check).toBe(false)
+  // The presence of "Jürgen" never broke in the browser.
+  expect(errors.filter((error) => /JSON|SyntaxError/.test(error))).toEqual([])
+  await context.close()
+})
+
+test('NOTES-8 NOTES-2 two accounts in two browser tabs: the second never sees a title or text of the first, not even what waited offline', async ({ page: operator, browser }) => {
+  const stamp = Date.now()
+  const context = await member(operator, browser, 'Jürgen', `juergen-a-${stamp}@example.com`)
+  const bea = await member(operator, browser, 'Bea', `bea-${stamp}@example.com`)
+  await bea.close()
+  const first = await context.newPage()
+  const { folder, notes } = await folderWith(first, `Personal E2E ${stamp}`, ['GEHEIM Personalakte', 'GEHEIM Gehälter'])
+  let offline = false
+  const sockets: WebSocketRoute[] = []
+  await first.routeWebSocket(LIVE, (ws) => {
+    if (offline) {
+      ws.close({ code: 4000, reason: 'tunnel' })
+      return
+    }
+    sockets.push(ws)
+    ws.connectToServer()
+  })
+  await first.goto(`/notes/${notes[0]}?folder=${folder}`)
+  await expect(first.getByTestId('note-saved')).toHaveText('saved')
+  await row(first, 'GEHEIM Gehälter').click({ button: 'right' })
+  await first.getByTestId('menu-open-beside').click()
+  await expect(first.getByTestId('note-saved')).toHaveText(['saved', 'saved'])
+  // Offline, Jürgen types on: the change waits.
+  offline = true
+  for (const ws of sockets) await ws.close({ code: 4000, reason: 'tunnel' })
+  await expect(first.getByTestId('offline-bar')).toHaveCount(2)
+  await first.locator('[data-testid="tab-pane"][data-side="left"]').getByTestId('note-body').click()
+  await first.keyboard.press('End')
+  await first.keyboard.type(' GEHEIM Nachtrag')
+  await expect(first.getByTestId('note-saved').first()).toHaveText(/changes? waiting/)
+
+  // From now on, whenever the first tab shows Bea's name, nothing of Jürgen's notes may be on it.
+  await first.evaluate(() => {
+    const seen: string[] = []
+    ;(window as unknown as { leaked: string[] }).leaked = seen
+    const look = () => {
+      const text = document.body.innerText
+      if (text.includes('Bea') && /GEHEIM|Personalakte|Gehälter|Nachtrag/.test(text)) seen.push(text.slice(0, 400))
+    }
+    new MutationObserver(look).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true })
+  })
+
+  // A second browser tab signs in as Bea (the cookie is shared).
+  const second = await context.newPage()
+  const signed = await second.request.post('/api/auth/login', { data: { name: `bea-${stamp}@example.com`, password: PASSWORD }, headers: TAB })
+  expect(signed.ok(), await signed.text()).toBe(true)
+  const beaId = ((await (await second.request.get('/api/auth/me')).json()) as { id: number }).id
+  await second.goto('/')
+  await expect(second.getByTestId('sidebar-places')).toBeVisible()
+  // The first tab follows when it is looked at again.
+  await first.bringToFront()
+  await first.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
+  await expect(first).toHaveURL(/\/$/, { timeout: 15_000 })
+  await expect(first.getByRole('link', { name: /^Bea · / })).toBeVisible()
+  await expect(first.getByTestId('folder-notice')).toContainText(/changes? of the account before (was|were) not saved yet and (is|are) lost\./)
+  // The line comes back: still nothing of Jürgen's arrives.
+  offline = false
+  await first.evaluate(() => window.dispatchEvent(new Event('online')))
+  await first.waitForTimeout(1500)
+  await expect(first.getByTestId('tab-bar')).toHaveCount(0)
+  for (const one of [first, second]) await expect(one.locator('body')).not.toContainText(/GEHEIM|Personalakte|Gehälter|Nachtrag/)
+  expect(await first.evaluate(() => (window as unknown as { leaked: string[] }).leaked)).toEqual([])
+  const kept = await first.evaluate((id) => localStorage.getItem(`nexnotes.tabs.${id}`) ?? '', beaId)
+  for (const id of notes) expect(kept).not.toContain(id)
+  await context.close()
 })
