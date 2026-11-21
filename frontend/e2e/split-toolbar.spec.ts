@@ -2,10 +2,12 @@
  * The one toolbar over two notes side by side (NOTES-8, decision of 21.11.2026), in a real browser at 1920 px.
  *
  * - With both sides on show the text tools stand once, above both sides; each sheet keeps a small bar of its own at the
- *   top right (width, outline, pin, the others, the note's menu) and no text tools.
+ *   top right inside the sheet, beside or above its title (width, outline, clip, pin, the others, the note's menu), and
+ *   no text tools; no row of its own above the sheet (fifth review).
  * - The bar works on the side used last and shows that side's state; a click into the other side moves it there.
  * - A click in the bar keeps the selection in the text and the side used last.
- * - It stays in sight while the text below scrolls; one note alone keeps its own bar as before.
+ * - It stays in sight while the text below scrolls, the sheet's own small bar scrolls with the sheet; one note alone
+ *   keeps its own bar as before.
  */
 import { expect, test, type Page } from '@playwright/test'
 
@@ -74,9 +76,10 @@ test('NOTES-8 AC-1 at 1920 px one toolbar stands over both notes; each sheet kee
   expect(box.scroll).toBeLessThanOrEqual(0)
   await expect(shared.getByTestId('tool-width')).toHaveCount(0)
   await expect(shared.getByTestId('tool-outline')).toHaveCount(0)
-  // Each head: no text tools, its own at the top right of the side.
+  // Each sheet: no text tools, its own small bar at its top right, inside the sheet; no head above the sheet.
   for (const side of ['left', 'right'] as const) {
-    const head = pane(page, side).getByTestId('editor-head')
+    await expect(pane(page, side).getByTestId('editor-head')).toHaveCount(0)
+    const head = pane(page, side).getByTestId('note-page').getByTestId('sheet-tools')
     await expect(head.locator('[data-tool]')).toHaveCount(0)
     const own = head.getByTestId('note-tools')
     await expect(own).toHaveAttribute('role', 'group')
@@ -84,6 +87,12 @@ test('NOTES-8 AC-1 at 1920 px one toolbar stands over both notes; each sheet kee
     const ownBox = (await own.boundingBox())!
     const sideBox = (await pane(page, side).boundingBox())!
     expect(ownBox.x).toBeGreaterThan(sideBox.x + sideBox.width / 2)
+    const sheetBox = (await pane(page, side).getByTestId('note-page').boundingBox())!
+    expect(ownBox.y).toBeGreaterThanOrEqual(sheetBox.y)
+    expect(ownBox.x + ownBox.width).toBeLessThanOrEqual(sheetBox.x + sheetBox.width + 0.5)
+    // Not above the title: beside it, or above it at the right.
+    const titleBox = (await pane(page, side).getByTestId('note-title').boundingBox())!
+    expect(ownBox.y).toBeLessThanOrEqual(titleBox.y + titleBox.height)
   }
 })
 
@@ -150,14 +159,14 @@ test("NOTES-8 AC-1 a sheet's own bar works on its own note, and the text tools s
   await page.getByTestId('paper-lined').click()
   await expect(pane(page, 'left').getByTestId('note-paper')).toHaveAttribute('data-paper', 'lined')
   await expect(pane(page, 'right').getByTestId('note-paper')).toHaveAttribute('data-paper', 'blank')
-  // The long left text scrolls; the bar over both does not move, the left head stays at the top of its side.
+  // The long left text scrolls; the bar over both does not move; the sheet's own small bar goes with the sheet.
   const before = (await bar(page).boundingBox())!
   await pane(page, 'left').evaluate((element) => element.scrollTo(0, element.scrollHeight))
   await page.waitForTimeout(200)
   const after = (await bar(page).boundingBox())!
   expect(Math.abs(after.y - before.y)).toBeLessThan(1)
   await expect(bar(page).getByTestId('tool-bold')).toBeInViewport()
-  await expect(pane(page, 'left').getByTestId('note-menu')).toBeInViewport()
+  await expect(pane(page, 'left').getByTestId('note-menu')).not.toBeInViewport()
 })
 
 test('NOTES-8 one note alone at 1920 px keeps its own toolbar as before', async ({ page }) => {

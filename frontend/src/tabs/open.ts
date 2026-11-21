@@ -14,8 +14,11 @@ type Go = (path: string, options?: { replace?: boolean; state?: unknown }) => vo
 
 // Outside the notes page the app's own history step; on it the router's `navigate` (set by the page).
 let go: Go = (path, options) => goTo(path, options?.state)
+/** The notes page with its tabs is drawn (it hands in its navigation). */
+let pageOn = false
 
 export function setNavigation(next: Go | null): void {
+  pageOn = next !== null
   go = next ?? ((path, options) => goTo(path, options?.state))
 }
 
@@ -97,6 +100,40 @@ export function closeTab(key: string): void {
 export function closeDeletedTab(key: string): void {
   tabs.close(key)
   follow(true)
+}
+
+// ---- Notes thrown away for being empty ------------------------------------------------------------------------------
+
+/** Notes an editor of this window left quite empty (no title, no text): nexnotes throws them away (NOTES-3 EC-4),
+ * this window at once or the server a moment later. Either way the tabs read the note's head again (the page says
+ * notes changed, or the next round of reading), find it gone and close its tab (`TabbedNotes`). */
+const leftEmpty = new Set<string>()
+
+/** An editor leaves its note quite empty. */
+export function noteLeftEmpty(note: string): void {
+  leftEmpty.add(note)
+}
+
+/** An editor has the note open (again). */
+export function noteInUse(note: string): void {
+  leftEmpty.delete(note)
+}
+
+/** Whether an editor of this window left the note quite empty (a tab of it that is "no longer available" now is one
+ * the server threw away). */
+export function wasLeftEmpty(note: string): boolean {
+  return leftEmpty.has(note)
+}
+
+/**
+ * A note thrown away for being empty (fifth review): its tabs close by themselves, without asking, and the tab beside
+ * moves up as on closing; no tab struck through "Untitled" stays behind. Away from the notes page the address stays.
+ */
+export function closeDiscardedNote(note: string): void {
+  leftEmpty.delete(note)
+  if (!tabsNow().tabs.some((tab) => tab.note === note)) return
+  tabs.closeNote(note)
+  if (pageOn) follow(true)
 }
 
 export function endSplit(): void {

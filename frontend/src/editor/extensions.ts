@@ -453,7 +453,8 @@ export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}
         label.className = 'collaboration-carets__label'
         label.style.backgroundColor = look.color
         label.textContent = look.label
-        caret.append(label)
+        // The same note on the other side of this window: the caret alone, no name.
+        if (look.label) caret.append(label)
         return caret
       },
       selectionRender: (user: Partial<PresenceUser>) => {

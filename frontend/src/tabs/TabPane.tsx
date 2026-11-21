@@ -8,10 +8,11 @@
  *   and closing the tab. No longer there for this account at all (deleted for good, sharing ended, EC-6): the side
  *   says so instead of an editor. Ended while the note was on show here, the side keeps the editor's sentence that
  *   names who ended it (NOTES-13 AC-5); only on this page, never in what the tabs remember.
- * - Two sides on show: the sheet of the side used last has a honey frame, the other side is dimmed (its sheet on the
- *   page's gray, its toolbar quieter); a click or the focus in it makes it the side used last at once (21.11.2026).
+ * - Two sides on show: the sheet of the side used last has a honey frame, the other side is clearly set back (its sheet
+ *   sunk to the page's gray, its text, title and small bar one dimmed gray, `index.css`); a click or the focus in it
+ *   makes it the side used last at once (21.11.2026, fifth review).
  * - Two sides on show: the note hands its editor to the one bar over both sides (`SharedToolbar.tsx`) and keeps only the
- *   tools of the whole note in its own small bar (21.11.2026).
+ *   tools of the whole note in its own small bar, at the top right inside its sheet (21.11.2026, fifth review).
  */
 import { Ban } from 'lucide-react'
 import { useCallback, useMemo, useState, type CSSProperties } from 'react'
@@ -59,6 +60,7 @@ export function TabPane({ tab, side, meta, focused, line, standing, hidden, fres
   const take = () => {
     if (!focused && !hidden) focusSide(side)
   }
+  const reveal = useCallback(() => focusSide(side), [side])
   return (
     <section
       aria-label={t(`tabs.${side}`)}
@@ -96,6 +98,7 @@ export function TabPane({ tab, side, meta, focused, line, standing, hidden, fres
           onGuard={onGuard}
           onDeleted={() => closeDeletedTab(tab.key)}
           onEnded={onEnded}
+          reveal={reveal}
           stoppedExtra={(status) =>
             status === 'gone' ? (
               <>

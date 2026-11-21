@@ -1486,7 +1486,7 @@
     "closedOldest": "„{{title}}“ wurde geschlossen, weil schon {{max}} Tabs offen waren.",
     "count": "{{count}} von {{max}}",
     "dropBeside": "Hier loslassen: daneben öffnen",
-    "endSplit": "Nebeneinander beenden",
+    "endSplit": "Nur eine Notiz zeigen",
     "gone": {
       "text": "Sie wurde endgültig gelöscht, oder das Teilen wurde beendet.",
       "title": "Diese Notiz ist nicht mehr verfügbar."

@@ -15,6 +15,7 @@ import { NoteIcon } from '../components/NoteIcon'
 import { usePulsingTab } from './pulse'
 import { colorOf } from '../folders/palette'
 import { useCurrentFolder, useFolders } from '../folders/store'
+import { blankOpenNoteIn } from '../notes/context'
 import { createNote } from '../notes/newNote'
 import { isMac } from './desktop'
 import { draggedTab as draggedTabNow, setDraggedTab, shortcutText, SIDE_LABEL, TAB_DRAG, TAB_MAX, tabMin, tabRows } from './layout'
@@ -35,6 +36,9 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   }, [])
   return [box, width]
 }
+
+/** The thin line between "List" and "Show one note only": 1 px, its margins (2 × 4) and one more gap of the row (4). */
+const GAP_LINE = 13
 
 type Props = {
   state: TabsState
@@ -57,10 +61,11 @@ export function TabBar({ state, metas, split, open, listToggle }: Props) {
   const list = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState<string | null>(null)
   const focused = focusedKey(state)
-  // The buttons after the tabs: their padding (4), "new tab" (30), "list" and "end split" (4 + 30 each), and the count
+  // The buttons after the tabs: their padding (4), "new tab" (30), "list" and "end split" (4 + 30 each) with the line
+  // between them (`GAP_LINE`), and the count
   // with its gap ("6 von 6" in 12 px with its padding, 4 + 52). When the tabs would not keep their least width in two
   // rows otherwise, the count goes (it is in the tooltip of "new tab" then) before the titles do.
-  const buttons = 4 + 30 + (state.right ? 34 : 0) + (listToggle ? 34 : 0)
+  const buttons = 4 + 30 + (state.right ? 34 : 0) + (listToggle ? 34 : 0) + (state.right && listToggle ? GAP_LINE : 0)
   const mins = state.tabs.map((tab) => tabMin(split && (tab.key === state.left || tab.key === state.right)))
   const full = tabRows(mins, width, buttons + 56)
   const compact = full.fits ? full : tabRows(mins, width, buttons)
@@ -115,7 +120,11 @@ export function TabBar({ state, metas, split, open, listToggle }: Props) {
     store.move(key, index)
   }
 
+  // "+" as "New note" (NOTES-3 AC-1, EC-4): a quite empty note open on a side in the folder it would go to is the new
+  // note already: its side comes to the front with the cursor in its title, no second one is made (fifth review).
   const newTab = () => {
+    const blank = blankOpenNoteIn(targetFolderId)
+    if (blank) return blank.focusTitle()
     createNote(targetFolderId)
       .then((note) => openNoteInNewTab(note.id, openFolderId ?? undefined, { fresh: true }))
       .catch(() => undefined)
@@ -250,6 +259,9 @@ export function TabBar({ state, metas, split, open, listToggle }: Props) {
           <List className="h-4 w-4" aria-hidden />
         </button>
       )}
+      {/* "Nur eine Notiz zeigen" stands apart from "List" by a thin line, so that the two are not mistaken for each other
+          (fifth review). */}
+      {state.right && listToggle && <span aria-hidden className="mx-1 h-4 w-px bg-ink-700" data-testid="tab-buttons-gap" />}
       {state.right && (
         <button
           type="button"

@@ -1,8 +1,12 @@
 /**
  * The title of a note, its own field above the text (NOTES-3 AC-9), written together like the text: it is the
  * `title` of the Yjs document. At most 120 characters (EC-7); Enter goes into the text (AC-1).
+ *
+ * A long title breaks into further lines instead of being cut off at the sheet's edge (fifth review, a sheet of
+ * 380 px beside a second note): the field is a text area of one line that grows with its words. A line break is
+ * never part of the title; Enter still goes into the text.
  */
-import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type * as Y from 'yjs'
 
@@ -29,7 +33,7 @@ export const TitleField = forwardRef<TitleFieldHandle, Props>(function TitleFiel
   const { t } = useTranslation()
   const text = doc.getText('title')
   const [value, setValue] = useState(() => text.toString())
-  const input = useRef<HTMLInputElement>(null)
+  const input = useRef<HTMLTextAreaElement>(null)
   const last = useRef(value)
   useImperativeHandle(ref, () => ({ focus: () => input.current?.focus() }), [])
 
@@ -70,10 +74,32 @@ export const TitleField = forwardRef<TitleFieldHandle, Props>(function TitleFiel
     if (autoFocus) input.current?.focus()
   }, [autoFocus])
 
+  // As high as its lines: after every change of the words, and when the sheet gets narrower or wider.
+  const fit = useCallback(() => {
+    const field = input.current
+    if (!field) return
+    field.style.height = 'auto'
+    // The height counts the line under the title too (border-box): the text's height and that line.
+    if (field.scrollHeight > 0) field.style.height = `${field.scrollHeight + field.offsetHeight - field.clientHeight}px`
+  }, [])
+  useLayoutEffect(fit, [fit, value])
+  useEffect(() => {
+    const field = input.current
+    if (!field || typeof ResizeObserver === 'undefined') return
+    let width = field.clientWidth
+    const observer = new ResizeObserver(() => {
+      if (field.clientWidth === width) return
+      width = field.clientWidth
+      fit()
+    })
+    observer.observe(field)
+    return () => observer.disconnect()
+  }, [fit])
+
   return (
-    <input
+    <textarea
       ref={input}
-      type="text"
+      rows={1}
       value={value}
       maxLength={MAX_TITLE}
       readOnly={!editable}
@@ -100,7 +126,7 @@ export const TitleField = forwardRef<TitleFieldHandle, Props>(function TitleFiel
       className={
         // A large field without a box on the sheet (drawing "N3-Editor"); focus shows as a line under the title, a
         // missing title as a red one.
-        'w-full border-0 border-b-2 bg-transparent px-0 pt-1 pb-1 text-[26px] leading-tight font-bold tracking-[-0.02em] text-mist-100 placeholder:text-mist-600 focus:outline-none md:text-[28px] ' +
+        'block w-full resize-none overflow-hidden border-0 border-b-2 bg-transparent px-0 pt-1 pb-1 text-[26px] leading-tight font-bold tracking-[-0.02em] [overflow-wrap:anywhere] text-mist-100 placeholder:text-mist-600 focus:outline-none md:text-[28px] ' +
         (invalid ? 'border-bad-500' : 'border-transparent focus-visible:border-accent-500/70 focus:border-accent-500/40')
       }
     />

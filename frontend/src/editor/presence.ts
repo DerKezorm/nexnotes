@@ -2,7 +2,10 @@
  * Who else has the note open (NOTES-12 AC-5, AC-6, EC-6, EC-8).
  *
  * Every person has a colour of their own from a fixed row, never honey. One's own caret is honey. A second window of
- * the same account is not somebody else: it shows as "du, anderes Fenster", in honey too.
+ * the same account is not somebody else: it shows as "du, anderes Fenster", in honey too. The same note on the other
+ * side of the same window is no other window (fifth review): each editor's state names its window (`window`, a number
+ * of this page load, not the browser tab's `X-Nexnotes-Client`, which a duplicated browser tab keeps), and a state of
+ * one's own account from one's own window is left out.
  *
  * How a colour is given (`colorsFor`): every account has its place in the row, its id modulo the row's length. Everyone
  * in the note, oneself included, is taken in the order of their account ids; who finds their place taken (ids 1 and 9)
@@ -60,11 +63,25 @@ export function initialOf(name: string): string {
   return (Array.from(name.trim())[0] ?? '?').toUpperCase()
 }
 
+/** This window: drawn anew with every page load, never shared with another browser tab. */
+export const WINDOW_ID = randomWindow()
+
+function randomWindow(): string {
+  const bytes = new Uint8Array(8)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 /** What a window tells the others about itself. */
-export type PresenceUser = { name: string; accountId: number; color: string; avatar?: string | null }
+export type PresenceUser = { name: string; accountId: number; color: string; avatar?: string | null; window?: string }
 
 export function presenceUser(accountId: number, name: string, avatar: string | null = null): PresenceUser {
-  return { name, accountId, color: colorFor(accountId), avatar }
+  return { name, accountId, color: colorFor(accountId), avatar, window: WINDOW_ID }
+}
+
+/** Another editor of one's own in this very window (the same note on the other side): no presence at all. */
+export function sameWindow(user: Partial<PresenceUser> | undefined, ownAccount: number, ownWindow = WINDOW_ID): boolean {
+  return Boolean(user && user.accountId === ownAccount && typeof user.window === 'string' && user.window === ownWindow)
 }
 
 export type Person = { accountId: number; name: string; color: string; initial: string; avatar?: string | null }
@@ -75,8 +92,9 @@ export type Presence = {
   ownWindows: number
 }
 
-/** The others in the note, from the awareness states (one's own state left out). */
-export function presenceOf(states: Map<number, Record<string, unknown>>, ownClient: number, ownAccount: number): Presence {
+/** The others in the note, from the awareness states (one's own state left out, and the other editors of one's own
+ * window). */
+export function presenceOf(states: Map<number, Record<string, unknown>>, ownClient: number, ownAccount: number, ownWindow = WINDOW_ID): Presence {
   const people = new Map<number, Person>()
   const colors = colorsFor([ownAccount, ...accountsOf(states)])
   let ownWindows = 0
@@ -84,6 +102,7 @@ export function presenceOf(states: Map<number, Record<string, unknown>>, ownClie
     if (client === ownClient) continue
     const user = state?.user as Partial<PresenceUser> | undefined
     if (!user || typeof user.accountId !== 'number') continue
+    if (sameWindow(user, ownAccount, ownWindow)) continue
     if (user.accountId === ownAccount) {
       ownWindows++
       continue
@@ -101,8 +120,10 @@ export function presenceFromAwareness(awareness: Awareness, ownAccount: number):
   return presenceOf(awareness.getStates() as Map<number, Record<string, unknown>>, awareness.clientID, ownAccount)
 }
 
-/** How a caret of someone else looks to this window: its colour among those `present` and its label. */
-export function caretLook(user: Partial<PresenceUser>, ownAccount: number, otherWindow: string, present: Iterable<number> = []): { color: string; label: string } {
+/** How a caret of someone else looks to this window: its colour among those `present` and its label. The caret of the
+ * same note on the other side of this window has no label: it is no other window. */
+export function caretLook(user: Partial<PresenceUser>, ownAccount: number, otherWindow: string, present: Iterable<number> = [], ownWindow = WINDOW_ID): { color: string; label: string } {
+  if (sameWindow(user, ownAccount, ownWindow)) return { color: OWN_COLOR, label: '' }
   if (user.accountId === ownAccount) return { color: OWN_COLOR, label: otherWindow }
   return { color: typeof user.accountId === 'number' ? colorFor(user.accountId, [ownAccount, ...present]) : PERSON_COLORS[0], label: String(user.name ?? '?') }
 }

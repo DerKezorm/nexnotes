@@ -10,7 +10,7 @@
  *   reload, AC-5).
  * - Two sides need 2 × 340 px; with less, one shows with a switcher, and the split comes back when the window grows
  *   (EC-2). The line between them moves with the mouse or the arrow keys, never below 340 px a side (AC-2).
- * - Beside two notes the list is a column while both sides keep their 340 px, else a drawer over the left note
+ * - Beside two notes the list is a column while both sides keep 480 px (`COLUMN_PANE`), else a drawer over the left note
  *   (`ListDrawer.tsx`): a list chosen in the sidebar opens it, a note chosen in it opens on the side used last and
  *   closes it. The button "List" in the row of tabs shows and hides the column (kept on this device) or the drawer.
  * - Two sides on show: one toolbar over both with the text tools, working on the side used last (`SharedToolbar.tsx`);
@@ -35,7 +35,7 @@ import { listenForTabKeys } from './keys'
 import { installTabLinks } from './links'
 import { onLiveStopped } from './live'
 import { refreshMeta, useTabMetas } from './meta'
-import { focusSide as focusSideAction, openNoteBeside, setNavigation } from './open'
+import { closeDiscardedNote, focusSide as focusSideAction, openNoteBeside, setNavigation, wasLeftEmpty } from './open'
 import { focusedKey, focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
 import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './store'
 import { draggedTab, listStand, MIN_PANE, SEPARATOR } from './layout'
@@ -131,6 +131,17 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
     }
     setSettled(true)
   }, [noteId, folderId, listPath, account, navigate])
+
+  // A tab whose note this window left quite empty and that was thrown away since (NOTES-3 EC-4), here at once or by the
+  // server after its grace: it closes by itself, without asking, as soon as its head says the note is no longer there
+  // (fifth review). No tab struck through "Untitled" stays behind.
+  const discarded = state.tabs
+    .filter((tab) => metas.get(tab.note)?.state === 'gone' && wasLeftEmpty(tab.note))
+    .map((tab) => tab.note)
+    .join(' ')
+  useEffect(() => {
+    for (const note of discarded ? discarded.split(' ') : []) closeDiscardedNote(note)
+  }, [discarded])
 
   useEffect(() => listenForTabKeys(), [])
   useEffect(() => onLiveStopped((note) => void refreshMeta([note])), [])

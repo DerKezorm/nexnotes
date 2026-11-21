@@ -19,7 +19,8 @@ import { attachFiles, dismissRefusal, insertLink, pastedLink, useRefusals } from
 import { useLimits } from './info'
 
 /** "Anhängen": the files go where the cursor stands. */
-export function AttachButton({ editor, noteId }: { editor: Editor; noteId: string }) {
+/** `iconOnly`: the sheet's own small bar beside a second note, where every button is a quiet symbol (fifth review). */
+export function AttachButton({ editor, noteId, iconOnly = false }: { editor: Editor; noteId: string; iconOnly?: boolean }) {
   const { t } = useTranslation()
   const anyFile = useRef<HTMLInputElement>(null)
   const photo = useRef<HTMLInputElement>(null)
@@ -38,16 +39,22 @@ export function AttachButton({ editor, noteId }: { editor: Editor; noteId: strin
       {/* With room in the head (a note alone) the word, beside another note only the clip: the tools keep their row. */}
       <button
         type="button"
-        className="hidden h-[34px] min-w-[34px] items-center justify-center gap-1.5 rounded-lg bg-accent-wash px-2 text-[13px] font-semibold text-accent-400 md:flex @[700px]:px-3"
+        className={
+          iconOnly
+            ? 'hidden h-[34px] w-[34px] items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 hover:text-mist-100 md:flex'
+            : 'hidden h-[34px] min-w-[34px] items-center justify-center gap-1.5 rounded-lg bg-accent-wash px-2 text-[13px] font-semibold text-accent-400 md:flex @[700px]:px-3'
+        }
         onClick={() => anyFile.current?.click()}
         aria-label={t('attachments.attach')}
         title={t('attachments.attachLabel')}
         data-testid="attach"
       >
-        <Paperclip className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
-        <span className="hidden @[700px]:inline" aria-hidden>
-          {t('attachments.attach')}
-        </span>
+        <Paperclip className={iconOnly ? 'h-4 w-4' : 'h-3.5 w-3.5'} strokeWidth={iconOnly ? 2 : 2.2} aria-hidden />
+        {!iconOnly && (
+          <span className="hidden @[700px]:inline" aria-hidden>
+            {t('attachments.attach')}
+          </span>
+        )}
       </button>
       <button type="button" className="grid h-11 w-11 place-items-center rounded-lg text-accent-400 md:hidden" aria-label={t('attachments.attach')} onClick={() => setSheet(true)} data-testid="attach-phone">
         <Paperclip className="h-5 w-5" strokeWidth={2.2} aria-hidden />

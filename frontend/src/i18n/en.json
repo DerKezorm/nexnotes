@@ -1486,7 +1486,7 @@
     "closedOldest": "“{{title}}” was closed because {{max}} tabs were open already.",
     "count": "{{count}} of {{max}}",
     "dropBeside": "Drop here to open beside",
-    "endSplit": "Stop side by side",
+    "endSplit": "Show one note only",
     "gone": {
       "text": "It was deleted for good, or it is no longer shared with you.",
       "title": "This note is no longer available."

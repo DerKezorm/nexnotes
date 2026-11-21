@@ -208,8 +208,9 @@ async function render(path: string, state?: unknown): Promise<void> {
 const $ = (testId: string) => document.body.querySelector(`[data-testid="${testId}"]`) as HTMLElement | null
 
 function typeTitle(value: string) {
-  const input = $('note-title') as HTMLInputElement
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+  const input = $('note-title') as HTMLTextAreaElement
+  // The title is a text area of one line that grows (fifth review).
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
   setter.call(input, value)
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
