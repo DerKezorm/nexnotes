@@ -294,7 +294,8 @@ test('NOTES-10 AC-7 EC-9 the gallery: kinds with numbers, largest first, into th
   ])
   await expect(page.getByTestId('attachment-pdf')).toBeVisible()
   await expect(page.getByTestId('note-saved')).toHaveText('saved')
-  await page.getByTestId('sidebar-attachments').click()
+  // No fixed entry of the sidebar any more (a smart folder now, NOTES-7): the account's gallery stays at its address.
+  await page.goto('/attachments')
   await expect(page.getByRole('heading', { name: 'Attachments' })).toBeVisible()
   await expect(page.getByTestId('gallery-kind-pdf')).toContainText('PDFs')
   await page.getByTestId('gallery-kind-pdf').click()

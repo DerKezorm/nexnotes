@@ -4,6 +4,8 @@
  * the real tests of NOTES-9 AC-6 and NOTES-5 AC-6), deleting with a question (AC-6), the two that come with an account
  * (AC-7), the section "Intelligent" with its order (AC-8), conditions that point nowhere (EC-1), nothing that fits
  * (EC-2), the device's zone (EC-3), a name taken (EC-6), and "New note" going into the inbox (NOTES-4 AC-9).
+ * "Mit mir geteilt" and "Anhänge" are presets in the place of the sidebar's fixed entries, "Anhänge" opening as the
+ * gallery of its notes' attachments.
  *
  * The real search page and the real tag page are on show, with smart folders docked on (`register.tsx`); a small
  * stand-in for the server keeps the smart folders.
@@ -15,14 +17,18 @@ import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { SIDEBAR_SECTIONS } from '../extensions'
 // The folders' section first, as in `main.tsx`: smart folders take their place right after it.
 import '../folders'
+// Sharing and attachments as `main.tsx` docks them: neither brings a fixed entry of the sidebar any more.
+import '../attachments'
+import '../shares'
 import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
+import type { GalleryItem } from '../attachments/api'
 import type { ListItem } from '../notes/list/api'
 import { folderOfList, hrefIn, isListPath, listNameOf, noteOf } from '../notes/workspace'
 import { SearchPage } from '../search/SearchPage'
 import { forgetTags } from '../tags/store'
 import { TagPage } from '../tags/TagPage'
-import type { Condition, SmartFolder } from './api'
+import type { Condition, Preset, SmartFolder } from './api'
 import { fromSearch, nameFromSearch } from './conditions'
 import { moved } from './order'
 // Docks smart folders onto the frame, as `main.tsx` does: the sidebar, the routes, the buttons of search and tags.
@@ -40,6 +46,7 @@ let smart: SmartFolder[] = []
 let items: ListItem[] = []
 let broken: { index: number; kind: 'folder' | 'tag'; name: string }[] = []
 let views: Record<string, string> = {}
+let gallery: GalleryItem[] = []
 let made = 0
 const INBOX = 'inbox-1'
 
@@ -47,14 +54,23 @@ function reply(status: number, body: unknown): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
 
+/** One moment for every note of a test: notes made a millisecond apart would change their order. */
+const AT = new Date(Date.now() - 60_000).toISOString()
+
 function item(id: string, extra: Partial<ListItem> = {}): ListItem {
-  const at = new Date(Date.now() - 60_000).toISOString()
+  const at = AT
   return { id, folder_id: 'f1', title: id, title_check: false, origin: '', preview: '', created_at: at, updated_at: at, pinned: false, color: '', tasks: null, ...extra }
 }
 
+const PRESET_NAMES: Record<string, string[]> = {
+  open_tasks: ['Offene Checklisten', 'Open checklists'],
+  recent: ['Zuletzt bearbeitet', 'Recently edited'],
+  shared_with_me: ['Mit mir geteilt', 'Shared with me'],
+  attachments: ['Anhänge', 'Attachments'],
+}
+
 function taken(name: string, besides = ''): SmartFolder | undefined {
-  const names = (folder: SmartFolder) =>
-    folder.name ? [folder.name] : folder.preset === 'open_tasks' ? ['Offene Checklisten', 'Open checklists'] : ['Zuletzt bearbeitet', 'Recently edited']
+  const names = (folder: SmartFolder) => (folder.name ? [folder.name] : PRESET_NAMES[folder.preset])
   return smart.find((folder) => folder.id !== besides && names(folder).some((one) => one.toLowerCase() === name.trim().toLowerCase()))
 }
 
@@ -84,7 +100,7 @@ function answer(call: Call): Response {
     const fitting = conditions.some((condition) => condition.kind === 'tasks') ? items.filter((one) => one.tasks) : items
     return reply(200, { total: fitting.length + (body?.match === 'any' ? 10 : 0), items: fitting, broken: [] })
   }
-  const one = /^\/api\/smart-folders\/([^/]+)(?:\/(notes|stamp|view))?$/.exec(path)
+  const one = /^\/api\/smart-folders\/([^/]+)(?:\/(notes|stamp|view|attachments))?$/.exec(path)
   if (one) {
     const [, id, what] = one
     const folder = smart.find((each) => each.id === id)
@@ -92,6 +108,13 @@ function answer(call: Call): Response {
     if (what === 'notes')
       return reply(200, { key: `s:${id}`, view: { mode: views[id] ?? 'list', sort: 'updated', direction: 'desc', grouped: true }, counts: { own: items.length, shared: 0 }, items, folder, broken })
     if (what === 'stamp') return reply(200, { stamp: '1' })
+    if (what === 'attachments') {
+      const kind = call.query.get('kind')
+      const chosen = gallery.filter((each) => !kind || each.kind === kind)
+      const counts = { image: 0, scan: 0, pdf: 0, recording: 0, drawing: 0, video: 0, file: 0 }
+      for (const each of gallery) counts[each.kind as keyof typeof counts] += 1
+      return reply(200, { total: chosen.length, all: gallery.length, bytes: 2048, counts, items: chosen })
+    }
     if (what === 'view') {
       views[id] = String(body?.mode ?? views[id] ?? 'list')
       return reply(200, { mode: views[id], sort: 'updated', direction: 'desc', grouped: true })
@@ -195,14 +218,21 @@ const posted = (path: string, method = 'POST') => calls.filter((call) => call.pa
 /** Long enough for the pause of the preview and its answer. */
 const previewed = () => settle(400)
 
-function preset(id: string, kind: 'open_tasks' | 'recent', position: number): SmartFolder {
+const PRESET_CONDITIONS: Record<Exclude<Preset, ''>, Condition[]> = {
+  open_tasks: [{ kind: 'tasks', op: 'open' }],
+  recent: [{ kind: 'date', field: 'updated', period: 'week' }],
+  shared_with_me: [{ kind: 'shared', op: 'with_me' }],
+  attachments: [{ kind: 'attachment', type: 'any' }],
+}
+
+function preset(id: string, kind: Exclude<Preset, ''>, position: number): SmartFolder {
+  return { id, name: '', preset: kind, match: 'all', conditions: PRESET_CONDITIONS[kind], position }
+}
+
+function attachment(id: string, kind: GalleryItem['kind'], note: string): GalleryItem {
   return {
-    id,
-    name: '',
-    preset: kind,
-    match: 'all',
-    conditions: kind === 'open_tasks' ? [{ kind: 'tasks', op: 'open' }] : [{ kind: 'date', field: 'updated', period: 'week' }],
-    position,
+    id, note_id: note, kind, name: `${id}.bin`, mime: 'application/octet-stream', size: 1024, width: null, height: null, pages: null,
+    duration_ms: null, view: false, thumb: false, inline: false, created_at: null, note: { id: note, title: note },
   }
 }
 
@@ -213,6 +243,7 @@ beforeEach(async () => {
   items = []
   broken = []
   views = {}
+  gallery = []
   forgetFolders()
   forgetTags()
   forgetSmartFolders()
@@ -435,6 +466,91 @@ describe('NOTES-7 smart folders', () => {
     forgetSmartFolders()
     await render('/')
     expect($$('sidebar-smart-folder').map((link) => link.textContent)).toEqual(['Open checklists', 'Recently edited'])
+  })
+
+  it('NOTES-7 AC-7 "Mit mir geteilt" and "Anhänge" are smart folders with their old symbols; the sidebar has no fixed entries for them', async () => {
+    smart = [...smart, preset('p3', 'shared_with_me', 2), preset('p4', 'attachments', 3)]
+    await render('/')
+    const keys = SIDEBAR_SECTIONS.map((section) => section.key)
+    expect(keys).not.toContain('shared')
+    expect(keys).not.toContain('attachments')
+    const links = $$('sidebar-smart-folder')
+    expect(links.map((link) => link.textContent)).toEqual(['Offene Checklisten', 'Zuletzt bearbeitet', 'Mit mir geteilt', 'Anhänge'])
+    expect(links[2].querySelector('[data-testid="smart-icon-shared_with_me"]')).not.toBeNull()
+    expect(links[3].querySelector('[data-testid="smart-icon-attachments"]')).not.toBeNull()
+    expect(links[3].querySelector('[data-testid="smart-filter-icon"]')).toBeNull()
+    // Deleted, it is gone like any other smart folder.
+    act(() => root?.unmount())
+    box.remove()
+    smart = smart.filter((folder) => folder.id !== 'p3')
+    forgetSmartFolders()
+    await render('/')
+    expect($$('sidebar-smart-folder').map((link) => link.textContent)).not.toContain('Mit mir geteilt')
+  })
+
+  it('NOTES-7 AC-7 whoever deleted them makes them anew: "Geteilt: mit mir geteilt" and "Anhang" of any kind or one kind', async () => {
+    await render('/smart/new')
+    await typeInto($('smart-name'), 'Mit mir geteilt')
+    await choose($('smart-kind'), 'shared')
+    expect(($('smart-shared') as HTMLSelectElement).value).toBe('with_me')
+    await click($('smart-add'))
+    await choose($$('smart-kind').at(-1)!, 'attachment')
+    const types = Array.from(($('smart-attachment') as HTMLSelectElement).options).map((option) => option.value)
+    expect(types).toEqual(expect.arrayContaining(['any', 'image', 'pdf', 'recording', 'file']))
+    expect(($('smart-attachment') as HTMLSelectElement).value).toBe('any')
+    expect(Array.from(($('smart-attachment') as HTMLSelectElement).options).find((option) => option.value === 'recording')!.textContent).toBe('Aufnahme')
+    await choose($('smart-attachment'), 'pdf')
+    await previewed()
+    expect(posted('/api/smart-folders/preview').at(-1)!.body!.conditions).toEqual([{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }])
+    await click($('smart-save'))
+    expect(posted('/api/smart-folders')[0].body).toEqual({ name: 'Mit mir geteilt', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }] })
+  })
+
+  it('NOTES-7 AC-4 "Anhänge" opens as the gallery of its notes\' attachments, beside list and tiles, and an entry opens its note', async () => {
+    smart = [...smart, preset('p4', 'attachments', 2)]
+    views = { p4: 'gallery' }
+    items = [item('Urlaub'), item('Vertrag')]
+    gallery = [attachment('a1', 'image', 'Urlaub'), attachment('a2', 'pdf', 'Vertrag')]
+    await render('/smart/p4')
+    expect($('note-list')!.getAttribute('data-mode')).toBe('gallery')
+    expect($('list-mode-gallery')!.getAttribute('aria-checked')).toBe('true')
+    expect($('list-mode-gallery')!.textContent).toBe('Anhänge')
+    // The gallery sorts itself: no sorting or grouping of notes above it, no second heading.
+    expect($('list-sort')).toBeNull()
+    expect($('list-group')).toBeNull()
+    expect(box.querySelectorAll('h1')).toHaveLength(1)
+    expect($$('gallery-item').map((tile) => tile.getAttribute('data-kind'))).toEqual(['image', 'pdf'])
+    expect($$('note-row')).toHaveLength(0)
+    expect(calls.some((call) => call.path === '/api/smart-folders/p4/attachments' && call.query.get('tz') !== null)).toBe(true)
+    await click($('gallery-kind-pdf'))
+    expect($$('gallery-item').map((tile) => tile.getAttribute('data-kind'))).toEqual(['pdf'])
+    // An entry opens its note beside the list, at the attachment.
+    await click($$('gallery-item')[0])
+    expect(where).toBe('/smart/p4?kind=pdf&attachment=a2&note=Vertrag')
+    // Back to the notes: a list, kept on the server.
+    await click($('list-mode-list'))
+    expect(posted('/api/smart-folders/p4/view', 'PUT')[0].body).toEqual({ mode: 'list' })
+    expect($('gallery')).toBeNull()
+    expect($$('note-row')).toHaveLength(2)
+  })
+
+  it('NOTES-7 AC-4 a smart folder without "Anhang" offers no gallery, and one kept from before shows as a list', async () => {
+    items = [item('Einkauf')]
+    views = { p1: 'gallery' }
+    await render('/smart/p1')
+    expect($('list-mode-gallery')).toBeNull()
+    expect($('gallery')).toBeNull()
+    expect($('note-list')!.getAttribute('data-mode')).toBe('list')
+    expect($$('note-row')).toHaveLength(1)
+    expect($('smart-shared-page')).toBeNull()
+  })
+
+  it('NOTES-7 AC-7 "Mit mir geteilt" leads to the page of what others shared (owners, rights, leaving)', async () => {
+    smart = [...smart, preset('p3', 'shared_with_me', 2)]
+    await render('/smart/p3')
+    expect($('smart-shared-page')!.getAttribute('href')).toBe('/shared')
+    expect($('smart-shared-page')!.textContent).toBe('Freigaben verwalten')
+    expect($('list-mode-gallery')).toBeNull()
   })
 
   it('NOTES-7 AC-8 the section "Intelligent" stands after the folders, with the filter symbol, in the order dragged', async () => {

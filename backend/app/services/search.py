@@ -1075,8 +1075,12 @@ def text_clause(account: Account, raw: str) -> ColumnElement[bool]:
     return Note.id.in_(statements[0] if len(statements) == 1 else union_all(*statements))
 
 
-def _locked() -> ColumnElement[bool]:
+def locked() -> ColumnElement[bool]:
+    """Locked notes (NOTES-16): what is in them the server does not know."""
     return or_(*(hidden() for hidden in tags.HIDDEN_NOTES)) if tags.HIDDEN_NOTES else false()
+
+
+_locked = locked
 
 
 def _shared_by(account: Account) -> ColumnElement[bool]:

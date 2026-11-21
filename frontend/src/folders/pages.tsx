@@ -3,12 +3,13 @@
  * or the empty state of NOTES-6 EC-1 (EC-5); the inbox with where each note came from (AC-7), "File" (AC-14) and its
  * own empty state (EC-6); and on the phone the list of all folders (drawing "Handy-Ordner").
  */
-import { ChevronDown, ChevronRight, FileText, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Users, Zap } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { LogoMark } from '../components/Logo'
+import { PHONE_FOLDER_SECTIONS } from '../extensions'
 import { NoteIcon } from '../components/NoteIcon'
 import { notesApi } from '../notes/api'
 import { NoteList } from '../notes/NoteList'
@@ -306,18 +307,12 @@ export function FoldersPage() {
             </span>
             <span className="text-[15px] text-mist-500">{tree.inbox?.count ?? ''} ›</span>
           </Link>
-          {/* The places of the drawing "Handy-Ordner" (NOTES-23 AC-1): all notes and what others shared. */}
-          <Link to="/" className="flex min-h-[50px] items-center justify-between border-b border-ink-800 px-3.5 text-base hover:bg-ink-800" data-testid="folders-all">
+          {/* The places of the drawing "Handy-Ordner" (NOTES-23 AC-1): all notes. What others shared is a smart folder
+              now (NOTES-7 "Mit mir geteilt"), in the section "Intelligent" below the folders, as in the sidebar. */}
+          <Link to="/" className="flex min-h-[50px] items-center justify-between px-3.5 text-base hover:bg-ink-800" data-testid="folders-all">
             <span className="flex items-center gap-2.5">
               <NotebookText aria-hidden className="h-4 w-4 text-mist-500" />
               {t('notes.all')}
-            </span>
-            <span className="text-[15px] text-mist-500">›</span>
-          </Link>
-          <Link to="/shared" className="flex min-h-[50px] items-center justify-between px-3.5 text-base hover:bg-ink-800" data-testid="folders-shared">
-            <span className="flex items-center gap-2.5">
-              <Users aria-hidden className="h-4 w-4 text-mist-500" />
-              {t('shares.page.title')}
             </span>
             <span className="text-[15px] text-mist-500">›</span>
           </Link>
@@ -355,6 +350,9 @@ export function FoldersPage() {
           </div>
         )}
         {tree.status === 'ready' && rows.length === 0 && <p className="px-1 text-sm text-mist-500">{t('folders.empty')}</p>}
+        {PHONE_FOLDER_SECTIONS.map((section) => (
+          <div key={section.key}>{section.render()}</div>
+        ))}
       </div>
       <div className="sticky bottom-0 flex items-center justify-between border-t border-ink-700 bg-ink-900 px-4 pt-3 pb-7">
         <button type="button" onClick={() => actions.create(null)} className="h-11 px-1.5 text-[15px] text-accent-400">

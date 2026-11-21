@@ -23,6 +23,8 @@ export const FEATURE_ROUTES: FeatureRoute[] = []
 /** The workspace the `list` routes show in (set by the notes); without it they are pages of their own. */
 export const LIST_LAYOUT: { element: ReactNode | null } = { element: null }
 export const SIDEBAR_SECTIONS: Section[] = []
+/** Sections of the phone's page "Ordner" after the folders (NOTES-23 AC-1), as the sidebar has them after its folders. */
+export const PHONE_FOLDER_SECTIONS: Section[] = []
 export const CONNECTION_SECTIONS: Section[] = []
 export const ACCOUNT_SECTIONS: Section[] = []
 export const SHELL_BANNERS: Section[] = []

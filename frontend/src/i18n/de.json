@@ -224,7 +224,8 @@
       "emptyText": "Zieh Fotos, PDFs, Videos oder andere Dateien in eine Notiz, füg sie ein oder wähl dort „Anhängen“. Hier findest du sie dann alle.",
       "noneOfKind": "Keine Anhänge dieser Art.",
       "more": "Weitere laden",
-      "failed": "Die Anhänge lassen sich gerade nicht laden."
+      "failed": "Die Anhänge lassen sich gerade nicht laden.",
+      "emptyHere": "Die Notizen hier haben keine Anhänge."
     },
     "storage": {
       "full": "Dein Speicher ist voll: {{used}} von {{limit}}. Schreiben geht weiter, neue Anhänge erst, wenn Platz frei ist.",
@@ -878,7 +879,8 @@
     "view": {
       "label": "Ansicht",
       "list": "Liste",
-      "tiles": "Kacheln"
+      "tiles": "Kacheln",
+      "gallery": "Anhänge"
     }
   },
   "notes": {
@@ -1955,7 +1957,9 @@
     "missingText": "Er wurde gelöscht, vielleicht auf einem anderen Gerät.",
     "preset": {
       "open_tasks": "Offene Checklisten",
-      "recent": "Zuletzt bearbeitet"
+      "recent": "Zuletzt bearbeitet",
+      "shared_with_me": "Mit mir geteilt",
+      "attachments": "Anhänge"
     },
     "kind": {
       "tag": "Schlagwort",
@@ -2017,7 +2021,8 @@
       "tag": "Das Schlagwort {{tag}} aus einer Bedingung steht in keiner Notiz mehr.",
       "unnamed": "ohne Namen",
       "gone": "Gelöscht: {{name}}"
-    }
+    },
+    "sharedPage": "Freigaben verwalten"
   },
   "pwa": {
     "update": "Es gibt eine neue Version von nexnotes.",

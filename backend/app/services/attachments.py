@@ -62,7 +62,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, event, func, select
+from sqlalchemy import ColumnElement, delete, event, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -783,16 +783,30 @@ SORTS = ("newest", "largest")
 
 
 def gallery(db: Session, account: Account, kind: str | None = None, sort: str = "newest", offset: int = 0,
-            limit: int = 120) -> dict[str, Any]:
+            limit: int = 120, notes: ColumnElement[bool] | None = None) -> dict[str, Any]:
     """Every attachment in the account's living notes, once each, with the note it stands in (its own note where
-    that names it), counted per kind; filtered by kind, newest or largest first."""
-    rows = db.execute(
-        select(Attachment, AttachmentRef.note_id, Note.title)
+    that names it), counted per kind; filtered by kind, newest or largest first.
+
+    ``notes`` takes the notes from a clause instead (a smart folder, NOTES-7: its own and those shared with it, the
+    caller checked the rights): in a note of somebody else only what its owner put there (NOTES-13, ``readable``)."""
+    if notes is None:
+        scope = (Note.owner_id == account.id, Attachment.owner_id == account.id)
+    else:
+        scope = (notes, Attachment.owner_id == Note.owner_id)
+    found = db.execute(
+        select(Attachment, AttachmentRef.note_id, Note.title, Note.owner_id)
         .join(AttachmentRef, AttachmentRef.attachment_id == Attachment.id)
         .join(Note, Note.id == AttachmentRef.note_id)
-        .where(Note.owner_id == account.id, Note.deleted_at.is_(None), Attachment.owner_id == account.id,
-               Attachment.kind.not_in(HIDDEN_KINDS))
+        .where(*scope, Note.deleted_at.is_(None), Attachment.kind.not_in(HIDDEN_KINDS))
     ).all()
+    theirs = list({note_id for _, note_id, _, owner_id in found if owner_id != account.id})
+    unvouched: set[tuple[str, str]] = set()
+    for start in range(0, len(theirs), 500):
+        unvouched.update((row.note_id, row.attachment_id) for row in db.execute(
+            select(AttachmentMention.note_id, AttachmentMention.attachment_id)
+            .where(AttachmentMention.note_id.in_(theirs[start:start + 500]), AttachmentMention.vouched.is_(False))))
+    rows = [(row, note_id, title) for row, note_id, title, _ in found
+            if row.note_id == note_id or (note_id, row.id) not in unvouched]
     seen: dict[str, tuple[Attachment, str, str]] = {}
     for row, note_id, title in rows:
         have = seen.get(row.id)

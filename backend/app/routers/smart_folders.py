@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 
 from ..db import SessionLocal
 from ..deps import Account, DbSession
-from ..services import smart_folders
+from ..services import attachments, smart_folders
 
 
 @asynccontextmanager
@@ -53,7 +53,8 @@ class PreviewIn(BaseModel):
 
 
 class ViewIn(BaseModel):
-    mode: Literal["list", "tiles"] | None = None
+    #: ``gallery``: the attachments of its notes (a smart folder with the condition "Anhang").
+    mode: Literal["list", "tiles", "gallery"] | None = None
     sort: Literal["updated", "created", "title"] | None = None
     direction: Literal["asc", "desc"] | None = None
     grouped: bool | None = None
@@ -111,3 +112,21 @@ def stamp(folder_id: str, db: DbSession, account: Account, tz: Zone = "") -> dic
 @router.put("/{folder_id}/view")
 def save_view(folder_id: str, body: ViewIn, db: DbSession, account: Account) -> dict[str, Any]:
     return smart_folders.save_view(db, account, folder_id, body.model_dump())
+
+
+GalleryKind = Annotated[str | None, Query(pattern="^(" + "|".join(attachments.GALLERY_KINDS) + ")$")]
+
+
+@router.get("/{folder_id}/attachments")
+def gallery(
+    folder_id: str,
+    db: DbSession,
+    account: Account,
+    tz: Zone = "",
+    kind: GalleryKind = None,
+    sort: Annotated[str, Query(pattern="^(newest|largest)$")] = "newest",
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
+    limit: Annotated[int, Query(ge=1, le=500)] = 120,
+) -> dict[str, Any]:
+    """The attachments of the notes that fit now, in the shape of ``/api/attachments`` (the gallery)."""
+    return smart_folders.gallery(db, account, folder_id, tz, kind, sort, offset, limit)
