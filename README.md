@@ -58,6 +58,13 @@ Password with an optional second factor (TOTP with recovery codes), and any numb
 English and German ship with nexnotes. Put a language file (`nl.json`, same keys as the English one) into
 `<data>/locales` and restart: it is offered in the language menu, marked as yours.
 
+## Export
+
+A note goes out as Markdown (a ZIP with its attachments, when it has any) or as a PDF set on the server with
+[Typst](https://typst.app). A folder or everything runs in the background as a ZIP of Markdown files in their folders;
+nexnotes says when it is ready, and it can be fetched for 24 hours. The ZIPs lie under `<data>/exports`, count towards
+no account's storage and are in no backup. An export needs the room it takes plus 256 MB free on the data disk.
+
 ## Development
 
 - Backend: `cd backend && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`, then
@@ -67,4 +74,4 @@ English and German ship with nexnotes. Put a language file (`nl.json`, same keys
 
 ## Licence
 
-AGPL-3.0, see `LICENSE`.
+AGPL-3.0, see `LICENSE`. What nexnotes brings along from others, and under which licence: `THIRD-PARTY.md`.

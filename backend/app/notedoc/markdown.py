@@ -138,7 +138,9 @@ def _table_md(rows: list[dict[str, Any]]) -> list[str]:
 
 
 _ESCAPE = re.compile(r"([\\`*_\[\]<~|])")
-_LINE_START = re.compile(r"^(\s*)(#|>|-|\+|=|\d+[.)])")
+#: What would start a block at the start of a line. A ``#`` only before a blank or the line's end: ``#einkauf`` is a
+#: tag (NOTES-5), and Obsidian reads it as one only unescaped (NOTES-17 AC-5).
+_LINE_START = re.compile(r"^(\s*)(#{1,6}(?=[ \t]|$)|>|-|\+|=|\d+[.)])")
 _ENTITY = re.compile(r"&(?=[A-Za-z0-9#]+;)")
 
 

@@ -15,12 +15,13 @@
  */
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import { Copy, Ellipsis, History, Trash2, WifiOff } from 'lucide-react'
+import { Copy, Ellipsis, History, Trash2, Upload, WifiOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Dialog } from '../components/Dialog'
 import { Menu } from '../components/Menu'
+import { ExportDialog } from '../export'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
 import { historyHref } from '../history/href'
@@ -120,6 +121,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   const [askLeave, setAskLeave] = useState<null | (() => void)>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   const [textWidth] = useTextWidth()
   const [outlineShown] = useOutlineShown()
@@ -488,6 +490,19 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
                   <Copy className="h-4 w-4" aria-hidden />
                   {t('editor.duplicate')}
                 </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="nn-menu-item"
+                  data-testid="note-export"
+                  onClick={() => {
+                    setMenuOpen(false)
+                    setExportOpen(true)
+                  }}
+                >
+                  <Upload className="h-4 w-4" aria-hidden />
+                  {t('export.menu')}
+                </button>
                 <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
                   <History className="h-4 w-4" aria-hidden />
                   {t('history.menu')}
@@ -619,6 +634,14 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
       )}
 
       {linkOpen && editor && <LinkDialog editor={editor} onClose={() => setLinkOpen(false)} />}
+      {exportOpen && head && (
+        <ExportDialog
+          note={{ id: noteId, title: head.title }}
+          // The note's own folder, when it is one of the member's (a shared note's folder is not theirs to export).
+          folder={head.owner?.id === me?.id && head.path.length ? exportFolder(head.path[head.path.length - 1]) : undefined}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
       {askLeave && (
         <LeaveDialog
           suggestion={suggestion}
@@ -740,4 +763,8 @@ export function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () =>
       </form>
     </Dialog>
   )
+}
+
+function exportFolder(step: { id: string; name: string; inbox: boolean }) {
+  return { id: step.id, name: step.name, inbox: step.inbox }
 }
