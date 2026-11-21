@@ -11,7 +11,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api, ApiError } from '../api/client'
-import { Logo } from '../components/Logo'
+import { Logo, Wordmark } from '../components/Logo'
 import { moment } from '../lib/time'
 import { useAuth } from '../state/auth'
 import { Button, Card, Feedback, Toggle } from './settings/ui'
@@ -104,7 +104,9 @@ export function AboutPage() {
         <div className="flex items-center gap-3">
           <Logo size={40} />
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-mist-100">nexnotes</h1>
+            <h1>
+              <Wordmark className="text-2xl" />
+            </h1>
             <p className="text-sm text-mist-500">{t('about.subtitle')}</p>
           </div>
         </div>

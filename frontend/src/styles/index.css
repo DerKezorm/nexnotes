@@ -112,6 +112,13 @@
 }
 
 @layer components {
+  /* The wordmark NEX/NOTES: NOTES in honey; on light ground the darker honey, the bright one is too faint there. */
+  .nn-wordmark-accent {
+    color: var(--color-accent-500);
+  }
+  :root[data-theme='light'] .nn-wordmark-accent {
+    color: var(--color-accent-400);
+  }
   .nn-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--color-ink-600) transparent;
