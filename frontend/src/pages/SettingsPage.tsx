@@ -1,6 +1,7 @@
 /**
  * Settings (NOTES-2 AC-9) in areas: "My account" (Profile, Security, Appearance, Connections) for every account, "Server"
- * (General, Sign-in, Mail, Storage and backups, Text recognition, Accounts, Log) for the operator. Each area has its
+ * (General, Sign-in, Mail, Storage and backups, Text recognition, Accounts, Log) for the operator, "About nexnotes" for
+ * everyone at the end. Each area has its
  * own address (`/settings/<slug>`, `areas.ts`), `/settings` is the profile. An area someone may not open, or an
  * address of the tabs before, leads on with the address replaced, so the navigation always marks where one is.
  */
@@ -9,7 +10,7 @@ import { Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { useTitle } from '../lib/title'
 import { useAuth } from '../state/auth'
-import { AREAS, resolveArea } from './settings/areas'
+import { areaPath, findArea, resolveArea } from './settings/areas'
 import { AreaContent } from './settings/SettingsAreas'
 import { SettingsJump, SettingsNav } from './settings/SettingsNav'
 
@@ -19,7 +20,7 @@ export function SettingsPage() {
   const { tab: asked } = useParams()
   const { search } = useLocation()
   const where = resolveArea(asked, me?.role, search)
-  const area = AREAS.find((entry) => 'area' in where && entry.slug === where.area)
+  const area = 'area' in where ? findArea(where.area) : undefined
   const title = area ? t(`settings.areas.${area.key}.title`) : ''
   useTitle(area ? `${title} · ${t('settings.title')}` : t('settings.title'))
   if (!me) return null
@@ -42,4 +43,9 @@ export function SettingsPage() {
       </div>
     </div>
   )
+}
+
+/** The address of before, `/about`: "About nexnotes" is an area of the settings now. */
+export function FormerAboutAddress() {
+  return <Navigate to={areaPath('about')} replace />
 }

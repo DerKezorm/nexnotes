@@ -10,7 +10,6 @@
     "reportLink": "Report it on GitHub",
     "source": "Source code",
     "subtitle": "Quick notes, self-hosted.",
-    "title": "About nexnotes",
     "updates": {
       "checkedAt": "last checked {{when}}",
       "current": "This is the newest version.",
@@ -1149,6 +1148,10 @@
   },
   "settings": {
     "areas": {
+      "about": {
+        "text": "Version, licence, where it comes from and whether a newer version is out.",
+        "title": "About nexnotes"
+      },
       "accounts": {
         "text": "Who uses nexnotes, with role and storage, and open invitations.",
         "title": "Accounts"

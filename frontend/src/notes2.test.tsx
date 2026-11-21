@@ -168,10 +168,11 @@ describe('the settings (NOTES-2 AC-9)', () => {
     const own = ['profile', 'security', 'appearance', 'connections']
     const server = ['general', 'signIn', 'mail', 'storage', 'ocr', 'accounts', 'log']
     const titles = (keys: string[]) => keys.map((key) => i18n.t(`settings.areas.${key}.title`))
-    expect(await settingsAs('member')).toEqual(titles(own))
+    // "About nexnotes" is an area of everyone's, at the end (fifth review).
+    expect(await settingsAs('member')).toEqual(titles([...own, 'about']))
     act(() => root.unmount())
     root = createRoot(box)
-    expect(await settingsAs('operator')).toEqual(titles([...own, ...server]))
+    expect(await settingsAs('operator')).toEqual(titles([...own, ...server, 'about']))
     // `/settings` is the profile: its card, not those of the other areas.
     expect(box.textContent).toContain(i18n.t('me.profile.title'))
     expect(box.textContent).not.toContain(i18n.t('me.security.title'))

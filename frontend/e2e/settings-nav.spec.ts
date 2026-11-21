@@ -35,9 +35,20 @@ test('NOTES-2 AC-9 the operator sees both groups, each area at its own address',
   await expect(page.locator('#backups')).toBeVisible()
   await expect(nav.getByRole('link', { name: 'Storage and backups', exact: true })).toHaveAttribute('aria-current', 'page')
   await expect(nav.getByRole('link', { name: 'Profile', exact: true })).not.toHaveAttribute('aria-current', 'page')
-  // "About nexnotes" stays reachable from the navigation.
+  // "About nexnotes" is an area of the settings: the navigation stays, its entry is marked.
   await nav.getByRole('link', { name: 'About nexnotes' }).click()
-  await expect(page).toHaveURL(/\/about$/)
+  await expect(page).toHaveURL(/\/settings\/about$/)
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('About nexnotes')
+  await expect(nav).toBeVisible()
+  await expect(nav.getByRole('link', { name: 'About nexnotes' })).toHaveAttribute('aria-current', 'page')
+  await expect(page.getByTestId('about-version')).toBeVisible()
+})
+
+test('NOTES-2 AC-9 the old address /about leads to the area in the settings', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 })
+  await page.goto('/about')
+  await expect(page).toHaveURL(/\/settings\/about$/)
+  await expect(page.getByTestId('settings-nav').getByRole('link', { name: 'About nexnotes' })).toHaveAttribute('aria-current', 'page')
 })
 
 test('NOTES-2 AC-9 the navigation is reached with the keyboard', async ({ page }) => {

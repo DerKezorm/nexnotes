@@ -1,6 +1,7 @@
 /**
  * About nexnotes, as nexlore's (pages/AboutPage.tsx): version, licence, where it comes from, whether a newer one is
- * out, and what it is built with. Reached from the settings.
+ * out, and what it is built with. An area of the settings (`/settings/about`, last in the navigation, for every
+ * account); the old address `/about` leads there. The heading and its line come from the settings page.
  *
  * The switch for the daily check stands here, where its answer shows, and the page says what goes out: the question
  * to GitHub is the one call nexnotes makes by itself. Every account sees the answer; switching and asking now belong
@@ -10,12 +11,11 @@ import { BookOpen, RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api, ApiError } from '../api/client'
-import { Logo, Wordmark } from '../components/Logo'
-import { moment } from '../lib/time'
-import { useAuth } from '../state/auth'
-import { Button, Card, Feedback, Toggle } from './settings/ui'
-import { useTitle } from '../lib/title'
+import { api, ApiError } from '../../api/client'
+import { Logo, Wordmark } from '../../components/Logo'
+import { moment } from '../../lib/time'
+import { useAuth } from '../../state/auth'
+import { Button, Card, Feedback, Toggle } from './ui'
 
 type About = { version: string; license: string; repo_url: string; releases_url: string; project_url: string }
 type Updates = { update_check: boolean; checked: boolean; latest: string | null; newer: boolean; checked_at: string | null; release_url: string | null }
@@ -61,9 +61,8 @@ function code(error: unknown): ApiError | string {
   return error instanceof ApiError ? error : 'internal_error'
 }
 
-export function AboutPage() {
+export function AboutArea() {
   const { t, i18n } = useTranslation()
-  useTitle(t('about.title'))
   const { me } = useAuth()
   const operator = me?.role === 'operator'
   const [about, setAbout] = useState<About | null>(null)
@@ -102,20 +101,20 @@ export function AboutPage() {
 
   const latest = updates?.latest?.replace(/^v/, '')
   return (
-    <div>
-      <div className="mx-auto max-w-2xl space-y-6 px-4 py-8 sm:px-6">
-        <div className="flex items-center gap-3">
-          <Logo size={40} />
+    <div className="space-y-6" data-testid="about-area">
+      <Feedback problem={problem} />
+      <section aria-labelledby="about-facts-title" className="rounded-[12px] border border-ink-700 bg-ink-850 p-5">
+        <div className="mb-2 flex items-center gap-3">
+          <Logo size={36} />
           <div>
-            <h1>
-              <Wordmark className="text-2xl" />
-            </h1>
+            <h2 id="about-facts-title">
+              <Wordmark className="text-lg" />
+            </h2>
             <p className="text-sm text-mist-500">{t('about.subtitle')}</p>
           </div>
         </div>
-        <Feedback problem={problem} />
         {about && (
-          <dl className="rounded-[12px] border border-ink-700 bg-ink-850 px-5 py-2" data-testid="about-facts">
+          <dl data-testid="about-facts">
             <Row label={t('about.version')}>
               <span className="flex flex-wrap items-center gap-2">
                 <span data-testid="about-version">{about.version}</span>
@@ -141,50 +140,50 @@ export function AboutPage() {
             </Row>
           </dl>
         )}
+      </section>
 
-        <Card icon={RefreshCw} title={t('about.updates.title')} text={t('about.updates.text')} id="about-updates">
-          {operator && updates && <Toggle label={t('about.updates.daily')} hint={t('about.updates.dailyHint')} checked={updates.update_check} onChange={(on) => void switchCheck(on)} />}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-live="polite">
-            {operator && (
-              <Button onClick={() => void checkNow()} busy={busy}>
-                {t('about.updates.now')}
-              </Button>
+      <Card icon={RefreshCw} title={t('about.updates.title')} text={t('about.updates.text')} id="about-updates">
+        {operator && updates && <Toggle label={t('about.updates.daily')} hint={t('about.updates.dailyHint')} checked={updates.update_check} onChange={(on) => void switchCheck(on)} />}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" aria-live="polite">
+          {operator && (
+            <Button onClick={() => void checkNow()} busy={busy}>
+              {t('about.updates.now')}
+            </Button>
+          )}
+          <span data-testid="about-update-state" className="text-mist-400">
+            {!updates || !updates.checked ? (
+              updates && !updates.update_check ? t('about.updates.off') : t('about.updates.notYet')
+            ) : updates.newer ? (
+              <>
+                {t('about.newer', { version: latest })}
+                {updates.release_url && (
+                  <>
+                    {' · '}
+                    <Out href={updates.release_url}>{t('about.updates.toRelease')}</Out>
+                  </>
+                )}
+              </>
+            ) : updates.latest ? (
+              t('about.updates.current')
+            ) : (
+              t('about.updates.none')
             )}
-            <span data-testid="about-update-state" className="text-mist-400">
-              {!updates || !updates.checked ? (
-                updates && !updates.update_check ? t('about.updates.off') : t('about.updates.notYet')
-              ) : updates.newer ? (
-                <>
-                  {t('about.newer', { version: latest })}
-                  {updates.release_url && (
-                    <>
-                      {' · '}
-                      <Out href={updates.release_url}>{t('about.updates.toRelease')}</Out>
-                    </>
-                  )}
-                </>
-              ) : updates.latest ? (
-                t('about.updates.current')
-              ) : (
-                t('about.updates.none')
-              )}
-            </span>
-            {updates?.checked_at && <span className="text-xs text-mist-500">{t('about.updates.checkedAt', { when: moment(updates.checked_at, i18n.language) })}</span>}
-          </div>
-          <p className="text-xs leading-relaxed text-mist-500">{t('about.updates.whatGoesOut')}</p>
-        </Card>
+          </span>
+          {updates?.checked_at && <span className="text-xs text-mist-500">{t('about.updates.checkedAt', { when: moment(updates.checked_at, i18n.language) })}</span>}
+        </div>
+        <p className="text-xs leading-relaxed text-mist-500">{t('about.updates.whatGoesOut')}</p>
+      </Card>
 
-        <Card icon={BookOpen} title={t('about.builtWith')}>
-          <ul className="flex flex-wrap gap-x-3 gap-y-1.5 text-sm">
-            {PARTS.map((part) => (
-              <li key={part.name}>
-                <Out href={part.url}>{part.name}</Out>
-                <span className="ml-1 text-xs text-mist-500">({part.licence})</span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      </div>
+      <Card icon={BookOpen} title={t('about.builtWith')}>
+        <ul className="flex flex-wrap gap-x-3 gap-y-1.5 text-sm">
+          {PARTS.map((part) => (
+            <li key={part.name}>
+              <Out href={part.url}>{part.name}</Out>
+              <span className="ml-1 text-xs text-mist-500">({part.licence})</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </div>
   )
 }
