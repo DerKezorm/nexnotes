@@ -29,7 +29,8 @@ export type Impact = { notes: number; folders: number; trash_days: number }
 
 export const foldersApi = {
   tree: () => api<FolderTree>('/api/folders'),
-  create: (name: string, parent_id: string | null) => api<Folder>('/api/folders', { method: 'POST', body: { name, parent_id } }),
+  create: (name: string, parent_id: string | null, look: { icon?: string; color?: string } = {}) =>
+    api<Folder>('/api/folders', { method: 'POST', body: { name, parent_id, ...look } }),
   change: (id: string, change: { name?: string; icon?: string; color?: string }) =>
     api<Folder>(`/api/folders/${encodeURIComponent(id)}`, { method: 'PATCH', body: change }),
   move: (target_id: string | null, folder_ids: string[], note_ids: string[] = []) =>

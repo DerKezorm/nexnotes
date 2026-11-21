@@ -28,6 +28,7 @@ from ..errors import error
 from ..models import FOLDER_INBOX, FOLDER_NORMAL, Folder, Note, new_uuid, utcnow
 from . import settings_service
 from .inbox import inbox_for
+from .symbols import SYMBOLS
 
 #: The longest name a folder may have, in characters (decided in the spec: 60, not 100).
 NAME_MAX = 60
@@ -49,13 +50,9 @@ FOLDER_COLORS: dict[str, str] = {
     "silver": "#d4d4d8",
 }
 
-#: The fixed row of symbols, in the order the picker shows them. An empty symbol shows the colour as a small square.
-FOLDER_ICONS: tuple[str, ...] = (
-    "folder", "briefcase", "house", "heart", "star", "chef-hat",
-    "book", "receipt", "plane", "car", "music", "camera",
-    "gift", "graduation-cap", "leaf", "wrench", "baby", "dumbbell",
-    "shopping-cart", "lightbulb", "code", "palette", "paw-print", "calendar",
-)
+#: The fixed row of symbols (``services/symbols.py``, shared with the notes). An empty symbol shows the colour as a
+#: small square.
+FOLDER_ICONS: tuple[str, ...] = SYMBOLS
 
 #: Characters that never belong in a name: control characters, line and paragraph separators.
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")

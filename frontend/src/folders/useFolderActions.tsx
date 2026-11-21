@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
 import { foldersApi, type Folder } from './api'
-import { MoveDialog, NameDialog, StyleDialog, TrashDialog, type MoveWhat } from './dialogs'
+import { MoveDialog, NameDialog, NewFolderDialog, StyleDialog, TrashDialog, type MoveWhat } from './dialogs'
 import type { MenuAction } from './FolderMenu'
 import { refreshFolders, revealFolder, setFolderOpen } from './store'
 
@@ -43,12 +43,11 @@ export function useFolderActions() {
   let node: ReactNode = null
   if (open?.kind === 'create')
     node = (
-      <NameDialog
+      <NewFolderDialog
         title={open.parentId ? t('folders.menu.newSubfolder') : t('folders.newFolder')}
-        initial=""
         onClose={close}
-        onSave={async (name) => {
-          const made = await foldersApi.create(name, open.parentId)
+        onSave={async (name, look) => {
+          const made = await foldersApi.create(name, open.parentId, look)
           if (open.parentId) setFolderOpen(open.parentId, true)
           await refreshFolders()
           revealFolder(made.id)

@@ -274,9 +274,9 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     click(row('Haushalt').querySelector('button[aria-label="Menu of Haushalt"]')!)
     click(button('New subfolder'))
     type(document.querySelector<HTMLInputElement>('[role="dialog"] input')!, 'Garten')
-    click(button('Save'))
+    click(button('Create'))
     await settle()
-    expect(changes().at(-1)).toMatchObject({ method: 'POST', path: '/api/folders', body: { name: 'Garten', parent_id: 'h' } })
+    expect(changes().at(-1)).toMatchObject({ method: 'POST', path: '/api/folders', body: { name: 'Garten', parent_id: 'h', icon: '', color: '' } })
     // The parent opens, so the new one shows.
     expect(row('Garten').getAttribute('aria-level')).toBe('2')
 
@@ -292,6 +292,51 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     await settle()
     expect(document.querySelector('[role="dialog"]')).toBeNull()
     expect(row('rezepte')).toBeTruthy()
+  })
+})
+
+describe('NOTES-4 AC-10 symbol and color when making a folder', () => {
+  it('NOTES-4 AC-10 the dialog "New folder" chooses symbol and color at once, from some 250 symbols in groups', async () => {
+    await render()
+    click(row('Haushalt').querySelector('button[aria-label="Menu of Haushalt"]')!)
+    click(button('New subfolder'))
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    type(dialog.querySelector<HTMLInputElement>('input[aria-label="Folder name"]')!, 'Bello')
+    const grid = dialog.querySelector<HTMLElement>('[data-testid="symbol-grid"]')!
+    const symbols = () => [...grid.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    expect(symbols().length).toBeGreaterThanOrEqual(250)
+    expect(grid.textContent).toContain('Animals')
+    // Searched in German on an English page: "hund" finds the dog by its German search word.
+    type(dialog.querySelector<HTMLInputElement>('[data-testid="symbol-search"]')!, 'hund')
+    expect(symbols().map((one) => one.getAttribute('aria-label'))).toEqual(['Dog'])
+    click(symbols()[0])
+    click(button('Sky', dialog))
+    // The preview shows the choice at once: the dog in sky blue.
+    const preview = dialog.querySelector<HTMLElement>('[data-testid="look-preview"] svg')!
+    expect(preview.getAttribute('class')).toContain('lucide-dog')
+    expect(preview.style.color).toBe('rgb(56, 189, 248)')
+    click(button('Create', dialog))
+    await settle()
+    expect(changes().at(-1)).toMatchObject({ method: 'POST', path: '/api/folders', body: { name: 'Bello', parent_id: 'h', icon: 'dog', color: 'sky' } })
+  })
+
+  it('NOTES-4 AC-10 the symbols are one stop for the keyboard, the arrow keys move inside, nothing found says so', async () => {
+    await render()
+    click(row('Haushalt').querySelector('button[aria-label="Menu of Haushalt"]')!)
+    click(button('New subfolder'))
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    const grid = dialog.querySelector<HTMLElement>('[data-testid="symbol-grid"]')!
+    const stops = [...grid.querySelectorAll<HTMLButtonElement>('[role="radio"]')].filter((one) => one.tabIndex === 0)
+    expect(stops).toHaveLength(1)
+    act(() => stops[0].focus())
+    key(stops[0], 'ArrowRight')
+    expect(document.activeElement?.getAttribute('data-symbol')).toBe(grid.querySelectorAll('[role="radio"]')[1].getAttribute('data-symbol'))
+    key(document.activeElement!, 'End')
+    expect(document.activeElement).toBe([...grid.querySelectorAll('[role="radio"]')].at(-1))
+    key(document.activeElement!, 'Home')
+    expect(document.activeElement).toBe(grid.querySelector('[role="radio"]'))
+    type(dialog.querySelector<HTMLInputElement>('[data-testid="symbol-search"]')!, 'xylophonzz')
+    expect(grid.textContent).toBe('No symbol found.')
   })
 })
 

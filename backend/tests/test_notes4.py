@@ -24,6 +24,7 @@ from app.models import Account, Folder, Note, utcnow
 from app.services import folders as folder_service
 from app.services import inbox as inbox_service
 from app.services.inbox import inbox_for
+from app.services.symbols import SYMBOLS
 
 from .conftest import make_account, new_client
 
@@ -433,7 +434,7 @@ def test_notes4_ac10_symbol_and_colour_come_from_fixed_rows_and_reach_every_devi
     with new_client(operator) as phone:
         seen = by_id(phone)[folder]
         assert (seen["icon"], seen["color"]) == ("briefcase", "orange")
-    for wrong in ({"icon": "skull"}, {"color": "#123456"}):
+    for wrong in ({"icon": "skull"}, {"color": "pinkish"}):
         refused = client.patch(f"/api/folders/{folder}", json=wrong)
         assert refused.status_code == 400 and code(refused) == "folder_style_unknown"
     assert code(client.post("/api/folders", json={"name": "X", "color": "pink"})) == "folder_style_unknown"
@@ -445,9 +446,29 @@ def test_notes4_ac10_symbol_and_colour_come_from_fixed_rows_and_reach_every_devi
 def test_notes4_ac10_the_page_knows_the_same_colours_and_symbols() -> None:
     source = (ROOT / "frontend" / "src" / "folders" / "palette.ts").read_text(encoding="utf-8")
     colors = dict(re.findall(r"\{ key: '([a-z-]+)', hex: '(#[0-9a-f]{6})' \}", source))
-    icons = re.findall(r"\['([a-z-]+)', [A-Z]\w+\]", source)
     assert colors == folder_service.FOLDER_COLORS
-    assert tuple(icons) == folder_service.FOLDER_ICONS
+    symbols = (ROOT / "frontend" / "src" / "lib" / "symbols.ts").read_text(encoding="utf-8")
+    icons = re.findall(r"\{ name: '([a-z0-9-]+)', icon: \w+, group: '\w+', words: '[^']*' \}", symbols)
+    assert tuple(icons) == folder_service.FOLDER_ICONS == SYMBOLS
+    assert len(SYMBOLS) == len(set(SYMBOLS)) >= 250
+
+
+def test_notes4_ac10_every_symbol_of_the_list_is_taken_and_an_unknown_one_refused(
+    client: TestClient, operator: Account
+) -> None:
+    folder = make(client, "Alles")
+    for name in SYMBOLS:
+        answer = client.patch(f"/api/folders/{folder}", json={"icon": name})
+        assert answer.status_code == 200, name
+    assert by_id(client)[folder]["icon"] == SYMBOLS[-1]
+    # Made with symbol and colour at once, as the dialog "New folder" does.
+    made = client.post("/api/folders", json={"name": "Reisen", "icon": "plane", "color": "sky"})
+    assert made.status_code == 201, made.text
+    assert (made.json()["icon"], made.json()["color"]) == ("plane", "sky")
+    for wrong in ("skull-crossbones", "Folder", "folder ", "<svg>"):
+        refused = client.patch(f"/api/folders/{folder}", json={"icon": wrong})
+        assert refused.status_code == 400 and code(refused) == "folder_style_unknown", wrong
+        assert code(client.post("/api/folders", json={"name": "Nein", "icon": wrong})) == "folder_style_unknown"
 
 
 # --- AC-11 Order ------------------------------------------------------------------------------------------------------

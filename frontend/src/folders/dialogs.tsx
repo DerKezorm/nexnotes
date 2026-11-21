@@ -8,11 +8,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '../components/Dialog'
+import { SymbolPicker } from '../components/SymbolPicker'
 import { problemText } from '../lib/errors'
 import { foldersApi, type Folder, type Impact } from './api'
 import { FolderMark } from './FolderMark'
 import { notesMoved } from './actions'
-import { FOLDER_COLORS, FOLDER_ICONS } from './palette'
+import { colorOf, FOLDER_COLORS } from './palette'
 import { flatten, refreshFolders, revealFolder, setFolderOpen, subtreeOf, useFolders } from './store'
 import { showNotice } from './notice'
 
@@ -74,6 +75,97 @@ export function NameDialog({ title, initial, onSave, onClose }: { title: string;
 
 // ---- Symbol and color (AC-10) ----------------------------------------------------------------------------------------
 
+type Look = { icon: string; color: string }
+
+/** The color and the symbol of a folder, for the dialog "Symbol and color" and for a new folder. */
+export function LookFields({ look, onChange }: { look: Look; onChange: (change: Partial<Look>) => void }) {
+  const { t } = useTranslation()
+  const ring = (on: boolean) => (on ? 'border-2 border-mist-100' : 'border border-ink-600')
+  return (
+    <>
+      <fieldset>
+        <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.color')}</legend>
+        <div className="grid grid-cols-6 gap-2">
+          {FOLDER_COLORS.map((color) => (
+            <button
+              key={color.key}
+              type="button"
+              aria-label={t(`folders.colors.${color.key}`)}
+              aria-pressed={look.color === color.key}
+              title={t(`folders.colors.${color.key}`)}
+              onClick={() => onChange({ color: color.key })}
+              className={'h-8 rounded-lg ' + ring(look.color === color.key)}
+              style={{ background: color.hex }}
+            />
+          ))}
+        </div>
+        <button type="button" aria-pressed={!look.color} onClick={() => onChange({ color: '' })} className="nn-btn-quiet mt-2 text-sm">
+          {t('folders.style.noColor')}
+        </button>
+      </fieldset>
+      <fieldset>
+        <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.icon')}</legend>
+        <SymbolPicker value={look.icon} onChange={(icon) => onChange({ icon })} color={look.color ? colorOf(look.color) : undefined} />
+        <button type="button" aria-pressed={!look.icon} onClick={() => onChange({ icon: '' })} className="nn-btn-quiet mt-2 text-sm">
+          {t('folders.style.noIcon')}
+        </button>
+      </fieldset>
+    </>
+  )
+}
+
+/** A new folder (AC-1): its name, and right away its symbol and color (AC-10). */
+export function NewFolderDialog({ title, onSave, onClose }: { title: string; onSave: (name: string, look: Look) => Promise<void>; onClose: () => void }) {
+  const { t } = useTranslation()
+  const [name, setName] = useState('')
+  const [look, setLook] = useState<Look>({ icon: '', color: '' })
+  const [problem, setProblem] = useState('')
+  const [busy, setBusy] = useState(false)
+  const save = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (busy || !name.trim()) return
+    setBusy(true)
+    try {
+      await onSave(name, look)
+      onClose()
+    } catch (error) {
+      setProblem(problemText(error))
+      setBusy(false)
+    }
+  }
+  return (
+    <Dialog title={title} onClose={onClose}>
+      <form onSubmit={(event) => void save(event)} className="space-y-4" data-testid="new-folder">
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-ink-700" data-testid="look-preview">
+            <FolderMark folder={look.icon ? look : { ...look, icon: 'folder' }} size={20} />
+          </span>
+          <input
+            className="nn-field"
+            value={name}
+            aria-label={t('folders.namePlaceholder')}
+            placeholder={t('folders.namePlaceholder')}
+            onChange={(event) => {
+              setName(event.target.value)
+              setProblem('')
+            }}
+          />
+        </div>
+        <LookFields look={look} onChange={(change) => setLook({ ...look, ...change })} />
+        <Problem text={problem} />
+        <div className="flex justify-end gap-2">
+          <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button type="submit" className="nn-btn nn-btn-accent" disabled={busy || !name.trim()}>
+            {t('folders.create')}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
 export function StyleDialog({ folder, onClose }: { folder: Folder; onClose: () => void }) {
   const { t } = useTranslation()
   const [look, setLook] = useState({ icon: folder.icon, color: folder.color })
@@ -89,55 +181,14 @@ export function StyleDialog({ folder, onClose }: { folder: Folder; onClose: () =
       setProblem(problemText(error))
     }
   }
-  const ring = (on: boolean) => (on ? 'border-2 border-mist-100' : 'border border-ink-600')
   return (
     <Dialog title={t('folders.style.title')} onClose={onClose}>
       <div className="space-y-4">
-        <div className="flex items-center gap-2 text-sm text-mist-300">
+        <div className="flex items-center gap-2 text-sm text-mist-300" data-testid="look-preview">
           <FolderMark folder={look} size={18} />
           <span className="truncate">{folder.name}</span>
         </div>
-        <fieldset>
-          <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.color')}</legend>
-          <div className="grid grid-cols-6 gap-2">
-            {FOLDER_COLORS.map((color) => (
-              <button
-                key={color.key}
-                type="button"
-                aria-label={t(`folders.colors.${color.key}`)}
-                aria-pressed={look.color === color.key}
-                title={t(`folders.colors.${color.key}`)}
-                onClick={() => void choose({ color: color.key })}
-                className={'h-8 rounded-lg ' + ring(look.color === color.key)}
-                style={{ background: color.hex }}
-              />
-            ))}
-          </div>
-          <button type="button" aria-pressed={!look.color} onClick={() => void choose({ color: '' })} className="nn-btn-quiet mt-2 text-sm">
-            {t('folders.style.noColor')}
-          </button>
-        </fieldset>
-        <fieldset>
-          <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.icon')}</legend>
-          <div className="grid grid-cols-6 gap-2">
-            {FOLDER_ICONS.map(([key, Icon]) => (
-              <button
-                key={key}
-                type="button"
-                aria-label={t(`folders.icons.${key}`)}
-                aria-pressed={look.icon === key}
-                title={t(`folders.icons.${key}`)}
-                onClick={() => void choose({ icon: key })}
-                className={'flex h-9 items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 ' + (look.icon === key ? 'border-2 border-accent-500' : 'border border-ink-600')}
-              >
-                <Icon aria-hidden className="h-[18px] w-[18px]" strokeWidth={2} />
-              </button>
-            ))}
-          </div>
-          <button type="button" aria-pressed={!look.icon} onClick={() => void choose({ icon: '' })} className="nn-btn-quiet mt-2 text-sm">
-            {t('folders.style.noIcon')}
-          </button>
-        </fieldset>
+        <LookFields look={look} onChange={(change) => void choose(change)} />
         <Problem text={problem} />
         <div className="flex justify-end">
           <button type="button" className="nn-btn nn-btn-accent" onClick={onClose}>
