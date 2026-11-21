@@ -187,13 +187,23 @@ def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, f
     ended = max((min(edit.last_at, now) for edit in edits), default=now) if restored_from is None else now
     started = min((edit.first_at for edit in edits), default=ended)
     sealed = bool(db.scalar(select(Note.locked).where(Note.id == note_id)))
-    # A locked note's content is encrypted (NOTES-16): its version takes the title the note shows.
+    sealed_rev: int | None = None
+    # A locked note's content is encrypted (NOTES-16): its version takes the title the note shows, and the revision
+    # its content was sealed for (format 2), so that the device opens it with the same AAD.
     if sealed:
+        from ..models_vault import SealedNote
+
         title = db.scalar(select(Note.title).where(Note.id == note_id)) or ""
+        current = db.execute(select(SealedNote.content, SealedNote.rev).where(SealedNote.note_id == note_id)).first()
+        if current is not None and current.content == state:
+            sealed_rev = current.rev
+        else:
+            logger.warning("A version of a locked note is not its content of a revision note=%s", note_id)
     else:
         title = notedoc.title_of(notedoc.load(state))
     version = NoteVersion(note_id=note_id, created_at=ended, started_at=min(started, ended), state=state, title=title,
-                          size=len(state), authors=authors, restored_from=restored_from, sealed=sealed)
+                          size=len(state), authors=authors, restored_from=restored_from, sealed=sealed,
+                          sealed_rev=sealed_rev)
     db.add(version)
     return version
 
@@ -400,6 +410,8 @@ def read(db: Session, account: Account, note_id: str, version_id: int) -> dict[s
             "title": version.title,
             "sealed": True,
             "content_sealed": base64.b64encode(version.state).decode("ascii"),
+            # Format 2: the revision of the note's content the version was sealed for, or ``None`` (for its id).
+            "sealed_rev": version.sealed_rev,
             "authors": _authors_out(version.authors, names),
             "restored_from": version.restored_from.isoformat() if version.restored_from else None,
             "can_restore": can_restore(db, account, note),

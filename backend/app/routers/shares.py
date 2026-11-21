@@ -3,7 +3,8 @@ account, and the page of a read link itself (``/l/<token>``), which needs no acc
 
 The page of a link, its PDF and its pictures answer the same for every link that does not work (unknown, expired,
 revoked, switched off, its note gone or locked): "Dieser Link gilt nicht mehr", status 404, nothing of the note
-(EC-5, EC-6). Unknown tokens count against the sender (EC-7); past the brake every request waits, with 429.
+(EC-5, EC-6). Unknown tokens count against the sender (EC-7); past the brake every unknown one waits, with 429. A
+link that exists always answers, so a stranger's misses behind the same proxy address stop nobody's links.
 """
 
 from __future__ import annotations
@@ -164,23 +165,32 @@ def _gone(request: Request, *, slow: bool = False, wait: int = 0) -> HTMLRespons
 
 
 def _open(request: Request, token: str) -> tuple[Any, Any] | HTMLResponse:
-    """The link and its note, or the answer for a link that does not work (and the brake for an unknown one)."""
+    """The link and its note, or the answer for a link that does not work (and the brake for an unknown one).
+
+    The brake counts and slows only unknown addresses (EC-7): a link that exists always gets its answer, whoever
+    tried wrong ones from the same address before. Behind a proxy every visitor may share one address; a stranger's
+    misses must not stop the links of everybody else."""
     key = "link:" + client_ip(request)
-    wait = shares.LINK_BRAKE.wait_seconds(key)
-    if wait:
-        return _gone(request, slow=True, wait=wait)
     if not re.fullmatch(TOKEN_PATTERN, token):
-        shares.LINK_BRAKE.failed(key)
-        return _gone(request)
+        return _miss(request, key)
     with SessionLocal() as db:
         link, note, known = shares.resolve(db, token)
         if not known:
-            shares.LINK_BRAKE.failed(key)
             logger.info("Unknown read link opened")
+            return _miss(request, key)
         if link is None or note is None:
             return _gone(request)
         db.expunge_all()
     return link, note
+
+
+def _miss(request: Request, key: str) -> HTMLResponse:
+    """An address no link has: counted, and slowed down once there were too many from the sender."""
+    wait = shares.LINK_BRAKE.wait_seconds(key)
+    if wait:
+        return _gone(request, slow=True, wait=wait)
+    shares.LINK_BRAKE.failed(key)
+    return _gone(request)
 
 
 @router.api_route("/l/{token}", methods=["GET", "HEAD"], include_in_schema=False)

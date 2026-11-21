@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 from ..deps import Account, DbSession
 from ..services import folders
 from ..services import notes as notes_service
+from ..services import shares as shares_service
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -65,7 +66,12 @@ def inbox(account: Account, db: DbSession) -> dict[str, Any]:
 
 @router.post("/move")
 def move(body: MoveIn, account: Account, db: DbSession) -> dict[str, int]:
-    return folders.move(db, account.id, target_id=body.target_id, folder_ids=body.folder_ids, note_ids=body.note_ids)
+    done = folders.move(db, account.id, target_id=body.target_id, folder_ids=body.folder_ids, note_ids=body.note_ids)
+    # Out of a shared folder (NOTES-13 EC-2) or into one: whoever has a moved note open is checked again at once, so
+    # that a writer who lost the right stops now, not after the room's next round (AC-5).
+    if shares_service.moves_change_rights(db, account.id):
+        notes_service.nudge_all()
+    return done
 
 
 @router.put("/order")

@@ -3,8 +3,9 @@
  * state encrypted here and saved as one piece.
  *
  * - **Saving:** every change counts as waiting; a moment after the last one the state is encrypted with the note's
- *   key and sent with the revision it started from. The server keeps the latest save; one made on an older revision
- *   still wins, and what it replaced stays in the history (EC-5).
+ *   key for the next revision (format 2: the revision is in the AAD) and sent with the revision it started from. The
+ *   server keeps the latest save; one made on an older revision still wins, and what it replaced stays in the history
+ *   (EC-5): the server names the newer revision (`vault_stale`), the state is sealed once more for the one after.
  * - **Another device:** every few seconds the revision is asked; a newer one with nothing waiting here is loaded
  *   (`onNewer`). A changed vault (`epoch`) closes the vault here (EC-7).
  * - **Closing:** before the vault closes (five minutes without use, the last locked note gone), what waits is saved.
@@ -16,8 +17,8 @@ import * as Y from 'yjs'
 import { ApiError } from '../api/client'
 import type { LiveStatus } from '../editor/provider'
 import { vaultApi } from './api'
-import { noteAad, seal, toB64 } from './crypto'
-import { epochSeen, lockVault, onBeforeLock } from './session'
+import { contentAad, seal, toB64 } from './crypto'
+import { epochSeen, forgetRev, lockVault, onBeforeLock, revSeen } from './session'
 
 export type SealedOptions = { saveDelay?: number; pollEvery?: number }
 
@@ -110,16 +111,26 @@ export class SealedProvider {
   private async save(): Promise<void> {
     const sending = this.pending
     const state = Y.encodeStateAsUpdate(this.doc) as Uint8Array<ArrayBuffer>
-    try {
-      const sealed = await seal(this.key, state, noteAad(this.noteId))
-      const answer = await vaultApi.save({
+    const send = async (rev: number) =>
+      vaultApi.save({
         note: this.noteId,
-        content: toB64(sealed),
+        content: toB64(await seal(this.key, state, contentAad(this.noteId, rev))),
         base_rev: this.rev,
+        rev,
         epoch: this.epoch,
         title: this.doc.getText('title').toString(),
       })
+    try {
+      let answer: Awaited<ReturnType<typeof send>>
+      try {
+        answer = await send(this.rev + 1)
+      } catch (error) {
+        // Another device saved meanwhile: sealed again for the revision after the newest, still a conflict (EC-5).
+        if (!(error instanceof ApiError && error.code === 'vault_stale')) throw error
+        answer = await send(Number(error.values.rev ?? this.rev) + 1)
+      }
       this.rev = answer.rev
+      revSeen(this.noteId, answer.rev)
       this.pending = Math.max(0, this.pending - sending)
       this.status = 'online'
     } catch (error) {
@@ -149,6 +160,7 @@ export class SealedProvider {
       if (found.rev > this.rev && this.pending === 0 && !this.saving) this.onNewer?.(found.rev)
     } catch (error) {
       if (error instanceof ApiError && error.code === 'note_not_locked') {
+        forgetRev(this.noteId)
         this.status = 'locked'
         this.emit()
       }

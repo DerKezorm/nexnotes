@@ -15,7 +15,8 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel, Field
 from starlette.requests import ClientDisconnect
 
-from ..deps import Account, DbSession
+from ..db import SessionLocal
+from ..deps import Account, DbSession, confirm_fresh
 from ..errors import error
 from ..services import vault
 
@@ -64,6 +65,10 @@ class PasswordIn(BaseModel):
 class ResetIn(SetupIn):
     #: The number of locked notes the device named; they go for good (EC-2).
     count: int = Field(ge=0)
+    #: The account's password once more, and a code of its second factor when it has one (``deps.confirm_fresh``);
+    #: an account of a provider signs in there again instead.
+    current_password: str = Field(default="", max_length=200)
+    code: str = Field(default="", max_length=40)
 
 
 class UnlockNoteIn(BaseModel):
@@ -76,6 +81,8 @@ class SaveIn(BaseModel):
     #: The encrypted Yjs state, base64.
     content: str
     base_rev: int
+    #: The revision the content is sealed for (in its AAD): ``rev`` of the note now plus one.
+    rev: int
     epoch: int
     title: str = Field(default="", max_length=1000)
     restored_from: int | None = None
@@ -102,7 +109,13 @@ def change_password(body: PasswordIn, db: DbSession, account: Account) -> dict[s
 
 
 @router.post("/reset", summary="Forgotten password: a new vault, every locked note goes for good")
-async def reset(body: ResetIn, account: Account) -> dict[str, Any]:
+async def reset(body: ResetIn, request: Request, account: Account) -> dict[str, Any]:
+    # A stolen session must not be enough to destroy every locked note: the member proves it is them once more.
+    def confirm() -> None:
+        with SessionLocal() as db:
+            confirm_fresh(request, db, account, body.current_password, body.code)
+
+    await asyncio.to_thread(confirm)
     return await vault.reset(account, body.count, body.kdf.model_dump(), body.wrapped_key, body.auth,
                              body.understood)
 
@@ -166,7 +179,7 @@ def sealed(note_id: NoteId, db: DbSession, account: Account) -> dict[str, Any]:
 @router.post("/save", summary="Save a locked note (encrypted on the device)")
 async def save(body: SaveIn, account: Account) -> dict[str, Any]:
     return await asyncio.to_thread(vault.save, account, body.note, body.content, body.base_rev, body.epoch,
-                                   body.title, body.restored_from)
+                                   body.title, body.restored_from, body.rev)
 
 
 @router.put("/attachments", status_code=201, summary="A new attachment of a locked note, encrypted on the device")

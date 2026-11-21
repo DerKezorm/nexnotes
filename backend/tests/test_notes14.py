@@ -667,3 +667,67 @@ def test_notes14_sent_messages_keep_no_text(client, operator, anna, as_anna, pus
     notify.tidy(history.clock.now() + timedelta(days=8))
     with SessionLocal() as db:
         assert db.scalar(select(NotifyOutbox)) is None
+
+
+# --- Before every try: the right and the lock again (EC-5, EC-1) -------------------------------------------------------
+
+
+def test_notes14_ec5_a_message_tried_again_after_a_failure_asks_the_right_again(client, operator, anna, as_anna,
+                                                                               pushed):
+    note_id = shared_note(client, anna, "read")
+    switch(as_anna, "note", note_id)
+    allow(as_anna)
+    pushed.error = httpx.ConnectError("down")
+    add(note_id, operator, "Eier")
+    assert tick_after(minutes=3) == (1, 0)
+    # The right goes between the bundle and the next try: the message goes nowhere, its text is dropped.
+    unshare(client, "note", note_id, anna)
+    pushed.error = None
+    assert tick_after(minutes=2) == (0, 0)
+    assert len(pushed.calls) == 1
+    with SessionLocal() as db:
+        row = db.scalar(select(NotifyOutbox))
+        assert row is not None and row.failed_at is not None and row.last_error == "no_right" and row.payload == {}
+
+
+def test_notes14_ec1_a_message_tried_again_after_the_note_was_locked_tells_nothing(client, operator, anna, as_anna,
+                                                                                  pushed, monkeypatch):
+    note_id = shared_note(client, anna)
+    switch(client, "note", note_id)
+    allow(client)
+    pushed.error = httpx.ConnectError("down")
+    add(note_id, anna, "Geheimnis")
+    assert tick_after(minutes=3) == (1, 0)
+    # Locked meanwhile (NOTES-16): the message with content does not go on the next try.
+    monkeypatch.setattr(tags, "HIDDEN_NOTES", [lambda: Note.id == note_id])
+    pushed.error = None
+    assert tick_after(minutes=2) == (0, 0)
+    assert len(pushed.calls) == 1
+    with SessionLocal() as db:
+        row = db.scalar(select(NotifyOutbox))
+        assert row is not None and row.last_error == "locked" and row.payload == {}
+
+
+# --- AC-6: no note id for the relay and the push service ------------------------------------------------------------
+
+
+def test_notes14_ac6_the_relay_and_the_push_service_get_a_keyed_mark_instead_of_the_note_id(
+        client, operator, anna, as_anna, relayed, pushed):
+    note_id = shared_note(client, anna)
+    switch(client, "note", note_id)
+    allow(client)
+    with SessionLocal() as db:
+        row, _token = apitokens.make(db, db.get(Account, operator.id), "iPhone")
+        public = X25519PrivateKey.generate().public_key().public_bytes(serialization.Encoding.Raw,
+                                                                       serialization.PublicFormat.Raw)
+        apppush.remember(db, operator.id, row.id, "1.ticket", base64.b64encode(public).decode())
+    add(note_id, anna, "Eier")
+    assert tick_after(minutes=3) == (2, 2)
+    _url, body, _ = relayed.calls[0]
+    _endpoint, _sealed, headers = pushed.calls[0]
+    compact = note_id.replace("-", "")
+    for seen in (body["collapse"], headers["Topic"]):
+        assert note_id not in seen and compact[:12] not in seen
+    # The same mark for the same note (a newer message replaces the older), another for another note.
+    assert body["collapse"] == headers["Topic"] == notify.opaque(note_id)
+    assert len(headers["Topic"]) <= 32 and notify.opaque(note_id) != notify.opaque(shopping(client))

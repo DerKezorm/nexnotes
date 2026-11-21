@@ -11,6 +11,8 @@ import asyncio
 import io
 import os
 import sqlite3
+import threading
+import time
 import uuid
 import zipfile
 from datetime import timedelta
@@ -22,9 +24,10 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import func, select
+from sqlalchemy import text as sqlite_text
 
 from app.db import SessionLocal, engine
-from app.models import Account, Note, NoteUpdate, utcnow
+from app.models import SIGN_IN_PASSWORD, Account, Note, NoteUpdate, utcnow
 from app.models_attachments import Attachment
 from app.models_history import NoteVersion
 from app.models_ocr import AttachmentText
@@ -36,12 +39,14 @@ from app.notedoc.markdown import to_plain
 from app.notedoc.room import CLOSE_LOCKED, Access
 from app.services import accounts, attachments, backups, export, history, notes, vault, workqueue
 
-from .conftest import DATA_DIR, MEDIA, make_account, new_client
+from .conftest import DATA_DIR, MEDIA, PASSWORD, make_account, new_client
 from .notes_live import Live, refused
 from .test_notes3 import token_for
-from .vault_client import Device, attachment_aad, b64, note_aad, seal, unb64, unpack, unseal
+from .vault_client import Device, attachment_aad, b64, content_aad, seal, unb64, unpack, unseal
 
 VAULT_PASSWORD = "Tresor-Passwort 2026"
+#: An account that signs in through a provider (anything but the password).
+PROVIDER_SIGN_IN = "oidc" if SIGN_IN_PASSWORD != "oidc" else "provider"
 
 
 @pytest.fixture(autouse=True)
@@ -246,7 +251,7 @@ def test_notes16_ec3_every_interface_gives_title_and_locked_only(client, operato
     version_id = client.get(f"/api/notes/{note_id}/history").json()["versions"][0]["id"]
     version = client.get(f"/api/notes/{note_id}/history/{version_id}").json()
     assert version["sealed"] is True and "content" not in version
-    plain = unseal(device.nkey(note_id), unb64(version["content_sealed"]), note_aad(note_id))
+    plain = device.open_version(note_id, version)
     assert secret in to_plain(notedoc.load(plain))
 
 
@@ -289,7 +294,7 @@ def test_notes16_ec4_a_backup_holds_the_locked_note_encrypted_and_brings_it_back
         locked, = copy.execute("SELECT locked FROM notes WHERE id = ?", (note_id,)).fetchone()
         content, rev = copy.execute("SELECT content, rev FROM sealed_notes WHERE note_id = ?", (note_id,)).fetchone()
     assert locked == 1 and rev == sealed_before[1]
-    assert unseal(device.nkey(note_id), content, note_aad(note_id)) == sealed_before[0]
+    assert unseal(device.nkey(note_id), content, content_aad(note_id, rev)) == sealed_before[0]
 
 
 # --- AC-3, AC-7, EC-6: opening, editing, saving -------------------------------------------------------------------
@@ -327,10 +332,10 @@ def test_notes16_ac3_ec6_a_wrong_key_opens_nothing(client, operator, device):
     device.lock(note_id)
     sealed = unb64(client.get(f"/api/vault/notes/{note_id}").json()["content"])
     with pytest.raises(InvalidTag):
-        unseal(os.urandom(32), sealed, note_aad(note_id))
+        unseal(os.urandom(32), sealed, content_aad(note_id, 1))
     # Bound to its note: the same ciphertext under another note's name does not open.
     with pytest.raises(InvalidTag):
-        unseal(device.nkey(note_id), sealed, note_aad(str(uuid.uuid4())))
+        unseal(device.nkey(note_id), sealed, content_aad(str(uuid.uuid4()), 1))
 
 
 def test_notes16_ac7_a_locked_note_has_no_live_room(client, operator, device):
@@ -362,8 +367,12 @@ def test_notes16_new_attachments_of_an_open_locked_note_arrive_encrypted(client,
         db.get(Account, operator.id).storage_limit = attachments.used(db, operator.id) + 10
         db.commit()
     full = client.put("/api/vault/attachments", params={"note": note_id, "id": attachments.new_id()},
-                      content=os.urandom(4000))
+                      content=bytes([2]) + os.urandom(3999))
     assert full.status_code == 507
+    # Something not sealed in today's format is not taken at all.
+    foreign = client.put("/api/vault/attachments", params={"note": note_id, "id": attachments.new_id()},
+                         content=bytes([1]) + os.urandom(99))
+    assert foreign.status_code == 422 and foreign.json()["detail"]["code"] == "vault_format"
     # Not in the gallery, never read by the recognition.
     assert client.get("/api/attachments").json()["total"] == 0
 
@@ -542,10 +551,10 @@ def test_notes16_ec2_a_new_vault_takes_every_locked_note_but_only_with_the_numbe
     assert status["locked_notes"] == 1 and status["locked_all"] == 2
     fresh = Device(client, operator.id)
     body = {**fresh.wrap("neues Passwort", os.urandom(32)), "understood": True}
-    wrong = client.post("/api/vault/reset", json={**body, "count": 1})
+    wrong = client.post("/api/vault/reset", json={**body, "count": 1, "current_password": PASSWORD})
     assert wrong.status_code == 409 and wrong.json()["detail"] == {
         "code": "vault_count", "message": "The number of locked notes changed.", "count": 2}
-    answer = client.post("/api/vault/reset", json={**body, "count": 2})
+    answer = client.post("/api/vault/reset", json={**body, "count": 2, "current_password": PASSWORD})
     assert answer.status_code == 200 and answer.json()["removed"] == 2 and answer.json()["epoch"] == 2
     with SessionLocal() as db:
         assert db.get(Note, first) is None and db.get(Note, second) is None and db.get(Note, kept) is not None
@@ -577,8 +586,7 @@ def test_notes16_ec5_two_devices_the_later_save_wins_and_the_other_stays_in_the_
     found = []
     for entry in client.get(f"/api/notes/{note_id}/history").json()["versions"]:
         version = client.get(f"/api/notes/{note_id}/history/{entry['id']}").json()
-        found.append(to_plain(notedoc.load(unseal(device.nkey(note_id), unb64(version["content_sealed"]),
-                                                  note_aad(note_id)))))
+        found.append(to_plain(notedoc.load(device.open_version(note_id, version))))
     assert any("vom Laptop" in text for text in found)
     tablet.client.close()
 
@@ -595,7 +603,7 @@ def test_notes16_ec5_restoring_a_version_of_a_locked_note_keeps_the_one_before(c
     old_id = client.get(f"/api/notes/{note_id}/history").json()["versions"][-1]["id"]
     assert client.post(f"/api/notes/{note_id}/history/{old_id}/restore").status_code == 409
     old = client.get(f"/api/notes/{note_id}/history/{old_id}").json()
-    plain = unseal(device.nkey(note_id), unb64(old["content_sealed"]), note_aad(note_id))
+    plain = device.open_version(note_id, old)
     _now, rev_now = device.read(note_id)
     answer = device.save(note_id, plain, rev_now, restored_from=old_id)
     assert answer.status_code == 200
@@ -773,14 +781,242 @@ def test_notes16_ac2_the_password_and_keys_never_reach_the_server(client, operat
 
 
 def test_notes16_the_vectors_of_the_browser():
-    """The same bytes as ``frontend/src/vault/vault.test.tsx`` (fixed vectors): the browser, these tests and the iOS
-    app derive, wrap and encrypt alike."""
-    from .vault_client import derive, note_key
+    """The same bytes as ``frontend/src/vault/vault.test.tsx`` (fixed vectors, format 2): the browser, these tests and
+    the iOS app derive, wrap and encrypt alike, and bind a sealed part to the same place."""
+    from .vault_client import derive, note_key, version_aad
 
     kek, auth = derive("Tresor-Passwort 2026", bytes(range(16)))
     assert b64(auth) == "JRORMaItQVOTPJoW3Ef0nnb552SFJt/mi6gbKi//jvs="
-    wrapped = unb64("AQcHBwcHBwcHBwcHB2uYq195Bav/93xmWPh2D1sdf63zmmkp/DB/aqvEQP1JrYoN/h4af0uJNWt59v9R3w==")
+    wrapped = unb64("AgcHBwcHBwcHBwcHB2uYq195Bav/93xmWPh2D1sdf63zmmkp/DB/aqvEQP1JrYoN/h4af0uJNWt59v9R3w==")
     vault_key = unseal(kek, wrapped, "nexnotes vault key v1|7")
     assert vault_key == bytes(range(32))
-    blob = unb64("AQcHBwcHBwcHBwcHB9lc9TGo2OAv4aqCNDH2RELAytw2r1xmmE2BhlUl")
-    assert unseal(note_key(vault_key, "note-1"), blob, note_aad("note-1")).decode() == "Geheim äöü"
+    key = note_key(vault_key, "note-1")
+    content = unb64("AgcHBwcHBwcHBwcHB9lc9TGo2OAv4aqCNDHXhJ5v08wwqRaZQr47Erz2")
+    assert unseal(key, content, content_aad("note-1", 3)).decode() == "Geheim äöü"
+    version = unb64("AgcHBwcHBwcHBwcHB9hY7ie026fMhs33QU71F8AoLkDF7BPb02Wv+FMUIQ==")
+    assert unseal(key, version, version_aad("note-1", 42)).decode() == "Fassung äöü"
+    # Bound to the revision and the kind: the content of revision 3 is not that of revision 2, nor a version.
+    for wrong in (content_aad("note-1", 2), version_aad("note-1", 3), "nexnotes sealed v1|note|note-1"):
+        with pytest.raises(InvalidTag):
+            unseal(key, content, wrong)
+
+
+# --- Format 2: every sealed state bound to its revision or version ------------------------------------------------
+
+
+def test_notes16_ac7_format_2_binds_the_content_to_its_revision_and_a_version_to_its_place(client, operator, device):
+    """A server cannot hand out an older content as the current one, nor one version for another: the AAD names the
+    revision (content, and a version the server kept of it) or the version's id (sealed at locking)."""
+    note_id = new_note(client, "Liste", "Anfang")
+    write(note_id, operator.id, "vor dem Sperren")
+    take_version(note_id)
+    device.setup(VAULT_PASSWORD)
+    device.lock(note_id)
+    state, rev = device.read(note_id)
+    assert rev == vault.FIRST_REV
+    later = notedoc.load(state)
+    edit.append_paragraph(later, "zweite Fassung")
+    assert device.save(note_id, later.get_update(), rev).json() == {"rev": rev + 1, "conflict": False}
+    take_version(note_id)
+    with SessionLocal() as db:
+        versions = list(db.scalars(select(NoteVersion).where(NoteVersion.note_id == note_id)
+                                   .order_by(NoteVersion.id)))
+        sealed_at_lock = [row for row in versions if row.sealed_rev is None]
+        kept = [row for row in versions if row.sealed_rev is not None]
+        assert sealed_at_lock and kept and all(row.sealed for row in versions)
+        assert kept[-1].sealed_rev == rev + 1
+        old_content = sealed_at_lock[-1].state
+    listed = client.get(f"/api/notes/{note_id}/history").json()["versions"]
+    for entry in listed:
+        detail = client.get(f"/api/notes/{note_id}/history/{entry['id']}").json()
+        assert "sealed_rev" in detail
+        device.open_version(note_id, detail)
+    current = unb64(client.get(f"/api/vault/notes/{note_id}").json()["content"])
+    key = device.nkey(note_id)
+    # The current content does not open as the revision before (a server rolling back would have to claim it) ...
+    with pytest.raises(InvalidTag):
+        unseal(key, current, content_aad(note_id, rev))
+    # ... and a version sealed at locking does not open as the current content of any revision.
+    for claimed in (rev, rev + 1):
+        with pytest.raises(InvalidTag):
+            unseal(key, old_content, content_aad(note_id, claimed))
+    # A save must be sealed for the next revision: another one is refused, and the device seals again (EC-5).
+    stale = device.save(note_id, later.get_update(), rev + 1, rev=rev + 1, retry=False)
+    assert stale.status_code == 409 and stale.json()["detail"] == {
+        "code": "vault_stale", "message": "The note has a newer revision. Seal it for the next one.", "rev": rev + 1}
+
+
+def test_notes16_format_1_and_foreign_bytes_are_refused(client, operator, device):
+    """Format 1 (one AAD for the content and every version) is not read: no release ever wrote it."""
+    note_id = new_note(client, "Liste", "Anfang")
+    device.setup(VAULT_PASSWORD)
+    device.lock(note_id)
+    state, rev = device.read(note_id)
+    old = bytes([1]) + seal(device.nkey(note_id), state, "nexnotes sealed v1|note|" + note_id)[1:]
+    answer = client.post("/api/vault/save", json={"note": note_id, "content": b64(old), "base_rev": rev,
+                                                  "rev": rev + 1, "epoch": device.epoch, "title": "Liste"})
+    assert answer.status_code == 422 and answer.json()["detail"]["code"] == "vault_format"
+    other = make_account("ida")
+    with new_client(other) as ida:
+        wrap = Device(ida, other.id).wrap("x" * 12, os.urandom(32))
+        wrap["wrapped_key"] = b64(bytes([1]) + unb64(wrap["wrapped_key"])[1:])
+        refused = ida.post("/api/vault/setup", json={**wrap, "understood": True})
+        assert refused.status_code == 422 and refused.json()["detail"]["code"] == "vault_format"
+    second = new_note(client, "Zwei", "Text")
+    start = client.post(f"/api/vault/notes/{second}/lock/start").json()
+    laid = client.put("/api/vault/stage", params={"note": second, "step": "lock", "part": "content"},
+                      content=bytes([1]) + seal(device.nkey(second), unb64(start["state"]), "x")[1:])
+    assert laid.status_code == 200
+    finished = client.post(f"/api/vault/notes/{second}/lock")
+    assert finished.status_code == 422 and finished.json()["detail"]["code"] == "vault_format"
+    assert not stored_note(second).locked
+
+
+# --- AC-2: titles of before -----------------------------------------------------------------------------------------
+
+
+def test_notes16_ac2_a_renamed_note_leaves_no_title_of_before_in_its_history(client, operator, device):
+    """The title made harmless before locking (the hint of AC-6) is the only one left: in the database, its log, the
+    data folder and the history the server lists. Unlocking reads the titles back from the versions."""
+    old_title = "Kontonummer" + uuid.uuid4().hex[:10]
+    note_id = new_note(client, old_title, "Inhalt")
+    write(note_id, operator.id, "mehr")
+    take_version(note_id)
+    assert client.put(f"/api/notes/{note_id}/title", json={"title": "Harmlos"}).status_code == 200
+    with SessionLocal() as db:
+        assert old_title in [row.title for row in db.scalars(select(NoteVersion)
+                                                              .where(NoteVersion.note_id == note_id))]
+    device.setup(VAULT_PASSWORD)
+    with engine.connect() as held:
+        held.exec_driver_sql("SELECT 1")
+        held.rollback()
+        device.lock(note_id)
+        assert files_holding([old_title.encode(), old_title.encode("utf-16-le")], Path(DATA_DIR)) == []
+    with SessionLocal() as db:
+        titles = {row.title for row in db.scalars(select(NoteVersion).where(NoteVersion.note_id == note_id))}
+        assert titles == {"Harmlos"}
+        assert db.execute(sqlite_text("PRAGMA secure_delete")).scalar() == 1
+    listed = client.get(f"/api/notes/{note_id}/history")
+    assert old_title not in listed.text and {entry["title"] for entry in listed.json()["versions"]} == {"Harmlos"}
+    device.unlock(note_id)
+    with SessionLocal() as db:
+        assert old_title in [row.title for row in db.scalars(select(NoteVersion)
+                                                              .where(NoteVersion.note_id == note_id))]
+
+
+# --- EC-1: tries at the same moment --------------------------------------------------------------------------------
+
+
+def test_notes16_ec1_wrong_passwords_at_the_same_moment_are_all_counted(client, operator, device):
+    device.setup(VAULT_PASSWORD)
+    wrong = device.auth_of("falsch falsch")
+    browsers = [new_client(operator) for _ in range(12)]
+    results: list[int] = []
+    barrier = threading.Barrier(len(browsers))
+
+    def go(browser: TestClient) -> None:
+        barrier.wait()
+        results.append(browser.post("/api/vault/unlock", json={"auth": wrong}).status_code)
+
+    threads = [threading.Thread(target=go, args=(browser,)) for browser in browsers]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    for browser in browsers:
+        browser.close()
+    # Three wrong ones, then the wait: the others are not taken, not even counted.
+    assert sorted(results) == [403] * 3 + [429] * 9, sorted(results)
+    with SessionLocal() as db:
+        row = db.get(Vault, operator.id)
+        assert (row.failures, row.rounds) == (3, 1) and row.wait_until is not None
+
+
+# --- EC-2: a new vault asks who it is -----------------------------------------------------------------------------
+
+
+def _reset_body(client: TestClient, operator: Account, count: int, **extra: str) -> dict:
+    fresh = Device(client, operator.id)
+    return {**fresh.wrap("neues Passwort", os.urandom(32)), "understood": True, "count": count, **extra}
+
+
+def test_notes16_ec2_a_new_vault_needs_the_account_password_once_more(client, operator, device):
+    """A stolen session must not be enough to destroy every locked note: the password of the account again."""
+    note_id = new_note(client, "Gesperrt", "weg")
+    device.setup(VAULT_PASSWORD)
+    device.lock(note_id)
+    for extra in ({}, {"current_password": "falsch"}):
+        refused = client.post("/api/vault/reset", json=_reset_body(client, operator, 1, **extra))
+        assert refused.status_code == 401 and refused.json()["detail"]["code"] == "wrong_password"
+    assert stored_note(note_id).locked
+    done = client.post("/api/vault/reset", json=_reset_body(client, operator, 1, current_password=PASSWORD))
+    assert done.status_code == 200 and done.json()["removed"] == 1
+
+
+def test_notes16_ec2_a_new_vault_needs_the_second_factor_when_the_account_has_one(client, operator, device):
+    from app.services import totp
+
+    seed = totp.generate_seed()
+    with SessionLocal() as db:
+        row = db.get(Account, operator.id)
+        row.totp_secret_enc = totp.seal_seed(seed)
+        db.commit()
+    device.setup(VAULT_PASSWORD)
+    refused = client.post("/api/vault/reset", json=_reset_body(client, operator, 0, current_password=PASSWORD))
+    assert refused.status_code == 401 and refused.json()["detail"]["code"] == "totp_code_wrong"
+    code = totp.code_at(seed, time.time())
+    done = client.post("/api/vault/reset", json=_reset_body(client, operator, 0, current_password=PASSWORD,
+                                                            code=code))
+    assert done.status_code == 200, done.text
+    # The same code twice is not taken.
+    again = client.post("/api/vault/reset", json=_reset_body(client, operator, 0, current_password=PASSWORD,
+                                                             code=code))
+    assert again.status_code == 401
+
+
+def test_notes16_ec2_a_provider_account_signs_in_there_again_within_ten_minutes(client, operator, device,
+                                                                              monkeypatch):
+    from app import deps
+
+    device.setup(VAULT_PASSWORD)
+    with SessionLocal() as db:
+        row = db.get(Account, operator.id)
+        row.sign_in = PROVIDER_SIGN_IN
+        db.commit()
+    later = [utcnow() + timedelta(minutes=deps.OPERATOR_FRESH_MINUTES + 1)]
+    monkeypatch.setattr(deps, "utcnow", lambda: later[0])
+    refused = client.post("/api/vault/reset", json=_reset_body(client, operator, 0))
+    assert refused.status_code == 403 and refused.json()["detail"]["code"] == "fresh_sign_in_required"
+    later[0] = utcnow()
+    assert client.post("/api/vault/reset", json=_reset_body(client, operator, 0)).status_code == 200
+
+
+# --- NOTES-14 EC-1 / NOTES-16 EC-4: what notifications kept goes with the lock ------------------------------------
+
+
+def test_notes16_ec4_notes14_ec1_locking_removes_what_notifications_kept_of_the_note(client, operator, device):
+    from app.models_notify import NotifyBaseline, NotifyEdit, NotifyOutbox
+
+    anna = make_account("anna")
+    secret = marker()
+    note_id = new_note(client, "Liste", f"Zeile {secret}")
+    assert client.put(f"/api/shares/note/{note_id}/people/{anna.id}", json={"level": "write"}).status_code == 200
+    assert client.put(f"/api/notify/note/{note_id}", json={"on": True}).status_code == 200
+    write(note_id, anna.id, f"Eier {secret}")
+    with SessionLocal() as db:
+        assert db.get(NotifyBaseline, note_id) is not None
+        db.add(NotifyOutbox(account_id=operator.id, channel="web", target_id=1,
+                            payload={"title": "Anna", "text": f"+ Eier {secret}", "note_id": note_id}))
+        db.commit()
+    assert client.delete(f"/api/shares/note/{note_id}/people/{anna.id}").status_code == 200
+    device.setup(VAULT_PASSWORD)
+    with engine.connect() as held:
+        held.exec_driver_sql("SELECT 1")
+        held.rollback()
+        device.lock(note_id)
+        assert files_holding([secret.encode()], Path(DATA_DIR)) == []
+    with SessionLocal() as db:
+        assert db.get(NotifyBaseline, note_id) is None
+        assert db.scalar(select(func.count()).select_from(NotifyEdit).where(NotifyEdit.note_id == note_id)) == 0
+        waiting = list(db.scalars(select(NotifyOutbox)))
+        assert [(row.payload, row.last_error) for row in waiting] == [({}, "locked")]

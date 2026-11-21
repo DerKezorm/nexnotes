@@ -13,10 +13,11 @@ import { problemText } from '../lib/errors'
 import { notesApi } from '../notes/api'
 import { noteTitle } from '../tabs/meta'
 import { vaultApi } from './api'
-import { fromB64, noteAad, noteKey, unseal } from './crypto'
+import { ApiError } from '../api/client'
+import { contentAad, fromB64, noteKey, unseal } from './crypto'
 import { forget as forgetOpened, remember } from './opened'
 import { SealedProvider } from './provider'
-import { hold, isOpen, subscribe, vaultKey } from './session'
+import { hold, isOpen, revSeen, subscribe, vaultKey } from './session'
 import { UnlockCard } from './dialogs'
 
 /** Sent on `window` when a note's lock was taken off here: its view goes back to the live editor. */
@@ -59,7 +60,9 @@ export function LockedNote(props: LockedViewProps) {
       if (!vault) return
       const found = await vaultApi.sealed(noteId)
       const key = await noteKey(vault, noteId)
-      const state = await unseal(key, fromB64(found.content), noteAad(noteId))
+      // Opens only as the revision the server names (format 2), and never one older than this tab had (a roll back).
+      const state = await unseal(key, fromB64(found.content), contentAad(noteId, found.rev))
+      if (!revSeen(noteId, found.rev)) throw new ApiError(0, 'vault_rollback')
       if (!live) return
       const doc = new Y.Doc()
       Y.applyUpdate(doc, state, 'vault')

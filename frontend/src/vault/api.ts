@@ -18,8 +18,10 @@ export type VaultStatus = {
 
 export type Wrapped = { kdf: Kdf; wrapped_key: string; auth: string }
 
-export type LockStart = { state: string; versions: { id: number; state: string }[]; attachments: string[]; epoch: number }
-export type UnlockStart = { content: string; rev: number; versions: { id: number; content: string }[]; attachments: string[]; epoch: number }
+/** Format 2: the content is sealed for `rev`, each version for its id. */
+export type LockStart = { state: string; rev: number; versions: { id: number; state: string }[]; attachments: string[]; epoch: number }
+/** A version's `rev`: the content of that revision it was (sealed so); `null`: sealed for its id at locking. */
+export type UnlockStart = { content: string; rev: number; versions: { id: number; content: string; rev: number | null }[]; attachments: string[]; epoch: number }
 export type Sealed = { id: string; content: string; rev: number; epoch: number; title: string; saved_at: string }
 
 const note = (id: string) => `/api/vault/notes/${encodeURIComponent(id)}`
@@ -29,7 +31,7 @@ export const vaultApi = {
   setup: (body: Wrapped & { understood: boolean }) => api<VaultStatus>('/api/vault/setup', { method: 'POST', body }),
   unlock: (auth: string) => api<{ wrapped_key: string; kdf: Kdf; epoch: number }>('/api/vault/unlock', { method: 'POST', body: { auth } }),
   password: (body: Wrapped & { auth_old: string }) => api<VaultStatus>('/api/vault/password', { method: 'POST', body }),
-  reset: (body: Wrapped & { understood: boolean; count: number }) => api<VaultStatus & { removed: number }>('/api/vault/reset', { method: 'POST', body }),
+  reset: (body: Wrapped & { understood: boolean; count: number; current_password: string; code: string }) => api<VaultStatus & { removed: number }>('/api/vault/reset', { method: 'POST', body }),
   lockStart: (id: string) => api<LockStart>(`${note(id)}/lock/start`, { method: 'POST' }),
   lock: (id: string) => api<{ id: string; locked: boolean; rev: number }>(`${note(id)}/lock`, { method: 'POST' }),
   lockCancel: (id: string) => api<void>(`${note(id)}/lock/cancel`, { method: 'POST' }),
@@ -39,7 +41,8 @@ export const vaultApi = {
   stage: (id: string, step: 'lock' | 'unlock', part: string, data: Uint8Array<ArrayBuffer>) =>
     api<{ part: string; size: number }>('/api/vault/stage', { method: 'PUT', query: { note: id, step, part }, raw: new Blob([data]) }),
   sealed: (id: string) => api<Sealed>(note(id)),
-  save: (body: { note: string; content: string; base_rev: number; epoch: number; title: string; restored_from?: number }) =>
+  /** `rev`: the revision the content is sealed for, the note's now plus one; `vault_stale` names a newer one. */
+  save: (body: { note: string; content: string; base_rev: number; rev: number; epoch: number; title: string; restored_from?: number }) =>
     api<{ rev: number; conflict: boolean }>('/api/vault/save', { method: 'POST', body }),
   /** The bytes of an attachment as the server keeps them (for a locked note: the ciphertext). */
   file: (attachmentId: string) => api<Blob>(`/api/attachments/${encodeURIComponent(attachmentId)}/file`, { blob: true }),

@@ -270,9 +270,11 @@ def test_notes13_ec7_a_thousand_wrong_addresses_are_slowed_down_and_links_are_no
     statuses = [visitor.get(f"/l/{shares.secrets.token_urlsafe(32)}").status_code for _ in range(1000)]
     assert statuses[: shares.LINK_FREE_MISSES] == [404] * shares.LINK_FREE_MISSES
     assert statuses.count(429) >= 1000 - shares.LINK_FREE_MISSES - 1
-    slowed = visitor.get(link["path"], headers=DE)
+    slowed = visitor.get(f"/l/{shares.secrets.token_urlsafe(32)}", headers=DE)
     assert slowed.status_code == 429 and "Zu viele Versuche" in slowed.text and "Rezept" not in slowed.text
     assert int(slowed.headers["retry-after"]) >= 1
+    # A link that exists is never slowed: the misses of a stranger behind the same address stop nobody's links.
+    assert visitor.get(link["path"]).status_code == 200
     # Malformed addresses count as well, without asking the database.
     shares.LINK_BRAKE.forget()
     assert visitor.get("/l/kurz").status_code == 404

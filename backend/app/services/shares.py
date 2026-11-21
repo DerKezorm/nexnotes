@@ -18,7 +18,7 @@ with 4403 or 4409 (AC-5). Only the owner shares; whoever a thing is shared with 
 
 **Read links** (AC-9 to AC-13, EC-5 to EC-7, EC-11): a token of 32 random bytes, kept only as its SHA-256. Opening one
 that is not there counts as a miss for the sender's address (``LINK_BRAKE``); after ``LINK_FREE_MISSES`` the page
-answers 429 for a while, whatever the token. A link ends with its day in the member's time zone, when it is revoked,
+answers 429 to unknown tokens for a while; a link that exists always gets its page. A link ends with its day in the member's time zone, when it is revoked,
 when the note goes to the trash or is locked, when its owner's account goes, and while the operator has switched
 read links off (``share_links``). The page itself is ``services/share_page.py``.
 """
@@ -497,6 +497,14 @@ def move_check(db: Session, account: Account, note_ids: list[str], target_id: st
             found.append({"id": note.id, "title": note.title,
                           "people": sorted(_names(db, losing).values(), key=str.casefold)})
     return found
+
+
+def moves_change_rights(db: Session, account_id: int) -> bool:
+    """Whether moving the account's folders and notes may change who reaches them (AC-5): a folder shared by it or
+    with it. Moving into or out of such a folder gives or takes rights; without one nothing changes for anybody."""
+    return db.scalar(select(Share.id).where(Share.folder_id.is_not(None),
+                                            or_(Share.owner_id == account_id, Share.account_id == account_id))
+                     .limit(1)) is not None
 
 
 def lock_refused(db: Session, note_id: str) -> bool:

@@ -19,24 +19,28 @@ without a pause is bundled at the latest after ``LONGEST``.
 alone, whose account is neither blocked nor deleted, and who may still read the note (``notes.right_to``, so a share
 that ended counts at once, EC-5, and a locked note of somebody else is out). A locked note (``tags.HIDDEN_NOTES``,
 NOTES-16) tells nothing of its content, only that it was changed (EC-1). A browser that has the note open and in view
-right now gets nothing (AC-9, ``viewing``).
+right now gets nothing (AC-9, ``viewing``). Before every try to send, the first and each after a failure, the right
+and the lock are asked again (``_still_for``): a message for somebody who lost the right meanwhile, or one with
+content of a note locked meanwhile, is dropped. Locking a note (``lock_changed``) removes what waits of it at once.
 
 **Where it goes**: every browser of the member that allowed notifications (Web Push, ``services/webpush.py``) and every
 iOS device signed up for them (the push relay, ``services/apppush.py``). Each message is a row of ``notify_outbox``,
 sent at once and tried again after a failure for a while (EC-2); a browser or ticket its service calls gone is
 dropped (EC-4). Both ways carry the text only encrypted for the receiver: the push service and the relay see that
-something goes, never what (AC-6).
+something goes, never what (AC-6), and of the note only a keyed hash of its id (``opaque``), never the id.
 """
 
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import hmac
 import logging
 from collections import Counter
 from datetime import datetime, timedelta
 from typing import Any
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.orm import Session
 
@@ -48,11 +52,21 @@ from ..models_shares import Share
 from ..notedoc import doc as notedoc
 from ..notedoc import schema as s
 from ..notedoc.room import Access
-from ..security import account_out
+from ..security import account_out, server_key
 from . import apppush, notes, tags, webpush
 from .history import clock
 
 logger = logging.getLogger("nexnotes.notify")
+
+#: Hex characters of the mark the relay and the push services get instead of a note's id (AC-6): 96 bits.
+OPAQUE_CHARS = 24
+
+
+class _Refused(Exception):
+    def __init__(self, reason: str) -> None:
+        super().__init__(reason)
+        self.reason = reason
+
 
 #: A bundle goes once nobody wrote for this long (AC-3) ...
 QUIET = timedelta(minutes=2)
@@ -199,7 +213,7 @@ def message(db: Session, receiver: Account, note: Note, writers: list[int], item
     if trashed_by is not None:
         names = _names(db, [trashed_by], language)
         return {"title": _cut(title, 100), "text": texts["trashed"].format(names=names, note=_cut(title, 60)),
-                "note_id": note.id, "at": None, "url": "/trash", "type": "trashed"}
+                "note_id": note.id, "at": None, "url": "/trash", "type": "trashed", "locked": locked}
     names = _names(db, writers, language)
     if locked:
         text = texts["locked"]
@@ -209,7 +223,7 @@ def message(db: Session, receiver: Account, note: Note, writers: list[int], item
     if at is not None:
         url += f"?change={at}"
     return {"title": _cut(texts["title"].format(names=names, note=_cut(title, 60)), 140), "text": text,
-            "note_id": note.id, "at": at, "url": url, "type": "changed"}
+            "note_id": note.id, "at": at, "url": url, "type": "changed", "locked": locked}
 
 
 # --- The switch ---------------------------------------------------------------------------------------------------
@@ -558,8 +572,12 @@ def flush_due(now: datetime | None = None) -> int:
     return queued
 
 
-def _topic(note_id: str) -> str:
-    return "n" + note_id.replace("-", "")[:31]
+def opaque(note_id: str) -> str:
+    """What the relay and the push services see of a note (AC-6): a keyed hash of its id, cut short. The same note
+    gives the same mark, so a newer message replaces an older one on the device (``collapse``, ``Topic``); nothing
+    leads back to the note without the server's secret."""
+    digest = hmac.new(server_key(), b"notify-note:" + note_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return "n" + digest[:OPAQUE_CHARS]
 
 
 def _deliver(db: Session, row: NotifyOutbox) -> None:
@@ -574,16 +592,30 @@ def _deliver(db: Session, row: NotifyOutbox) -> None:
         body = {"title": payload.get("title"), "body": payload.get("text"), "url": payload.get("url"),
                 "tag": f"note-{payload.get('note_id')}"}
         webpush.deliver(db, target, json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                        topic=_topic(str(payload.get("note_id") or "")))
+                        topic=opaque(str(payload.get("note_id") or "")))
         target.last_ok_at = clock.now()
     elif row.channel == "app":
         device = db.get(PushDevice, row.target_id)
         if device is None or device.account_id != row.account_id:
             raise LookupError
-        apppush.deliver(device, payload, collapse=f"note-{payload.get('note_id')}")
+        apppush.deliver(device, payload, collapse=opaque(str(payload.get("note_id") or "")))
         device.last_ok_at = clock.now()
     else:
         raise LookupError
+
+
+def _still_for(db: Session, account: Account, payload: dict[str, Any]) -> str:
+    """Why a message must not go any more (empty: it may): the receiver lost the right to the note since it was
+    bundled (EC-5), or the note was locked meanwhile and the message tells of its content (EC-1). Asked before every
+    try, the first and each one after a failure."""
+    note = db.get(Note, str(payload.get("note_id") or ""))
+    if note is None:
+        return "no_note"
+    if not payload.get("locked") and _locked(db, note.id):
+        return "locked"
+    if notes.right_to(db, account, note) not in (Access.READ, Access.WRITE):
+        return "no_right"
+    return ""
 
 
 def send_round(now: datetime | None = None) -> int:
@@ -601,7 +633,14 @@ def send_round(now: datetime | None = None) -> int:
             try:
                 if account is None or account_out(account):
                     raise LookupError
+                refused = _still_for(db, account, dict(row.payload or {}))
+                if refused:
+                    raise _Refused(refused)
                 _deliver(db, row)
+            except _Refused as refused:
+                row.failed_at, row.last_error, row.payload = now, refused.reason, {}
+                logger.info("Notification dropped before sending account_id=%s reason=%s", row.account_id,
+                            refused.reason)
             except LookupError:
                 row.failed_at, row.last_error, row.payload = now, "no_target", {}
             except webpush.Gone:
@@ -661,6 +700,23 @@ async def run_forever(stop: asyncio.Event) -> None:
             pass
 
 
+# --- A note locked ----------------------------------------------------------------------------------------------------
+
+
+def lock_changed(db: Session, note_id: str, locked: bool) -> None:
+    """``tags.LOCK_HOOKS``: a note was locked (NOTES-16). What notifications kept of its content goes in the same
+    transaction: the lines before the bundle (``notify_baselines``), who wrote (``notify_edits``) and every message
+    still waiting to be sent (EC-1 here, NOTES-16 EC-4)."""
+    if not locked:
+        return
+    db.execute(delete(NotifyBaseline).where(NotifyBaseline.note_id == note_id))
+    db.execute(delete(NotifyEdit).where(NotifyEdit.note_id == note_id))
+    db.execute(update(NotifyOutbox)
+               .where(NotifyOutbox.sent_at.is_(None), NotifyOutbox.failed_at.is_(None),
+                      func.json_extract(NotifyOutbox.payload, "$.note_id") == note_id)
+               .values(failed_at=clock.now(), last_error="locked", payload={}))
+
+
 # --- Accounts going ------------------------------------------------------------------------------------------------
 
 
@@ -693,5 +749,7 @@ def register() -> None:
         notes.HEAD_EXTRAS.append(head_extras)
     if _accounts_out not in SESSIONS_ENDED:
         SESSIONS_ENDED.append(_accounts_out)
+    if lock_changed not in tags.LOCK_HOOKS:
+        tags.LOCK_HOOKS.append(lock_changed)
     with SessionLocal() as db:
         webpush.server_key(db)

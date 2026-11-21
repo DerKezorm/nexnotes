@@ -9,17 +9,18 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
 import * as Y from 'yjs'
 
+import { ApiError } from '../api/client'
 import { SEALED_BLOCK, type SealedBlockProps } from '../attachments/sealed'
 import { registerSender, type Sender } from '../attachments/uploads'
 import { LOCKED_VIEW, NOTE_MENU_ITEMS, type NoteMenuContext } from '../editor/noteParts'
 import { CONNECTION_SECTIONS, SHELL_PARTS } from '../extensions'
-import { SEALED_HISTORY } from '../history/sealed'
+import { SEALED_HISTORY, type SealedVersion } from '../history/sealed'
 import type { ProseNode } from '../history/api'
 import { bytes as formatBytes } from '../lib/format'
 import { onAccountChange } from '../state/account'
 import { Card } from '../pages/settings/ui'
 import { sendSealed, vaultApi, type VaultStatus } from './api'
-import { attachmentAad, fromB64, noteAad, noteKey, packAttachment, seal, toB64, unpackAttachment, unseal } from './crypto'
+import { attachmentAad, contentAad, fromB64, noteKey, packAttachment, seal, sealedVersionAad, toB64, unpackAttachment, unseal } from './crypto'
 import { ChangePasswordDialog, ForgotDialog, LockDialog, RemoveLockDialog } from './dialogs'
 import { LockedNote, NOTE_UNLOCKED_EVENT } from './LockedNote'
 import { openSealed } from './opened'
@@ -190,31 +191,39 @@ const sealedSender = (noteId: string): Sender | null => {
 
 // --- Versions -----------------------------------------------------------------------------------------------------
 
-async function openVersion(noteId: string, sealed: string): Promise<ProseNode | null> {
+async function openVersion(noteId: string, version: SealedVersion): Promise<ProseNode | null> {
   const vault = vaultKey()
   if (!vault) return null
-  const state = await unseal(await noteKey(vault, noteId), fromB64(sealed), noteAad(noteId))
+  const state = await unseal(await noteKey(vault, noteId), fromB64(version.content_sealed), sealedVersionAad(noteId, version))
   const doc = new Y.Doc()
   Y.applyUpdate(doc, state)
   return yXmlFragmentToProsemirrorJSON(doc.getXmlFragment('body')) as ProseNode
 }
 
-async function restoreVersion(noteId: string, versionId: number, sealed: string): Promise<void> {
+async function restoreVersion(noteId: string, version: SealedVersion): Promise<void> {
   const vault = vaultKey()
   if (!vault) throw new Error('the vault is closed')
   const key = await noteKey(vault, noteId)
-  const state = await unseal(key, fromB64(sealed), noteAad(noteId))
+  const state = await unseal(key, fromB64(version.content_sealed), sealedVersionAad(noteId, version))
   const doc = new Y.Doc()
   Y.applyUpdate(doc, state)
   const current = await vaultApi.sealed(noteId)
-  await vaultApi.save({
-    note: noteId,
-    content: toB64(await seal(key, state, noteAad(noteId))),
-    base_rev: current.rev,
-    epoch: current.epoch,
-    title: doc.getText('title').toString(),
-    restored_from: versionId,
-  })
+  const send = async (rev: number) =>
+    vaultApi.save({
+      note: noteId,
+      content: toB64(await seal(key, state, contentAad(noteId, rev))),
+      base_rev: current.rev,
+      rev,
+      epoch: current.epoch,
+      title: doc.getText('title').toString(),
+      restored_from: version.id,
+    })
+  try {
+    await send(current.rev + 1)
+  } catch (error) {
+    if (!(error instanceof ApiError && error.code === 'vault_stale')) throw error
+    await send(Number(error.values.rev ?? current.rev) + 1)
+  }
 }
 
 // --- Settings, Connections ----------------------------------------------------------------------------------------

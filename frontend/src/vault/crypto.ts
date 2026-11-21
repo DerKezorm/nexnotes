@@ -7,20 +7,67 @@
  * - **Vault key:** 32 random bytes, wrapped with AES-256-GCM (AAD `nexnotes vault key v1|<account>`). Opened, it lives
  *   only as a non-extractable HKDF key; its bytes are overwritten right after the import.
  * - **Per note:** HKDF-SHA-256 of the vault key with `nexnotes note v1|<note>` gives the note's AES-256-GCM key.
- * - **A sealed part:** `0x01`, a fresh 96-bit nonce from `crypto.getRandomValues`, the ciphertext with its tag. AAD
- *   binds it to its place: `nexnotes sealed v1|note|<note>` (content, versions) or
- *   `nexnotes sealed v1|attachment|<note>|<attachment>`. An attachment's plain bytes are the length of a JSON header
- *   (4 bytes, big-endian), the header `{name, mime}` and the file.
+ * - **A sealed part (format 2):** `0x02`, a fresh 96-bit nonce from `crypto.getRandomValues`, the ciphertext with its
+ *   tag. AAD binds it to its place: `nexnotes sealed v2|content|<note>|<rev>` (the note's content at a revision; it
+ *   keeps that AAD when the server moves it into the history), `nexnotes sealed v2|version|<note>|<version id>` (a
+ *   version sealed at locking) or `nexnotes sealed v2|attachment|<note>|<attachment>`. The revision travels in plain
+ *   text beside the content, and opening checks it: a server cannot hand out an older content as the current one under
+ *   the current number, nor one version for another. An attachment's plain bytes are the length of a JSON header
+ *   (4 bytes, big-endian), the header `{name, mime}` and the file. Format 1 (one AAD for content and versions) is not
+ *   read: no release wrote it.
+ * - **The derivation the server names is checked first** (`checkKdf`): only what `KDF_ALLOWED` lists, never fewer
+ *   rounds or less salt. A server that lowers them to guess the password faster gets no check value at all.
  *
  * The same in Python for the server's tests: `backend/tests/vault_client.py`; the iOS app does it with CommonCrypto
  * (PBKDF2) and CryptoKit (HKDF, AES-GCM).
  */
 
 export const KDF_ITERATIONS = 600_000
-const FORMAT = 1
+const FORMAT = 2
 const NONCE = 12
 
 export type Kdf = { name: 'PBKDF2'; hash: 'SHA-256'; iterations: number; salt: string }
+
+/** The derivations this page takes from a server, each with its floor (OWASP 2023 for PBKDF2-HMAC-SHA-256) and a ceiling
+ * that keeps a phone from working for minutes. A new one (Argon2id one day) is added here, never taken from the server.
+ * The iOS app keeps the same list (NOTES-24). */
+export const KDF_ALLOWED: readonly { name: string; hash: string; minIterations: number; maxIterations: number; minSalt: number; maxSalt: number }[] = [
+  { name: 'PBKDF2', hash: 'SHA-256', minIterations: 600_000, maxIterations: 10_000_000, minSalt: 16, maxSalt: 64 },
+]
+
+/** A derivation the server named that this page does not take: fewer rounds, less salt, another hash. */
+export class WeakKdfError extends Error {
+  constructor() {
+    super('the vault names a derivation this page does not take')
+    this.name = 'WeakKdfError'
+  }
+}
+
+/** The derivation as the server names it, checked against `KDF_ALLOWED`; throws `WeakKdfError` for anything else. */
+export function checkKdf(kdf: unknown): Kdf {
+  const found = (kdf ?? {}) as Partial<Record<keyof Kdf, unknown>>
+  let salt: Uint8Array | null = null
+  try {
+    salt = typeof found.salt === 'string' ? fromB64(found.salt) : null
+  } catch {
+    salt = null
+  }
+  const iterations = found.iterations
+  const fits = KDF_ALLOWED.some(
+    (allowed) =>
+      found.name === allowed.name &&
+      found.hash === allowed.hash &&
+      typeof iterations === 'number' &&
+      Number.isInteger(iterations) &&
+      iterations >= allowed.minIterations &&
+      iterations <= allowed.maxIterations &&
+      salt !== null &&
+      salt.length >= allowed.minSalt &&
+      salt.length <= allowed.maxSalt,
+  )
+  if (!fits) throw new WeakKdfError()
+  return found as Kdf
+}
 
 const encoder = new TextEncoder()
 const bytesOf = (text: string): Uint8Array<ArrayBuffer> => encoder.encode(text) as Uint8Array<ArrayBuffer>
@@ -48,7 +95,8 @@ function random(length: number): Uint8Array<ArrayBuffer> {
 /** What a password gives: the key that wraps the vault key, and the check value for the server. */
 export type Derived = { kek: CryptoKey; auth: Uint8Array<ArrayBuffer> }
 
-export async function derive(password: string, kdf: Kdf): Promise<Derived> {
+export async function derive(password: string, given: Kdf): Promise<Derived> {
+  const kdf = checkKdf(given)
   const material = await crypto.subtle.importKey('raw', bytesOf(password), 'PBKDF2', false, ['deriveBits'])
   const master = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: fromB64(kdf.salt), iterations: kdf.iterations }, material, 256)
   const base = await crypto.subtle.importKey('raw', master, 'HKDF', false, ['deriveKey', 'deriveBits'])
@@ -116,10 +164,19 @@ export function noteKey(vaultKey: CryptoKey, noteId: string): Promise<CryptoKey>
   )
 }
 
-export const noteAad = (noteId: string) => `nexnotes sealed v1|note|${noteId}`
-export const attachmentAad = (noteId: string, attachmentId: string) => `nexnotes sealed v1|attachment|${noteId}|${attachmentId}`
+/** The note's content at revision `rev` (also when the server keeps it as a version later). */
+export const contentAad = (noteId: string, rev: number) => `nexnotes sealed v2|content|${noteId}|${rev}`
+/** A version sealed when the note was locked, bound to its id. */
+export const versionAad = (noteId: string, versionId: number) => `nexnotes sealed v2|version|${noteId}|${versionId}`
+export const attachmentAad = (noteId: string, attachmentId: string) => `nexnotes sealed v2|attachment|${noteId}|${attachmentId}`
 
-/** AES-256-GCM with a fresh random nonce: `0x01 · nonce · ciphertext and tag`. */
+/** A version as the server lists it: `rev` (or `sealed_rev`) set, it was the content of that revision; else its id. */
+export function sealedVersionAad(noteId: string, version: { id: number; rev?: number | null; sealed_rev?: number | null }): string {
+  const rev = version.sealed_rev ?? version.rev ?? null
+  return rev === null ? versionAad(noteId, version.id) : contentAad(noteId, rev)
+}
+
+/** AES-256-GCM with a fresh random nonce: `0x02 · nonce · ciphertext and tag`. */
 export async function seal(key: CryptoKey, data: Uint8Array<ArrayBuffer>, aad: string): Promise<Uint8Array<ArrayBuffer>> {
   const nonce = random(NONCE)
   const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv: nonce, additionalData: bytesOf(aad) }, key, data))

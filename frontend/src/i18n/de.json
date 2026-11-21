@@ -439,7 +439,7 @@
   },
   "errors": {
     "folder_not_found": "Diesen Ordner gibt es nicht.",
-    "fresh_sign_in_required": "Melde dich dafür zuerst noch einmal bei deinem Anbieter an: Betreiber-Handlungen brauchen eine Anmeldung aus den letzten {{minutes}} Minuten. Danach kommst du hierher zurück.",
+    "fresh_sign_in_required": "Melde dich dafür zuerst noch einmal bei deinem Anbieter an: Das braucht eine Anmeldung aus den letzten {{minutes}} Minuten. Danach kommst du hierher zurück.",
     "internal_error": "Das hat nicht geklappt.",
     "account_blocked": "Dieses Konto ist gesperrt. Wende dich an den Betreiber.",
     "account_locked": "Zu viele falsche Passwörter. Das Konto wartet eine Viertelstunde.",
@@ -554,6 +554,10 @@
     "vault_changed": "Das Tresor-Passwort wurde geändert. Gib das neue ein.",
     "vault_count": "Die Zahl der gesperrten Notizen hat sich geändert. Sieh sie dir noch einmal an.",
     "vault_not_understood": "Bestätige, dass ein vergessenes Passwort nicht zurückgesetzt werden kann.",
+    "vault_format": "Diese Seite verschlüsselt in einem Format, das der Server nicht nimmt. Lade die Seite neu.",
+    "vault_stale": "Die Notiz wurde inzwischen anderswo gespeichert. Versuch es noch einmal.",
+    "vault_weak_kdf": "Der Server verlangt eine zu schwache Ableitung des Schlüssels. So entsperrt nexnotes den Tresor nicht, damit dein Passwort nicht leichter zu erraten ist. Sag dem Betreiber Bescheid.",
+    "vault_rollback": "Der Server liefert einen älteren Stand dieser Notiz als den, den du schon gesehen hast. nexnotes zeigt ihn nicht. Schließe die Notiz und öffne sie neu; bleibt es so, sag dem Betreiber Bescheid.",
     "note_not_locked": "Die Notiz ist nicht gesperrt.",
     "note_shared": "Die Notiz ist geteilt. Beende zuerst das Teilen, dann lässt sie sich sperren.",
     "note_busy": "Die Notiz wird gerade gesperrt oder entsperrt.",
@@ -621,7 +625,6 @@
       "color": "Farbe",
       "icon": "Symbol",
       "noColor": "Ohne Farbe",
-      "noIcon": "Ohne Symbol",
       "ownColor": "Eigene Farbe {{hex}}",
       "pickColor": "Farbe wählen",
       "custom": "Eigene Farbe",
@@ -1732,7 +1735,12 @@
       "submit_one": "Neu anlegen, {{count}} Notiz löschen",
       "submit_other": "Neu anlegen, {{count}} Notizen löschen",
       "done_one": "Der neue Tresor ist da. {{count}} gesperrte Notiz wurde gelöscht.",
-      "done_other": "Der neue Tresor ist da. {{count}} gesperrte Notizen wurden gelöscht."
+      "done_other": "Der neue Tresor ist da. {{count}} gesperrte Notizen wurden gelöscht.",
+      "confirm": "Bestätige, dass du es bist",
+      "account": "Passwort deines Kontos",
+      "code": "Code des zweiten Faktors",
+      "accountMissing": "Gib das Passwort deines Kontos ein.",
+      "provider": "Dafür meldest du dich noch einmal bei deinem Anbieter an; die Anmeldung darf höchstens {{minutes}} Minuten alt sein."
     },
     "section": {
       "title": "Tresor",

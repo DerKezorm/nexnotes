@@ -64,8 +64,12 @@ KDF_HASH = "SHA-256"
 MIN_ITERATIONS = 600_000
 MAX_ITERATIONS = 10_000_000
 SALT_BYTES = (16, 64)
-#: The wrapped vault key: a nonce of 12 bytes, 32 bytes of key and 16 of tag, maybe a byte of format in front.
-WRAPPED_BYTES = (44, 256)
+#: The wrapped vault key: the format byte, a nonce of 12 bytes, 32 bytes of key and 16 of tag.
+WRAPPED_BYTES = (61, 256)
+#: The first byte of everything a device seals (``FORMAT``): format 2 binds a note's content to its revision and a
+#: version from before the lock to its id (the AAD, see ``frontend/src/vault/crypto.ts``). Format 1 had the same AAD
+#: for the content and every version; it never left a test installation and is refused, not read.
+FORMAT = 0x02
 #: The check value: 32 bytes.
 AUTH_BYTES = 32
 #: Wrong passwords per round, the first wait and the longest (EC-1).
@@ -76,6 +80,8 @@ LONGEST_WAIT = timedelta(hours=24)
 PENDING_FOR = timedelta(minutes=10)
 #: What an encrypted part may add to its plain size (format byte, nonce, tag, the header of an attachment).
 OVERHEAD = 64 * 1024
+#: The revision a note's content has when it is locked; every save raises it by one.
+FIRST_REV = 1
 LOCK = "lock"
 UNLOCK = "unlock"
 STEPS = (LOCK, UNLOCK)
@@ -106,6 +112,30 @@ def b64(value: bytes) -> str:
 
 def _auth_hash(auth: bytes) -> str:
     return hashlib.sha256(auth).hexdigest()
+
+
+def _format_error() -> Exception:
+    return error("vault_format", "The device sealed this in a format the server does not take. Update the app.", 422)
+
+
+def check_format(data: bytes) -> bytes:
+    """Something a device sealed, in today's format (``FORMAT``); anything else is ``vault_format``."""
+    if not data or data[0] != FORMAT:
+        raise _format_error()
+    return data
+
+
+def _wrapped(value: str) -> bytes:
+    return check_format(_bytes(value, "wrapped_key", *WRAPPED_BYTES))
+
+
+def _write_lock(db: Session) -> None:
+    """The write lock before the first read (as ``history._write_lock``): two requests at once read one after the
+    other, never the same count of failures."""
+    connection = db.connection()
+    raw = connection.connection.driver_connection
+    if raw is not None and not raw.in_transaction:
+        connection.exec_driver_sql("BEGIN IMMEDIATE")
 
 
 def check_kdf(kdf: Any) -> dict[str, Any]:
@@ -177,8 +207,7 @@ def setup(db: Session, account: Account, kdf: Any, wrapped_key: str, auth: str, 
         raise error("vault_not_understood", "Confirm that a forgotten password cannot be recovered.", 422)
     if vault_of(db, account.id) is not None:
         raise error("vault_exists", "The vault is set up already.", 409)
-    row = Vault(account_id=account.id, kdf=check_kdf(kdf), wrapped_key=_bytes(wrapped_key, "wrapped_key",
-                                                                               *WRAPPED_BYTES),
+    row = Vault(account_id=account.id, kdf=check_kdf(kdf), wrapped_key=_wrapped(wrapped_key),
                 auth_hash=_auth_hash(_bytes(auth, "auth", AUTH_BYTES, AUTH_BYTES)), epoch=1)
     db.add(row)
     db.commit()
@@ -186,18 +215,26 @@ def setup(db: Session, account: Account, kdf: Any, wrapped_key: str, auth: str, 
     return status(db, account)
 
 
-def _verify(db: Session, found: Vault, auth: str) -> None:
+def _verify(db: Session, account: Account, auth: str) -> Vault:
     """The right check value, or a counted failure (EC-1): ``vault_wait`` while a wait lasts, ``vault_wrong`` with the
-    tries left before the next wait and the wait it started."""
+    tries left before the next wait and the wait it started. The count is read and written under the write lock:
+    tries at the same moment wait for each other, and none of them is lost (twelve at once still give a wait after
+    the third)."""
+    given = _bytes(auth, "auth", AUTH_BYTES, AUTH_BYTES)
+    _write_lock(db)
+    found = db.get(Vault, account.id, populate_existing=True)
+    if found is None:
+        db.rollback()
+        raise error("vault_missing", "The vault is not set up.", 404)
     waiting = wait_left(found)
     if waiting:
+        db.rollback()
         raise error("vault_wait", "Too many wrong passwords. Wait a moment.", 429, wait=waiting)
-    given = _bytes(auth, "auth", AUTH_BYTES, AUTH_BYTES)
     if hmac.compare_digest(_auth_hash(given), found.auth_hash):
         if found.failures or found.rounds or found.wait_until:
             found.failures, found.rounds, found.wait_until = 0, 0, None
-            db.commit()
-        return
+        db.commit()
+        return found
     found.failures += 1
     wait = 0
     if found.failures % PER_ROUND == 0:
@@ -213,8 +250,7 @@ def _verify(db: Session, found: Vault, auth: str) -> None:
 
 def unlock(db: Session, account: Account, auth: str) -> dict[str, Any]:
     """The wrapped vault key for the right check value (AC-3, AC-7, AC-8)."""
-    found = _vault(db, account)
-    _verify(db, found, auth)
+    found = _verify(db, account, auth)
     return {"wrapped_key": b64(found.wrapped_key), "kdf": found.kdf, "epoch": found.epoch}
 
 
@@ -222,11 +258,11 @@ def change_password(db: Session, account: Account, auth_old: str, kdf: Any, wrap
                     auth: str) -> dict[str, Any]:
     """A new password (AC-5): the same vault key, wrapped anew. Every locked note is read with the new password on
     every device; a device holding the key of before hears ``vault_changed`` and asks again (EC-7)."""
-    found = _vault(db, account)
+    _vault(db, account)
     clean_kdf = check_kdf(kdf)
-    wrapped = _bytes(wrapped_key, "wrapped_key", *WRAPPED_BYTES)
+    wrapped = _wrapped(wrapped_key)
     new_auth = _bytes(auth, "auth", AUTH_BYTES, AUTH_BYTES)
-    _verify(db, found, auth_old)
+    found = _verify(db, account, auth_old)
     found.kdf, found.wrapped_key, found.auth_hash = clean_kdf, wrapped, _auth_hash(new_auth)
     found.epoch += 1
     found.changed_at = utcnow()
@@ -243,7 +279,7 @@ async def reset(account: Account, count: int, kdf: Any, wrapped_key: str, auth: 
     if not understood:
         raise error("vault_not_understood", "Confirm that a forgotten password cannot be recovered.", 422)
     clean_kdf = check_kdf(kdf)
-    wrapped = _bytes(wrapped_key, "wrapped_key", *WRAPPED_BYTES)
+    wrapped = _wrapped(wrapped_key)
     new_auth = _bytes(auth, "auth", AUTH_BYTES, AUTH_BYTES)
     with SessionLocal() as db:
         _vault(db, account)
@@ -375,7 +411,9 @@ async def lock_start(account: Account, note_id: str) -> dict[str, Any]:
             pending.parts = parts
             found = vault_of(db, account.id)
             db.commit()
-            return {"state": b64(state), "versions": [{"id": row.id, "state": b64(row.state)} for row in versions],
+            # The content is sealed for revision ``FIRST_REV``, each version for its id (format 2).
+            return {"state": b64(state), "rev": FIRST_REV,
+                    "versions": [{"id": row.id, "state": b64(row.state)} for row in versions],
                     "attachments": sealing,
                     "epoch": found.epoch if found else 0}
 
@@ -426,6 +464,11 @@ async def stage(account: Account, note_id: str, step: str, part: str, chunks: As
     return received
 
 
+def _first_byte(path: Path) -> bytes:
+    with open(path, "rb") as head:
+        return head.read(1)
+
+
 def _staged(note_id: str, step: str, parts: list[str]) -> dict[str, Path]:
     found = {part: stage_path(note_id, step, part) for part in parts}
     missing = [part for part, path in found.items() if not path.is_file()]
@@ -454,10 +497,12 @@ async def lock_finish(account: Account, note_id: str) -> dict[str, Any]:
         _own_note(db, account, note_id)
         parts = list(_pending_for(db, account, note_id, LOCK).parts or [])
     staged = _staged(note_id, LOCK, parts)
-    sealed_content = staged["content"].read_bytes()
-    version_parts = {int(part.split(":", 1)[1]): staged[part].read_bytes()
+    sealed_content = check_format(staged["content"].read_bytes())
+    version_parts = {int(part.split(":", 1)[1]): check_format(staged[part].read_bytes())
                      for part in parts if part.startswith("version:")}
     sealing = [part.split(":", 1)[1] for part in parts if part.startswith("attachment:")]
+    for attachment_id in sealing:
+        check_format(await asyncio.to_thread(_first_byte, staged[f"attachment:{attachment_id}"]))
 
     def run() -> list[str]:
         with SessionLocal() as db:
@@ -485,12 +530,17 @@ async def lock_finish(account: Account, note_id: str) -> dict[str, Any]:
             note.text = ""
             note.title_check = False
             db.execute(delete(NoteUpdate).where(NoteUpdate.note_id == note_id))
-            db.merge(SealedNote(note_id=note_id, content=sealed_content, rev=1, saved_at=utcnow(),
+            db.merge(SealedNote(note_id=note_id, content=sealed_content, rev=FIRST_REV, saved_at=utcnow(),
                                 saved_by_id=account.id))
             for version in db.scalars(select(NoteVersion).where(NoteVersion.note_id == note_id)):
                 version.state = version_parts[version.id]
                 version.size = len(version.state)
                 version.sealed = True
+                # Sealed by the device for its id; a version the server keeps later is bound to its revision.
+                version.sealed_rev = None
+                # The titles the note had before go with their text: a title made harmless before locking must not
+                # stay readable in the history (AC-2, AC-6). Unlocking reads them back from the versions.
+                version.title = note.title
             moved: list[str] = []
             for attachment_id in sealing:
                 row = rows.get(attachment_id)
@@ -575,8 +625,8 @@ async def unlock_start(account: Account, note_id: str) -> dict[str, Any]:
         if not note.locked:
             raise error("note_not_locked", "The note is not locked.", 409)
         sealed = db.get(SealedNote, note_id)
-        versions = list(db.execute(select(NoteVersion.id, NoteVersion.state).where(NoteVersion.note_id == note_id)
-                                   .order_by(NoteVersion.id)))
+        versions = list(db.execute(select(NoteVersion.id, NoteVersion.state, NoteVersion.sealed_rev)
+                                   .where(NoteVersion.note_id == note_id).order_by(NoteVersion.id)))
         sealing = list(db.scalars(select(Attachment.id).where(Attachment.note_id == note_id,
                                                               Attachment.kind == SEALED_KIND)
                                   .order_by(Attachment.created_at, Attachment.id)))
@@ -588,7 +638,9 @@ async def unlock_start(account: Account, note_id: str) -> dict[str, Any]:
         return {
             "content": b64(sealed.content if sealed is not None else b""),
             "rev": sealed.rev if sealed is not None else 0,
-            "versions": [{"id": row.id, "content": b64(row.state)} for row in versions],
+            # ``rev``: the version was the note's content at that revision (sealed for it); ``None``: it was sealed
+            # for its id when the note was locked.
+            "versions": [{"id": row.id, "content": b64(row.state), "rev": row.sealed_rev} for row in versions],
             "attachments": sealing,
             "epoch": found.epoch,
         }
@@ -641,6 +693,7 @@ async def unlock_finish(account: Account, note_id: str, names: dict[str, str]) -
                 version.state, version.title = version_states[version.id]
                 version.size = len(version.state)
                 version.sealed = False
+                version.sealed_rev = None
             for row in db.scalars(select(Attachment).where(Attachment.id.in_(opening))):
                 # A file to download until it is checked and drawn anew right after this (``_place_plain``).
                 row.kind, row.name = "file", attachments.clean_name(names.get(row.id) or "")
@@ -736,11 +789,15 @@ def sealed_of(db: Session, account: Account, note_id: str) -> dict[str, Any]:
 
 
 def save(account: Account, note_id: str, content_b64: str, base_rev: int, epoch: int, title: str,
-         restored_from: int | None = None) -> dict[str, Any]:
+         restored_from: int | None = None, rev: int | None = None) -> dict[str, Any]:
     """The whole note encrypted, as a device saves it. The latest save is the current content; when it was written on
     an older revision, the content it replaces stays in the history (EC-5). ``restored_from``: the id of the version
-    the device brought back (NOTES-15 AC-4 for a locked note)."""
-    data = _bytes(content_b64, "content", 13, s.MAX_DOC + OVERHEAD)
+    the device brought back (NOTES-15 AC-4 for a locked note).
+
+    ``rev`` is the revision the device sealed the content for (format 2: it is in the AAD): the one after the
+    current, nothing else. A device that wrote on an older revision hears ``vault_stale`` with the current one, seals
+    again for the next and sends once more, still with its ``base_rev``: the save stays a conflict (EC-5)."""
+    data = check_format(_bytes(content_b64, "content", 13, s.MAX_DOC + OVERHEAD))
     with SessionLocal() as db:
         history._write_lock(db)
         found = _vault(db, account)
@@ -752,6 +809,9 @@ def save(account: Account, note_id: str, content_b64: str, base_rev: int, epoch:
         sealed = db.get(SealedNote, note_id)
         if sealed is None:
             raise error("not_found", "Not found.", 404)
+        if rev != sealed.rev + 1:
+            raise error("vault_stale", "The note has a newer revision. Seal it for the next one.", 409,
+                        rev=sealed.rev)
         restoring: datetime | None = None
         if restored_from is not None:
             version = db.scalars(select(NoteVersion).where(NoteVersion.id == restored_from,
@@ -778,11 +838,11 @@ def save(account: Account, note_id: str, content_b64: str, base_rev: int, epoch:
             db.flush()
             history._take(db, note_id, restored_from=restoring, force=True, author=account.id)
         db.commit()
-        rev = sealed.rev
+        saved_rev = sealed.rev
     if conflict:
         logger.info("A locked note was saved on an older revision; the one before stays in the history note=%s",
                     note_id)
-    return {"rev": rev, "conflict": conflict}
+    return {"rev": saved_rev, "conflict": conflict}
 
 
 async def store_attachment(account: Account, note_id: str, attachment_id: str, chunks: AsyncIterator[bytes],
@@ -817,6 +877,8 @@ async def store_attachment(account: Account, note_id: str, attachment_id: str, c
     try:
         with open(work, "wb") as sink:  # noqa: ASYNC230 - written in a thread below, chunk by chunk
             async for chunk in chunks:
+                if received == 0 and chunk:
+                    check_format(chunk[:1])
                 received += len(chunk)
                 if received > limit:
                     raise error("attachment_too_large", "The file is larger than allowed.", 413, name="",

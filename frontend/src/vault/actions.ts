@@ -9,8 +9,8 @@
  */
 import { currentAccount } from '../state/account'
 import { vaultApi } from './api'
-import { attachmentAad, fromB64, makeVault, noteAad, noteKey, packAttachment, rewrapVault, seal, unpackAttachment, unseal } from './crypto'
-import { checkFor, takeKey, vaultKey } from './session'
+import { attachmentAad, contentAad, fromB64, makeVault, noteKey, packAttachment, rewrapVault, seal, sealedVersionAad, unpackAttachment, unseal, versionAad, WeakKdfError } from './crypto'
+import { checkFor, forgetRev, takeKey, vaultKey } from './session'
 
 /** Steps of a lock or unlock, for the progress the dialog shows. */
 export type Progress = (done: number, of: number) => void
@@ -35,10 +35,11 @@ export async function lockNote(noteId: string, progress: Progress = () => undefi
     const steps = 1 + start.versions.length + start.attachments.length
     let done = 0
     const step = () => progress(++done, steps)
-    await vaultApi.stage(noteId, 'lock', 'content', await seal(key, fromB64(start.state), noteAad(noteId)))
+    // Format 2: the content for the revision the server names, each version for its id.
+    await vaultApi.stage(noteId, 'lock', 'content', await seal(key, fromB64(start.state), contentAad(noteId, start.rev)))
     step()
     for (const version of start.versions) {
-      await vaultApi.stage(noteId, 'lock', `version:${version.id}`, await seal(key, fromB64(version.state), noteAad(noteId)))
+      await vaultApi.stage(noteId, 'lock', `version:${version.id}`, await seal(key, fromB64(version.state), versionAad(noteId, version.id)))
       step()
     }
     for (const attachmentId of start.attachments) {
@@ -49,6 +50,7 @@ export async function lockNote(noteId: string, progress: Progress = () => undefi
       step()
     }
     await vaultApi.lock(noteId)
+    forgetRev(noteId)
   } catch (error) {
     await vaultApi.lockCancel(noteId).catch(() => undefined)
     throw error
@@ -64,10 +66,10 @@ export async function unlockNote(noteId: string, progress: Progress = () => unde
     const steps = 1 + start.versions.length + start.attachments.length
     let done = 0
     const step = () => progress(++done, steps)
-    await vaultApi.stage(noteId, 'unlock', 'content', await unseal(key, fromB64(start.content), noteAad(noteId)))
+    await vaultApi.stage(noteId, 'unlock', 'content', await unseal(key, fromB64(start.content), contentAad(noteId, start.rev)))
     step()
     for (const version of start.versions) {
-      await vaultApi.stage(noteId, 'unlock', `version:${version.id}`, await unseal(key, fromB64(version.content), noteAad(noteId)))
+      await vaultApi.stage(noteId, 'unlock', `version:${version.id}`, await unseal(key, fromB64(version.content), sealedVersionAad(noteId, version)))
       step()
     }
     const names: Record<string, string> = {}
@@ -79,6 +81,7 @@ export async function unlockNote(noteId: string, progress: Progress = () => unde
       step()
     }
     await vaultApi.unlockNote(noteId, names)
+    forgetRev(noteId)
   } catch (error) {
     await vaultApi.unlockCancel(noteId).catch(() => undefined)
     throw error
@@ -87,8 +90,14 @@ export async function unlockNote(noteId: string, progress: Progress = () => unde
 
 /** A new password (AC-5): the old one opens the wrapped key, the new one wraps the same key. Wrong old passwords are
  * counted like any (EC-1). */
-export async function changePassword(oldPassword: string, newPassword: string): Promise<'ok' | 'wrong' | 'wait'> {
-  const old = await checkFor(oldPassword)
+export async function changePassword(oldPassword: string, newPassword: string): Promise<'ok' | 'wrong' | 'wait' | 'weak'> {
+  let old: Awaited<ReturnType<typeof checkFor>>
+  try {
+    old = await checkFor(oldPassword)
+  } catch (error) {
+    if (error instanceof WeakKdfError) return 'weak'
+    throw error
+  }
   if (!old) throw new Error('no vault')
   let wrapped: string
   try {
@@ -104,10 +113,12 @@ export async function changePassword(oldPassword: string, newPassword: string): 
   return 'ok'
 }
 
-/** "Passwort vergessen …" (EC-2): a new vault; every locked note goes, only when `count` is what the server counts. */
-export async function resetVault(password: string, count: number): Promise<number> {
+/** "Passwort vergessen …" (EC-2): a new vault; every locked note goes, only when `count` is what the server counts.
+ * The account proves once more that it is itself: its password and a code of its second factor (`confirm`), or a
+ * sign-in at its provider from the last minutes. */
+export async function resetVault(password: string, count: number, confirm: { current_password: string; code: string } = { current_password: '', code: '' }): Promise<number> {
   const made = await makeVault(password, currentAccount() ?? 0)
-  const answer = await vaultApi.reset({ kdf: made.kdf, wrapped_key: made.wrapped_key, auth: made.auth, understood: true, count })
+  const answer = await vaultApi.reset({ kdf: made.kdf, wrapped_key: made.wrapped_key, auth: made.auth, understood: true, count, ...confirm })
   takeKey(made.key, answer.epoch ?? 1)
   return answer.removed
 }

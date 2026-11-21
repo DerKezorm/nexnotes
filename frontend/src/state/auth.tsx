@@ -160,6 +160,12 @@ export function useAccountId(): number | null {
   return useContext(Context)?.me?.id ?? null
 }
 
+/** The account signed in, or null; also outside the provider. */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useMe(): Me | null {
+  return useContext(Context)?.me ?? null
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): Auth {
   const value = useContext(Context)
