@@ -31,18 +31,16 @@ import {
   Undo2,
   type LucideIcon,
 } from 'lucide-react'
-import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Menu } from '../components/Menu'
 import { HIGHLIGHT_COLORS } from './extensions'
 import { TableMenuItems } from './TableControls'
 import { useOutlineShown } from './outlineData'
+import { groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './toolbarRows'
 import { TEXT_WIDTHS, useTextWidth } from './textWidth'
 
-/** The width of a tool with its gap, and of the text style with the line after it. */
-const TOOL_WIDTH = 38
-const STYLE_WIDTH = 160
 /** The tools that go into "More" first when the row is short: the ones used least. */
 const HIDE_ORDER = ['outline', 'width', 'divider', 'outdent', 'indent', 'code', 'quote', 'strike', 'underline', 'highlight', 'table', 'link', 'redo', 'undo', 'task', 'ordered', 'bullet', 'italic', 'bold']
 
@@ -204,12 +202,22 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   }
 
   const size = compact ? 'h-11 w-11' : 'h-[34px] w-[34px]'
-  // One row, no scroll bar (beside another note the side may be narrow): what does not fit goes into "More", the
-  // tools used least first. Unknown width (no layout yet): all.
-  const narrow = !compact && room > 0 && room < STYLE_WIDTH + TOOL_WIDTH
-  const capacity = compact || !room ? buttons.length : Math.max(0, Math.floor((room - (narrow ? 0 : STYLE_WIDTH)) / TOOL_WIDTH))
+  // The groups of tools in one row or two, broken only between groups (second review); only what not even two
+  // rows hold goes into "More", whole groups from the end. Not even one group fits (a very narrow side): one row, and
+  // the tools used least go into "More" first, the text style too. On a phone one row above the keyboard that scrolls
+  // sideways. Worked out from the bar's width alone, so typing never changes it. Unknown width (no layout yet): one row.
+  const present = new Set(['style', ...buttons.map((button) => button.key)])
+  const groups = TOOL_GROUPS.map((group) => group.filter((key) => present.has(key))).filter((group) => group.length > 0)
+  const layout = compact ? null : toolRows(groups.map(groupWidth), room)
+  const rows = layout && layout.rows.length > 0 ? layout.rows : null
+  const restList = rows && layout ? layout.rest.flatMap((index) => groups[index]) : []
+  // Of what two rows of whole groups do not hold, the first tools still stand at the end of the second row.
+  const extraKeys = restList.slice(0, layout?.extra ?? 0)
+  const restKeys = new Set(restList.slice(extraKeys.length))
+  const narrow = !compact && !rows && room > 0
+  const capacity = compact || rows || !room ? buttons.length : Math.max(0, Math.floor(room / TOOL_WIDTH))
   const overflow = capacity >= buttons.length ? 0 : buttons.length - Math.max(0, capacity - 1)
-  const away = new Set(HIDE_ORDER.filter((key) => buttons.some((button) => button.key === key)).slice(0, overflow))
+  const away = rows ? restKeys : new Set(HIDE_ORDER.filter((key) => buttons.some((button) => button.key === key)).slice(0, overflow))
   const visible = buttons.filter((button) => !away.has(button.key))
   const hidden = buttons.filter((button) => away.has(button.key))
   const anchorOf = (key: string) => toolButton(key) ?? moreButton.current
@@ -221,17 +229,9 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
     ['h3', () => chain().setHeading({ level: 3 }).run()],
     ['p', () => chain().setParagraph().run()],
   ] as const
-  return (
-    <div
-      ref={bar}
-      role="toolbar"
-      aria-label={t('editor.tools.label')}
-      onKeyDown={move}
-      data-testid="toolbar"
-      className={compact ? 'nn-scroll flex items-center gap-0.5 overflow-x-auto border-t border-ink-700 bg-ink-850 px-2 py-1.5' : 'flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden'}
-    >
-      {!styleAway && (
-      <>
+  const line = (key: string) => <span key={key} aria-hidden className="mx-1.5 h-[22px] w-px shrink-0 bg-ink-700" />
+  const styleField = (
+    <Fragment key="style">
       <label className="sr-only" htmlFor="nn-text-style">
         {t('editor.tools.style')}
       </label>
@@ -262,57 +262,94 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
         </select>
         <ChevronDown aria-hidden className="pointer-events-none absolute top-1/2 right-2 h-3 w-3 -translate-y-1/2 text-mist-500" />
       </span>
-      </>
-      )}
-      {!compact && !styleAway && <span aria-hidden className="mx-1.5 h-[22px] w-px bg-ink-700" />}
-      {visible.map((button, index) => {
-        const Icon = button.icon
-        const position = index + 1
-        const title = button.shortcut ? `${button.label} (${button.shortcut})` : button.label
-        return (
-          <span key={button.key} className="relative flex shrink-0">
-            <button
-              type="button"
-              data-tool
-              data-testid={`tool-${button.key}`}
-              tabIndex={focusAt === position ? 0 : -1}
-              onFocus={() => setFocusAt(position)}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={button.run}
-              disabled={button.disabled || (!state.editable && !['undo', 'redo', 'keyboard', 'width', 'outline'].includes(button.key))}
-              aria-label={button.label}
-              aria-pressed={button.menu ? undefined : button.active}
-              aria-haspopup={button.menu ? 'menu' : undefined}
-              aria-expanded={button.menu ? menu === button.key : undefined}
-              title={title}
-              className={`${size} flex items-center justify-center rounded-lg transition-colors disabled:opacity-35 ${button.active ? 'nn-chosen' : 'text-mist-300 hover:bg-ink-800 hover:text-mist-100'}`}
-            >
-              <Icon className="h-4 w-4" strokeWidth={button.key === 'bold' ? 2.6 : 2} aria-hidden />
-            </button>
-          </span>
-        )
-      })}
-      {(hidden.length > 0 || styleAway) && (
-        <span className="relative flex shrink-0">
-          <button
-            ref={moreButton}
-            type="button"
-            data-tool
-            data-testid="tool-more"
-            tabIndex={focusAt === visible.length + 1 ? 0 : -1}
-            onFocus={() => setFocusAt(visible.length + 1)}
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => setMoreOpen(!moreOpen)}
-            aria-label={t('editor.tools.more')}
-            aria-haspopup="menu"
-            aria-expanded={moreOpen}
-            title={t('editor.tools.more')}
-            className={`${size} flex items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 hover:text-mist-100`}
-          >
-            <ChevronsRight className="h-4 w-4" aria-hidden />
-          </button>
-        </span>
-      )}
+    </Fragment>
+  )
+  const tool = (button: ButtonSpec, position: number) => {
+    const Icon = button.icon
+    const title = button.shortcut ? `${button.label} (${button.shortcut})` : button.label
+    return (
+      <span key={button.key} className="relative flex shrink-0">
+        <button
+          type="button"
+          data-tool
+          data-testid={`tool-${button.key}`}
+          tabIndex={focusAt === position ? 0 : -1}
+          onFocus={() => setFocusAt(position)}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={button.run}
+          disabled={button.disabled || (!state.editable && !['undo', 'redo', 'keyboard', 'width', 'outline'].includes(button.key))}
+          aria-label={button.label}
+          aria-pressed={button.menu ? undefined : button.active}
+          aria-haspopup={button.menu ? 'menu' : undefined}
+          aria-expanded={button.menu ? menu === button.key : undefined}
+          title={title}
+          className={`${size} flex items-center justify-center rounded-lg transition-colors disabled:opacity-35 ${button.active ? 'nn-chosen' : 'text-mist-300 hover:bg-ink-800 hover:text-mist-100'}`}
+        >
+          <Icon className="h-4 w-4" strokeWidth={button.key === 'bold' ? 2.6 : 2} aria-hidden />
+        </button>
+      </span>
+    )
+  }
+  // "More": after the last tool on show, its place for the keys after every tool.
+  const morePlace = rows ? buttons.length + 1 : visible.length + 1
+  const moreTool = (
+    <span key="more" className="relative flex shrink-0">
+      <button
+        ref={moreButton}
+        type="button"
+        data-tool
+        data-testid="tool-more"
+        tabIndex={focusAt === morePlace ? 0 : -1}
+        onFocus={() => setFocusAt(morePlace)}
+        onMouseDown={(event) => event.preventDefault()}
+        onClick={() => setMoreOpen(!moreOpen)}
+        aria-label={t('editor.tools.more')}
+        aria-haspopup="menu"
+        aria-expanded={moreOpen}
+        title={t('editor.tools.more')}
+        className={`${size} flex items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 hover:text-mist-100`}
+      >
+        <ChevronsRight className="h-4 w-4" aria-hidden />
+      </button>
+    </span>
+  )
+  // A tool's place for the keys is its place in the order of the groups (EC-11): the arrows run over both rows.
+  const placeOf = (key: string) => buttons.findIndex((button) => button.key === key) + 1
+  const byKey = new Map(buttons.map((button) => [button.key, button]))
+  return (
+    <div
+      ref={bar}
+      role="toolbar"
+      aria-label={t('editor.tools.label')}
+      onKeyDown={move}
+      data-testid="toolbar"
+      data-rows={rows ? rows.length : 1}
+      className={
+        compact
+          ? 'nn-scroll flex items-center gap-0.5 overflow-x-auto border-t border-ink-700 bg-ink-850 px-2 py-1.5'
+          : rows
+            ? 'flex w-full min-w-0 flex-col gap-1 overflow-hidden'
+            : 'flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden'
+      }
+    >
+      {rows &&
+        rows.map((row, index) => (
+          <div key={index} className="flex min-w-0 flex-nowrap items-center gap-1" data-testid="toolbar-row">
+            {row.flatMap((groupIndex, at) => [
+              ...(at > 0 ? [line(`line-${groupIndex}`)] : []),
+              ...groups[groupIndex].map((key) => (key === 'style' ? styleField : tool(byKey.get(key)!, placeOf(key)))),
+            ])}
+            {index === rows.length - 1 && hidden.length > 0 && [
+              ...(row.length > 0 ? [line('line-more')] : []),
+              ...extraKeys.map((key) => tool(byKey.get(key)!, placeOf(key))),
+              moreTool,
+            ]}
+          </div>
+        ))}
+      {!rows && !styleAway && styleField}
+      {!rows && !compact && !styleAway && line('line-style')}
+      {!rows && visible.map((button, index) => tool(button, index + 1))}
+      {!rows && (hidden.length > 0 || styleAway) && moreTool}
       {moreOpen && moreButton.current && (
         <Menu anchor={moreButton.current} onClose={() => setMoreOpen(false)} label={t('editor.tools.more')} testId="tool-more-menu">
           {styleAway &&

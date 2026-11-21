@@ -16,6 +16,7 @@ import { COLUMN_MIN, TABLE_MENU, WIDTH_STEP, columnWidths, setColumnWidths, tabl
 import { TableControls } from './TableControls'
 import { TitleField } from './TitleField'
 import { Toolbar } from './Toolbar'
+import { GROUP_LINE, groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './toolbarRows'
 import { forgetPrefs, prefKey } from '../lib/devicePref'
 import { Outline } from './Outline'
 import { headingsOf, OUTLINE_FROM } from './outlineData'
@@ -693,7 +694,31 @@ describe('NOTES-3 AC-1 the placeholder', () => {
 })
 
 describe('NOTES-3 EC-11 a short toolbar', () => {
-  it('NOTES-3 EC-11 keeps one row: what does not fit goes into "More", where each tool still works', async () => {
+  it('NOTES-3 EC-11 the groups break into a second row only between groups; two rows that do not fit leave the rest to "More"', () => {
+    const widths = TOOL_GROUPS.map(groupWidth)
+    expect(TOOL_GROUPS.flat()).toEqual(['style', 'bold', 'italic', 'underline', 'strike', 'highlight', 'bullet', 'ordered', 'task', 'table', 'link', 'quote', 'code', 'indent', 'outdent', 'divider', 'undo', 'redo', 'width', 'outline'])
+    expect(toolRows(widths, 1400)).toEqual({ rows: [[0, 1, 2, 3, 4, 5, 6, 7]], rest: [], extra: 0 })
+    expect(toolRows(widths, 0)).toEqual({ rows: [[0, 1, 2, 3, 4, 5, 6, 7]], rest: [], extra: 0 })
+    expect(toolRows(widths, 520)).toEqual({ rows: [[0, 1, 2], [3, 4, 5, 6, 7]], rest: [], extra: 0 })
+    // Two rows too few: the second keeps room for "More", which takes whole groups from the end; what still fits of
+    // them stands before "More".
+    expect(toolRows(widths, 400)).toEqual({ rows: [[0, 1], [2, 3, 4]], rest: [5, 6, 7], extra: 1 })
+    // Not even the first group: no rows.
+    expect(toolRows(widths, 120)).toEqual({ rows: [], rest: [0, 1, 2, 3, 4, 5, 6, 7], extra: 0 })
+    // Every width: whole groups only, in order, rows as full as they get, never more than two rows.
+    const need = (row: number[]) => row.reduce((sum, index, at) => sum + widths[index] + (at > 0 ? GROUP_LINE : 0), 0)
+    // Beside the text style nothing: the second row holds the first tools and "More".
+    expect(toolRows(widths, 198)).toEqual({ rows: [[0], []], rest: [1, 2, 3, 4, 5, 6, 7], extra: 4 })
+    for (let room = 150; room <= 1100; room += 7) {
+      const { rows, rest, extra } = toolRows(widths, room)
+      expect([...rows.flat(), ...rest]).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+      expect(rows.length).toBeLessThanOrEqual(2)
+      rows.forEach((row, index) => expect(need(row) + (rest.length && index === rows.length - 1 ? (extra + 1) * TOOL_WIDTH + (row.length ? GROUP_LINE : 0) : 0)).toBeLessThanOrEqual(room))
+      if (rows.length === 2 && rows[1].length > 0) expect(need([...rows[0], rows[1][0]])).toBeGreaterThan(room)
+    }
+  })
+
+  it('NOTES-3 EC-11 two rows show every tool, the arrows run across both; only when two rows are too few comes "More"', async () => {
     let width = 520
     const observers: { callback: ResizeObserverCallback; target: Element }[] = []
     vi.stubGlobal(
@@ -708,6 +733,10 @@ describe('NOTES-3 EC-11 a short toolbar', () => {
         unobserve() {}
       },
     )
+    const resize = async (next: number) => {
+      width = next
+      await act(async () => observers.at(-1)!.callback([{ target: observers.at(-1)!.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
+    }
     try {
       const editor = makeEditor()
       const box = document.createElement('div')
@@ -715,25 +744,43 @@ describe('NOTES-3 EC-11 a short toolbar', () => {
       const root = createRoot(box)
       await act(async () => root.render(<Toolbar editor={editor} onLink={() => undefined} />))
       const shownTools = () => [...box.querySelectorAll('button[data-tool]')].map((tool) => tool.getAttribute('data-testid'))
-      // 520 px: the text style, eight tools and "More" (nine places of 38 px).
-      expect(shownTools()).toHaveLength(8 + 1)
-      expect(shownTools().at(-1)).toBe('tool-more')
-      expect(shownTools()).toContain('tool-bold')
-      expect(shownTools()).not.toContain('tool-outline')
-      expect(box.querySelector('[data-testid="toolbar"]')!.className).toContain('flex-nowrap')
+      const rowsShown = () => [...box.querySelectorAll('[data-testid="toolbar-row"]')].map((row) => [...row.querySelectorAll('[data-tool]')].map((tool) => tool.getAttribute('data-testid') ?? 'style'))
+      // 520 px: two rows, every tool on show, no "More"; the second row starts with a whole group.
+      expect(rowsShown()).toEqual([
+        ['style', 'tool-bold', 'tool-italic', 'tool-underline', 'tool-strike', 'tool-highlight', 'tool-bullet', 'tool-ordered', 'tool-task'],
+        ['tool-table', 'tool-link', 'tool-quote', 'tool-code', 'tool-indent', 'tool-outdent', 'tool-divider', 'tool-undo', 'tool-redo', 'tool-width', 'tool-outline'],
+      ])
+      expect(shownTools()).not.toContain('tool-more')
+      expect(box.querySelector('[data-testid="toolbar"]')!.getAttribute('data-rows')).toBe('2')
+      // The arrows go from the end of the first row to the start of the second, and back.
+      const task = box.querySelector<HTMLButtonElement>('[data-testid="tool-task"]')!
+      await act(async () => task.focus())
+      await act(async () => task.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('tool-table')
+      await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('tool-task')
+      // Wide: one row.
+      await resize(1400)
+      expect(rowsShown()).toHaveLength(1)
+      expect(shownTools()).toHaveLength(19)
+      // Two rows too few: both rows full of whole groups, "More" at the end of the second with the rest, where each
+      // tool still works.
+      await resize(400)
+      expect(rowsShown()).toEqual([
+        ['style', 'tool-bold', 'tool-italic', 'tool-underline', 'tool-strike', 'tool-highlight'],
+        ['tool-bullet', 'tool-ordered', 'tool-task', 'tool-table', 'tool-link', 'tool-quote', 'tool-code', 'tool-indent', 'tool-more'],
+      ])
       await act(async () => box.querySelector<HTMLButtonElement>('[data-testid="tool-more"]')!.click())
       const more = [...document.querySelectorAll<HTMLButtonElement>('[data-testid^="more-"]')].map((item) => item.dataset.testid)
-      expect(more).toContain('more-table')
-      expect(more).toContain('more-outline')
-      expect(more.length + 8).toBe(19)
-      // A tool from "More" does what it does in the row: the table goes in.
-      await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="more-table"]')!.click())
-      expect(types(editor)).toContain('table')
-      // Wide again: everything in the row, no "More".
-      width = 1400
-      await act(async () => observers.at(-1)!.callback([{ target: observers.at(-1)!.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
-      expect(shownTools()).not.toContain('tool-more')
-      expect(shownTools()).toHaveLength(19)
+      expect(more).toEqual(['more-outdent', 'more-divider', 'more-undo', 'more-redo', 'more-width', 'more-outline'])
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="more-divider"]')!.click())
+      expect(types(editor)).toContain('horizontalRule')
+      // Not even one group fits: one row, the text style in "More" too.
+      await resize(120)
+      expect(rowsShown()).toHaveLength(0)
+      expect(shownTools().at(-1)).toBe('tool-more')
+      expect(box.querySelector('[data-testid="toolbar"]')!.className).toContain('flex-nowrap')
+      expect(box.querySelector('#nn-text-style')).toBeNull()
       await act(async () => root.unmount())
     } finally {
       vi.unstubAllGlobals()

@@ -482,10 +482,11 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           )}
         </div>
       )}
-      {/* One row: the toolbar takes what is left and puts the rest into "More"; the others and the note's buttons are
-          never cut off (NOTES-12 AC-5). */}
-      <div className="@container flex items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
-        <div className="hidden min-w-0 flex-1 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
+      {/* The toolbar takes what is left, in one row or two (only beyond two rows "More"); the others and the note's
+          buttons are never cut off (NOTES-12 AC-5). Not even "More" beside them (a narrow side with someone else in
+          the note): they go below the tools. */}
+      <div className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
+        <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
