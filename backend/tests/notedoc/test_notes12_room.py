@@ -449,3 +449,23 @@ def test_notes12_concurrent_deletions_leave_a_shape_the_browser_reads():
         await world.rooms.shutdown()
 
     asyncio.run(scenario())
+
+
+def test_notes12_a_state_that_does_not_encode_cleanly_is_not_folded(monkeypatch, caplog):
+    import app.notedoc.room as room_module
+
+    async def scenario():
+        world = World(fold_after=2)
+        a, b = await _pair(world)
+        monkeypatch.setattr(room_module, "well_formed", lambda data: False)
+        for letter in "xyz":
+            _type(a, letter)
+            await world.settle()
+        assert world.store.folds == []
+        assert len(world.store.updates) == 3  # every update stays stored as it came
+        assert _plain(_stored(world)) == "helloxyz"
+        await world.rooms.shutdown()
+
+    with caplog.at_level("ERROR", logger="nexnotes.live"):
+        asyncio.run(scenario())
+    assert "does not encode cleanly" in caplog.text

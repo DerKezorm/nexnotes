@@ -190,3 +190,91 @@ def test_notes12_ac4_ec1_offline_text_in_a_deleted_paragraph_survives_a_reconnec
         await world.rooms.shutdown()
 
     asyncio.run(scenario())
+
+
+def test_notes12_ec3_text_sent_twice_comes_back_once():
+    # Newer pycrdt names an item it gets a second time in the transaction's delete set again when its paragraph is
+    # gone; such an item is old for the room and must not come back a second time.
+    from pycrdt import Doc
+
+    from app.notedoc import rescue
+
+    base = notedoc.new_doc("x", {"type": "doc", "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "keep"}]},
+        {"type": "paragraph", "content": [{"type": "text", "text": "gone"}]},
+    ]})
+    typist = Doc()
+    typist.apply_update(base.get_update())
+    before = typist.get_state()
+    run = typist.get("body", type=XmlFragment).children[1].children[0]
+    run.insert(len(run), " late")
+    typed = typist.get_update(before)
+    deleter = notedoc.load(base.get_update())
+    _, deletion = notedoc.change(deleter, lambda d: d.get("body", type=XmlFragment).children.__delitem__(1))
+    room_doc = notedoc.load(base.get_update(), [deletion])
+    rescuer = rescue.Rescuer()
+    first = rescue.apply(room_doc, typed)
+    with notedoc.recording(room_doc):
+        assert rescuer.after(room_doc, typed, first, None) == len(" late")
+    again = rescue.apply(room_doc, typed)
+    again.deleted = first.deleted  # as pycrdt 0.14 reports it
+    again.changed = True
+    with notedoc.recording(room_doc):
+        assert rescuer.after(room_doc, typed, again, None) == 0
+    assert to_plain(room_doc) == "keep\n late"
+
+
+def test_notes12_ec1_late_text_finds_its_place_after_other_changes():
+    async def scenario():
+        world, a, b = await _two()
+        b.disconnect()
+        del _body(a).children[1]  # "second" goes; its place is before "third"
+        await world.settle()
+        top = _body(a).children.insert(0, XmlElement("paragraph"))
+        top.children.append(XmlText("new top"))
+        await world.settle()
+        text = _body(b).children[1].children[0]
+        text.insert(len(text), " late")
+        b.connect()
+        await world.settle()
+        for client in (a, b):
+            assert _texts(client) == ["new top", "first", " late", "third"], _texts(client)
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def test_notes12_ec1_text_comes_back_and_an_emptied_checklist_is_mended_in_one_go():
+    async def scenario():
+        world = World()
+        doc = notedoc.new_doc("x", {"type": "doc", "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "intro"}]},
+            {"type": "taskList", "content": [
+                {"type": "taskItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "a"}]}]},
+                {"type": "taskItem", "content": [{"type": "paragraph", "content": [{"type": "text", "text": "b"}]}]},
+            ]},
+        ]})
+        world.store.state = doc.get_update()
+        a = world.client("a", 1, client_id=1)
+        b = world.client("b", 2, client_id=2)
+        a.connect()
+        b.connect()
+        await world.settle()
+        a.disconnect()
+        # B types into the intro and deletes item "b"; A, cut off, deletes the intro and item "a" in one go.
+        run = _body(b).children[0].children[0]
+        run.insert(len(run), " typed")
+        del _body(b).children[1].children[1]
+        await world.settle()
+        with a.doc.transaction():
+            del _body(a).children[1].children[0]
+            del _body(a).children[0]
+        a.connect()
+        await world.settle()
+        for client in (a, b):
+            shape = notedoc.to_json(client.doc)
+            assert notedoc.clean_doc(shape) == shape, shape
+            assert _texts(client)[0] == " typed"
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
