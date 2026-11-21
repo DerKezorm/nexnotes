@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import smtplib
+import sqlite3
+import zipfile
 from datetime import UTC, datetime, timedelta
 from email.message import EmailMessage
 from email.utils import parsedate_to_datetime
+from pathlib import Path
 from typing import Any, ClassVar, Self
 
 import pytest
@@ -159,7 +162,9 @@ def test_a_backup_keeps_the_secret_key_and_a_restore_signs_everybody_out(
         name = backups.create().name
         key_file.write_text("a key made later", encoding="utf-8")
         monkeypatch.setattr(backups, "restart_soon", lambda: None)
-        assert client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD}).status_code == 202
+        answer = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
+        # The answer's text names the reason, should the restore ever be refused.
+        assert answer.status_code == 202, answer.text
         with SessionLocal() as db:
             assert db.scalar(select(AuthSession)) is not None
         assert backups.apply_pending() is True
@@ -170,6 +175,62 @@ def test_a_backup_keeps_the_secret_key_and_a_restore_signs_everybody_out(
             assert settings_service.get(db, "smtp_host") == "mail.example.com"
     finally:
         key_file.unlink(missing_ok=True)
+
+
+def test_a_restore_is_not_refused_as_damaged_when_the_system_held_the_database_copy_for_a_moment(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The check reads the archive's database from a copy beside the backups. A virus scanner or a busy disk may keep
+    SQLite from opening that fresh copy for a moment ("disk I/O error"); that is no damage, and the restore must not be
+    refused for it (400 backup_damaged). A database that really is broken still is."""
+    name = backups.create().name
+    real = sqlite3.connect
+    held: list[str] = []
+
+    def connect(database: Any, *args: Any, **kwargs: Any) -> sqlite3.Connection:
+        if Path(str(database)).name.startswith(".check-") and len(held) < 2:
+            held.append(str(database))
+            raise sqlite3.OperationalError("disk I/O error")
+        return real(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", connect)
+    monkeypatch.setattr(backups, "DATABASE_PAUSE_SECONDS", 0.01)
+    monkeypatch.setattr(backups, "restart_soon", lambda: None)
+    answer = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
+    assert answer.status_code == 202, answer.text
+    assert len(held) == 2
+    backups._remove_tree(backups.pending_folder())
+    # Held for good: then it is refused, and says so.
+    opened: list[str] = []
+
+    def never(database: Any, *args: Any, **kwargs: Any) -> sqlite3.Connection:
+        if Path(str(database)).name.startswith(".check-"):
+            opened.append(str(database))
+            raise sqlite3.OperationalError("disk I/O error")
+        return real(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", never)
+    refused = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
+    assert refused.status_code == 400 and refused.json()["detail"]["code"] == "backup_damaged"
+    assert len(opened) == backups.DATABASE_TRIES
+    # A database SQLite reads and finds broken is damaged at once, without trying again.
+    broken = backups.folder() / "nexnotes-2000-01-01-000000.zip"
+    with zipfile.ZipFile(backups.path_of(name)) as source, zipfile.ZipFile(broken, "w") as target:
+        for info in source.infolist():
+            data = source.read(info)
+            if info.filename == backups.DATABASE_ENTRY:
+                data = data[:100] + bytes([0xFF]) * (len(data) - 100)
+            target.writestr(info, data)
+    opened.clear()
+
+    def counted(database: Any, *args: Any, **kwargs: Any) -> sqlite3.Connection:
+        if Path(str(database)).name.startswith(".check-"):
+            opened.append(str(database))
+        return real(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", counted)
+    assert backups.check(broken.name).database_ok is False
+    assert len(opened) == 1
 
 
 @pytest.mark.parametrize(("value", "status"), [(1, 200), (100, 200), (365, 200), (0, 422), (366, 422)])

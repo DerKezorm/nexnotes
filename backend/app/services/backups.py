@@ -408,6 +408,55 @@ def _compare_notes(archived: dict[str, _NoteRow], current: dict[str, _NoteRow],
     }
 
 
+#: How often the check reads the archive's database when the system does not let it for a moment, and the pause between.
+DATABASE_TRIES = 3
+DATABASE_PAUSE_SECONDS = 0.25
+
+
+def _archived_database(archive: zipfile.ZipFile) -> tuple[bool, dict[str, _NoteRow]]:
+    """Whether the archive's database is whole, and its notes, read from a copy beside the backups.
+
+    What SQLite reads and finds broken (not a database, a malformed page, a failed integrity check) is damaged at
+    once. A file the system does not let SQLite open or read for a moment (a virus scanner still holding the fresh
+    copy, a busy disk: ``disk I/O error``, ``database is locked``, a sharing violation) is not damage: it is read again
+    from a new copy; only when that keeps failing does the check say "damaged". Each time the reason goes to the log,
+    so a refused restore says why."""
+    problem: BaseException | None = None
+    for attempt in range(DATABASE_TRIES):
+        if attempt:
+            time.sleep(DATABASE_PAUSE_SECONDS * attempt)
+        scratch = folder() / f".check-{os.getpid()}-{time.time_ns()}.db"
+        try:
+            with archive.open(DATABASE_ENTRY) as source, open(scratch, "wb") as sink:
+                shutil.copyfileobj(source, sink, _CHUNK)
+            if scratch.read_bytes()[:16] != SQLITE_HEADER:
+                logger.warning("The database in the backup is not an SQLite file")
+                return False, {}
+            connection = sqlite3.connect(scratch)
+            try:
+                result = connection.execute("PRAGMA integrity_check").fetchone()[0]
+                if result != "ok":
+                    logger.warning("The database in the backup is damaged: %s", result)
+                    return False, {}
+                return True, _notes_in(connection)
+            finally:
+                connection.close()
+        except (sqlite3.OperationalError, OSError) as exc:
+            problem = exc
+            logger.info("The database in the backup could not be read yet, try %s: %s", attempt + 1, exc)
+        except (sqlite3.DatabaseError, zipfile.BadZipFile) as exc:
+            logger.warning("The database in the backup is damaged: %s", exc)
+            return False, {}
+        finally:
+            try:
+                scratch.unlink(missing_ok=True)
+            except OSError:
+                # Still held: a hidden name nobody lists; the next check's copy has a name of its own.
+                pass
+    logger.warning("The database in the backup could not be read: %s", problem)
+    return False, {}
+
+
 def check(name: str, viewer_id: int | None = None) -> Brief:
     """The trial run: is the archive whole, and what would a restore change, in the notes and in the media folder?
     ``viewer_id``: the account asking, whose own notes are named by title."""
@@ -425,22 +474,7 @@ def check(name: str, viewer_id: int | None = None) -> Brief:
         database_ok = False
         archived_notes: dict[str, _NoteRow] = {}
         if DATABASE_ENTRY in members:
-            scratch = folder() / f".check-{os.getpid()}-{time.time_ns()}.db"
-            try:
-                with archive.open(DATABASE_ENTRY) as source, open(scratch, "wb") as sink:
-                    shutil.copyfileobj(source, sink, _CHUNK)
-                if scratch.read_bytes()[:16] == SQLITE_HEADER:
-                    connection = sqlite3.connect(scratch)
-                    try:
-                        database_ok = connection.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
-                        if database_ok:
-                            archived_notes = _notes_in(connection)
-                    finally:
-                        connection.close()
-            except (sqlite3.DatabaseError, OSError):
-                database_ok = False
-            finally:
-                scratch.unlink(missing_ok=True)
+            database_ok, archived_notes = _archived_database(archive)
         damaged: list[str] = []
         for rel, (size, digest) in manifest.media.items():
             member = members.get(MEDIA_PREFIX + rel)
