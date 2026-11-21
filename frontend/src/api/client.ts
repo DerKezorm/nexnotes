@@ -167,6 +167,8 @@ export type SetupState = {
   data_on_share?: boolean
   /** Free space under the data folder, while nobody has set nexnotes up. */
   data_free?: number | null
+  /** The data folder as the server sees it; only while nexnotes is not set up. */
+  data_dir?: string | null
 }
 
 /** A button of the sign-in page: an active provider (the shared sign-in module, vendor/nexoidc). */

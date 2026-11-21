@@ -903,7 +903,7 @@
   "setup": {
     "code": "Setup code",
     "codeHint": "It is in the container's log, or you set it yourself.",
-    "folder": "Data folder /data",
+    "folder": "Data folder {{path}}",
     "free": "{{size}} free",
     "passwordHint_one": "At least {{count}} character. You set up the second factor right afterwards.",
     "passwordHint_other": "At least {{count}} characters. You set up the second factor right afterwards.",

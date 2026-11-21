@@ -903,7 +903,7 @@
   "setup": {
     "code": "Einrichtungscode",
     "codeHint": "Steht im Log des Containers, oder du hast ihn selbst vorgegeben.",
-    "folder": "Datenordner /data",
+    "folder": "Datenordner {{path}}",
     "free": "{{size}} frei",
     "passwordHint_one": "Mindestens {{count}} Zeichen. Den zweiten Faktor richtest du gleich danach ein.",
     "passwordHint_other": "Mindestens {{count}} Zeichen. Den zweiten Faktor richtest du gleich danach ein.",

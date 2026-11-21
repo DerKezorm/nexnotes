@@ -195,6 +195,9 @@ def setup_state(request: Request, db: DbSession) -> dict[str, Any]:
         # Only while nobody has set it up: the setup page warns when the data folder lies on a share.
         "data_on_share": mounts.locate(get_settings().data_dir).network if needs_setup else False,
         "data_free": storage.usage(get_settings().data_dir).free if needs_setup else None,
+        # The folder NEXNOTES_DATA_DIR names, as the container sees it: whoever sets up checks that the volume is
+        # where they meant it. Gone once set up, like the two values above.
+        "data_dir": str(get_settings().data_dir) if needs_setup else None,
     }
 
 

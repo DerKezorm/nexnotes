@@ -148,13 +148,17 @@ export function SetupPage() {
   // Set up already: the setup page is the sign-in (NOTES-1 EC-8).
   if (status !== 'setup') return <Navigate to={status === 'signedIn' ? '/' : '/login'} replace />
   const min = state?.min_password ?? 12
-  const footer = state ? (
-    <>
-      {t('setup.folder')}
-      {state.data_free !== undefined && state.data_free !== null ? ` · ${t('setup.free', { size: bytes(state.data_free, i18n.language) })}` : ''}
-      {` · ${t('setup.version', { version: state.version })}`}
-    </>
-  ) : undefined
+  // The data folder the server really uses (NEXNOTES_DATA_DIR), its free space, the version; what it does not say
+  // is left out, never filled in.
+  const footer = state
+    ? [
+        state.data_dir ? t('setup.folder', { path: state.data_dir }) : null,
+        state.data_free !== undefined && state.data_free !== null ? t('setup.free', { size: bytes(state.data_free, i18n.language) }) : null,
+        t('setup.version', { version: state.version }),
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : undefined
   return (
     <AuthFrame title={t('setup.title')} text={t('setup.text')} footer={footer}>
       <form

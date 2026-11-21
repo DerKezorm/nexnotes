@@ -104,6 +104,21 @@ describe('the setup (NOTES-1)', () => {
     expect(box.querySelector('[data-testid="home"]')).not.toBeNull()
   })
 
+  it('NOTES-1 AC-12 the setup names the data folder the server really uses, and none when it names none', async () => {
+    const answer = { needs_setup: true, code_required: true, signed_in: false, version: '0.1.0', min_password: 12, data_on_share: false, data_free: 412 * 1024 ** 3 }
+    handler = (_method, path) => (path === '/api/setup' ? { status: 200, body: { ...answer, data_dir: '/srv/nexnotes-daten' } } : undefined)
+    const { SetupPage } = await import('./pages/AuthPages')
+    await render(<AuthProvider><SetupPage /></AuthProvider>, '/setup')
+    expect(box.textContent).toContain(`${i18n.t('setup.folder', { path: '/srv/nexnotes-daten' })} · 412 GB free · Version 0.1.0`)
+    expect(box.textContent).not.toContain('/data ')
+    act(() => root.unmount())
+    root = createRoot(box)
+    handler = (_method, path) => (path === '/api/setup' ? { status: 200, body: answer } : undefined)
+    await render(<AuthProvider><SetupPage /></AuthProvider>, '/setup')
+    expect(box.textContent).toContain('412 GB free · Version 0.1.0')
+    expect(box.textContent).not.toContain(i18n.t('setup.folder', { path: '' }).trim())
+  })
+
   it('NOTES-1 EC-2 a data folder on a network share is warned about on the setup', async () => {
     handler = (_method, path) =>
       path === '/api/setup' ? { status: 200, body: { needs_setup: true, code_required: true, signed_in: false, version: '0.1.0', min_password: 12, data_on_share: true } } : undefined

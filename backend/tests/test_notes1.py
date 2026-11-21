@@ -31,7 +31,7 @@ from app.routers import health
 from app.security import brake
 from app.services import accounts, backups, content, settings_service, storage
 
-from .conftest import MEDIA, PASSWORD, SETUP_CODE, make_account, new_client
+from .conftest import DATA_DIR, MEDIA, PASSWORD, SETUP_CODE, make_account, new_client
 
 GOOD = "a long enough password"
 SETUP = {"display_name": "Robin", "email": "robin@example.com", "password": GOOD, "code": SETUP_CODE}
@@ -59,6 +59,16 @@ def test_notes1_ac1_a_fresh_data_folder_shows_the_setup_and_the_first_account_is
     assert made.json()["role"] == OPERATOR and made.json()["display_name"] == "Robin"
     assert client.get("/api/auth/me").json()["email"] == "robin@example.com"
     assert client.get("/api/setup").json()["needs_setup"] is False
+
+
+def test_notes1_ac12_the_setup_names_the_data_folder_it_really_uses_and_nobody_after(client: TestClient) -> None:
+    # NEXNOTES_DATA_DIR of the test run is a temporary folder, never ``/data``: the page shows that one.
+    assert client.get("/api/setup").json()["data_dir"] == str(get_settings().data_dir) == str(Path(DATA_DIR))
+    assert str(Path(DATA_DIR)) != str(Path("/data"))
+    assert client.post("/api/setup", json=SETUP).status_code == 200
+    # Set up: the sign-in page asks the same route, and nobody learns the folder from it any more.
+    with new_client() as stranger:
+        assert stranger.get("/api/setup").json()["data_dir"] is None
 
 
 def test_notes1_ac2_the_setup_code_is_in_the_log_at_every_start_until_set_up(
