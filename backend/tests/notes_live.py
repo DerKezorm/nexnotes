@@ -224,12 +224,20 @@ def _open(note_id: str) -> bool:
     return any(rooms.room_of(note_id) is not None for rooms in list(notes._rooms.values()))
 
 
-def refused(client: TestClient, note_id: str, token: str | None = None) -> int:
-    """The close code a connection gets before it is accepted (0 when it was accepted)."""
+def refused(client: TestClient, note_id: str, token: str | None = None, *, origin: str | None = None) -> int:
+    """The close code a connection gets instead of the room's first message (0 when the room spoke).
+
+    The endpoint accepts first and closes then (NOTES-12 EC-2, EC-5): a close before ``accept()`` reaches a browser as
+    HTTP 403 and code 1006. A refusal before the handshake is therefore a failure here too."""
     # Without a token: no session at all (not the test client's own cookie).
     headers = {"cookie": f"{SESSION_COOKIE}={token}" if token else "nothing=1"}
+    if origin is not None:
+        headers["origin"] = origin
     try:
-        with client.websocket_connect(f"/api/notes/{note_id}/live", headers=headers):
-            return 0
+        with client.websocket_connect(f"/api/notes/{note_id}/live", headers=headers) as ws:
+            message = ws.receive()
     except WebSocketDisconnect as closed:
-        return closed.code
+        raise AssertionError(f"closed before it was accepted (code {closed.code}): a browser sees 1006") from closed
+    if message["type"] == "websocket.close":
+        return int(message.get("code", 1000))
+    return 0

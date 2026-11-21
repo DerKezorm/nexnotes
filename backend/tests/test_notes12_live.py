@@ -7,7 +7,11 @@ store in SQLite, "changed by".
 from __future__ import annotations
 
 import random
+import socket
+import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 import pytest
 from pycrdt import Text, XmlElement, XmlFragment, XmlText
@@ -18,7 +22,7 @@ from app.notedoc import doc as notedoc
 from app.notedoc import edit
 from app.notedoc.markdown import to_plain
 from app.notedoc.room import Access
-from app.security import end_session
+from app.security import SESSION_COOKIE, end_session
 from app.services import accounts, notes
 
 from .conftest import make_account
@@ -220,6 +224,66 @@ def test_notes12_ec2_a_note_deleted_while_open_closes_with_gone_and_can_come_bac
     _connected(again)
     assert again.text == "open in two windows"
     again.close()
+
+
+@contextmanager
+def _real_server() -> Iterator[int]:
+    """The app under uvicorn on a free port, as in the container: the test client's WebSocket forgives what a real
+    server answers with HTTP 403 (a close before ``accept()``)."""
+    import uvicorn
+
+    from app.main import app
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.bind(("127.0.0.1", 0))
+    port = sock.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, log_level="warning"))
+    thread = threading.Thread(target=server.run, kwargs={"sockets": [sock]}, daemon=True)
+    thread.start()
+    try:
+        deadline = time.monotonic() + 15
+        while not server.started:
+            assert time.monotonic() < deadline, "the server did not start"
+            time.sleep(0.02)
+        yield port
+    finally:
+        server.should_exit = True
+        thread.join(10)
+        sock.close()
+
+
+def _close_code(port: int, note_id: str, token: str | None) -> int:
+    """What a browser learns when the room will not have it: the close code of the connection."""
+    from websockets.exceptions import ConnectionClosed, InvalidStatus
+    from websockets.sync.client import connect
+
+    headers = {"Cookie": f"{SESSION_COOKIE}={token}"} if token else {}
+    try:
+        with connect(f"ws://127.0.0.1:{port}/api/notes/{note_id}/live", additional_headers=headers,
+                     origin=f"http://127.0.0.1:{port}", open_timeout=5) as ws:
+            try:
+                ws.recv(timeout=5)
+            except ConnectionClosed as closed:
+                return closed.rcvd.code if closed.rcvd else 1006
+            return 0
+    except InvalidStatus as refused_status:
+        raise AssertionError(f"handshake refused with HTTP {refused_status.response.status_code}: "
+                             "a browser sees 1006 and reconnects for ever") from refused_status
+
+
+def test_notes12_ec2_ec5_a_real_server_closes_with_the_room_s_code_not_before_the_handshake(client, operator):
+    """NOTES-12 EC-2, EC-5 against uvicorn: a deleted note says 4404, no session or no right 4403, never HTTP 403."""
+    gone = new_note(client, markdown="in the trash")
+    assert client.delete(f"/api/notes/{gone['id']}").status_code == 204
+    other = make_account("other")
+    mine = new_note(client, markdown="only mine")
+    with _real_server() as port:
+        assert _close_code(port, gone["id"], token_for(operator)) == 4404
+        assert _close_code(port, mine["id"], None) == 4403
+        assert _close_code(port, mine["id"], token_for(other)) == 4403
+        assert _close_code(port, "no-such-note", token_for(operator)) == 4403
+        # A note that may be written: the room speaks first (its sync step 1), nothing is closed.
+        assert _close_code(port, mine["id"], token_for(operator)) == 0
 
 
 def test_notes12_ec5_a_right_taken_while_writing_ends_the_connection_and_nothing_more_is_stored(

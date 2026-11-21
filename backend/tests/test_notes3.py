@@ -362,15 +362,9 @@ def test_notes3_the_accounts_side_counts_the_notes(client, operator):
 
 def test_notes3_live_connections_from_another_site_are_refused(client, operator):
     note = new_note(client)
-    from app.security import SESSION_COOKIE
-
-    headers = {"cookie": f"{SESSION_COOKIE}={token_for(operator)}", "origin": "https://evil.example"}
-    from starlette.websockets import WebSocketDisconnect
-
-    with pytest.raises(WebSocketDisconnect) as closed, client.websocket_connect(
-            f"/api/notes/{note['id']}/live", headers=headers):
-        pass
-    assert closed.value.code == 4403
+    for origin in ("https://evil.example", "null", "http://testserver.evil.example"):
+        assert refused(client, note["id"], token_for(operator), origin=origin) == 4403
+    assert refused(client, note["id"], token_for(operator), origin="http://testserver") == 0
 
 
 def test_notes3_the_body_of_a_new_note_is_one_empty_paragraph(client, operator):

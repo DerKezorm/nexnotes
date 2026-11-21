@@ -191,18 +191,26 @@ def _admit(token: str, note_id: str) -> tuple[Any, Access]:
         return account, access
 
 
+async def _refuse(socket: WebSocket, code: int) -> None:
+    """Accepted first, then closed with the room's code. Closed before ``accept()``, the server answers the handshake
+    with HTTP 403 and the browser only ever sees 1006, which reads as a broken connection: it would reconnect for ever
+    instead of saying that the note went (NOTES-12 EC-2) or the right did (EC-5). Nothing is sent before the close."""
+    await socket.accept()
+    await socket.close(code=code)
+
+
 @router.websocket("/{note_id}/live")
 async def live(socket: WebSocket, note_id: str) -> None:
     if not _origin_ok(socket):
-        await socket.close(code=CLOSE_FORBIDDEN)
+        await _refuse(socket, CLOSE_FORBIDDEN)
         return
     token = socket.cookies.get(SESSION_COOKIE, "")
     account, access = await asyncio.to_thread(_admit, token, note_id)
     if access == Access.GONE:
-        await socket.close(code=CLOSE_GONE)
+        await _refuse(socket, CLOSE_GONE)
         return
     if account is None or access not in (Access.WRITE, Access.READ):
-        await socket.close(code=CLOSE_FORBIDDEN)
+        await _refuse(socket, CLOSE_FORBIDDEN)
         return
     await socket.accept()
     rooms = notes.rooms()
