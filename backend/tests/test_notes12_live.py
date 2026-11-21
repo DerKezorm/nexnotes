@@ -27,6 +27,13 @@ from .test_notes3 import new_note, stored, stored_doc, token_for, wait_for
 
 
 @pytest.fixture(autouse=True)
+def close_connections(client):
+    """Connections left open by a failing test are closed before the test client goes."""
+    yield
+    Live.close_all()
+
+
+@pytest.fixture(autouse=True)
 def quick_rooms(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(notes, "LEAVE_GRACE", 0.05)
 

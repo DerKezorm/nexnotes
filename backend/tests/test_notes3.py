@@ -23,6 +23,13 @@ from .notes_live import Live, refused
 
 
 @pytest.fixture(autouse=True)
+def close_connections(client):
+    """Connections left open by a failing test are closed before the test client goes."""
+    yield
+    Live.close_all()
+
+
+@pytest.fixture(autouse=True)
 def quick_rooms(monkeypatch: pytest.MonkeyPatch) -> None:
     """Rooms answer in test time: a short grace after the last one left."""
     monkeypatch.setattr(notes, "LEAVE_GRACE", 0.05)

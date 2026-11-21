@@ -34,7 +34,17 @@ _CLOSED = "closed"
 
 
 class Live:
+    #: Every connection a test opened; closed after the test even when it failed half way (``close_all``), or the
+    #: test client would wait for them for ever.
+    opened: list[Live] = []
+
+    @classmethod
+    def close_all(cls) -> None:
+        while cls.opened:
+            cls.opened.pop().disconnect(wait=False)
+
     def __init__(self, client: TestClient, note_id: str, token: str | None = None, *, doc: Doc | None = None) -> None:
+        Live.opened.append(self)
         self.client = client
         self.note_id = note_id
         self.token = token
