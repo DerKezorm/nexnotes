@@ -5,7 +5,7 @@
  *   note opened in this browser. Without it a locked note says only that it is locked.
  * - `NOTE_MENU_ITEMS`: entries of the note's menu ("Sperren", "Sperre aufheben").
  */
-import type { ReactNode } from 'react'
+import type { ComponentType, ReactNode } from 'react'
 
 import type { NoteHead } from '../notes/api'
 import type { LeaveGuard } from '../notes/context'
@@ -34,4 +34,4 @@ export type NoteMenuContext = {
   close: () => void
 }
 
-export const NOTE_MENU_ITEMS: ((context: NoteMenuContext) => ReactNode)[] = []
+export const NOTE_MENU_ITEMS: ComponentType<NoteMenuContext>[] = []

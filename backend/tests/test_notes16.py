@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import func, select
 
-from app.db import SessionLocal
+from app.db import SessionLocal, engine
 from app.models import Account, Note, NoteUpdate, utcnow
 from app.models_attachments import Attachment
 from app.models_history import NoteVersion
@@ -191,9 +191,14 @@ def test_notes16_ac2_ec3_ec4_after_locking_no_plain_text_is_left_in_the_data_fol
         assert db.scalar(select(func.count()).select_from(AttachmentText)
                          .where(AttachmentText.attachment_id == picture["id"]))
     device.setup(VAULT_PASSWORD)
-    device.lock(note_id)
-    # After: not in the database, its log, the versions, the index, the recognised text, the files, the export ZIPs.
-    assert files_holding(needles, Path(DATA_DIR)) == []
+    # Another connection stays open, as the live rooms and other requests keep theirs: the write-ahead log is not
+    # dropped by the last connection closing, the lock has to empty it.
+    with engine.connect() as held:
+        held.exec_driver_sql("SELECT 1")
+        held.rollback()
+        device.lock(note_id)
+        # After: not in the database, its log, the versions, the index, the recognised text, the files, the exports.
+        assert files_holding(needles, Path(DATA_DIR)) == []
     note = stored_note(note_id)
     assert note.locked and note.ydoc == b"" and note.text == "" and note.title == "Versicherungen"
     with SessionLocal() as db:

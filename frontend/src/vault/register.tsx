@@ -12,7 +12,7 @@ import * as Y from 'yjs'
 import { SEALED_BLOCK, type SealedBlockProps } from '../attachments/sealed'
 import { registerSender, type Sender } from '../attachments/uploads'
 import { LOCKED_VIEW, NOTE_MENU_ITEMS, type NoteMenuContext } from '../editor/noteParts'
-import { CONNECTION_SECTIONS } from '../extensions'
+import { CONNECTION_SECTIONS, SHELL_PARTS } from '../extensions'
 import { SEALED_HISTORY } from '../history/sealed'
 import type { ProseNode } from '../history/api'
 import { bytes as formatBytes } from '../lib/format'
@@ -27,48 +27,54 @@ import { isOpen, subscribe, vaultKey, vaultVersion } from './session'
 
 // --- The note's menu --------------------------------------------------------------------------------------------
 
+/** Asks the shell's dialog host for a vault dialog (the menu closes at once; the dialog outlives it). */
+export const VAULT_DIALOG_EVENT = 'nexnotes:vault-dialog'
+type Asked = { kind: 'lock' | 'remove'; noteId: string }
+
+function ask(detail: Asked): void {
+  window.dispatchEvent(new CustomEvent<Asked>(VAULT_DIALOG_EVENT, { detail }))
+}
+
 function LockItem({ noteId, head, sealed, mine, close }: NoteMenuContext) {
   const { t } = useTranslation()
-  const [asking, setAsking] = useState<'lock' | 'remove' | null>(null)
   // Only the owner locks, and only a note that is not in the trash (a shared note is refused by the server).
   if (!mine || !head?.can_write || head.deleted_at) return null
+  const choose = (kind: Asked['kind']) => {
+    close()
+    ask({ kind, noteId })
+  }
+  return sealed ? (
+    <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-unlock" onClick={() => choose('remove')}>
+      <LockOpen className="h-4 w-4" aria-hidden />
+      {t('vault.remove.menu')}
+    </button>
+  ) : (
+    <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-lock" onClick={() => choose('lock')}>
+      <Lock className="h-4 w-4" aria-hidden />
+      {t('vault.lock.menu')}
+    </button>
+  )
+}
+
+/** The vault's dialogs over the page, opened from a note's menu. */
+export function VaultDialogs() {
+  const [asked, setAsked] = useState<Asked | null>(null)
+  useEffect(() => {
+    const open = (event: Event) => setAsked((event as CustomEvent<Asked>).detail)
+    window.addEventListener(VAULT_DIALOG_EVENT, open)
+    return () => window.removeEventListener(VAULT_DIALOG_EVENT, open)
+  }, [])
+  if (!asked) return null
+  if (asked.kind === 'lock') return <LockDialog noteId={asked.noteId} onClose={() => setAsked(null)} />
   return (
-    <>
-      {sealed ? (
-        <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-unlock" onClick={() => setAsking('remove')}>
-          <LockOpen className="h-4 w-4" aria-hidden />
-          {t('vault.remove.menu')}
-        </button>
-      ) : (
-        <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-lock" onClick={() => setAsking('lock')}>
-          <Lock className="h-4 w-4" aria-hidden />
-          {t('vault.lock.menu')}
-        </button>
-      )}
-      {asking === 'lock' && (
-        <LockDialog
-          noteId={noteId}
-          onClose={() => {
-            setAsking(null)
-            close()
-          }}
-        />
-      )}
-      {asking === 'remove' && (
-        <RemoveLockDialog
-          noteId={noteId}
-          onClose={() => {
-            setAsking(null)
-            close()
-          }}
-          onDone={() => {
-            setAsking(null)
-            close()
-            window.dispatchEvent(new CustomEvent(NOTE_UNLOCKED_EVENT, { detail: { noteId } }))
-          }}
-        />
-      )}
-    </>
+    <RemoveLockDialog
+      noteId={asked.noteId}
+      onClose={() => setAsked(null)}
+      onDone={() => {
+        setAsked(null)
+        window.dispatchEvent(new CustomEvent(NOTE_UNLOCKED_EVENT, { detail: { noteId: asked.noteId } }))
+      }}
+    />
   )
 }
 
@@ -252,6 +258,7 @@ registerSender(sealedSender)
 SEALED_HISTORY.open = openVersion
 SEALED_HISTORY.restore = restoreVersion
 if (!CONNECTION_SECTIONS.some((section) => section.key === 'vault')) CONNECTION_SECTIONS.push({ key: 'vault', render: () => <VaultSection /> })
+if (!SHELL_PARTS.some((part) => part.key === 'vault-dialogs')) SHELL_PARTS.push({ key: 'vault-dialogs', render: () => <VaultDialogs /> })
 // The decrypted files go with the key: closed vault, another account.
 subscribe(() => {
   if (!isOpen()) forgetFiles()

@@ -570,10 +570,8 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
                     {t('export.menu')}
                   </button>
                 )}
-                {NOTE_MENU_ITEMS.map((item, index) => (
-                  <span key={index} className="contents">
-                    {item({ noteId, head, sealed, mine: Boolean(head && head.owner?.id === myId), close: () => setMenuOpen(false) })}
-                  </span>
+                {NOTE_MENU_ITEMS.map((Item, index) => (
+                  <Item key={index} noteId={noteId} head={head} sealed={sealed} mine={Boolean(head && head.owner?.id === myId)} close={() => setMenuOpen(false)} />
                 ))}
                 <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
                   <History className="h-4 w-4" aria-hidden />

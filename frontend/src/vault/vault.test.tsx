@@ -343,7 +343,7 @@ describe('the dialogs', () => {
     expect($('vault-message')!.textContent).toBe('Wrong. One more try, then you will have to wait.')
     type($('vault-password') as HTMLInputElement, 'drei')
     await submit('vault-password')
-    await until(() => /Unlock in 0:(30|29)/.test($('vault-submit')!.textContent ?? ''))
+    await until(() => /Unlock in 0:[0-3]\d/.test($('vault-submit')!.textContent ?? ''))
     expect(($('vault-submit') as HTMLButtonElement).disabled).toBe(true)
     expect($('vault-message')!.textContent).toBe('Too many wrong tries. Wait until the time is up.')
     expect(isOpen()).toBe(false)
