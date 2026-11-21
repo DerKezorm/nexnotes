@@ -1,12 +1,12 @@
 /**
  * The order of a list (NOTES-6): pinned notes first under "Angeheftet" (AC-6), then the others sorted as the view says
  * (AC-4) and, when grouping is on, under Heute, Gestern, Letzte 7 Tage, Letzte 30 Tage and then one heading per month
- * (AC-5). Sorted by title there are no groups. Days are the device's days (EC-7): everything here takes `now` and
- * reads dates in the browser's time zone.
+ * (AC-5); without them the others stand under "Notizen" (AC-6). Sorted by title there are no groups. Days are the
+ * device's days (EC-7): everything here takes `now` and reads dates in the browser's time zone.
  */
 import type { ListItem, ListView } from './api'
 
-export type GroupKey = 'pinned' | 'today' | 'yesterday' | 'week' | 'month' | `m:${string}` | 'all'
+export type GroupKey = 'pinned' | 'notes' | 'today' | 'yesterday' | 'week' | 'month' | `m:${string}` | 'all'
 
 export type Section = { key: GroupKey; items: ListItem[] }
 
@@ -71,14 +71,16 @@ export function groupsOn(view: ListView): boolean {
   return view.grouped && view.sort !== 'title'
 }
 
-/** The sections of a list: "Angeheftet" first when anything is pinned, then the date groups, or one section with all. */
+/** The sections of a list: "Angeheftet" first when anything is pinned, then the date groups. Without groups the rest is
+ * one section: under its own heading "Notizen" after pinned notes, so they stand apart from them (AC-6), else without
+ * a heading. */
 export function arrange(items: ListItem[], view: ListView, now: Date, lang = 'en'): Section[] {
   const sorted = sortItems(items, view, lang)
   const pinned = sorted.filter((item) => item.pinned)
   const rest = pinned.length ? sorted.filter((item) => !item.pinned) : sorted
   const sections: Section[] = pinned.length ? [{ key: 'pinned', items: pinned }] : []
   if (!groupsOn(view)) {
-    if (rest.length) sections.push({ key: 'all', items: rest })
+    if (rest.length) sections.push({ key: pinned.length ? 'notes' : 'all', items: rest })
     return sections
   }
   let current: Section | null = null

@@ -1,6 +1,7 @@
 /**
  * NOTES-6 in real browsers against the real server: the view of a folder and a note changed on another device arrive
- * without reloading the page (AC-1, EC-6), and 10,000 notes open quickly, scroll smoothly with only a window of rows in
+ * without reloading the page (AC-1, EC-6), and 10,000 notes open with the first row on screen in under a second (the
+ * spec's loading time, measured in the page from the start of the navigation), scroll smoothly with only a window of rows in
  * the page, and keep the note at the top of the screen in its place when a new one arrives (EC-2, EC-6).
  *
  * The 10,000 notes belong to an account of their own (invited here), so that the other files' lists stay small.
@@ -8,6 +9,27 @@
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-list0000' }
+
+/** Notes in the page, from the start of the navigation, the moment the first row of a list is drawn (the frame after
+ * it entered the page). */
+async function watchFirstRow(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const seen = new MutationObserver(() => {
+      if (!document.querySelector('[data-testid="note-row"]')) return
+      seen.disconnect()
+      requestAnimationFrame(() => ((window as { firstRow?: number }).firstRow = performance.now()))
+    })
+    seen.observe(document, { childList: true, subtree: true })
+  })
+}
+
+/** Opens `go` and gives the time from the start of the navigation to the first row on screen, in ms. */
+async function firstRowAfter(page: Page, go: () => Promise<unknown>): Promise<number> {
+  await go()
+  await expect(page.getByTestId('note-row').first()).toBeVisible({ timeout: 30_000 })
+  await page.waitForFunction(() => (window as { firstRow?: number }).firstRow !== undefined)
+  return page.evaluate(() => Math.round((window as { firstRow?: number }).firstRow!))
+}
 
 async function secondWindow(browser: Browser): Promise<Page> {
   const context = await browser.newContext({ storageState: process.env.NEXNOTES_E2E_STATE })
@@ -73,16 +95,20 @@ test('NOTES-6 EC-2 EC-6 ten thousand notes open quickly, scroll smoothly and kee
     )
   }
 
+  // Loading: the time until the first row is on screen, not only the server's answer. Once with an empty cache (the
+  // program comes along), then opened again as on every day after.
+  await watchFirstRow(many)
   const listed = many.waitForResponse((response) => response.url().includes('/api/note-list?') || response.url().endsWith('/api/note-list'))
-  const started = Date.now()
-  await many.goto('/')
-  const answer = await listed
-  await expect(many.getByTestId('note-row').first()).toBeVisible()
-  const shown = Date.now() - started
-  const timing = answer.request().timing()
+  const first = await firstRowAfter(many, () => many.goto('/'))
+  const timing = (await listed).request().timing()
   const server = timing.responseEnd - timing.requestStart
-  console.log(`${count} notes: list answer ${Math.round(server)} ms, first row ${shown} ms after navigation`)
+  const again: number[] = []
+  for (let round = 0; round < 3; round++) again.push(await firstRowAfter(many, () => many.reload()))
+  const opened = [...again].sort((a, b) => a - b)[1]
+  console.log(`${count} notes: list answer ${Math.round(server)} ms; first row ${first} ms after navigation, opened again ${again.join(' / ')} ms`)
   expect(server).toBeLessThan(1000)
+  expect(first).toBeLessThan(1000)
+  expect(opened).toBeLessThan(1000)
   await expect(many.getByTestId('list-counts')).toHaveText(`${count} notes`)
 
   // Scrolling through: every frame quick, never more than a window of rows in the page.

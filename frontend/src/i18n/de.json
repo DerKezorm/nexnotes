@@ -606,6 +606,7 @@
     "groupOffByTitle": "Nach Titel sortiert gibt es keine Gruppen.",
     "groups": {
       "month": "Letzte 30 Tage",
+      "notes": "Notizen",
       "pinned": "Angeheftet",
       "today": "Heute",
       "week": "Letzte 7 Tage",

@@ -12,6 +12,13 @@ import { anchorOf, shiftFor, visibleRange, type Anchor, type Entry } from './lay
 /** Without a layout (a page not yet measured, or a test without one): this many entries from the top. */
 const UNMEASURED = 400
 
+/** What the first render draws, before anything is measured: a list opens at its top, so one screen of it. Drawing
+ * `UNMEASURED` entries there first cost half a second with 10,000 notes (EC-2). */
+function firstScreen(entries: Entry[]): [number, number] {
+  const height = typeof window === 'undefined' ? 0 : window.innerHeight
+  return height > 0 ? visibleRange(entries, 0, height) : [0, UNMEASURED]
+}
+
 type Scroller = HTMLElement | Window
 
 function scrollerOf(element: HTMLElement): Scroller {
@@ -53,7 +60,7 @@ export function Window({ entries, height, render }: Props) {
   const scroller = useRef<Scroller | null>(null)
   const anchor = useRef<Anchor | null>(null)
   const latest = useRef(entries)
-  const [range, setRange] = useState<[number, number]>([0, UNMEASURED])
+  const [range, setRange] = useState<[number, number]>(() => firstScreen(entries))
 
   const measure = useCallback(() => {
     const element = box.current
