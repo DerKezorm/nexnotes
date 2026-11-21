@@ -43,9 +43,10 @@ def new_doc(title: str = "", content: dict[str, Any] | None = None, *, client_id
     return doc
 
 
-def load(state: bytes | None, updates: Iterable[bytes] = ()) -> Doc:
-    """A document from what is stored: the folded state and every update after it, in order."""
-    doc = Doc()
+def load(state: bytes | None, updates: Iterable[bytes] = (), *, client_id: int | None = None) -> Doc:
+    """A document from what is stored: the folded state and every update after it, in order. Every loaded document
+    writes under a new client id (the default, random) unless one is given."""
+    doc = Doc(client_id=client_id) if client_id is not None else Doc()
     shared(doc)
     if state:
         doc.apply_update(state)
@@ -265,7 +266,8 @@ def clean_marks(marks: Any) -> list[dict[str, Any]]:
         found[kind] = attrs
     if s.CODE in found:
         found = {s.CODE: found[s.CODE]}
-    return [{"type": kind, "attrs": found[kind]} if found[kind] else {"type": kind} for kind in s.MARKS if kind in found]
+    return [{"type": kind, "attrs": found[kind]} if found[kind] else {"type": kind}
+            for kind in s.MARKS if kind in found]
 
 
 def _clean_text(text: Any) -> str:
@@ -471,6 +473,62 @@ def write_inline(element: XmlElement, content: list[dict[str, Any]]) -> None:
             at = 0
         text.insert(at, node["text"], _mark_attributes(node.get("marks")))
         at += _u8(node["text"])
+
+
+# --- Repairing the shape ------------------------------------------------------------------------------------------
+
+_NEEDS_BLOCK = frozenset({s.BLOCKQUOTE, s.TABLE_CELL, s.TABLE_HEADER})
+_ITEMS = frozenset({s.LIST_ITEM, s.TASK_ITEM})
+
+
+def repair(doc: Doc) -> int:
+    """Fixes shapes the browser's schema refuses and concurrent changes can leave behind (two people deleting the last
+    items of a checklist, a cell emptied from two sides). The browser would drop such a node and what is in it; the
+    server adds what is missing instead: an empty item, an empty paragraph. Only a table without rows goes. Returns
+    the number of fixes; call it inside the transaction whose update carries them."""
+    body = body_of(doc)
+    fixes = 0
+    with doc.transaction():
+        fixes += _repair_children(body)
+        if len(body.children) == 0:
+            body.children.append(XmlElement(s.PARAGRAPH))
+            fixes += 1
+    return fixes
+
+
+def _elements(parent: XmlFragment | XmlElement) -> list[XmlElement]:
+    return [child for child in parent.children if isinstance(child, XmlElement)]
+
+
+def _repair_children(parent: XmlFragment | XmlElement) -> int:
+    fixes = 0
+    index = 0
+    while index < len(parent.children):
+        child = parent.children[index]
+        index += 1
+        if not isinstance(child, XmlElement):
+            continue
+        tag = child.tag or ""
+        if tag in s.TEXTBLOCKS or tag in (s.CODE_BLOCK, s.HORIZONTAL_RULE, s.HARD_BREAK):
+            continue
+        fixes += _repair_children(child)
+        if tag in s.LISTS and not _elements(child):
+            item = child.children.append(XmlElement(s.LISTS[tag], _element_attrs(s.LISTS[tag], {})))
+            item.children.append(XmlElement(s.PARAGRAPH))
+            fixes += 1
+        elif tag in _ITEMS:
+            first = _elements(child)
+            if not first or first[0].tag != s.PARAGRAPH:
+                child.children.insert(0, XmlElement(s.PARAGRAPH))
+                fixes += 1
+        elif tag in _NEEDS_BLOCK and not _elements(child):
+            child.children.append(XmlElement(s.PARAGRAPH))
+            fixes += 1
+        elif tag == s.TABLE and not any(row.tag == s.TABLE_ROW for row in _elements(child)):
+            index -= 1
+            del parent.children[index]
+            fixes += 1
+    return fixes
 
 
 # --- Reading the document -----------------------------------------------------------------------------------------

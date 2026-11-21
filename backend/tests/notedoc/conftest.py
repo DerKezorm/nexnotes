@@ -10,6 +10,3 @@ HERE = Path(__file__).resolve().parent
 for path in (str(BACKEND), str(HERE)):
     if path not in sys.path:
         sys.path.insert(0, path)
-
-FIXTURES = HERE / "fixtures"
-INTEROP = BACKEND.parent / "interop"

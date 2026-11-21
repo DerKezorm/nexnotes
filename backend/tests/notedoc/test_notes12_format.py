@@ -237,3 +237,23 @@ def test_notes12_change_returns_the_update_others_apply():
     assert notedoc.title_of(other) == "b"
     _, nothing = notedoc.change(doc, lambda d: notedoc.set_title(d, "b"))
     assert nothing is None
+
+
+def test_notes12_repair_mends_shapes_concurrent_deletions_leave():
+    doc = Doc()
+    body = doc.get("body", type=XmlFragment)
+    assert notedoc.repair(doc) == 1  # an empty body gets a paragraph
+    empty_list = body.children.append(XmlElement("taskList"))
+    item = body.children.append(XmlElement("bulletList")).children.append(XmlElement("listItem"))
+    item.children.append(XmlElement("bulletList")).children.append(XmlElement("listItem"))
+    cell = body.children.append(XmlElement("table")).children.append(XmlElement("tableRow")).children.append(
+        XmlElement("tableCell"))
+    body.children.append(XmlElement("table"))
+    body.children.append(XmlElement("blockquote"))
+    assert cell is not None and empty_list is not None
+    fixes = notedoc.repair(doc)
+    assert fixes == 6
+    assert notedoc.clean_doc(notedoc.to_json(doc)) == notedoc.to_json(doc)
+    assert [block["type"] for block in notedoc.to_json(doc)["content"]] == [
+        "paragraph", "taskList", "bulletList", "table", "blockquote"]
+    assert notedoc.repair(doc) == 0
