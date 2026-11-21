@@ -14,6 +14,7 @@ from app.models import FOLDER_NORMAL, Account, Folder, Note, NoteUpdate
 from app.notedoc import doc as notedoc
 from app.notedoc import edit
 from app.notedoc.markdown import to_plain
+from app.notedoc.room import Access
 from app.security import start_session
 from app.services import content, notes
 from app.services.inbox import inbox_for
@@ -183,6 +184,27 @@ def test_notes3_ac7_the_copy_title_stays_within_120_characters(client, operator)
         db.commit()
     title = client.post(f"/api/notes/{note['id']}/duplicate").json()["title"]
     assert len(title) <= 120 and title.endswith(" (Kopie)")
+
+
+def test_notes3_ac7_a_copy_of_somebody_else_s_note_goes_into_the_own_inbox(client, operator, monkeypatch):
+    """Ready for sharing (NOTES-13): the copy belongs to who made it, never into a folder of the note's owner."""
+    kitchen = folder(operator, "Kitchen")
+    note = new_note(client, folder_id=kitchen, title="Shared shopping", markdown="- [ ] Milk")
+    other = make_account("other")
+    monkeypatch.setattr(notes, "ACCESS_RULES", [lambda _db, account, _note: Access.READ if account.id == other.id
+                                                else None])
+    theirs = new_client(other)
+    answer = theirs.post(f"/api/notes/{note['id']}/duplicate")
+    assert answer.status_code == 201
+    made = answer.json()
+    with SessionLocal() as db:
+        assert made["folder_id"] == inbox_for(db, other.id).id
+        copy = db.get(Note, made["id"])
+        assert copy.owner_id == other.id
+        assert db.get(Folder, copy.folder_id).owner_id == other.id
+    assert notedoc.to_json(stored_doc(made["id"])) == notedoc.to_json(stored_doc(note["id"]))
+    # The owner's own copy stays beside the note.
+    assert client.post(f"/api/notes/{note['id']}/duplicate").json()["folder_id"] == kitchen
 
 
 # --- AC-8 ---------------------------------------------------------------------------------------------------------

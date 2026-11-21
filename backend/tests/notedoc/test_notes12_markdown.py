@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from pycrdt import XmlFragment
 from test_notes12_format import EVERYTHING, D, P, T
 
 from app.notedoc import doc as notedoc
@@ -154,3 +155,17 @@ def test_notes12_markdown_never_breaks_on_garbage():
         result = from_markdown(snippet)
         assert result["type"] == "doc" and result["content"]
         assert notedoc.clean_doc(result) == result
+
+
+@pytest.mark.parametrize("href", ["javascript:alert(1)", "data:text/html,<b>x</b>", "vbscript:x", "//evil.example"])
+def test_notes3_ec8_a_link_written_straight_into_the_document_leaves_markdown_and_text_without_its_target(href):
+    """The server keeps Yjs updates from the browser as they come; what it writes out (Markdown export, MCP, the text
+    for search) shows only safe links, an unsafe one as its words."""
+    doc = notedoc.new_doc("", {"type": "doc", "content": [{"type": "paragraph", "content": [
+        {"type": "text", "text": "click here", "marks": [{"type": "link", "attrs": {"href": "https://ok.example"}}]}]}]})
+    run = doc.get("body", type=XmlFragment).children[0].children[0]
+    run.format(0, 5, {"link": {"href": href, "target": "_blank"}})  # as a browser's update would
+    assert href in str(list(run.diff()))  # the document itself is not touched
+    markdown = to_markdown(doc)
+    assert markdown == "click [here](https://ok.example)\n"
+    assert href not in to_plain(doc) and href not in markdown
