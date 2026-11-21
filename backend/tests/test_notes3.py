@@ -452,3 +452,43 @@ def test_notes3_ac6_a_note_deleted_alone_stays_in_the_trash_when_its_folder_come
     with SessionLocal() as db:
         assert back["folder_id"] == inbox_for(db, operator.id).id
     assert stored(alone["id"]).deleted_batch is None
+
+
+# --- AC-17 the paper of a note ----------------------------------------------------------------------------------------
+
+
+def test_notes3_ac17_a_note_has_a_paper_only_its_writers_change_and_every_device_reads(client, operator):
+    note = new_note(client, title="Paper")
+    assert note["paper"] == "blank" and stored(note["id"]).paper == "blank"
+    for paper in ("lined", "grid", "dots", "blank", "grid"):
+        answer = client.put(f"/api/notes/{note['id']}/paper", json={"paper": paper})
+        assert answer.status_code == 200 and answer.json()["paper"] == paper
+    with new_client(operator) as phone:
+        assert phone.get(f"/api/notes/{note['id']}").json()["paper"] == "grid"
+    for wrong in ("squared", "", "Lined", "<b>"):
+        refused_answer = client.put(f"/api/notes/{note['id']}/paper", json={"paper": wrong})
+        assert refused_answer.status_code == 422 and refused_answer.json()["detail"]["code"] == "paper_unknown"
+    # Somebody else: as if the note were not there, and nothing changes.
+    with new_client(make_account("stranger")) as stranger:
+        answer = stranger.put(f"/api/notes/{note['id']}/paper", json={"paper": "dots"})
+        assert answer.status_code == 404
+    assert stored(note["id"]).paper == "grid"
+    # The lists do not carry it.
+    assert "paper" not in client.get("/api/notes").json()[0]
+
+
+def test_notes3_ac17_new_notes_start_on_the_accounts_paper_and_a_copy_keeps_its_own(client, operator):
+    assert client.get("/api/auth/me").json()["paper"] == "blank"
+    answer = client.put("/api/me/paper", json={"paper": "lined"})
+    assert answer.status_code == 200 and answer.json()["paper"] == "lined"
+    assert client.put("/api/me/paper", json={"paper": "wavy"}).json()["detail"]["code"] == "paper_unknown"
+    fresh = new_note(client, title="Lined by default")
+    assert fresh["paper"] == "lined"
+    # Another account keeps its own default.
+    with new_client(make_account("other")) as other:
+        assert new_note(other, title="Mine")["paper"] == "blank"
+    # A copy keeps the paper of the note it was made from, whatever the default.
+    client.put(f"/api/notes/{fresh['id']}/paper", json={"paper": "dots"})
+    copy = client.post(f"/api/notes/{fresh['id']}/duplicate")
+    assert copy.status_code in (200, 201)
+    assert client.get(f"/api/notes/{copy.json()['id']}").json()["paper"] == "dots"

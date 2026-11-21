@@ -41,6 +41,7 @@ from ..security import (
     start_session,
 )
 from ..services import accounts, locales, mailer, mounts, settings_service, storage, totp
+from ..services import notes as notes_service
 from ..services.accounts import AccountError
 from ..services.oidc_store import SqlStore, offered_address
 from ..vendor.nexoidc import providers
@@ -150,6 +151,8 @@ def account_view(account: AccountRow, db: Session | None = None) -> dict[str, An
         # The address a sign-in provider knows the account by, offered on the account page.
         "provider_email": offered_address(db, account) if db is not None else "",
         "language": account.language,
+        # The paper new notes start on (NOTES-3 AC-17).
+        "paper": notes_service.default_paper(account),
         "two_factor": bool(account.totp_secret_enc),
         "two_factor_recovery_left": len(totp.load_recovery(account.totp_recovery)) if account.totp_secret_enc else 0,
         "password_changed_at": account.password_changed_at.isoformat() if account.password_changed_at else None,
@@ -385,6 +388,22 @@ def password_reset_notice_seen(account: Account, db: DbSession) -> dict[str, Any
     row = db.get(AccountRow, account.id)
     assert row is not None
     row.password_reset_notice = False
+    db.commit()
+    return account_view(row)
+
+
+class PaperDefaultIn(BaseModel):
+    paper: str = Field(max_length=8)
+
+
+@router.put("/me/paper", summary="The paper new notes of the own account start on (NOTES-3 AC-17)")
+def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession) -> dict[str, Any]:
+    row = db.get(AccountRow, account.id)
+    assert row is not None
+    paper = notes_service.check_paper(payload.paper)
+    preferences = dict(row.preferences) if isinstance(row.preferences, dict) else {}
+    preferences["paper"] = paper
+    row.preferences = preferences
     db.commit()
     return account_view(row)
 

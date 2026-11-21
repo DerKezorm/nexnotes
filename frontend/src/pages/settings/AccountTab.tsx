@@ -12,6 +12,8 @@ import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { Field, Problem } from '../../components/Field'
 import { PasswordConfirmField } from '../../components/PasswordConfirm'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
+import { paperOf } from '../../editor/paper'
+import { PaperPicker } from '../../editor/PaperPicker'
 import { browserLanguage, changeLanguage, languageOptions, type LanguageOption } from '../../i18n'
 import { copyText } from '../../lib/copy'
 import { errorText, problemText, signInErrorText } from '../../lib/errors'
@@ -264,6 +266,12 @@ export function AccountTab() {
           <span className="font-medium">{t('me.looks.appearance')}</span> <span className="text-xs text-mist-500">{t('me.looks.appearanceHint')}</span>
           <div className="mt-1.5">
             <ThemeSwitcher withWords />
+          </div>
+        </div>
+        <div className="text-sm">
+          <span className="font-medium">{t('me.looks.paper')}</span> <span className="text-xs text-mist-500">{t('me.looks.paperHint')}</span>
+          <div className="mt-1.5">
+            <PaperPicker value={paperOf(me.paper)} onChange={(paper) => void run(async () => setMe(await authApi.paper(paper)), '')} />
           </div>
         </div>
       </Card>

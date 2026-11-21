@@ -39,3 +39,30 @@ for (const scheme of ['light', 'dark'] as const) {
     }
   })
 }
+
+test('NOTES-3 AC-17 each paper is the background of the text, light and dark apart', async ({ page }) => {
+  const made = await page.request.post('/api/notes', { data: { title: 'Paper', markdown: 'one\n\ntwo' }, headers: TAB })
+  const id = (await made.json()).id as string
+  await page.setViewportSize({ width: 1440, height: 900 })
+  const seen: Record<string, string> = {}
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.addInitScript((mode) => localStorage.setItem('nexnotes.theme', mode), scheme)
+    for (const paper of ['blank', 'lined', 'grid', 'dots']) {
+      expect((await page.request.put(`/api/notes/${id}/paper`, { data: { paper }, headers: TAB })).ok()).toBe(true)
+      await page.goto(`/notes/${id}`)
+      const sheet = page.getByTestId('note-paper')
+      await expect(sheet).toHaveAttribute('data-paper', paper)
+      const style = await sheet.evaluate((element) => {
+        const css = getComputedStyle(element)
+        return { image: css.backgroundImage, size: css.backgroundSize, attachment: css.backgroundAttachment }
+      })
+      seen[`${scheme} ${paper}`] = style.image
+      if (paper === 'blank') expect(style.image).toBe('none')
+      else expect(style.attachment).toMatch(/^local(, local)*$/)
+      if (paper === 'lined') expect(style.image).toContain('linear-gradient')
+      if (paper === 'grid') expect(style.size).toMatch(/^24px 24px(, 24px 24px)*$/)
+      if (paper === 'dots') expect(style.image).toContain('radial-gradient')
+    }
+  }
+  expect(seen['light lined']).not.toBe(seen['dark lined'])
+})

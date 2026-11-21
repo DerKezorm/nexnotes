@@ -318,6 +318,13 @@
       "folder": "Folder",
       "created": "Created",
       "changed": "Changed"
+    },
+    "paper": {
+      "label": "Paper",
+      "blank": "Blank",
+      "lined": "Lined",
+      "grid": "Grid",
+      "dots": "Dotted"
     }
   },
   "errors": {
@@ -404,7 +411,8 @@
     "tag_exists": "The tag #{{label}} exists already.",
     "search_tag_invalid": "This is no tag: a tag needs at least one letter or emoji, like #invoice.",
     "search_too_many_terms": "A search takes at most {{maximum}} words, phrases and tags. Leave some out.",
-    "search_term_too_long": "A word or a phrase in quotes may have at most {{maximum}} characters. Shorten it."
+    "search_term_too_long": "A word or a phrase in quotes may have at most {{maximum}} characters. Shorten it.",
+    "paper_unknown": "Choose blank, lined, grid or dotted."
   },
   "folders": {
     "section": "Folders",
@@ -565,7 +573,9 @@
       "byOperator": "(by the operator)",
       "language": "Language",
       "languageHint": "(on all your devices)",
-      "title": "Language and appearance"
+      "title": "Language and appearance",
+      "paper": "Paper of new notes",
+      "paperHint": "Each note can be changed later in its menu."
     },
     "password": {
       "change": "Change",

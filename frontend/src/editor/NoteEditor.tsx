@@ -42,6 +42,8 @@ import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
 import { Outline } from './Outline'
+import { paperOf } from './paper'
+import { PaperPicker } from './PaperPicker'
 import { OUTLINE_FROM, useOutlineShown } from './outlineData'
 import { TEXT_MAX, useTextWidth } from './textWidth'
 import { Toolbar } from './Toolbar'
@@ -168,6 +170,14 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
       if (timer) clearTimeout(timer)
     }
   }, [provider, loadHead])
+
+  // What is no change of the text (the paper, AC-17) comes with the head: read again every 5 s while the page is seen.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState !== 'hidden') loadHead()
+    }, 5000)
+    return () => clearInterval(timer)
+  }, [loadHead])
 
   // Own changes confirmed: the head says "geändert gerade eben".
   useEffect(() => {
@@ -466,6 +476,20 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
                   {t('editor.delete')}
                 </button>
                 {head?.can_write && <NoteColorRow noteId={noteId} head={head} onDone={() => setMenuOpen(false)} />}
+                {head?.can_write && (
+                  <div className="border-t border-ink-700 px-2 pt-2 pb-1">
+                    <p className="mb-1.5 px-1 text-[11px] font-semibold tracking-wide text-mist-500 uppercase">{t('editor.paper.label')}</p>
+                    <PaperPicker
+                      value={paperOf(head.paper)}
+                      role="menuitemradio"
+                      onChange={(paper) => {
+                        setMenuOpen(false)
+                        setHead({ ...head, paper })
+                        notesApi.setPaper(noteId, paper).then(setHead, (error) => setProblem(problemText(error)))
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </span>
@@ -531,7 +555,9 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           )}
         </div>
         {problem && <p className="text-sm text-bad-500">{problem}</p>}
-        <EditorContent editor={editor} className="nn-editor mt-1 flex-1" />
+        <div className="nn-paper mt-1 flex flex-1 flex-col" data-paper={paperOf(head?.paper)} data-testid="note-paper">
+          <EditorContent editor={editor} className="nn-editor flex-1" />
+        </div>
       </article>
       {editor && outlineShown && paneWidth >= OUTLINE_FROM && (
         <Outline

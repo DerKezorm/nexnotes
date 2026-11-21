@@ -344,7 +344,7 @@ def create(db: Session, account: Account, *, note_id: str | None = None, folder_
     now = utcnow()
     note = Note(id=wanted, owner_id=account.id, folder_id=folder.id, title=clean, title_check=check,
                 origin=(origin or "")[:100], ydoc=document.get_update(), text=to_plain(document), created_at=now,
-                updated_at=now, updated_by_id=account.id)
+                updated_at=now, updated_by_id=account.id, paper=default_paper(account))
     db.add(note)
     _written(db, note)
     try:
@@ -358,6 +358,31 @@ def create(db: Session, account: Account, *, note_id: str | None = None, folder_
         return existing, False
     logger.info("Note created note=%s", note.id)
     return note, True
+
+
+#: The papers a note can be written on (NOTES-3 AC-17); the first is the default.
+PAPERS: tuple[str, ...] = ("blank", "lined", "grid", "dots")
+
+
+def check_paper(paper: str) -> str:
+    if paper not in PAPERS:
+        raise error("paper_unknown", "Choose blank, lined, grid or dots.", 422)
+    return paper
+
+
+def default_paper(account: Account) -> str:
+    """The paper new notes of the account start on ("My account", Appearance); blank unless it chose another."""
+    chosen = (account.preferences or {}).get("paper") if isinstance(account.preferences, dict) else None
+    return chosen if chosen in PAPERS else PAPERS[0]
+
+
+def set_paper(db: Session, account: Account, note_id: str, paper: str) -> Note:
+    """Only who may write the note; every open editor follows within seconds (it reads the head again)."""
+    check_paper(paper)
+    note = note_for(db, account, note_id, write=True)
+    note.paper = paper
+    db.commit()
+    return note
 
 
 def copy_suffix(account: Account) -> str:
@@ -384,6 +409,8 @@ async def duplicate(account: Account, note_id: str) -> Note:
         source = note_for(db, account, note_id)
         folder_id = source.folder_id
         origin = source.origin
+        # The copy keeps the paper of its original (NOTES-3 AC-17).
+        paper = source.paper or PAPERS[0]
     title, body = await change(note_id, read)
     title = copy_title(title, copy_suffix(account))
     document = notedoc.new_doc(title, body)
@@ -394,7 +421,7 @@ async def duplicate(account: Account, note_id: str) -> Note:
         now = utcnow()
         note = Note(owner_id=account.id, folder_id=folder_id, title=title, origin=origin,
                     ydoc=document.get_update(), text=to_plain(document), created_at=now, updated_at=now,
-                    updated_by_id=account.id)
+                    updated_by_id=account.id, paper=paper)
         db.add(note)
         _written(db, note)
         db.commit()

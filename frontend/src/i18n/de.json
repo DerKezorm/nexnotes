@@ -318,6 +318,13 @@
       "folder": "Ordner",
       "created": "Erstellt",
       "changed": "Geändert"
+    },
+    "paper": {
+      "label": "Papier",
+      "blank": "Leer",
+      "lined": "Liniert",
+      "grid": "Kariert",
+      "dots": "Gepunktet"
     }
   },
   "errors": {
@@ -404,7 +411,8 @@
     "tag_exists": "Das Schlagwort #{{label}} gibt es schon.",
     "search_tag_invalid": "Das ist kein Schlagwort: Ein Schlagwort braucht mindestens einen Buchstaben oder ein Emoji, etwa #rechnung.",
     "search_too_many_terms": "Eine Suche nimmt höchstens {{maximum}} Wörter, Wortfolgen und Schlagwörter. Lass ein paar weg.",
-    "search_term_too_long": "Ein Wort oder eine Wortfolge in Anführungszeichen darf höchstens {{maximum}} Zeichen haben. Kürze sie."
+    "search_term_too_long": "Ein Wort oder eine Wortfolge in Anführungszeichen darf höchstens {{maximum}} Zeichen haben. Kürze sie.",
+    "paper_unknown": "Wähl leer, liniert, kariert oder gepunktet."
   },
   "folders": {
     "section": "Ordner",
@@ -565,7 +573,9 @@
       "byOperator": "(vom Betreiber)",
       "language": "Sprache",
       "languageHint": "(gilt auf allen deinen Geräten)",
-      "title": "Sprache und Darstellung"
+      "title": "Sprache und Darstellung",
+      "paper": "Papier neuer Notizen",
+      "paperHint": "Jede Notiz lässt sich danach über ihr Menü umstellen."
     },
     "password": {
       "change": "Ändern",

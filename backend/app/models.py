@@ -367,6 +367,8 @@ class Note(Base):
     tasks_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: The last change to anything a list shows (``services/notes_list.py``): lists ask for it to load again (EC-6).
     listed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The paper the note is written on (NOTES-3 AC-17): one of ``PAPERS`` in ``services/notes.py``.
+    paper: Mapped[str] = mapped_column(String(8), default="blank", server_default="blank")
 
 
 class NoteUpdate(Base):

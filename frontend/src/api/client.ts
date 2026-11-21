@@ -140,6 +140,8 @@ export type Me = {
   provider_email?: string
   /** Empty: the browser's language. Chosen once, it counts on every device of the account. */
   language: string
+  /** The paper new notes start on (NOTES-3 AC-17). */
+  paper?: string
   two_factor: boolean
   two_factor_recovery_left: number
   password_changed_at?: string | null
@@ -348,6 +350,7 @@ export const authApi = {
   logoutEverywhere: () => api<void>('/api/auth/logout-all', { method: 'POST' }),
   me: () => api<Me>('/api/auth/me'),
   language: (language: string) => api<Me>('/api/me/language', { method: 'PUT', body: { language } }),
+  paper: (paper: string) => api<Me>('/api/me/paper', { method: 'PUT', body: { paper } }),
   profile: (change: { display_name?: string; email?: string }) => api<Me>('/api/me/profile', { method: 'PUT', body: change }),
   password: (current: string, next: string, confirm: string) =>
     api<void>('/api/auth/password', { method: 'PUT', body: { current, new: next, password_confirm: confirm } }),

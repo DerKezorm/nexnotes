@@ -217,3 +217,40 @@
   color: #06122e;
   user-select: none;
 }
+
+/* ---- Paper (NOTES-3 AC-17) ------------------------------------------------------------------------------------------
+ * The pattern is the background of the text on the sheet, from below the title on: quiet nex gray, separately tuned
+ * for light and dark, never honey. It scrolls with the text. Lined: one line per line of body text (15 px × 1.65);
+ * the paragraphs then stand without extra space so that the text keeps to the lines, and a heading (bigger, not on a
+ * line) lies on the sheet's own color, so no line runs through its letters. Grid and dots: 24 px. */
+.nn-paper, .nn-paper-preview {
+  --nn-paper-ink: rgb(242 242 245 / 0.09);
+  --nn-paper-dot: rgb(242 242 245 / 0.22);
+  --nn-paper-line: 24.75px;
+  background-attachment: local;
+}
+:root[data-theme='light'] .nn-paper,
+:root[data-theme='light'] .nn-paper-preview {
+  --nn-paper-ink: rgb(20 20 26 / 0.1);
+  --nn-paper-dot: rgb(20 20 26 / 0.24);
+}
+.nn-paper-preview { --nn-paper-line: 8px; }
+.nn-paper[data-paper='lined'], .nn-paper-preview[data-paper='lined'] {
+  background-image: linear-gradient(to bottom, transparent calc(var(--nn-paper-line) - 1px), var(--nn-paper-ink) calc(var(--nn-paper-line) - 1px));
+  background-size: 100% var(--nn-paper-line);
+}
+.nn-paper[data-paper='grid'], .nn-paper-preview[data-paper='grid'] {
+  background-image: linear-gradient(to right, var(--nn-paper-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--nn-paper-ink) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+.nn-paper-preview[data-paper='grid'] { background-size: 8px 8px; }
+.nn-paper[data-paper='dots'], .nn-paper-preview[data-paper='dots'] {
+  background-image: radial-gradient(circle, var(--nn-paper-dot) 1.1px, transparent 1.4px);
+  background-size: 24px 24px;
+}
+.nn-paper-preview[data-paper='dots'] { background-size: 8px 8px; }
+.nn-paper[data-paper='lined'] .ProseMirror > * + * { margin-top: 0; }
+.nn-paper[data-paper='lined'] .ProseMirror :is(h1, h2, h3) { background: var(--color-ink-850); }
+@media print {
+  .nn-paper { background: none !important; }
+}

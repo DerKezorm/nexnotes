@@ -89,6 +89,8 @@ def note_out(db: Any, note: Note, account: Any) -> dict[str, Any]:
         "owner": notes.person(db, note.owner_id),
         "deleted_at": _iso(note.deleted_at),
         "can_write": access == Access.WRITE or (access == Access.GONE and note.owner_id == account.id),
+        # NOTES-3 AC-17: the paper, on every device; the lists do not need it.
+        "paper": note.paper or notes.PAPERS[0],
     }
 
 
@@ -120,6 +122,15 @@ def create_note(body: NewNote, db: DbSession, account: Account, response: Respon
 def get_note(note_id: str, db: DbSession, account: Account) -> dict[str, Any]:
     note = notes.note_for(db, account, note_id, deleted=True)
     return note_out(db, note, account)
+
+
+class PaperIn(BaseModel):
+    paper: str = Field(max_length=8)
+
+
+@router.put("/{note_id}/paper", summary="The paper of a note: blank, lined, grid or dots (needs the right to write)")
+def put_paper(note_id: str, body: PaperIn, db: DbSession, account: Account) -> dict[str, Any]:
+    return note_out(db, notes.set_paper(db, account, note_id, body.paper), account)
 
 
 @router.put("/{note_id}/title")

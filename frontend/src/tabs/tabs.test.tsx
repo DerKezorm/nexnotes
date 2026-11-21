@@ -47,6 +47,8 @@ const belongs = new Map<string, number>()
 let networkDown = false
 /** Answers of the stand-in server whose callers may still be busy with them. */
 let inFlight = 0
+/** The body of the last request to the stand-in server. */
+let lastBody: string | null = null
 /** Every request to the stand-in server, as "METHOD /path". */
 const requests: string[] = []
 const INBOX = 'inbox-1'
@@ -99,6 +101,11 @@ async function answer(method: string, path: string): Promise<Response> {
     const found = notes.get(id)
     if (!found || (belongs.get(id) ?? 1) !== me) return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
     if (method === 'GET' && !tail) return reply(200, found)
+    if (method === 'PUT' && tail === '/paper') {
+      const paper = String(JSON.parse(lastBody ?? '{}').paper)
+      notes.set(id, { ...found, paper })
+      return reply(200, notes.get(id))
+    }
     if (method === 'POST' && tail === '/title/suggestion') return reply(200, found)
   }
   return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
@@ -334,6 +341,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'http://localhost')
     requests.push(`${init?.method ?? 'GET'} ${url.pathname}`)
+    lastBody = typeof init?.body === 'string' ? init.body : null
     inFlight += 1
     // Counted until the caller had a turn to read the answer.
     setTimeout(() => (inFlight -= 1), 5)
@@ -510,6 +518,31 @@ describe('tabs in the page', () => {
     // Turned off, it stays off.
     await act(async () => $('tool-outline')!.click())
     expect($('outline')).toBeNull()
+  })
+
+  it('NOTES-3 AC-17 the note menu chooses the paper; the sheet shows it, and another window follows within 5 s', async () => {
+    // The 5 s of the head are counted by hand.
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    await render('/notes/soup')
+    const paper = () => $('note-paper')!.dataset.paper
+    expect(paper()).toBe('blank')
+    await act(async () => $('note-menu')!.click())
+    const choices = $$('paper-picker')[0].querySelectorAll('[role="menuitemradio"]')
+    expect([...choices].map((one) => one.textContent)).toEqual(['Blank', 'Lined', 'Grid', 'Dotted'])
+    await act(async () => $('paper-lined')!.click())
+    expect(paper()).toBe('lined')
+    expect(requests).toContain('PUT /api/notes/soup/paper')
+    await idle()
+    expect(paper()).toBe('lined')
+    // Changed somewhere else: the open editor reads the head again within 5 s.
+    try {
+      await act(async () => void notes.set('soup', { ...notes.get('soup')!, paper: 'grid' } as NoteHead))
+      await act(async () => void vi.advanceTimersByTime(5000))
+      await idle()
+      expect(paper()).toBe('grid')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {
