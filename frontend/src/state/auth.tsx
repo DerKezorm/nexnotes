@@ -6,11 +6,16 @@
  * `interrupted` says why: `expired` (the session ran out; a dialog asks to sign in again, and afterwards
  * `SIGNED_IN_AGAIN_EVENT` lets every editor save what waited, NOTES-2 EC-3) or `blocked` (the operator blocked or
  * deleted the account: "Your account is blocked", and nothing more is saved, NOTES-2 EC-4).
+ *
+ * Signing out and every change of the account in the tab forget what the stores kept of the account before
+ * (`state/account.ts`), before the next account's page is drawn. The open page asks now and then who is signed in; if
+ * another tab signed in as someone else meanwhile, this page follows at once.
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { ApiError, authApi, SIGNED_OUT_EVENT, type Me } from '../api/client'
 import i18n, { changeLanguage } from '../i18n'
+import { followAccount } from './account'
 
 type Status = 'loading' | 'setup' | 'signedOut' | 'signedIn'
 export type Interruption = 'expired' | 'blocked' | null
@@ -44,6 +49,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [ended, setEnded] = useState(false)
 
   const setMe = useCallback((next: Me) => {
+    // Before anything of this account is drawn: the stores forget the one before.
+    followAccount(next.id)
     setMeState(next)
     setInterrupted(null)
     setEnded(false)
@@ -60,6 +67,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return
       }
       if (!state.signed_in) {
+        followAccount(null)
         setStatus('signedOut')
         setMeState(null)
         return
@@ -67,7 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setMe(await authApi.me())
     } catch (error) {
       setStatus('signedOut')
-      if (error instanceof ApiError && error.status === 401) setMeState(null)
+      if (error instanceof ApiError && error.status === 401) {
+        followAccount(null)
+        setMeState(null)
+      }
     }
   }, [setMe])
 
@@ -92,11 +103,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => window.removeEventListener(SIGNED_OUT_EVENT, gone)
   }, [])
 
+  const meId = useRef<number | null>(null)
+  meId.current = me?.id ?? null
+
   useEffect(() => {
     if (status !== 'signedIn' || interrupted) return
     // A 401 sends SIGNED_OUT_EVENT (api/client.ts); anything else, such as the server restarting, changes nothing.
+    // Another account (signed in in another tab, the cookie is shared): the page follows it.
     const ask = () => {
-      if (document.visibilityState === 'visible') void authApi.me().catch(() => undefined)
+      if (document.visibilityState !== 'visible') return
+      void authApi
+        .me()
+        .then((now) => {
+          if (now && typeof now.id === 'number' && meId.current !== null && now.id !== meId.current) setMe(now)
+        })
+        .catch(() => undefined)
     }
     const session = window.setInterval(ask, SESSION_MS)
     document.addEventListener('visibilitychange', ask)
@@ -104,10 +125,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       window.clearInterval(session)
       document.removeEventListener('visibilitychange', ask)
     }
-  }, [status, interrupted])
+  }, [status, interrupted, setMe])
 
   const signOut = useCallback(async () => {
     await authApi.logout().catch(() => undefined)
+    followAccount(null)
     setEnded(false)
     setInterrupted(null)
     setMeState(null)

@@ -10,6 +10,7 @@
  */
 import { useSyncExternalStore } from 'react'
 
+import { onAccountChange } from '../state/account'
 import { foldersApi, type Folder, type FolderTree } from './api'
 
 export type TreeState = {
@@ -38,6 +39,8 @@ let state: TreeState = build(null, 'idle')
 const listeners = new Set<() => void>()
 let pending: Promise<void> | null = null
 let watching = false
+/** Counts up whenever the account changes: an answer asked for the account before is dropped when it comes. */
+let generation = 0
 
 function publish(next: TreeState): void {
   state = next
@@ -48,14 +51,20 @@ function publish(next: TreeState): void {
 export function refreshFolders(): Promise<void> {
   if (pending) return pending
   if (state.status === 'idle') publish({ ...state, status: 'loading' })
-  pending = foldersApi
+  const asked = generation
+  const request: Promise<void> = foldersApi
     .tree()
-    .then((tree) => publish(build(tree, 'ready')))
-    .catch(() => publish({ ...state, status: state.status === 'ready' ? 'ready' : 'failed' }))
-    .finally(() => {
-      pending = null
+    .then((tree) => {
+      if (asked === generation) publish(build(tree, 'ready'))
     })
-  return pending
+    .catch(() => {
+      if (asked === generation) publish({ ...state, status: state.status === 'ready' ? 'ready' : 'failed' })
+    })
+    .finally(() => {
+      if (pending === request) pending = null
+    })
+  pending = request
+  return request
 }
 
 function watch(): void {
@@ -78,8 +87,9 @@ export function useFolders(): TreeState {
   return useSyncExternalStore(subscribe, () => state)
 }
 
-/** For tests and for signing out: forget the tree of the account before. */
+/** For tests and for signing out: forget the tree of the account before. The next one to show it asks again. */
 export function forgetFolders(): void {
+  generation += 1
   pending = null
   publish(build(null, 'idle'))
 }
@@ -217,3 +227,8 @@ export function useCurrentFolder(): { openFolderId: string | null; targetFolderI
   const alive = openFolderId !== null && (tree.status !== 'ready' || tree.byId.has(openFolderId) || tree.inbox?.id === openFolderId)
   return { openFolderId: alive ? openFolderId : null, targetFolderId: alive ? openFolderId : (tree.inbox?.id ?? null) }
 }
+
+onAccountChange(() => {
+  forgetFolders()
+  setCurrentFolder(null)
+})

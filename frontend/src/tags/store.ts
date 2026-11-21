@@ -6,6 +6,7 @@
 import { useSyncExternalStore } from 'react'
 
 import { NOTES_CHANGED_EVENT } from '../notes/api'
+import { onAccountChange } from '../state/account'
 import { tagsApi, type TagInfo } from './api'
 
 export type TagsState = { status: 'idle' | 'loading' | 'ready' | 'failed'; tags: TagInfo[] }
@@ -22,6 +23,8 @@ const listeners = new Set<() => void>()
 let pending: Promise<void> | null = null
 let watching = false
 let soon: ReturnType<typeof setTimeout> | null = null
+/** Counts up whenever the account changes: an answer asked for the account before is dropped when it comes. */
+let generation = 0
 
 function publish(next: TagsState): void {
   state = next
@@ -32,14 +35,20 @@ function publish(next: TagsState): void {
 export function refreshTags(): Promise<void> {
   if (pending) return pending
   if (state.status === 'idle') publish({ ...state, status: 'loading' })
-  pending = tagsApi
+  const asked = generation
+  const request: Promise<void> = tagsApi
     .list()
-    .then((answer) => publish({ status: 'ready', tags: answer.tags }))
-    .catch(() => publish({ ...state, status: state.status === 'ready' ? 'ready' : 'failed' }))
-    .finally(() => {
-      pending = null
+    .then((answer) => {
+      if (asked === generation) publish({ status: 'ready', tags: answer.tags })
     })
-  return pending
+    .catch(() => {
+      if (asked === generation) publish({ ...state, status: state.status === 'ready' ? 'ready' : 'failed' })
+    })
+    .finally(() => {
+      if (pending === request) pending = null
+    })
+  pending = request
+  return request
 }
 
 /** The tags of a note changed while typing: the list follows once the server has read them. */
@@ -85,10 +94,14 @@ export function currentTags(): TagInfo[] {
   return state.tags
 }
 
-/** For tests: forget what was loaded. */
+/** Forgets what was loaded: when the account changes or signs out, and in tests. The next one to show the list asks
+ * again (the page of the next account is drawn anew, `App.tsx`). */
 export function forgetTags(): void {
-  state = { status: 'idle', tags: [] }
+  generation += 1
   pending = null
   if (soon) clearTimeout(soon)
   soon = null
+  publish({ status: 'idle', tags: [] })
 }
+
+onAccountChange(forgetTags)
