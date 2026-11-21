@@ -375,7 +375,10 @@
     "wrong_credentials": "E-Mail oder Passwort stimmen nicht.",
     "wrong_password": "Das Passwort stimmt nicht.",
     "tag_name_invalid": "Ein Schlagwort besteht aus Buchstaben, Ziffern, Bindestrich, Unterstrich oder Emoji, ohne Leerzeichen, mit mindestens einem Buchstaben und höchstens 64 Zeichen.",
-    "tag_exists": "Das Schlagwort #{{label}} gibt es schon."
+    "tag_exists": "Das Schlagwort #{{label}} gibt es schon.",
+    "search_tag_invalid": "Das ist kein Schlagwort: Ein Schlagwort braucht mindestens einen Buchstaben oder ein Emoji, etwa #rechnung.",
+    "search_too_many_terms": "Eine Suche nimmt höchstens {{maximum}} Wörter, Wortfolgen und Schlagwörter. Lass ein paar weg.",
+    "search_term_too_long": "Ein Wort oder eine Wortfolge in Anführungszeichen darf höchstens {{maximum}} Zeichen haben. Kürze sie."
   },
   "folders": {
     "section": "Ordner",

@@ -12,6 +12,7 @@ from typing import Annotated, Any, Literal
 from fastapi import APIRouter, FastAPI, Query
 
 from ..deps import Account, DbSession
+from ..errors import error
 from ..services import search
 
 search.register_hooks()
@@ -40,9 +41,13 @@ def find(db: DbSession, account: Account,
          date_field: Literal["updated", "created"] = "updated",
          offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
          limit: Annotated[int, Query(ge=1, le=search.PAGE_MAX)] = search.PAGE) -> dict[str, Any]:
+    tag_key = search.tag_key(tag) if tag.strip() else ""
+    if tag.strip() and not tag_key:
+        # A filter that cannot hold would quietly show every hit under a chip that says otherwise.
+        raise error("search_tag_invalid", "This is not a tag.", 422)
     filters = search.Filters(
         folder_ids=search.folder_tree(db, account, folder_id) if folder_id else None,
-        tag=search.tag_key(tag) if tag else "",
+        tag=tag_key,
         since=since,
         until=until,
         date_field=date_field,

@@ -31,6 +31,7 @@ Other features dock on here, mostly through the hooks the tags already have:
 
 from __future__ import annotations
 
+import functools
 import logging
 import re
 import unicodedata
@@ -39,7 +40,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import ColumnElement, bindparam, column, func, literal_column, or_, select, table, text
+from sqlalchemy import (ColumnElement, bindparam, column, func, literal, literal_column, or_, select, table, text,
+                        union, union_all)
 from sqlalchemy.orm import Session, defer
 
 from ..db import SessionLocal, engine
@@ -52,7 +54,7 @@ logger = logging.getLogger("nexnotes.search")
 
 #: Changes whenever the folding or the columns change: the tables carry it in their names, and a start with a new
 #: version builds the index anew and drops the old tables.
-INDEX_VERSION = 2
+INDEX_VERSION = 3
 INDEX = f"search_index_v{INDEX_VERSION}"
 ROWS = f"search_rows_v{INDEX_VERSION}"
 
@@ -61,8 +63,11 @@ PAGE = 50
 PAGE_MAX = 100
 #: The longest query taken; longer ones are refused, not cut.
 QUERY_MAX = 500
-#: Terms and tags a query holds at most; the rest is ignored.
+#: Terms and tags a query holds at most; more are refused, not cut (AC-7 asks for all words).
 TERMS_MAX = 16
+#: The longest word or phrase, in folded characters: a long phrase costs the index a lot and finds nothing a shorter
+#: piece of it would not.
+TERM_CHARS_MAX = 100
 #: Weights of bm25 per column: title, body, extra.
 WEIGHTS = (10.0, 1.0, 0.5)
 #: Characters of text an excerpt shows before the first hit and in total.
@@ -72,6 +77,9 @@ EXCERPT_CHARS = 220
 MARKS_MAX = 50
 #: Notes indexed per transaction when the index is built at the start.
 BATCH = 500
+#: Characters of text looked through at a time for the first hit; only around it are hits marked and mapped back to
+#: the original letters, so a very long note costs no more than a short one.
+SCAN_STEP = 8192
 
 
 # --- Folding ------------------------------------------------------------------------------------------------------
@@ -127,11 +135,30 @@ def fold_with_map(value: str) -> tuple[str, list[int]]:
     return "".join(out), starts
 
 
+#: Blanks to join: a run of them, or a single one that is not a plain space (a plain space stays as it is, which keeps
+#: the work small in ordinary text).
+_BLANKS = re.compile(r"\s{2,}|[^\S ]")
+_AFTER_VOWEL = re.compile(r"(?<=[aou])" + _COMBINING_DIAERESIS)
+
+
 def fold(value: str) -> str:
-    """``value`` as the index holds it: no case, umlauts as ae/oe/ue, ß as ss, no other accents, one space."""
+    """``value`` as the index holds it: no case, umlauts as ae/oe/ue, ß as ss, no other accents, one space. The same
+    as ``fold_with_map(value)[0]``, without the map and at the speed of ``str.translate``, so a long note is folded
+    quickly."""
     if value.isascii():
-        return _SPACE.sub(" ", value.lower())
-    return fold_with_map(value)[0]
+        return _BLANKS.sub(" ", value.lower())
+    table: dict[int, str] = {}
+    for char in set(value):
+        if char.isspace():
+            table[ord(char)] = " "
+        elif char != _COMBINING_DIAERESIS:
+            folded = char.lower() if char.isascii() else _fold_char(char)
+            if folded != char:
+                table[ord(char)] = folded
+    out = value.translate(table)
+    if _COMBINING_DIAERESIS in out:
+        out = _AFTER_VOWEL.sub("e", out).replace(_COMBINING_DIAERESIS, "")
+    return _BLANKS.sub(" ", out)
 
 
 # --- Tags ---------------------------------------------------------------------------------------------------------
@@ -201,9 +228,21 @@ def _hidden(db: Session, note: Note) -> bool:
 # --- Who may find what --------------------------------------------------------------------------------------------
 
 
-def _scope(account: Account) -> ColumnElement[bool]:
-    """The account's own notes and those shared with it (``tags.SHARED_NOTES``, the one hook of NOTES-13)."""
-    return or_(Note.owner_id == account.id, *(Note.id.in_(rule(account.id)) for rule in tags.SHARED_NOTES))
+#: Every account has its own block of row ids in the index: ``owner_id << ROW_BITS`` and up. A search gives the index
+#: the block as a range of row ids next to ``MATCH``, so the index skips other accounts' rows instead of handing them on
+#: to be filtered out afterwards; how long a search takes then says nothing about words in other accounts' notes.
+ROW_BITS = 32
+
+
+def _block(owner_id: int) -> tuple[int, int]:
+    """The first and the last row id of an account's block."""
+    first = owner_id << ROW_BITS
+    return first, first + (1 << ROW_BITS) - 1
+
+
+def _shared(account: Account) -> list[Any]:
+    """Notes shared with the account (``tags.SHARED_NOTES``, the one hook of NOTES-13), as selects of note ids."""
+    return [rule(account.id) for rule in tags.SHARED_NOTES]
 
 
 # --- The index ----------------------------------------------------------------------------------------------------
@@ -254,9 +293,17 @@ def _row_values(db: Session, note: Note) -> dict[str, str]:
 
 def _write(db: Session, note: Note) -> None:
     values = _row_values(db, note)
+    first, last = _block(note.owner_id)
     row = db.execute(_sql("SELECT id FROM @rows WHERE note_id = :id"), {"id": note.id}).scalar()
+    if row is not None and not first <= row <= last:
+        # The note has another owner now: its row moves into the owner's block.
+        db.execute(_sql("DELETE FROM @index WHERE rowid = :row"), {"row": row})
+        db.execute(_sql("DELETE FROM @rows WHERE id = :row"), {"row": row})
+        row = None
     if row is None:
-        row = db.execute(_sql("INSERT INTO @rows (note_id) VALUES (:id) RETURNING id"), {"id": note.id}).scalar()
+        row = db.execute(_sql("INSERT INTO @rows (id, note_id) SELECT COALESCE(MAX(id) + 1, :first), :id FROM @rows "
+                              "WHERE id BETWEEN :first AND :last RETURNING id"),
+                         {"id": note.id, "first": first, "last": last}).scalar()
     else:
         db.execute(_sql("DELETE FROM @index WHERE rowid = :row"), {"row": row})
     db.execute(_sql("INSERT INTO @index (rowid, title, body, extra) VALUES (:row, :title, :body, :extra)"),
@@ -389,8 +436,12 @@ def parse(raw: str) -> Query:
         term = fold(piece).strip()
         if term and term not in query.terms:
             query.terms.append(term)
-    query.terms = query.terms[:TERMS_MAX]
-    query.tags = query.tags[:TERMS_MAX]
+    if len(query.terms) + len(query.tags) > TERMS_MAX:
+        raise error("search_too_many_terms", f"A search takes at most {TERMS_MAX} words, phrases and tags.", 422,
+                    maximum=TERMS_MAX)
+    if any(len(term) > TERM_CHARS_MAX for term in query.terms):
+        raise error("search_term_too_long", f"A word or phrase may have at most {TERM_CHARS_MAX} characters.", 422,
+                    maximum=TERM_CHARS_MAX)
     return query
 
 
@@ -439,20 +490,36 @@ def _conditions(account: Account, query: Query, filters: Filters | None) -> tupl
     return " AND ".join(match), extra
 
 
-def _base(account: Account, match: str, extra: Sequence[ColumnElement[bool]], *columns: Any) -> Any:
-    statement = (select(*columns)
-                 .select_from(_INDEX_T)
-                 .join(_ROWS_T, _ROWS_T.c.id == _INDEX_T.c.rowid)
-                 .join(Note, Note.id == _ROWS_T.c.note_id)
-                 .where(Note.deleted_at.is_(None), _scope(account), *extra))
-    if match:
-        statement = statement.where(_sql("@index MATCH :match").bindparams(match=match))
-    return statement
+def _bases(account: Account, match: str, extra: Sequence[ColumnElement[bool]], *columns: Any) -> list[Any]:
+    """The statements that find the hits: one over the account's own block of the index, and, once notes are shared
+    with it, one over the rows of those notes. Each hands the index the rows it may touch together with ``MATCH``."""
+    first, last = _block(account.id)
+    parts = [(_INDEX_T.c.rowid.between(first, last), Note.owner_id == account.id)]
+    shared = _shared(account)
+    if shared:
+        ids = shared[0] if len(shared) == 1 else union(*shared)
+        rows = select(_ROWS_T.c.id).where(_ROWS_T.c.note_id.in_(ids))
+        parts.append((_INDEX_T.c.rowid.in_(rows), Note.owner_id != account.id))
+    statements = []
+    for rows_wanted, whose in parts:
+        statement = (select(*columns)
+                     .select_from(_INDEX_T)
+                     .join(_ROWS_T, _ROWS_T.c.id == _INDEX_T.c.rowid)
+                     .join(Note, Note.id == _ROWS_T.c.note_id)
+                     .where(rows_wanted, whose, Note.deleted_at.is_(None), *extra))
+        if match:
+            statement = statement.where(_sql("@index MATCH :match").bindparams(match=match))
+        statements.append(statement)
+    return statements
+
+
+def _total(db: Session, account: Account, match: str, extra: Sequence[ColumnElement[bool]]) -> int:
+    return sum(int(db.scalar(statement) or 0) for statement in _bases(account, match, extra, func.count()))
 
 
 def _count(db: Session, account: Account, query: Query, filters: Filters | None) -> int:
     match, extra = _conditions(account, query, filters)
-    return int(db.scalar(_base(account, match, extra, func.count())) or 0)
+    return _total(db, account, match, extra)
 
 
 def folder_tree(db: Session, account: Account, folder_id: str) -> list[str]:
@@ -481,18 +548,17 @@ def folder_tree(db: Session, account: Account, folder_id: str) -> list[str]:
 Segment = dict[str, Any]
 
 
-def _spans(value: str, needles: Sequence[str]) -> tuple[list[tuple[int, int]], str, list[int]]:
-    """Where the folded needles stand in ``value``, as (start, end) in the original, sorted and merged."""
+def _spans_in(value: str, needles: Sequence[str], offset: int = 0) -> list[tuple[int, int]]:
+    """Where the folded needles stand in ``value``, as (start, end) in the original plus ``offset``, sorted and
+    merged."""
     folded, starts = fold_with_map(value)
     spans: list[tuple[int, int]] = []
     for needle in needles:
-        if not needle:
-            continue
         at = folded.find(needle)
         found = 0
         while at >= 0 and found < MARKS_MAX:
             end = at + len(needle)
-            spans.append((starts[at], starts[end - 1] + 1))
+            spans.append((offset + starts[at], offset + starts[end - 1] + 1))
             found += 1
             at = folded.find(needle, end)
     spans.sort()
@@ -502,7 +568,108 @@ def _spans(value: str, needles: Sequence[str]) -> tuple[list[tuple[int, int]], s
             merged[-1] = (merged[-1][0], max(end, merged[-1][1]))
         else:
             merged.append((start, end))
-    return merged, folded, starts
+    return merged
+
+
+#: Letters that fold into more than one (ä to ae, ß to ss, ﬁ to fi): a stretch of a needle that one letter of the text
+#: may stand for. Filled with ``_letters_of`` on first use.
+_MULTI: set[str] = set()
+#: For each folded character, the characters of the text whose folding holds it ("a": a, A, á, Ä, ...).
+_SOURCES: dict[str, set[str]] = {}
+#: Marks that fold to nothing and may follow any letter of the text.
+_MARKS = "[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]*"
+#: Candidates checked letter by letter before the whole text is folded after all.
+CANDIDATES_MAX = 200
+
+
+def _letters_of() -> dict[str, set[str]]:
+    if not _SOURCES:
+        ranges = [range(0x20, 0x7F), range(0xA0, 0x2000), range(0x1E00, 0x2000), range(0x2100, 0x2190),
+                  range(0xFB00, 0xFB50), range(0xFF00, 0xFF60)]
+        for code in (code for each in ranges for code in each):
+            char = chr(code)
+            folded = char.lower() if char.isascii() else _fold_char(char)
+            if len(folded) > 1:
+                _MULTI.add(folded)
+            for piece in folded:
+                _SOURCES.setdefault(piece, set()).add(char)
+    return _SOURCES
+
+
+@functools.lru_cache(maxsize=256)
+def _anchor(needle: str) -> re.Pattern[str] | None:
+    """A pattern for the raw text that every place holding ``needle`` (after folding) matches: the longest stretch of
+    the needle without blanks and without letters one character of the text may fold into together; each letter a
+    class of the characters that fold to it. ``None`` when no stretch of three is left."""
+    sources = _letters_of()
+    free = [char != " " for char in needle]
+    for multi in _MULTI:
+        at = needle.find(multi)
+        while at >= 0:
+            for index in range(at, at + len(multi)):
+                free[index] = False
+            at = needle.find(multi, at + 1)
+    best, run = (0, 0), 0
+    for index, ok in enumerate([*free, False]):
+        if ok:
+            run += 1
+            continue
+        if run > best[1] - best[0]:
+            best = (index - run, index)
+        run = 0
+    if best[1] - best[0] < 3:
+        return None
+    parts = []
+    for char in needle[best[0]:best[1]]:
+        chars = sources.get(char, set()) | {char, char.upper()}
+        parts.append("[" + "".join(re.escape(each) for each in sorted(chars)) + "]" + _MARKS)
+    return re.compile("".join(parts))
+
+
+def _first_at(value: str, needle: str, reach: int) -> int | None:
+    """Where the first place holding ``needle`` starts in ``value``: candidates from ``_anchor`` checked letter by
+    letter in a small stretch; the whole text folded only when the needle has no anchor or too many candidates fail."""
+    pattern = _anchor(needle)
+    after = 0
+    if pattern is not None:
+        for number, match in enumerate(pattern.finditer(value)):
+            if number >= CANDIDATES_MAX:
+                after = max(0, match.start() - reach)
+                break
+            low = max(0, match.start() - reach)
+            spans = _spans_in(value[low:match.start() + 2 * reach], [needle], low)
+            if spans:
+                return spans[0][0]
+        else:
+            return None
+    for start in range(after, len(value), SCAN_STEP):
+        piece = value[start:start + SCAN_STEP + reach]
+        if needle in fold(piece):
+            spans = _spans_in(piece, [needle], start)
+            if spans:
+                return spans[0][0]
+    return None
+
+
+def _spans(value: str, needles: Sequence[str]) -> list[tuple[int, int]]:
+    """The hits around the first one, as (start, end) in ``value``: enough for the excerpt and the jump (AC-1, AC-5).
+    Only the stretch of the excerpt is folded letter by letter, wherever the hit is: a long text is first looked
+    through with a pattern of the raw letters (``_first_at``), so a note of half a megabyte costs about as much as a
+    short one."""
+    needles = [needle for needle in needles if needle]
+    if not needles or not value:
+        return []
+    # How far a hit may reach: a folded letter is never shorter than its original, except for blanks run together and
+    # marks that fall away.
+    reach = max(len(needle) for needle in needles) * 3 + 64
+    if len(value) <= SCAN_STEP:
+        return _spans_in(value, needles)
+    starts = [at for at in (_first_at(value, needle, reach) for needle in needles) if at is not None]
+    if not starts:
+        return []
+    first = min(starts)
+    low = max(0, first - EXCERPT_BEFORE - reach)
+    return [span for span in _spans_in(value[low:first + EXCERPT_CHARS + reach], needles, low) if span[0] >= first]
 
 
 def _segments(value: str, spans: Sequence[tuple[int, int]], start: int = 0, end: int | None = None) -> list[Segment]:
@@ -526,23 +693,29 @@ _FLAT = re.compile(r"\s")
 
 
 def excerpt(value: str, spans: Sequence[tuple[int, int]]) -> list[Segment]:
-    """A piece of ``value`` around its first hit, with every hit in it marked; blanks of any kind as spaces."""
-    flat = _FLAT.sub(" ", value)
+    """A piece of ``value`` around its first hit, with every hit in it marked; blanks of any kind as spaces. Only the
+    stretch around the hit is looked at, however long the text."""
     if not spans:
+        flat = _FLAT.sub(" ", value[:EXCERPT_CHARS + 20])
         end = min(len(flat), EXCERPT_CHARS)
         while end < len(flat) and end < EXCERPT_CHARS + 20 and not flat[end].isspace():
             end += 1
-        return _with_ellipsis(_segments(flat, [], 0, end), False, end < len(flat))
-    first = spans[0][0]
-    start = max(0, first - EXCERPT_BEFORE)
-    if start > 0:
-        blank = flat.find(" ", start, first)
-        start = blank + 1 if blank >= 0 else start
-    end = min(len(flat), max(start + EXCERPT_CHARS, spans[0][1]))
-    if end < len(flat):
-        blank = flat.rfind(" ", spans[0][1], end)
-        end = blank if blank > spans[0][1] else end
-    return _with_ellipsis(_segments(flat, spans, start, end), start > 0, end < len(flat))
+        return _with_ellipsis(_segments(flat, [], 0, end), False, end < len(value))
+    first, first_end = spans[0]
+    low = max(0, first - EXCERPT_BEFORE)
+    high = min(len(value), max(first + EXCERPT_CHARS, first_end))
+    # Blanks become spaces one for one, so the positions in the stretch stay those of the text.
+    flat = _FLAT.sub(" ", value[low:high])
+    shifted = [(span_start - low, span_end - low) for span_start, span_end in spans]
+    start = 0
+    if low > 0:
+        blank = flat.find(" ", 0, first - low)
+        start = blank + 1 if blank >= 0 else 0
+    end = min(len(flat), max(start + EXCERPT_CHARS, first_end - low))
+    if high < len(value) or end < len(flat):
+        blank = flat.rfind(" ", first_end - low, end)
+        end = blank if blank > first_end - low else end
+    return _with_ellipsis(_segments(flat, shifted, start, end), low + start > 0, low + end < len(value))
 
 
 def _with_ellipsis(segments: list[Segment], before: bool, after: bool) -> list[Segment]:
@@ -568,17 +741,17 @@ def _jump(value: str, span: tuple[int, int]) -> dict[str, Any]:
 
 def _hit(db: Session, note: Note, query: Query, folders: dict[str, Folder]) -> dict[str, Any]:
     needles = query.terms + [fold(f"#{tag}") for tag in query.tags]
-    title_spans, _, _ = _spans(note.title or "", query.terms)
+    title_spans = _spans(note.title or "", query.terms)
     hidden = _hidden(db, note)
     body = "" if hidden else (note.text or "")
-    body_spans, _, _ = _spans(body, needles) if body else ([], "", [])
+    body_spans = _spans(body, needles)
     where = "text" if body_spans else ("title" if title_spans else "text")
     attachment: dict[str, Any] | None = None
     shown = excerpt(body, body_spans)
     jump = _jump(body, body_spans[0]) if body_spans else None
     if not body_spans and not title_spans and not hidden and query.terms:
         for part in _parts(db, note):
-            part_spans, _, _ = _spans(part.text, query.terms)
+            part_spans = _spans(part.text, query.terms)
             if part_spans:
                 where = "attachment"
                 attachment = {"kind": part.kind, "name": part.name, "page": part.page, "ref": part.ref}
@@ -629,13 +802,14 @@ def search(db: Session, account: Account, raw: str, filters: Filters | None = No
         return Result(total=0, items=[], offset=offset, unfiltered=None, terms=[], tags=[])
     match, extra = _conditions(account, query, filters)
     total = _count(db, account, query, filters)
-    ids: list[str]
     if match and not query.empty:
         weights = ", ".join(str(weight) for weight in WEIGHTS)
-        score = literal_column(f"bm25({INDEX}, {weights})")
-        statement = _base(account, match, extra, Note.id).order_by(score, Note.updated_at.desc(), Note.id)
+        score: Any = literal_column(f"bm25({INDEX}, {weights})")
     else:
-        statement = _base(account, match, extra, Note.id).order_by(Note.updated_at.desc(), Note.id)
+        score = literal(0)
+    parts = _bases(account, match, extra, Note.id.label("id"), score.label("score"), Note.updated_at.label("changed"))
+    hits = (parts[0] if len(parts) == 1 else union_all(*parts)).subquery()
+    statement = select(hits.c.id).order_by(hits.c.score, hits.c.changed.desc(), hits.c.id)
     ids = list(db.scalars(statement.offset(offset).limit(limit)))
     # The Yjs document stays in the database: a hit needs the title and the plain text only.
     page = select(Note).options(defer(Note.ydoc)).where(Note.id.in_(ids))

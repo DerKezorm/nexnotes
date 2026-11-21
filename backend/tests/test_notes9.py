@@ -346,10 +346,12 @@ def test_notes9_ec4_page_size_has_a_limit(client, operator):
 ])
 def test_notes9_ec5_odd_input_never_breaks(client, operator, query):
     new_note(client, "Sonderzeichen", 'a < b, 5 * 3, "zitiert", Pfad C:\\temp, 100 % #tag')
-    answer = client.get("/api/search", params={"q": query})
-    assert answer.status_code == 200, (query, answer.text)
-    for params in ({"tag": query[:101]}, {"q": query, "tag": "tag"}):
-        assert client.get("/api/search", params=params).status_code == 200
+    # Never a 500: either hits, or a refusal that says why (a word too long, no tag).
+    allowed = {"search_term_too_long", "search_tag_invalid"}
+    for params in ({"q": query}, {"tag": query[:101]}, {"q": query, "tag": "tag"}):
+        answer = client.get("/api/search", params=params)
+        assert answer.status_code == 200 or (answer.status_code == 422 and answer.json()["detail"]["code"] in allowed), \
+            (params, answer.text)
 
 
 def test_notes9_ec5_special_characters_are_found_as_text(client, operator):
@@ -553,4 +555,176 @@ def test_notes9_ec5_match_strings_are_always_closed(client, operator):
     with SessionLocal() as db:
         account = db.get(Account, operator.id)
         match, extra = search._conditions(account, search.Query(terms=['x"y\x00z', 'NEAR("a"']), None)
-        assert db.scalar(search._base(account, match, extra, search.func.count())) == 0
+        assert search._total(db, account, match, extra) == 0
+
+
+# --- Findings of the review ---------------------------------------------------------------------------------------
+
+
+def _bulk(owner: Account, count: int, text_of) -> None:
+    with SessionLocal() as db:
+        inbox = inbox_for(db, owner.id).id
+        db.commit()
+    now = datetime.now(UTC)
+    rows = [{"id": str(uuid.uuid4()), "owner_id": owner.id, "folder_id": inbox, "title": f"Notiz {number}",
+             "text": text_of(number), "ydoc": b"", "created_at": now, "updated_at": now} for number in range(count)]
+    with SessionLocal() as db:
+        db.execute(insert(Note), rows)
+        db.commit()
+
+
+def _median_time(run, rounds: int = 25) -> float:
+    run()
+    times = []
+    for _ in range(rounds):
+        started = time.perf_counter()
+        run()
+        times.append(time.perf_counter() - started)
+    return sorted(times)[len(times) // 2]
+
+
+def test_notes9_ec7_the_time_of_a_search_tells_nothing_about_other_accounts_notes(client, operator):
+    """A word that stands in 4,000 notes of another account takes no longer to look for than a word that stands
+    nowhere: the account is part of the index query, not a filter after it."""
+    other = make_account("other")
+    _bulk(operator, 200, lambda number: f"Eintrag {number} über den Garten, Beet {number % 37} gießen. " * 4)
+    _bulk(other, 4000, lambda number: f"Eintrag {number} über den Zebrafisch im Becken {number % 37}. " * 4)
+    search.fill()
+    with SessionLocal() as db:
+        me = db.get(Account, operator.id)
+        assert search.search(db, me, "zebrafisch").total == 0
+        foreign = _median_time(lambda: search.search(db, me, "zebrafisch"))
+        nowhere = _median_time(lambda: search.search(db, me, "quallenwal"))
+        theirs = db.get(Account, other.id)
+        assert search.search(db, theirs, "zebrafisch").total == 4000
+    print(f"EC-7 timing: word in 4,000 foreign notes {foreign * 1000:.1f} ms, word nowhere {nowhere * 1000:.1f} ms")
+    assert foreign < nowhere * 1.5 + 0.003, (foreign, nowhere)
+
+
+def test_notes9_ac4_a_tag_filter_that_is_no_tag_is_refused(client, operator):
+    """Before, ``!!!`` or ``2026`` gave an empty key, the filter fell away and every hit came under a honey chip."""
+    tagged_note(client, "Bad", "Fliesen #bad")
+    tagged_note(client, "Küche", "Fliesen #küche")
+    for tag in ("!!!", "1", "#2026", "#", "- _"):
+        answer = client.get("/api/search", params={"q": "fliesen", "tag": tag})
+        assert answer.status_code == 422, tag
+        assert answer.json()["detail"]["code"] == "search_tag_invalid"
+    assert titles(find(client, "fliesen", tag="#bad,")) == ["Bad"]
+    assert sorted(titles(find(client, "fliesen", tag=" "))) == ["Bad", "Küche"]
+
+
+def test_notes9_ac7_more_than_sixteen_terms_are_refused_not_cut(client, operator):
+    words = [f"wort{number:02d}" for number in range(search.TERMS_MAX + 1)]
+    new_note(client, "Alle bis auf eins", " ".join(words[:-1]))
+    assert titles(find(client, " ".join(words[:-1]))) == ["Alle bis auf eins"]
+    for query in (" ".join(words), " ".join(words[:-2]) + " #eins #zwei #drei"):
+        answer = client.get("/api/search", params={"q": query})
+        assert answer.status_code == 422, query
+        assert answer.json()["detail"] | {"message": ""} == {"code": "search_too_many_terms", "message": "",
+                                                             "maximum": search.TERMS_MAX}
+
+
+def test_notes9_ec5_a_phrase_too_long_is_refused_and_one_at_the_limit_stays_quick(client, operator):
+    phrase = ("Strom und Gas fuer das ganze Haus " * 4)[:search.TERM_CHARS_MAX].strip()
+    _bulk(operator, 4000, lambda number: f"{number}: " + "Strom und Gas fuer das ganze Haus " * 5)
+    search.fill()
+    find(client, f'"{phrase[:40]}"')
+    started = time.perf_counter()
+    result = find(client, f'"{phrase}"')
+    took = time.perf_counter() - started
+    assert result["total"] == 4000
+    print(f"EC-5: phrase of {len(phrase)} characters over 4,000 hits {took:.3f} s")
+    assert took < 0.5, took
+    answer = client.get("/api/search", params={"q": f'"{phrase} und noch mehr Text"'})
+    assert answer.status_code == 422
+    assert answer.json()["detail"]["code"] == "search_term_too_long"
+    assert answer.json()["detail"]["maximum"] == search.TERM_CHARS_MAX
+    assert client.get("/api/search", params={"q": "x" * (search.TERM_CHARS_MAX + 1)}).status_code == 422
+
+
+def test_notes9_ec4_a_note_of_460_kb_costs_no_more_than_a_short_one(client, operator):
+    """Excerpt and marks fold only the piece around the first hit, not the whole text."""
+    filler = "Ärger über die Größe der Rückstände, " * 12_800
+    assert len(filler.encode("utf-8")) > 460_000
+    _bulk(operator, 20, lambda number: filler + f"am Ende steht die Stromrechnung Nummer {number}. Danach Ruhe.")
+    search.fill()
+    find(client, "stromrechnung")
+    with SessionLocal() as db:
+        me = db.get(Account, operator.id)
+        started = time.perf_counter()
+        search._count(db, me, search.parse("stromrechnung"), None)
+        print(f"EC-4: counting in the index alone {time.perf_counter() - started:.3f} s")
+    started = time.perf_counter()
+    result = find(client, "stromrechnung")
+    took = time.perf_counter() - started
+    print(f"EC-4: 20 notes of {len(filler.encode('utf-8')) // 1000} KB, one page {took:.3f} s")
+    assert result["total"] == 20 and len(result["items"]) == 20
+    assert took < 1.0, took
+    item = result["items"][0]
+    assert marked(item["excerpt"]) == ["Stromrechnung"]
+    assert item["jump"] == {"text": "Stromrechnung", "nth": 0}
+    # A hit early in the long text is found the same way.
+    early = new_note(client, "Früh", "Die Stromrechnung kommt. " + filler)
+    item = next(hit for hit in find(client, "stromrechnung", limit=50)["items"] if hit["id"] == early)
+    assert marked(item["excerpt"]) == ["Stromrechnung"]
+
+
+def test_notes9_ec1_quick_folding_agrees_with_the_letter_by_letter_one():
+    import random
+
+    letters = list("aouAOUsSß  \t\nÄÖÜäöüéÉçﬁİÆøẞ\u0308\u0301\u00a0\u2003xyz-#")
+    chance = random.Random(9)
+    for _ in range(3000):
+        sample = "".join(chance.choice(letters) for _ in range(chance.randint(0, 24)))
+        assert search.fold(sample) == search.fold_with_map(sample)[0], repr(sample)
+
+
+def test_notes9_ec1_a_short_word_in_capitals_is_found(client, operator):
+    """Words under three letters go the ``instr`` way, which compares the folded text letter for letter."""
+    new_note(client, "Kurz", "Wir sehen uns ab und zu")
+    new_note(client, "Anders", "Nichts davon")
+    assert titles(find(client, "AB")) == ["Kurz"]
+    assert titles(find(client, "Zu")) == ["Kurz"]
+
+
+def test_notes9_ac4_creation_and_change_are_two_dates(client, operator):
+    now = datetime.now(UTC)
+    note = new_note(client, "Alt angelegt", "Rechnung von früher, neu bearbeitet")
+    with SessionLocal() as db:
+        row = db.get(Note, note)
+        row.created_at = now - timedelta(days=400)
+        row.updated_at = now - timedelta(days=2)
+        db.commit()
+    week = (now - timedelta(days=7)).isoformat()
+    assert titles(find(client, "rechnung", since=week)) == ["Alt angelegt"]
+    assert titles(find(client, "rechnung", since=week, date_field="updated")) == ["Alt angelegt"]
+    assert titles(find(client, "rechnung", since=week, date_field="created")) == []
+    assert titles(find(client, "rechnung", until=week, date_field="created")) == ["Alt angelegt"]
+
+
+def test_notes9_ac5_the_jump_counts_the_same_text_before_the_hit():
+    """The editor finds the place by the text of the hit and how often the same text stands before it."""
+    text = "Rechnung vom Mai, Rechnung vom Juni, Rechnung vom Juli"
+    second = text.index("Rechnung", 1)
+    third = text.index("Rechnung", second + 1)
+    assert search._jump(text, (0, 8)) == {"text": "Rechnung", "nth": 0}
+    assert search._jump(text, (second, second + 8)) == {"text": "Rechnung", "nth": 1}
+    assert search._jump(text, (third, third + 8)) == {"text": "Rechnung", "nth": 2}
+
+
+def test_notes9_ac1_the_first_hit_of_a_long_text_is_the_one_marked():
+    """Looking through a long text by pattern finds the same first hit as folding all of it."""
+    import random
+
+    chance = random.Random(15)
+    words = ["Straße", "strasse", "Müller", "MUELLER", "Müller", "Café", "cafe", "Größe", "groesse", "Ärger",
+             "rechnung", "Stromrechnung", "ﬁnal", "final", "Fuß", "fuss", "Ökologie", "ab", "und", "#bad"]
+    for _ in range(40):
+        text = " ".join(chance.choice(words) + chance.choice([" ", "  ", "\n", ", "]) for _ in range(4000))
+        for needle in ("strasse", "mueller", "cafe", "groesse", "aerger", "stromrechnung", "final", "fuss",
+                       "oekologie", "rger", "ller", "#bad", "und mueller"):
+            whole = search._spans_in(text, [needle])
+            quick = search._spans(text, [needle])
+            assert bool(whole) == bool(quick), needle
+            if whole:
+                assert quick[0] == whole[0], needle
