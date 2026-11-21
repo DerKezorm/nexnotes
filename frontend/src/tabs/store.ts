@@ -4,11 +4,16 @@
  * tabs to another device is not part of the briefing.
  *
  * A tab pushed out by a seventh says so in the notice at the bottom (AC-7).
+ *
+ * Another account in the same tab (signing out, or another tab signed in as someone else): the tabs of the account
+ * before are put away, and the notes they showed are remembered as that account's for the rest of the page load. The
+ * address may still name one of them; the page does not take it over as a tab of the next account (`TabbedNotes`).
  */
 import i18n from 'i18next'
 import { useSyncExternalStore } from 'react'
 
 import { showNotice } from '../folders/notice'
+import { currentAccount, onAccountChange } from '../state/account'
 import { metaOf } from './meta'
 import * as rules from './state'
 import { EMPTY, MAX_TABS, type Side, type Step, type TabsState } from './state'
@@ -90,9 +95,26 @@ export function useTabs(): TabsState {
   )
 }
 
+/** Notes the tabs of another account showed in this page load, with that account. */
+const others = new Map<string, number>()
+
+/** A note an account before had open in this page load, and not the one signed in now. */
+export function isOtherAccountsNote(note: string): boolean {
+  const owner = others.get(note)
+  return owner !== undefined && owner !== currentAccount()
+}
+
+onAccountChange(() => {
+  if (account !== null) for (const tab of state.tabs) others.set(tab.note, account)
+  account = null
+  state = EMPTY
+  emit()
+})
+
 /** For tests: as after a fresh page load. */
 export function forgetTabs(): void {
   account = null
   state = EMPTY
+  others.clear()
   emit()
 }

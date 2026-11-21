@@ -879,7 +879,13 @@
     "blockedTitle": "Dein Konto ist gesperrt",
     "expiredText": "Deine Anmeldung ist abgelaufen. Was du geschrieben hast, bleibt hier stehen und wird gespeichert, sobald du wieder angemeldet bist.",
     "expiredTitle": "Bitte melde dich wieder an",
-    "leave": "Zur Anmeldung"
+    "leave": "Zur Anmeldung",
+    "lostChanges_one": "Jetzt ist {{name}} angemeldet. {{count}} Änderung des Kontos davor war noch nicht gespeichert und ist verloren.",
+    "lostChanges_other": "Jetzt ist {{name}} angemeldet. {{count}} Änderungen des Kontos davor waren noch nicht gespeichert und sind verloren.",
+    "signOutAnyway": "Trotzdem abmelden",
+    "wait": "Warten",
+    "waitingText_one": "{{count}} Änderung ist noch nicht gespeichert. Meldest du dich jetzt ab, geht sie verloren.",
+    "waitingText_other": "{{count}} Änderungen sind noch nicht gespeichert. Meldest du dich jetzt ab, gehen sie verloren."
   },
   "settings": {
     "ownPassword": "Dein Passwort",

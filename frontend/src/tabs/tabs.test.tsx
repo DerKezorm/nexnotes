@@ -8,7 +8,7 @@
  * A stand-in for the server answers the routes, one for the live room answers the y-websocket sync with a Yjs
  * document per note; `matchMedia` says "wide screen".
  */
-import { act, useEffect } from 'react'
+import { act, Fragment, useEffect, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import * as decoding from 'lib0/decoding'
@@ -22,11 +22,13 @@ import i18n from '../i18n'
 import type { NoteHead } from '../notes/api'
 import { tryLeave } from '../notes/context'
 import { NotesPage } from '../notes/NotesPage'
-import { AuthProvider } from '../state/auth'
+import { SIGNED_OUT_EVENT } from '../api/client'
+import { SessionDialog } from '../components/SessionDialog'
+import { AuthProvider, useAuth } from '../state/auth'
 import { tabCommand } from './keys'
 import { acquireProvider, BRIDGE, forgetParked, parkedProviders, releaseProvider } from './live'
-import { accountChanged } from '../state/account'
-import { forgetMeta } from './meta'
+import { accountChanged, followAccount, waitingChanges } from '../state/account'
+import { forgetMeta, metaOf, refreshMeta } from './meta'
 import { openNoteBeside, openNoteInNewTab } from './open'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabsNow } from './store'
@@ -38,6 +40,10 @@ let notes: Map<string, NoteHead & { locked?: boolean }>
 const rooms = new Map<string, Y.Doc>()
 const sockets: RoomSocket[] = []
 let me = 1
+/** The account a note belongs to (1 unless named): any other gets 404 for it, and its room refuses them. */
+const belongs = new Map<string, number>()
+/** The network is away: the room refuses every new connection, as a dead line does. */
+let networkDown = false
 /** Every request to the stand-in server, as "METHOD /path". */
 const requests: string[] = []
 const INBOX = 'inbox-1'
@@ -69,6 +75,7 @@ function reply(status: number, body: unknown): Response {
 
 async function answer(method: string, path: string): Promise<Response> {
   if (path === '/api/setup') return reply(200, { needs_setup: false, signed_in: true, version: '1', min_password: 12, code_required: false })
+  if (method === 'POST' && path === '/api/auth/logout') return reply(204, null)
   if (path === '/api/auth/me') return reply(200, { id: me, name: 'me', display_name: 'Me', role: 'member', language: 'en', version: '1', whats_new_seen: '1' })
   if (path === '/api/folders')
     return reply(200, {
@@ -79,7 +86,7 @@ async function answer(method: string, path: string): Promise<Response> {
       ],
     })
   if (method === 'GET' && path === '/api/note-list') {
-    const alive = [...notes.values()].filter((n) => !n.deleted_at)
+    const alive = [...notes.values()].filter((n) => !n.deleted_at && (belongs.get(n.id) ?? 1) === me)
     return reply(200, { key: 'all', view: { mode: 'list', sort: 'title', direction: 'asc', grouped: false }, counts: { own: alive.length, shared: 0 }, items: alive })
   }
   if (method === 'GET' && path === '/api/note-list/stamp') return reply(200, { stamp: String(notes.size) })
@@ -87,7 +94,7 @@ async function answer(method: string, path: string): Promise<Response> {
   if (one) {
     const [, id, tail = ''] = one
     const found = notes.get(id)
-    if (!found) return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
+    if (!found || (belongs.get(id) ?? 1) !== me) return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
     if (method === 'GET' && !tail) return reply(200, found)
     if (method === 'POST' && tail === '/title/suggestion') return reply(200, found)
   }
@@ -109,8 +116,13 @@ class RoomSocket {
     this.doc = rooms.get(this.id)!
     sockets.push(this)
     setTimeout(() => {
+      if (networkDown) {
+        this.readyState = 3
+        this.onclose?.({ code: 1006 } as CloseEvent)
+        return
+      }
       const found = notes.get(this.id)
-      if (!found || found.deleted_at) {
+      if (!found || found.deleted_at || (belongs.get(this.id) ?? 1) !== me) {
         this.readyState = 3
         this.onclose?.({ code: 4404 } as CloseEvent)
         return
@@ -175,6 +187,12 @@ async function settle(ms = 30): Promise<void> {
   })
 }
 
+/** As `App.tsx`: the signed-in part drawn anew for every account. */
+function PerAccount({ children }: { children: ReactNode }) {
+  const { me: who } = useAuth()
+  return <Fragment key={who?.id ?? 'nobody'}>{children}</Fragment>
+}
+
 async function render(path: string): Promise<void> {
   box = document.createElement('div')
   document.body.appendChild(box)
@@ -184,11 +202,14 @@ async function render(path: string): Promise<void> {
       <AuthProvider>
         <MemoryRouter initialEntries={[path]}>
           <Where />
-          <Routes>
-            <Route path="/" element={<NotesPage />} />
-            <Route path="/notes/:noteId" element={<NotesPage />} />
-            <Route path="/trash" element={<div data-testid="trash-page" />} />
-          </Routes>
+          <SessionDialog />
+          <PerAccount>
+            <Routes>
+              <Route path="/" element={<NotesPage />} />
+              <Route path="/notes/:noteId" element={<NotesPage />} />
+              <Route path="/trash" element={<div data-testid="trash-page" />} />
+            </Routes>
+          </PerAccount>
         </MemoryRouter>
       </AuthProvider>,
     )
@@ -250,6 +271,8 @@ beforeEach(() => {
     rooms.set(one.id, doc)
   }
   sockets.length = 0
+  belongs.clear()
+  networkDown = false
   me = 1
   width = 1400
   localStorage.clear()
@@ -503,6 +526,7 @@ describe('tabs in the page', () => {
   it('NOTES-8 EC-1 a parked tab opened again knows its title: leaving it asks for none', async () => {
     withText('soup', 'red lentils, onion')
     await render('/notes/soup')
+    networkDown = true
     await act(async () => window.dispatchEvent(new Event('offline')))
     const title = pane('left')!.querySelector('[data-testid="note-title"]') as HTMLInputElement
     await act(async () => typeTitle(title, 'Lentil soup, spicy'))
@@ -715,6 +739,132 @@ describe('tabs in the page', () => {
     expect(parkedProviders()).toEqual([first])
     accountChanged()
     expect(parkedProviders()).toEqual([])
+  })
+
+  it('NOTES-8 NOTES-2 another account in the same browser tab sees nothing of the notes of the one before, not even what waited offline', async () => {
+    notes.set('mine', note('mine', 'Bea list'))
+    belongs.set('mine', 2)
+    rooms.set('mine', new Y.Doc())
+    rooms.get('mine')!.getText('title').insert(0, 'Bea list')
+    withText('soup', 'the secret recipe')
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('shop'))
+    await settle(80)
+    // Offline, A types into both sides: the changes wait.
+    networkDown = true
+    await act(async () => window.dispatchEvent(new Event('offline')))
+    await act(async () => typeTitle(pane('left')!.querySelector('[data-testid="note-title"]') as HTMLInputElement, 'Lentil soup SECRET'))
+    await act(async () => typeTitle(pane('right')!.querySelector('[data-testid="note-title"]') as HTMLInputElement, 'Saturday SECRET'))
+    expect(waitingChanges()).toBe(2)
+    expect(where).toBe('/notes/shop')
+
+    // Another browser tab signs in as B (the cookie is shared); this one follows when it comes into view.
+    me = 2
+    networkDown = false
+    await act(async () => document.dispatchEvent(new Event('visibilitychange')))
+    await settle(120)
+    await act(async () => window.dispatchEvent(new Event('online')))
+    await settle(120)
+
+    expect(where).toBe('/')
+    expect($('tab-bar')).toBeNull()
+    expect($$('tab-pane')).toHaveLength(0)
+    for (const secret of ['Lentil soup', 'Saturday', 'SECRET', 'secret recipe']) expect(box.textContent).not.toContain(secret)
+    // Nothing of A in B's tabs on this device, and nothing of A parked for B.
+    expect(localStorage.getItem(storageKey(2)) ?? '').not.toMatch(/soup|shop/)
+    expect(parkedProviders()).toEqual([])
+    expect(metaOf('soup')).toBeUndefined()
+    // The notice says what was lost, without a word of it.
+    const notice = document.querySelector('[data-testid="folder-notice"]')?.textContent ?? ''
+    expect(notice).toContain('2 changes of the account before were not saved yet and are lost.')
+    expect(notice).not.toContain('SECRET')
+
+    // B opens a note of its own beside nothing of A's: the tab is B's alone.
+    await act(async () => openNoteInNewTab('mine'))
+    await settle(80)
+    expect(tabTitles()).toEqual(['Bea list'])
+    for (const secret of ['Lentil soup', 'SECRET']) expect(box.textContent).not.toContain(secret)
+    expect(localStorage.getItem(storageKey(2)) ?? '').not.toMatch(/soup|shop/)
+  })
+
+  it('NOTES-8 NOTES-2 a connection of the account before never goes on to the next one: not parked, not bridged', () => {
+    vi.stubGlobal('WebSocket', function () {
+      return { send() {}, close() {}, readyState: 0, binaryType: 'arraybuffer', onopen: null, onmessage: null, onclose: null, onerror: null }
+    })
+    followAccount(1)
+    const first = acquireProvider('soup')
+    first.doc.getText('title').insert(0, 'typed offline by A')
+    // Another account in the tab before A's editor went: B's editor of the same note meets nothing of A's.
+    followAccount(2)
+    const theirs = acquireProvider('soup')
+    expect(theirs).not.toBe(first)
+    expect(theirs.doc.getText('title').toString()).toBe('')
+    first.doc.getText('title').insert(0, '> ')
+    expect(theirs.doc.getText('title').toString()).toBe('')
+    // A's editor goes only now: its connection closes instead of waiting in B's place.
+    releaseProvider(first)
+    expect(parkedProviders()).toEqual([])
+    releaseProvider(theirs)
+    const again = acquireProvider('soup')
+    expect(again).not.toBe(first)
+    expect(again.doc.getText('title').toString()).toBe('')
+    releaseProvider(again)
+    followAccount(1)
+  })
+
+  it('NOTES-8 NOTES-2 the heads of the tabs are forgotten with the account, a late answer is dropped, a note not handed out keeps no title', async () => {
+    const held: Array<() => void> = []
+    vi.stubGlobal('fetch', async (input: string) => {
+      const url = new URL(input, 'http://localhost')
+      const id = url.pathname.split('/').pop()!
+      if (id === 'late') await new Promise<void>((resolve) => held.push(resolve))
+      const found = notes.get(id)
+      if (!found || (belongs.get(id) ?? 1) !== me) return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
+      return reply(200, found)
+    })
+    notes.set('late', note('late', 'Payroll of A'))
+    await refreshMeta(['soup'])
+    expect(metaOf('soup')?.title).toBe('Lentil soup')
+    const asking = refreshMeta(['late'])
+    accountChanged()
+    expect(metaOf('soup')).toBeUndefined()
+    held.forEach((resolve) => resolve())
+    await asking
+    expect(metaOf('late')).toBeUndefined()
+    // The note is not handed out (any more): "not available", and no title of it stays.
+    await refreshMeta(['soup'])
+    me = 2
+    await refreshMeta(['soup'])
+    expect(metaOf('soup')).toMatchObject({ state: 'gone', title: '' })
+  })
+
+  it('NOTES-8 NOTES-2 signing out while changes still wait asks first: "Sign out anyway" or "Wait"', async () => {
+    await render('/notes/soup')
+    networkDown = true
+    await act(async () => window.dispatchEvent(new Event('offline')))
+    await act(async () => typeTitle(pane('left')!.querySelector('[data-testid="note-title"]') as HTMLInputElement, 'Lentil soup, more'))
+    expect(waitingChanges()).toBe(1)
+    // The operator blocked the account: the way out is signing out.
+    await act(async () => window.dispatchEvent(new CustomEvent(SIGNED_OUT_EVENT, { detail: { code: 'account_blocked' } })))
+    await act(async () => $('session-leave', document.body)!.click())
+    expect($('sign-out-waiting', document.body)!.textContent).toContain('1 change is not saved yet. If you sign out now, it is lost.')
+    expect(requests).not.toContain('POST /api/auth/logout')
+    // "Wait": nothing happens, the page stays.
+    await act(async () => $('sign-out-wait', document.body)!.click())
+    expect($('sign-out-waiting', document.body)).toBeNull()
+    expect(requests).not.toContain('POST /api/auth/logout')
+    expect(pane('left')).not.toBeNull()
+    // "Sign out anyway".
+    await act(async () => $('session-leave', document.body)!.click())
+    await act(async () => $('sign-out-anyway', document.body)!.click())
+    await settle(30)
+    expect(requests).toContain('POST /api/auth/logout')
+    // In German too.
+    await act(async () => i18n.changeLanguage('de'))
+    expect(i18n.t('session.waitingText', { count: 2 })).toBe('2 Änderungen sind noch nicht gespeichert. Meldest du dich jetzt ab, gehen sie verloren.')
+    expect(i18n.t('session.signOutAnyway')).toBe('Trotzdem abmelden')
+    expect(i18n.t('session.wait')).toBe('Warten')
+    await act(async () => i18n.changeLanguage('en'))
   })
 
   /** Text arrives in the note "blank" (another window typed it), its title stays empty. */

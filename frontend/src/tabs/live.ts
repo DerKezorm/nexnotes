@@ -11,11 +11,16 @@
  *   typed on one side shows on the other at once, offline too. When a second one joins, both hand each other their
  *   whole state; afterwards each change typed on one side goes into the other document and out over both
  *   connections (the room takes an update twice without harm).
+ * - **Each connection belongs to the account it was opened for.** Bridges and parked connections are kept per account
+ *   and note: an editor of another account never takes a parked connection of the one before, nor meets its document
+ *   over a bridge. Signing out or another account in the tab closes what was parked; an editor of the account before
+ *   that goes only afterwards (the page is drawn anew a moment later) closes its connection instead of parking it in
+ *   the next account's place. What still waited is lost then; the page says so (`state/auth.tsx`).
  */
 import * as Y from 'yjs'
 
 import { NoteProvider, type LiveStatus } from '../editor/provider'
-import { onAccountChange } from '../state/account'
+import { currentAccount, onAccountChange, onWaiting } from '../state/account'
 
 /** The origin of an update brought over by the bridge: its document counts it as its own and sends it too. */
 export const BRIDGE = Symbol('nexnotes-tab-bridge')
@@ -24,9 +29,16 @@ const STOPPED: LiveStatus[] = ['gone', 'tooLarge', 'broken']
 
 type Parked = { provider: NoteProvider; stop: () => void }
 
+/** Members and parked connections are kept under the account and the note: `<account>:<note>`. */
 const members = new Map<string, Set<NoteProvider>>()
 const bridges = new Map<NoteProvider, () => void>()
 const parked = new Map<string, Parked[]>()
+/** The account each connection was opened for. */
+const owners = new Map<NoteProvider, number | null>()
+
+function placeOf(provider: NoteProvider): string {
+  return `${owners.get(provider) ?? 'none'}:${provider.noteId}`
+}
 const stoppedListeners = new Set<(note: string) => void>()
 let forwarding = false
 let unloadWatched = false
@@ -39,7 +51,8 @@ export function onLiveStopped(listener: (note: string) => void): () => void {
 
 function join(provider: NoteProvider): void {
   const note = provider.noteId
-  const set = members.get(note) ?? new Set<NoteProvider>()
+  const place = placeOf(provider)
+  const set = members.get(place) ?? new Set<NoteProvider>()
   forwarding = true
   try {
     for (const other of set) {
@@ -55,7 +68,7 @@ function join(provider: NoteProvider): void {
     if (forwarding || origin instanceof NoteProvider) return
     forwarding = true
     try {
-      for (const other of members.get(note) ?? []) if (other !== provider) Y.applyUpdate(other.doc, update, BRIDGE)
+      for (const other of members.get(place) ?? []) if (other !== provider) Y.applyUpdate(other.doc, update, BRIDGE)
     } finally {
       forwarding = false
     }
@@ -68,12 +81,12 @@ function join(provider: NoteProvider): void {
     if (STOPPED.includes(last) || last === 'forbidden') for (const listener of [...stoppedListeners]) listener(note)
   })
   set.add(provider)
-  members.set(note, set)
+  members.set(place, set)
   bridges.set(provider, () => {
     provider.doc.off('update', onUpdate)
     watch()
     set.delete(provider)
-    if (!set.size) members.delete(note)
+    if (!set.size && members.get(place) === set) members.delete(place)
   })
 }
 
@@ -82,27 +95,37 @@ function leave(provider: NoteProvider): void {
   bridges.delete(provider)
 }
 
-/** The connection for an editor of this note: the parked one with its waiting changes, or a new one. */
+/** The connection for an editor of this note: the parked one of this account with its waiting changes, or a new
+ * one. */
 export function acquireProvider(noteId: string): NoteProvider {
-  const waiting = parked.get(noteId)?.shift()
-  if (waiting && !parked.get(noteId)?.length) parked.delete(noteId)
+  const account = currentAccount()
+  const place = `${account ?? 'none'}:${noteId}`
+  const waiting = parked.get(place)?.shift()
+  if (waiting && !parked.get(place)?.length) parked.delete(place)
   let provider: NoteProvider
   if (waiting) {
     waiting.stop()
     provider = waiting.provider
   } else {
     provider = new NoteProvider(noteId, new Y.Doc())
+    owners.set(provider, account)
     provider.connect()
   }
   join(provider)
   return provider
 }
 
+function close(provider: NoteProvider): void {
+  owners.delete(provider)
+  provider.destroy()
+}
+
 /** Gives a connection back: closed at once, or kept until the room confirmed what still waits. */
 export function releaseProvider(provider: NoteProvider): void {
   leave(provider)
-  if (provider.pending === 0 || STOPPED.includes(provider.status)) {
-    provider.destroy()
+  // Given back after the account of the tab changed: it belongs to the account before and goes with it.
+  if (provider.pending === 0 || STOPPED.includes(provider.status) || owners.get(provider) !== currentAccount()) {
+    close(provider)
     return
   }
   watchUnload()
@@ -113,21 +136,23 @@ export function releaseProvider(provider: NoteProvider): void {
   const unsubscribe = provider.subscribe(() => {
     if (provider.pending > 0 && !STOPPED.includes(provider.status)) return
     unpark(entry)
-    provider.destroy()
+    close(provider)
   })
   entry.stop = unsubscribe
-  const list = parked.get(provider.noteId) ?? []
+  const place = placeOf(provider)
+  const list = parked.get(place) ?? []
   list.push(entry)
-  parked.set(provider.noteId, list)
+  parked.set(place, list)
 }
 
 function unpark(entry: Parked): void {
   entry.stop()
-  const list = parked.get(entry.provider.noteId)
+  const place = placeOf(entry.provider)
+  const list = parked.get(place)
   if (!list) return
   const rest = list.filter((one) => one !== entry)
-  if (rest.length) parked.set(entry.provider.noteId, rest)
-  else parked.delete(entry.provider.noteId)
+  if (rest.length) parked.set(place, rest)
+  else parked.delete(place)
 }
 
 /** Connections parked with changes still waiting (for the warning when the browser tab closes, and for tests). */
@@ -137,7 +162,13 @@ export function parkedProviders(): NoteProvider[] {
 
 /** How many other editors of the same note are open in this window. */
 export function othersOpen(provider: NoteProvider): number {
-  return [...(members.get(provider.noteId) ?? [])].filter((other) => other !== provider).length
+  return [...(members.get(placeOf(provider)) ?? [])].filter((other) => other !== provider).length
+}
+
+/** Changes still waiting in every connection of this window, open or parked (for the question before signing out). */
+export function waitingInConnections(): number {
+  const all = new Set<NoteProvider>([...[...members.values()].flatMap((set) => [...set]), ...parkedProviders()])
+  return [...all].reduce((sum, provider) => sum + (STOPPED.includes(provider.status) ? 0 : provider.pending), 0)
 }
 
 function watchUnload(): void {
@@ -155,10 +186,11 @@ function watchUnload(): void {
 export function forgetParked(): void {
   for (const entry of [...parked.values()].flat()) {
     entry.stop()
-    entry.provider.destroy()
+    close(entry.provider)
   }
   parked.clear()
 }
 
 // A parked connection holds a note of the account before: gone with it, never carried over to the next one.
 onAccountChange(forgetParked)
+onWaiting(waitingInConnections)

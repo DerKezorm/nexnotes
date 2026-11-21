@@ -21,7 +21,7 @@ import { onLiveStopped } from './live'
 import { refreshMeta, useTabMetas } from './meta'
 import { focusSide as focusSideAction, hrefOf, openNoteBeside, setNavigation } from './open'
 import { focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
-import { loadAccountTabs, tabs, tabsNow, useTabs } from './store'
+import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './store'
 import { draggedTab, firstVisit, LIST_WIDTH, MIN_PANE, ROOMY_PANE, SEPARATOR } from './layout'
 import { TabBar } from './TabBar'
 import { TabPane } from './TabPane'
@@ -76,11 +76,18 @@ function Tabbed({ noteId, folderId, fresh, back, list, account }: Props & { acco
     return () => setNavigation(null)
   }, [navigate, back])
 
-  // The address opens its note on the side used last; before anything is drawn.
+  // The address opens its note on the side used last; before anything is drawn. Not a note of the account before,
+  // though, which the address may still name after another account came into this browser tab: that goes to the
+  // start, and never into this account's tabs.
   useLayoutEffect(() => {
+    if (noteId && isOtherAccountsNote(noteId)) {
+      setSettled(false)
+      navigate('/', { replace: true })
+      return
+    }
     if (noteId) tabs.openHere(noteId, folderId ?? '')
     setSettled(true)
-  }, [noteId, folderId, account])
+  }, [noteId, folderId, account, navigate])
 
   // The first visit of a page load at "/": back to the tabs of last time.
   useLayoutEffect(() => {

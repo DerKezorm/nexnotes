@@ -879,7 +879,13 @@
     "blockedTitle": "Your account is blocked",
     "expiredText": "Your sign-in has expired. What you wrote stays here and is saved as soon as you are signed in again.",
     "expiredTitle": "Please sign in again",
-    "leave": "To the sign-in"
+    "leave": "To the sign-in",
+    "lostChanges_one": "{{name}} is signed in now. {{count}} change of the account before was not saved yet and is lost.",
+    "lostChanges_other": "{{name}} is signed in now. {{count}} changes of the account before were not saved yet and are lost.",
+    "signOutAnyway": "Sign out anyway",
+    "wait": "Wait",
+    "waitingText_one": "{{count}} change is not saved yet. If you sign out now, it is lost.",
+    "waitingText_other": "{{count}} changes are not saved yet. If you sign out now, they are lost."
   },
   "settings": {
     "ownPassword": "Your password",

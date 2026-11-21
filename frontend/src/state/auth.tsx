@@ -9,11 +9,13 @@
  *
  * Signing out and every change of the account in the tab forget what the stores kept of the account before
  * (`state/account.ts`), before the next account's page is drawn. The open page asks now and then who is signed in; if
- * another tab signed in as someone else meanwhile, this page follows at once.
+ * another tab signed in as someone else meanwhile, this page follows at once; changes typed here for the account
+ * before that still waited are lost then, and the notice at the bottom says how many.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import { ApiError, authApi, SIGNED_OUT_EVENT, type Me } from '../api/client'
+import { showNotice } from '../folders/notice'
 import i18n, { changeLanguage } from '../i18n'
 import { followAccount } from './account'
 
@@ -50,7 +52,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const setMe = useCallback((next: Me) => {
     // Before anything of this account is drawn: the stores forget the one before.
-    followAccount(next.id)
+    const lost = followAccount(next.id)
+    if (lost > 0) showNotice({ text: i18n.t('session.lostChanges', { count: lost, name: next.display_name || next.name }) }, 15_000)
     setMeState(next)
     setInterrupted(null)
     setEnded(false)

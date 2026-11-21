@@ -29,10 +29,48 @@ export function accountChanged(): void {
 
 let account: number | null | undefined
 
-/** The account of the tab now (`null`: none). Forgets the stores when it is another one than before. */
-export function followAccount(id: number | null): void {
-  if (account !== undefined && account !== id) accountChanged()
+/** The account of the tab now (`null`: none, or not known yet). Stores that keep things per account (the live
+ * connections of `tabs/live.ts`) mark what they keep with it. */
+export function currentAccount(): number | null {
+  return account ?? null
+}
+
+const waiting = new Set<() => number>()
+
+/** `count` says how many changes typed in this tab still wait for the server (offline, say). */
+export function onWaiting(count: () => number): () => void {
+  waiting.add(count)
+  return () => waiting.delete(count)
+}
+
+/** Changes typed in this tab the server has not confirmed yet: signing out, or another account, loses them. */
+export function waitingChanges(): number {
+  let sum = 0
+  for (const count of [...waiting]) {
+    try {
+      sum += count()
+    } catch {
+      // A store that cannot count does not keep the others from it.
+    }
+  }
+  return sum
+}
+
+/**
+ * The account of the tab now (`null`: none). Forgets the stores when it is another one than before; while they
+ * forget, `currentAccount()` already names the next one. Returns how many changes of the account before still waited
+ * and are lost with it.
+ */
+export function followAccount(id: number | null): number {
+  const before = account
+  if (before === undefined || before === id) {
+    account = id
+    return 0
+  }
+  const lost = before === null ? 0 : waitingChanges()
   account = id
+  accountChanged()
+  return lost
 }
 
 /** For tests: the tab starts without an account. */
