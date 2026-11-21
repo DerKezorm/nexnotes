@@ -37,7 +37,7 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .. import private
-from ..config import get_settings
+from ..config import LOG_LEVEL_ALIASES, get_settings
 
 BACKUP_COUNT = 3
 RETENTION_DAYS = 14
@@ -196,7 +196,7 @@ def env_mode() -> str | None:
     value = (get_settings().log_level or "").strip().lower()
     if value in MODES:
         return value
-    return {"warning": "quiet", "warn": "quiet", "info": "normal", "debug": "detailed"}.get(value)
+    return LOG_LEVEL_ALIASES.get(value)
 
 
 def setup() -> None:

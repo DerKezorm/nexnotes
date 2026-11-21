@@ -25,12 +25,24 @@ if [ "$PUID" = "0" ] || [ "$PGID" = "0" ]; then
     exit 1
 fi
 
+# A port nexnotes can listen on; checked before anything else happens, with the values it takes.
+PORT=${NEXNOTES_PORT:-8000}
+case "$PORT" in
+    ''|*[!0-9]*) PORT_OK=no ;;
+    *) if [ "$PORT" -ge 1 ] && [ "$PORT" -le 65535 ]; then PORT_OK=yes; else PORT_OK=no; fi ;;
+esac
+if [ "$PORT_OK" != "yes" ]; then
+    echo "nexnotes: NEXNOTES_PORT has the value '$PORT', which is not valid. Allowed: a whole number from 1 to 65535." >&2
+    echo "  Nothing has been started." >&2
+    exit 1
+fi
+
 # Port inside the container, default 8000. NEXNOTES_PORT is for host networking, where the container's port
 # is the server's port. Docker does not expand variables in the JSON form of CMD, hence here.
 if [ "$1" = "uvicorn" ]; then
     case " $* " in
         *" --port "*) ;;
-        *) set -- "$@" --port "${NEXNOTES_PORT:-8000}" ;;
+        *) set -- "$@" --port "$PORT" ;;
     esac
 fi
 

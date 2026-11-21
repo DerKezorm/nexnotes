@@ -8,7 +8,10 @@ from __future__ import annotations
 import errno
 import json
 import logging
+import os
+import shutil
 import sqlite3
+import subprocess
 import threading
 import time
 import zipfile
@@ -451,8 +454,25 @@ def test_notes1_ec4_a_data_folder_without_write_access_stops_the_start(
 
 @pytest.mark.parametrize(("variable", "value", "allowed"), [
     ("NEXNOTES_SESSION_DAYS", "thirty", "a whole number"),
+    ("NEXNOTES_SESSION_DAYS", "0", "a whole number from 1 to 3650"),
+    ("NEXNOTES_SESSION_DAYS", "-3", "a whole number from 1 to 3650"),
+    ("NEXNOTES_SESSION_DAYS", "3651", "a whole number from 1 to 3650"),
     ("NEXNOTES_API_DOCS", "maybe", "true or false"),
+    ("NEXNOTES_DISABLE_BACKGROUND", "perhaps", "true or false"),
     ("NEXNOTES_COOKIE_SECURE", "sometimes", "auto"),
+    ("NEXNOTES_OPERATOR_NETWORKS", "192.168.1.0/33", "addresses and networks separated by commas"),
+    ("NEXNOTES_OPERATOR_NETWORKS", "192.168.1.0/24, home", "addresses and networks separated by commas"),
+    ("NEXNOTES_TRUSTED_PROXIES", "10.0.0.300", "addresses and networks separated by commas"),
+    ("NEXNOTES_LOG_LEVEL", "verbose", "quiet, normal, detailed, trace"),
+    ("NEXNOTES_PUBLIC_URL", "notes.example.com", "http:// or https://"),
+    ("NEXNOTES_PUBLIC_URL", "ftp://notes.example.com", "http:// or https://"),
+    ("NEXNOTES_PUBLIC_URL", "https://example.com/notes", "without a path"),
+    ("NEXNOTES_PUBLIC_URL", "https://notes.example.com:port", "http:// or https://"),
+    ("NEXNOTES_UPDATE_URL", "github.com/releases", "http:// or https://"),
+    ("NEXNOTES_COOKIE_SUFFIX", "a;b", "letters, digits and _ only"),
+    ("NEXNOTES_ARGON2_TIME", "0", "a whole number from 1 to 20"),
+    ("NEXNOTES_ARGON2_MEMORY_KIB", "512", "a whole number from 1024 to 4194304"),
+    ("NEXNOTES_ARGON2_PARALLELISM", "0", "a whole number from 1 to 16"),
 ])
 def test_notes1_ec5_a_wrong_variable_names_itself_and_what_is_allowed(
     monkeypatch: pytest.MonkeyPatch, variable: str, value: str, allowed: str
@@ -464,6 +484,48 @@ def test_notes1_ec5_a_wrong_variable_names_itself_and_what_is_allowed(
         Settings()
     [line] = _explain(caught.value)
     assert line.startswith(f"{variable} has the value {value!r}") and allowed in line
+
+
+@pytest.mark.parametrize(("variable", "value"), [
+    ("NEXNOTES_SESSION_DAYS", "1"),
+    ("NEXNOTES_SESSION_DAYS", "3650"),
+    ("NEXNOTES_OPERATOR_NETWORKS", "192.168.0.0/16, 10.0.0.5, fd00::/8"),
+    ("NEXNOTES_OPERATOR_NETWORKS", ""),
+    ("NEXNOTES_TRUSTED_PROXIES", "172.16.0.0/12"),
+    ("NEXNOTES_LOG_LEVEL", "DEBUG"),
+    ("NEXNOTES_LOG_LEVEL", "trace"),
+    ("NEXNOTES_PUBLIC_URL", "https://notes.example.com/"),
+    ("NEXNOTES_PUBLIC_URL", "http://192.168.1.5:8570"),
+    ("NEXNOTES_COOKIE_SUFFIX", "_second"),
+])
+def test_notes1_ec5_good_values_still_start(monkeypatch: pytest.MonkeyPatch, variable: str, value: str) -> None:
+    monkeypatch.setenv(variable, value)
+    Settings()
+
+
+def test_notes1_ec5_a_wrong_operator_network_stops_the_start_instead_of_opening_the_pages(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    # The case the review found: "/33" was skipped and the operator's pages were open from everywhere.
+    monkeypatch.setenv("NEXNOTES_OPERATOR_NETWORKS", "192.168.1.0/33")
+    get_settings.cache_clear()
+    try:
+        with caplog.at_level(logging.CRITICAL), pytest.raises(StartupError):
+            get_settings()
+        assert "NEXNOTES_OPERATOR_NETWORKS has the value '192.168.1.0/33', which is not valid. Allowed:" in caplog.text
+    finally:
+        monkeypatch.delenv("NEXNOTES_OPERATOR_NETWORKS")
+        get_settings.cache_clear()
+
+
+@pytest.mark.skipif(shutil.which("sh") is None, reason="needs a POSIX shell")
+@pytest.mark.parametrize("port", ["eighty", "0", "70000"])
+def test_notes1_ec5_a_wrong_port_stops_the_container_before_anything_starts(port: str) -> None:
+    entrypoint = Path(__file__).resolve().parents[2] / "docker" / "entrypoint.sh"
+    done = subprocess.run(["sh", str(entrypoint), "uvicorn", "app.main:app"], capture_output=True, text=True,
+                          env={**os.environ, "NEXNOTES_PORT": port}, timeout=30, check=False)
+    assert done.returncode == 1
+    assert f"NEXNOTES_PORT has the value '{port}', which is not valid. Allowed: a whole number from 1 to 65535"         in done.stderr
 
 
 def test_notes1_ec5_get_settings_stops_the_start_with_those_lines(monkeypatch: pytest.MonkeyPatch,

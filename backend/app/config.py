@@ -6,19 +6,52 @@ What the operator changes at runtime (log level and, later, sign-in rules and ba
 
 from __future__ import annotations
 
+import ipaddress
 import logging
 import os
+import re
 import secrets
 import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
 from pydantic import PrivateAttr, ValidationError, field_validator, model_validator
+from pydantic_core import PydanticCustomError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 PROJECT_DIR = BACKEND_DIR.parent
+
+#: The log levels ``NEXNOTES_LOG_LEVEL`` takes: the interface's four, and the usual names for three of them.
+LOG_LEVELS = ("quiet", "normal", "detailed", "trace")
+LOG_LEVEL_ALIASES = {"warning": "quiet", "warn": "quiet", "info": "normal", "debug": "detailed"}
+#: Bounds of the numbers, (lowest, highest). Below or above them nexnotes does not start.
+BOUNDS = {
+    "session_days": (1, 3650),
+    "argon2_time": (1, 20),
+    "argon2_memory_kib": (1024, 4 * 1024 * 1024),
+    "argon2_parallelism": (1, 16),
+}
+_COOKIE_SUFFIX = re.compile(r"^[A-Za-z0-9_]{0,32}$")
+
+
+def _not_allowed(allowed: str) -> PydanticCustomError:
+    """A refusal that ``_explain`` turns into "Allowed: <allowed>"."""
+    return PydanticCustomError("not_allowed", "not allowed", {"allowed": allowed})
+
+
+def _web_address(value: str, *, path: bool) -> bool:
+    """``http://`` or ``https://`` with a host (and a port that is a number); without a path unless ``path``."""
+    parts = urlsplit(value)
+    try:
+        parts.port  # noqa: B018 - raises ValueError when the port is not a number
+    except ValueError:
+        return False
+    if parts.scheme.lower() not in ("http", "https") or not parts.hostname or parts.username or parts.password:
+        return False
+    return path or (parts.path in ("", "/") and not parts.query and not parts.fragment)
 
 
 class Settings(BaseSettings):
@@ -76,6 +109,60 @@ class Settings(BaseSettings):
             return None
         return value if value.is_absolute() else PROJECT_DIR / value
 
+    @field_validator(*BOUNDS)
+    @classmethod
+    def _within_bounds(cls, value: int, info: object) -> int:
+        lowest, highest = BOUNDS[info.field_name]  # type: ignore[attr-defined]
+        if not lowest <= value <= highest:
+            raise _not_allowed(f"a whole number from {lowest} to {highest}")
+        return value
+
+    @field_validator("trusted_proxies", "operator_networks")
+    @classmethod
+    def _networks(cls, value: str) -> str:
+        # A typo here must stop the start: skipped, a broken entry left the operator's pages open to everybody.
+        for entry in value.split(","):
+            if not entry.strip():
+                continue
+            try:
+                ipaddress.ip_network(entry.strip(), strict=False)
+            except ValueError:
+                raise _not_allowed(
+                    "empty, or addresses and networks separated by commas, such as 192.168.1.0/24, 10.0.0.5 or "
+                    "fd00::/8"
+                ) from None
+        return value
+
+    @field_validator("log_level")
+    @classmethod
+    def _log_level(cls, value: str) -> str:
+        if value.strip() and value.strip().lower() not in (*LOG_LEVELS, *LOG_LEVEL_ALIASES):
+            raise _not_allowed("empty (the level set in the interface), " + ", ".join(LOG_LEVELS)
+                               + " (or warning, info, debug)")
+        return value
+
+    @field_validator("public_url")
+    @classmethod
+    def _public_url(cls, value: str) -> str:
+        if value.strip() and not _web_address(value.strip(), path=False):
+            raise _not_allowed("empty, or an address with http:// or https:// and a host, without a path, such as "
+                               "https://notes.example.com")
+        return value
+
+    @field_validator("update_url")
+    @classmethod
+    def _update_url(cls, value: str) -> str:
+        if value.strip() and not _web_address(value.strip(), path=True):
+            raise _not_allowed("empty, or an address with http:// or https://")
+        return value
+
+    @field_validator("cookie_suffix")
+    @classmethod
+    def _cookie_suffix(cls, value: str) -> str:
+        if not _COOKIE_SUFFIX.match(value):
+            raise _not_allowed("letters, digits and _ only, at most 32 characters")
+        return value
+
     @model_validator(mode="after")
     def _defaults_inside_data(self) -> Settings:
         if self.locales_dir is None:
@@ -89,7 +176,7 @@ class Settings(BaseSettings):
         return self.data_dir / "nexnotes.db"
 
     def cookie_name_suffix(self) -> str:
-        """The suffix, with anything but letters, digits and "_" taken out (a cookie name allows little)."""
+        """The suffix; letters, digits and "_" only (checked at start, a cookie name allows little)."""
         return "".join(ch for ch in self.cookie_suffix if ch.isascii() and (ch.isalnum() or ch == "_"))
 
     def resolved_secret_key(self) -> str:
@@ -134,7 +221,8 @@ def _explain(error: ValidationError) -> list[str]:
         field = str(item.get("loc", ("?",))[0])
         variable = "NEXNOTES_" + field.upper()
         value = item.get("input")
-        allowed = _ALLOWED.get(str(item.get("type")))
+        kind = str(item.get("type"))
+        allowed = (item.get("ctx") or {}).get("allowed") if kind == "not_allowed" else _ALLOWED.get(kind)
         if allowed is None:
             expected = (item.get("ctx") or {}).get("expected", "")
             allowed = str(expected).replace("'", "") or "see the README"
