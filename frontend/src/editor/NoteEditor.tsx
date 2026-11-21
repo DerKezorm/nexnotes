@@ -50,7 +50,7 @@ import { bodyIsEmpty, editorExtensions, editorProps, safeHref } from './extensio
 import { presenceFromAwareness, presenceUser, type Presence } from './presence'
 import { PresenceBar } from './PresenceBar'
 import { NoteProvider, type EditorConnection, type LiveStatus } from './provider'
-import { LOCKED_VIEW, NOTE_MENU_ITEMS } from './noteParts'
+import { LOCKED_VIEW, NOTE_HEAD_PARTS, NOTE_MENU_ITEMS } from './noteParts'
 import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
@@ -591,6 +591,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       >
         <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
+          {editor && NOTE_HEAD_PARTS.map((Part, index) => <Part key={index} noteId={noteId} editor={editor} head={head} sealed={sealed} />)}
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
           <NotePinButton noteId={noteId} head={head} />

@@ -267,6 +267,8 @@ class PasswordReset(Base):
 #: Token kinds: a paired iPhone or iPad (NOTES-24), or a key for MCP tools (NOTES-20). Both act as their account.
 TOKEN_DEVICE = "device"
 TOKEN_MCP = "mcp"
+#: A key nexdeck reads a member's card with (NOTES-21), valid under ``/api/v1/`` only.
+TOKEN_DASHBOARD = "dashboard"
 
 
 class ApiToken(Base):

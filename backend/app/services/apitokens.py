@@ -1,4 +1,4 @@
-"""Tokens of programs and devices: a paired iPhone or iPad, or a key for MCP tools.
+"""Tokens of programs and devices: a paired iPhone or iPad, a key for MCP tools, or a key for a nexdeck card.
 
 The features that hand them out (device pairing, MCP keys) make them with ``make``; this frame checks them on every
 request (``deps.require_account``). A token acts as its account and never sees more. The token itself is shown once;
@@ -19,14 +19,14 @@ from datetime import timedelta
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ..models import TOKEN_DEVICE, TOKEN_MCP, Account, ApiToken, utcnow
+from ..models import TOKEN_DASHBOARD, TOKEN_DEVICE, TOKEN_MCP, Account, ApiToken, utcnow
 from ..security import account_out
 
 logger = logging.getLogger("nexnotes.api")
 
-KINDS = (TOKEN_DEVICE, TOKEN_MCP)
+KINDS = (TOKEN_DEVICE, TOKEN_MCP, TOKEN_DASHBOARD)
 LEVELS = ("read", "write")
-PREFIXES = {TOKEN_DEVICE: "nnd_", TOKEN_MCP: "nn_mcp_"}
+PREFIXES = {TOKEN_DEVICE: "nnd_", TOKEN_MCP: "nn_mcp_", TOKEN_DASHBOARD: "nn_deck_"}
 #: ``last_used_at`` is written at most this often.
 USED_EVERY = timedelta(minutes=1)
 

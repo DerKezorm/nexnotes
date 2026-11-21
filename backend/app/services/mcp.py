@@ -41,7 +41,19 @@ from ..notedoc import edit
 from ..notedoc import schema as s
 from ..notedoc.markdown import to_markdown
 from ..notedoc.room import Access
-from . import apitokens, folders, history, notes, notes_list, search, settings_service, shares, tags, totp
+from . import (
+    apitokens,
+    folders,
+    history,
+    notes,
+    notes_list,
+    search,
+    settings_service,
+    shares,
+    smart_folders,
+    tags,
+    totp,
+)
 from .inbox import inbox_for
 
 logger = logging.getLogger("nexnotes.mcp")
@@ -409,6 +421,26 @@ async def list_tags(caller: Caller, _args: dict[str, Any]) -> Any:
     return await asyncio.to_thread(run)
 
 
+async def list_smart_folders(caller: Caller, _args: dict[str, Any]) -> Any:
+    """The member's smart folders (NOTES-7) with their conditions and how many notes fit them now (AC-3)."""
+    account = caller.account
+
+    def run() -> dict[str, Any]:
+        with SessionLocal() as db:
+            out = []
+            for folder in smart_folders.list_for(db, account)[:MAX_FOLDERS]:
+                asked = search.Asked(account=account, tz=search.zone(None), now=smart_folders.now())
+                where = search.matching(db, asked, folder.conditions or [], folder.match)
+                count = int(db.scalar(select(func.count()).select_from(Note).where(where)) or 0)
+                # The two every account gets have no name of their own until renamed: their English name here.
+                name = folder.name or smart_folders.PRESET_NAMES.get(folder.preset or "", ("", ""))[1]
+                out.append({"id": folder.id, "name": name, "preset": folder.preset, "match": folder.match,
+                            "conditions": folder.conditions or [], "notes": count})
+            return {"smart_folders": out}
+
+    return await asyncio.to_thread(run)
+
+
 # --- What a tool writes -------------------------------------------------------------------------------------------
 
 
@@ -604,6 +636,10 @@ TOOLS: list[Tool] = [
          "Your inbox and folders (with their parent and number of notes), and what others shared with you.",
          _schema({}), list_folders),
     Tool("list_tags", "read", "The tags of the notes you may read, the most used first.", _schema({}), list_tags),
+    Tool("list_smart_folders", "read",
+         "Your smart folders: saved conditions (tags, folders, dates, open checklist items ...) shown as a folder, "
+         "with how many notes fit them now.",
+         _schema({}), list_smart_folders),
     Tool("create_note", "write",
          "Make a note from Markdown. It goes into the inbox unless you name a folder. Without a title the first "
          "words become one; either way its owner is asked to check the title.",

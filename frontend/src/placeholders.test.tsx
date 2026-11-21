@@ -31,6 +31,8 @@ const VALUES: Record<string, Record<string, unknown>> = {
   search_term_too_long: { maximum: 100 },
   attachment_too_large: { name: 'Drohnenflug.mp4', size: 1468006400, max_mb: 100 },
   mcp_too_many_keys: { max: 20 },
+  dashboard_too_many_keys: { max: 20 },
+  nextasks_slow_down: { seconds: 60 },
 }
 const WITH_PLACEHOLDER = Object.entries({ ...en.errors, ...de.errors })
   .filter(([, text]) => /\{\{/.test(String(text)))

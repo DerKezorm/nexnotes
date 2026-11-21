@@ -47,6 +47,7 @@ class SettingsOut(BaseModel):
     link_previews: bool
     share_links: bool
     mcp_enabled: bool
+    connections_local_network: bool
     ocr_languages: list[str]
     update_check: bool
     #: The disk under the data folder, in bytes (NOTES-1 AC-11).
@@ -81,6 +82,7 @@ class SettingsIn(BaseModel):
     link_previews: bool | None = None
     share_links: bool | None = None
     mcp_enabled: bool | None = None
+    connections_local_network: bool | None = None
     ocr_languages: list[str] | None = Field(default=None, max_length=20)
     update_check: bool | None = None
 
@@ -113,6 +115,7 @@ def _view(db: DbSession) -> SettingsOut:
         link_previews=bool(values["link_previews"]),
         share_links=bool(values["share_links"]),
         mcp_enabled=bool(values["mcp_enabled"]),
+        connections_local_network=bool(values["connections_local_network"]),
         ocr_languages=[code for code in settings_service.OCR_LANGUAGES if code in (values["ocr_languages"] or [])],
         update_check=bool(values["update_check"]),
         data_total=used.total,
