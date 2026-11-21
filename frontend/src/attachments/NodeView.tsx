@@ -3,6 +3,8 @@
 import { NodeViewWrapper, useEditorState, type ReactNodeViewProps } from '@tiptap/react'
 
 import type { LinkCard } from './api'
+import { DrawingBlock } from '../sketches/DrawingBlock'
+import { RecordingBlock } from '../sketches/RecordingBlock'
 import { AttachmentBlock, LinkCardBlock } from './blocks'
 import type { ImageSize } from './open'
 import { cancelUpload } from './uploads'
@@ -29,6 +31,17 @@ export function BlockView({ node, editor, getPos, updateAttributes, deleteNode, 
     <NodeViewWrapper className={'nn-attachment-node' + (selected ? ' nn-attachment-selected' : '')} data-drag-handle="" contentEditable={false}>
       {node.type.name === 'linkPreview' ? (
         <LinkCardBlock attrs={attrs as unknown as LinkCard} actions={{ editable, onRemove: remove, onPlain: plain }} />
+      ) : node.type.name === 'drawing' ? (
+        <DrawingBlock noteId={noteId} id={attrs.id} name={attrs.name} actions={{ editable, onRemove: remove }} />
+      ) : node.type.name === 'recording' ? (
+        <RecordingBlock
+          noteId={noteId}
+          id={attrs.id}
+          name={attrs.name}
+          duration={typeof node.attrs.duration === 'number' ? node.attrs.duration : null}
+          transcript={attrs.transcript}
+          actions={{ editable, onRemove: remove }}
+        />
       ) : (
         <AttachmentBlock
           noteId={noteId}

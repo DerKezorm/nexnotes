@@ -1513,5 +1513,37 @@
       "not_found": "The export “{{name}}” could not run: the folder is gone.",
       "failed": "The export “{{name}}” failed."
     }
+  },
+  "sketches": {
+    "drawing": {
+      "title": "Sketch",
+      "viewOnly": "view only in the browser, draw on iPhone and iPad",
+      "download": "Save as picture",
+      "open": "Open sketch “{{name}}” large",
+      "alt": "Sketch “{{name}}”",
+      "viewer": "Sketch “{{name}}”",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit"
+    },
+    "recording": {
+      "title": "Recording",
+      "label": "Recording “{{name}}”",
+      "keys": "Space plays and pauses, the arrow keys jump five seconds.",
+      "play": "Play",
+      "pause": "Pause",
+      "position": "Position",
+      "positionText": "{{at}} of {{total}}",
+      "speed": "Speed",
+      "rate": {
+        "1": "1×",
+        "1_5": "1.5×",
+        "2": "2×"
+      },
+      "hint": "Tap a word to jump to that point of the recording.",
+      "transcriptLoading": "Loading the text …",
+      "transcriptMissing": "The text is not there yet.",
+      "cannotPlay": "Your browser cannot play this format."
+    }
   }
 }

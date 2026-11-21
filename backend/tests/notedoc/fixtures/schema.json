@@ -134,6 +134,25 @@
       },
       "content": "",
       "group": "block"
+    },
+    "drawing": {
+      "attrs": {
+        "id": null,
+        "data": null,
+        "name": null
+      },
+      "content": "",
+      "group": "block"
+    },
+    "recording": {
+      "attrs": {
+        "id": null,
+        "name": null,
+        "duration": null,
+        "transcript": null
+      },
+      "content": "",
+      "group": "block"
     }
   },
   "marks": {

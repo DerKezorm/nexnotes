@@ -4,7 +4,7 @@
  */
 import { api, ApiError, tabId } from '../api/client'
 
-export type AttachmentKind = 'image' | 'scan' | 'pdf' | 'recording' | 'drawing' | 'video' | 'file' | 'linkimage'
+export type AttachmentKind = 'image' | 'scan' | 'pdf' | 'recording' | 'drawing' | 'video' | 'file' | 'linkimage' | 'transcript' | 'drawingdata'
 
 /** An attachment as the server describes it. */
 export type AttachmentInfo = {
@@ -29,7 +29,8 @@ export type AttachmentInfo = {
 
 export type Limits = { max_mb: number; used: number; limit: number | null; full: boolean; link_previews: boolean }
 
-export type GalleryKind = Exclude<AttachmentKind, 'linkimage'>
+/** The gallery's kinds; the helpers behind a block (a card's picture, a sketch's data, a transcript) are never in it. */
+export type GalleryKind = Exclude<AttachmentKind, 'linkimage' | 'transcript' | 'drawingdata'>
 export const GALLERY_KINDS: GalleryKind[] = ['image', 'scan', 'pdf', 'recording', 'drawing', 'video', 'file']
 export type GallerySort = 'newest' | 'largest'
 export type GalleryItem = AttachmentInfo & { note: { id: string; title: string } }

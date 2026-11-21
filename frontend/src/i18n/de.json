@@ -1513,5 +1513,37 @@
       "not_found": "Der Export „{{name}}“ ging nicht: Den Ordner gibt es nicht mehr.",
       "failed": "Der Export „{{name}}“ ist fehlgeschlagen."
     }
+  },
+  "sketches": {
+    "drawing": {
+      "title": "Skizze",
+      "viewOnly": "im Browser nur ansehen, zeichnen auf iPhone und iPad",
+      "download": "Als Bild laden",
+      "open": "Skizze „{{name}}“ groß öffnen",
+      "alt": "Skizze „{{name}}“",
+      "viewer": "Skizze „{{name}}“",
+      "zoomIn": "Vergrößern",
+      "zoomOut": "Verkleinern",
+      "fit": "Einpassen"
+    },
+    "recording": {
+      "title": "Aufnahme",
+      "label": "Aufnahme „{{name}}“",
+      "keys": "Leertaste spielt und hält an, Pfeiltasten springen fünf Sekunden.",
+      "play": "Abspielen",
+      "pause": "Anhalten",
+      "position": "Position",
+      "positionText": "{{at}} von {{total}}",
+      "speed": "Geschwindigkeit",
+      "rate": {
+        "1": "1×",
+        "1_5": "1,5×",
+        "2": "2×"
+      },
+      "hint": "Ein Wort antippen springt an diese Stelle der Aufnahme.",
+      "transcriptLoading": "Der Text wird geladen …",
+      "transcriptMissing": "Der Text fehlt noch.",
+      "cannotPlay": "Dein Browser spielt dieses Format nicht ab."
+    }
   }
 }

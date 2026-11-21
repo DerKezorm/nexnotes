@@ -28,6 +28,10 @@ there (``readable``). The headers are the router's (``routers/attachments.py``).
 * as a file without a row (its account gone for good, an upload that broke off) in the cleanup round.
 Files go only after the commit that removed their row.
 
+**Sketches and recordings (NOTES-18)** come from the iOS app with a role (``as=``): ``services/sketches.py`` checks
+that the content is what the role says and prepares it; the helpers behind them (a sketch's data, a transcript) never
+stand in the gallery.
+
 **For the export (NOTES-17)**: ``files_of(db, note_id)`` gives every attachment a note names today, in the order of its
 text, with the path of its file; ``export_files`` hands them to ``export.ATTACHMENT_SOURCES`` (``export_total`` to
 ``ATTACHMENT_TOTALS``), and the export puts them at their place in the text (``to_markdown(..., attachment_href=...)``,
@@ -42,7 +46,7 @@ import os
 import re
 import secrets
 import threading
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable
 from dataclasses import dataclass
 from datetime import timedelta
 from pathlib import Path
@@ -68,6 +72,12 @@ MB = 1024 * 1024
 GALLERY_KINDS = ("image", "scan", "pdf", "recording", "drawing", "video", "file")
 #: The picture of a link card: an attachment of the note, never in the gallery.
 LINK_PICTURE = "linkimage"
+#: Kinds that only stand behind a block of their own (a card's picture, a sketch's data, a transcript): never in the
+#: gallery.
+HIDDEN_KINDS = (LINK_PICTURE, "drawingdata", "transcript")
+#: Called with every attachment once it is stored and committed (NOTES-18: the search reads a transcript's note again).
+#: A hook must not raise.
+STORED_HOOKS: list[Callable[[Attachment], None]] = []
 #: Kinds a list and a tile show as the note's picture (NOTES-6), first one first.
 PICTURE_KINDS = ("image", "scan", "drawing", "video")
 #: How long an attachment no note names is kept at least (undo in an open editor).
@@ -166,6 +176,8 @@ class Upload:
     room: int | None
     taken: int
     limit: int | None
+    #: What the device means the file to be (NOTES-18, ``sketches.ROLES``); ``None``: whatever its content is.
+    role: str | None = None
 
 
 def _too_large(name: str, size: int, max_mb: int) -> AttachmentError:
@@ -190,12 +202,16 @@ def existing(db: Session, attachment_id: str, note_id: str) -> Attachment | None
 
 
 def begin(db: Session, account: Account, note_id: str, attachment_id: str, name: str | None,
-          declared: int | None) -> Upload | Attachment:
-    """Checks an upload before its body is read: the right to write the note, the id, the limit per file, the
-    storage. Returns the attachment when it is there already."""
+          declared: int | None, role: str | None = None) -> Upload | Attachment:
+    """Checks an upload before its body is read: the right to write the note, the id, the role, the limit per file,
+    the storage. Returns the attachment when it is there already."""
+    from . import sketches
+
     note = notes.note_for(db, account, note_id, write=True)
     if not _ID.match(attachment_id or ""):
         raise AttachmentError("invalid_input", "The input is not valid.", 422, fields=["id"])
+    if role is not None and role not in sketches.ROLES:
+        raise AttachmentError("invalid_input", "The input is not valid.", 422, fields=["as"])
     found = existing(db, attachment_id, note.id)
     if found is not None:
         return found
@@ -208,7 +224,7 @@ def begin(db: Session, account: Account, note_id: str, attachment_id: str, name:
     if room is not None and (room <= 0 or (declared is not None and declared > room)):
         raise _full(taken, limit)
     return Upload(attachment_id=attachment_id, note_id=note.id, owner_id=note.owner_id, uploader_id=account.id,
-                  name=clean, max_bytes=max_bytes, room=room, taken=taken, limit=limit)
+                  name=clean, max_bytes=max_bytes, room=room, taken=taken, limit=limit, role=role)
 
 
 async def receive(upload: Upload, chunks: AsyncIterator[bytes]) -> Path:
@@ -254,7 +270,7 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
     try:
         if work.stat().st_size == 0:
             raise AttachmentError("attachment_empty", "The file is empty.", 400)
-        prepared = media.prepare(work)
+        prepared = _prepare(work, upload.role)
         name = upload.name
         if prepared.suffix and not name.lower().endswith(prepared.suffix):
             name = notedoc.clean_label(re.sub(r"\.[A-Za-z0-9]{1,8}$", "", name) + prepared.suffix, s.MAX_NAME) or name
@@ -295,9 +311,24 @@ def finish(upload: Upload, work: Path) -> tuple[Attachment, bool]:
                 raise _not_found() from None
             logger.info("Attachment stored note=%s attachment=%s kind=%s size=%s", upload.note_id, row.id,
                         row.kind, row.size)
-            return row, True
+        for hook in STORED_HOOKS:
+            hook(row)
+        return row, True
     finally:
         work.unlink(missing_ok=True)
+
+
+def _prepare(work: Path, role: str | None) -> media.Prepared:
+    """What the file is: by its content alone, or (NOTES-18) checked against the role the device gave."""
+    if role is None:
+        return media.prepare(work)
+    from . import sketches
+
+    try:
+        return sketches.prepare(work, role)
+    except sketches.WrongKind as exc:
+        logger.info("An upload is not what its role says role=%s reason=%s", role, exc)
+        raise AttachmentError("attachment_wrong_kind", "The file is not what it was sent as.", 422, role=role)             from None
 
 
 def store_bytes(db: Session, note_id: str, owner_id: int, kind: str, name: str, data: bytes,
@@ -600,7 +631,7 @@ def gallery(db: Session, account: Account, kind: str | None = None, sort: str = 
         .join(AttachmentRef, AttachmentRef.attachment_id == Attachment.id)
         .join(Note, Note.id == AttachmentRef.note_id)
         .where(Note.owner_id == account.id, Note.deleted_at.is_(None), Attachment.owner_id == account.id,
-               Attachment.kind != LINK_PICTURE)
+               Attachment.kind.not_in(HIDDEN_KINDS))
     ).all()
     seen: dict[str, tuple[Attachment, str, str]] = {}
     for row, note_id, title in rows:
@@ -769,6 +800,9 @@ def register() -> None:
         export.ATTACHMENT_SOURCES.append(export_files)
     if export_total not in export.ATTACHMENT_TOTALS:
         export.ATTACHMENT_TOTALS.append(export_total)
+    from . import sketches
+
+    sketches.register()
 
 
 def remove_all_of(db: Session, note_ids: Iterable[str]) -> None:
