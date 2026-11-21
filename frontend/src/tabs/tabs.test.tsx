@@ -44,6 +44,8 @@ let me = 1
 const belongs = new Map<string, number>()
 /** The network is away: the room refuses every new connection, as a dead line does. */
 let networkDown = false
+/** Answers of the stand-in server whose callers may still be busy with them. */
+let inFlight = 0
 /** Every request to the stand-in server, as "METHOD /path". */
 const requests: string[] = []
 const INBOX = 'inbox-1'
@@ -187,6 +189,37 @@ async function settle(ms = 30): Promise<void> {
   })
 }
 
+/**
+ * Waits a few milliseconds at a time until `check` holds (returns anything but `false` and throws no failed
+ * expectation): no longer than needed on a fast machine, as long as needed on a busy one, within the test's time.
+ */
+async function until(check: () => unknown, ms = 4000): Promise<void> {
+  const end = Date.now() + ms
+  for (;;) {
+    try {
+      if (check() !== false) return
+      if (Date.now() > end) throw new Error('the page never got there')
+    } catch (error) {
+      if (Date.now() > end) throw error
+    }
+    await settle(5)
+  }
+}
+
+/** The page has nothing more on its way: every answer of the stand-in server handled, no editor still connecting,
+ * the list drawn. */
+function quiet(): boolean {
+  if (inFlight > 0 || !$('notes-page')) return false
+  if ($$('note-editor').some((editor) => editor.dataset.status === 'connecting')) return false
+  if ($('note-list') && !$('note-row') && !$('list-empty')) return false
+  return true
+}
+
+/** Waits until the page is quiet (see `quiet`). */
+async function idle(): Promise<void> {
+  await until(quiet)
+}
+
 /** As `App.tsx`: the signed-in part drawn anew for every account. */
 function PerAccount({ children }: { children: ReactNode }) {
   const { me: who } = useAuth()
@@ -214,7 +247,7 @@ async function render(path: string): Promise<void> {
       </AuthProvider>,
     )
   })
-  await settle(80)
+  await idle()
 }
 
 /** A reload: the page goes, everything in memory with it, only `localStorage` stays. */
@@ -244,6 +277,7 @@ function key(code: string, extra: Partial<KeyboardEventInit> = {}) {
 }
 
 beforeAll(async () => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   await i18n.changeLanguage('en')
   const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
   Range.prototype.getClientRects = noRects
@@ -294,9 +328,13 @@ beforeEach(() => {
     },
   )
   requests.length = 0
+  inFlight = 0
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'http://localhost')
     requests.push(`${init?.method ?? 'GET'} ${url.pathname}`)
+    inFlight += 1
+    // Counted until the caller had a turn to read the answer.
+    setTimeout(() => (inFlight -= 1), 5)
     return answer(init?.method ?? 'GET', url.pathname)
   })
 })
@@ -321,8 +359,7 @@ describe('tabs in the page', () => {
     const row = box.querySelector('[data-note="shop"]') as HTMLElement
     await act(async () => row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })))
     await act(async () => $('menu-open-tab')!.click())
-    await settle(60)
-    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    await until(() => expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping']))
     expect(where).toBe('/notes/shop')
     // In its own tab, not beside.
     expect(pane('right')).toBeNull()
@@ -330,13 +367,14 @@ describe('tabs in the page', () => {
     // The middle button on a row, and Ctrl with a click: tabs too, not the browser's.
     const link = (id: string) => box.querySelector(`[data-note="${id}"] [data-testid="note-row"]`) as HTMLAnchorElement
     const middle = new MouseEvent('auxclick', { bubbles: true, cancelable: true, button: 1 })
-    await act(async () => link('bath').dispatchEvent(middle))
-    expect(middle.defaultPrevented).toBe(true)
     const ctrl = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, ctrlKey: true })
-    await act(async () => link('meet').dispatchEvent(ctrl))
+    await act(async () => {
+      link('bath').dispatchEvent(middle)
+      link('meet').dispatchEvent(ctrl)
+    })
+    expect(middle.defaultPrevented).toBe(true)
     expect(ctrl.defaultPrevented).toBe(true)
-    await settle(60)
-    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping', 'Bathroom works', 'Monday meeting'])
+    await until(() => expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping', 'Bathroom works', 'Monday meeting']))
     // Each with color, title and cross.
     const first = $$('tab')[0]
     expect((first.querySelector('span[aria-hidden]') as HTMLElement).style.background).not.toBe('')
@@ -345,12 +383,10 @@ describe('tabs in the page', () => {
     expect($('tab-count')!.textContent).toBe('4 of 6')
     // A plain click opens in place of the note on show.
     await act(async () => link('pack').click())
-    await settle(60)
-    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping', 'Bathroom works', 'Packing list'])
+    await until(() => expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping', 'Bathroom works', 'Packing list']))
     // The cross closes.
     await act(async () => $$('tab-close')[0].click())
-    await settle(40)
-    expect(tabTitles()).toEqual(['Saturday shopping', 'Bathroom works', 'Packing list'])
+    await until(() => expect(tabTitles()).toEqual(['Saturday shopping', 'Bathroom works', 'Packing list']))
   })
 
   it('NOTES-8 AC-1 AC-4 "Open beside" puts two notes side by side, the side used last has the honey line, the tabs say left and right', async () => {
@@ -400,26 +436,39 @@ describe('tabs in the page', () => {
   it('NOTES-8 AC-2 the line between the sides moves both widths, never below a readable width', async () => {
     await render('/notes/soup')
     await act(async () => openNoteBeside('shop'))
-    await settle(40)
+    await idle()
     const separator = $('tab-separator')!
+    const leftWidth = () => parseInt(pane('left')!.style.flex.split(' ')[2], 10)
+    // By keyboard, a step at a time.
     const before = Number(separator.getAttribute('aria-valuenow'))
     await act(async () => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
     expect(Number(separator.getAttribute('aria-valuenow'))).toBeGreaterThan(before)
-    for (let i = 0; i < 20; i++) await act(async () => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
-    // 1400 px: the list (300 px) stays beside two notes of 480 px or more; the right side keeps 340 px.
+    await act(async () => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
+    expect(Number(separator.getAttribute('aria-valuenow'))).toBe(before)
+    // With the mouse, all the way to either end: 1400 px less the list (300 px) is the area of the two sides.
+    const area = pane('left')!.parentElement!
+    area.getBoundingClientRect = () => new DOMRect(300, 0, 1100, 800)
+    const drag = async (clientX: number) => {
+      await act(async () => separator.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true, cancelable: true })))
+      await act(async () => separator.dispatchEvent(new MouseEvent('pointermove', { clientX })))
+      await act(async () => separator.dispatchEvent(new MouseEvent('pointerup', {})))
+    }
+    await drag(1400)
+    // The list stays beside two notes of 480 px or more; the right side keeps 340 px.
     expect($('note-list')).not.toBeNull()
-    const leftWidth = parseInt(pane('left')!.style.flex.split(' ')[2], 10)
-    expect(1400 - 300 - 12 - leftWidth).toBe(340)
-    for (let i = 0; i < 30; i++) await act(async () => separator.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
-    expect(parseInt(pane('left')!.style.flex.split(' ')[2], 10)).toBe(340)
+    expect(1400 - 300 - 12 - leftWidth()).toBe(340)
+    await drag(300)
+    expect(leftWidth()).toBe(340)
   })
 
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {
     await render('/notes/soup')
-    await act(async () => openNoteInNewTab('shop'))
-    await act(async () => openNoteInNewTab('bath'))
-    await act(async () => openNoteBeside('meet'))
-    await settle(60)
+    await act(async () => {
+      openNoteInNewTab('shop')
+      openNoteInNewTab('bath')
+      openNoteBeside('meet')
+    })
+    await idle()
     expect(localStorage.getItem(storageKey(1))).toContain('"meet"')
     await reload('/')
     expect(where).toBe('/notes/meet')
@@ -436,13 +485,15 @@ describe('tabs in the page', () => {
   it('NOTES-8 AC-7 a seventh tab closes the one not used for the longest, never one on show, and says so', async () => {
     await render('/notes/soup')
     // "soup" stays on the left, used first of all; the others open one after the other on the right.
-    await act(async () => openNoteBeside('shop'))
-    for (const id of ['bath', 'meet', 'pack', 'gift']) await act(async () => openNoteInNewTab(id))
-    await settle(40)
+    await act(async () => {
+      openNoteBeside('shop')
+      for (const id of ['bath', 'meet', 'pack', 'gift']) openNoteInNewTab(id)
+    })
+    await idle()
     expect($$('tab')).toHaveLength(6)
     expect($('tab-count')!.textContent).toBe('6 of 6')
     await act(async () => openNoteInNewTab('cost'))
-    await settle(60)
+    await idle()
     const open = $$('tab').map((tab) => tab.dataset.note)
     expect(open).toEqual(['soup', 'bath', 'meet', 'pack', 'gift', 'cost'])
     expect(document.querySelector('[data-testid="folder-notice"]')?.textContent).toContain('“Saturday shopping” was closed because 6 tabs were open already.')
@@ -501,21 +552,21 @@ describe('tabs in the page', () => {
     withText('soup', 'red lentils, onion')
     await render('/notes/soup')
     await act(async () => openNoteBeside('soup'))
-    await settle(80)
+    await idle()
     expect(pane('right')!.dataset.note).toBe('soup')
     // Both tabs know the title from the start, never "Untitled" for a moment.
     expect(tabTitles()).toEqual(['Lentil soup', 'Lentil soup'])
     await act(async () => $('tab-end-split')!.click())
-    await settle(120)
+    await settle(60)
     expect($('leave-dialog')).toBeNull()
     expect(pane('right')).toBeNull()
     // Beside again, then its tab closed.
     await act(async () => openNoteBeside('soup'))
-    await settle(80)
+    await idle()
     expect(pane('right')!.dataset.note).toBe('soup')
     const right = $$('tab').find((tab) => tab.dataset.side === 'right')!
     await act(async () => $('tab-close', right)!.click())
-    await settle(120)
+    await settle(60)
     expect($('leave-dialog')).toBeNull()
     expect($$('tab')).toHaveLength(1)
     expect(titleWrites()).toEqual([])
@@ -532,16 +583,15 @@ describe('tabs in the page', () => {
     await act(async () => typeTitle(title, 'Lentil soup, spicy'))
     // Out of view with its change still waiting: parked.
     await act(async () => openNoteInNewTab('shop'))
-    await settle(80)
-    expect(parkedProviders().map((provider) => provider.noteId)).toEqual(['soup'])
+    // The line is dead: "shop" keeps connecting; wait for what this is about.
+    await until(() => expect(parkedProviders().map((provider) => provider.noteId)).toEqual(['soup']))
     const soup = $$('tab').find((tab) => tab.dataset.note === 'soup')!
     await act(async () => soup.click())
-    await settle(80)
-    expect(pane('left')!.dataset.note).toBe('soup')
+    await until(() => expect(pane('left')!.dataset.note).toBe('soup'))
     expect(parkedProviders()).toEqual([])
     expect(tabTitles()).toEqual(['Lentil soup, spicy', 'Saturday shopping'])
     await act(async () => $('tab-close', $$('tab').find((tab) => tab.dataset.note === 'soup')!)!.click())
-    await settle(120)
+    await settle(60)
     expect($('leave-dialog')).toBeNull()
     expect($$('tab').map((tab) => tab.dataset.note)).toEqual(['shop'])
     expect(titleWrites()).toEqual([])
@@ -660,27 +710,22 @@ describe('tabs in the page', () => {
 
   it('NOTES-8 EC-7 tabs and sides by keyboard', async () => {
     await render('/notes/soup')
-    for (const id of ['shop', 'bath']) await act(async () => openNoteInNewTab(id))
-    await settle(40)
-    expect(where).toBe('/notes/bath')
+    await act(async () => {
+      for (const id of ['shop', 'bath']) openNoteInNewTab(id)
+    })
+    await until(() => expect(where).toBe('/notes/bath'))
     await act(async () => key('Digit1'))
-    await settle(20)
-    expect(where).toBe('/notes/soup')
+    await until(() => expect(where).toBe('/notes/soup'))
     await act(async () => key('ArrowRight'))
-    await settle(20)
-    expect(where).toBe('/notes/shop')
+    await until(() => expect(where).toBe('/notes/shop'))
     await act(async () => key('ArrowLeft'))
-    await settle(20)
-    expect(where).toBe('/notes/soup')
+    await until(() => expect(where).toBe('/notes/soup'))
     await act(async () => openNoteBeside('bath'))
-    await settle(40)
-    expect(where).toBe('/notes/bath')
+    await until(() => expect(where).toBe('/notes/bath'))
     await act(async () => key('KeyS'))
-    await settle(20)
-    expect(where).toBe('/notes/soup')
+    await until(() => expect(where).toBe('/notes/soup'))
     await act(async () => key('KeyW'))
-    await settle(40)
-    expect(tabTitles()).toEqual(['Saturday shopping', 'Bathroom works'])
+    await until(() => expect(tabTitles()).toEqual(['Saturday shopping', 'Bathroom works']))
     expect(where).toBe('/notes/bath')
     // Inside the row: arrows move, Enter opens, Delete closes.
     const tabs = $$('tab')
@@ -688,11 +733,9 @@ describe('tabs in the page', () => {
     await act(async () => tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
     expect(document.activeElement).toBe(tabs[0])
     await act(async () => tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
-    await settle(20)
-    expect(where).toBe('/notes/shop')
+    await until(() => expect(where).toBe('/notes/shop'))
     await act(async () => $$('tab')[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true })))
-    await settle(30)
-    expect(tabTitles()).toEqual(['Bathroom works'])
+    await until(() => expect(tabTitles()).toEqual(['Bathroom works']))
     // The keys themselves: Alt and Shift, never with Ctrl (AltGr on a German keyboard).
     expect(tabCommand({ altKey: true, shiftKey: true, ctrlKey: false, metaKey: false, code: 'Digit6' })).toEqual({ kind: 'nth', index: 5 })
     expect(tabCommand({ altKey: true, shiftKey: true, ctrlKey: true, metaKey: false, code: 'Digit1' })).toBeNull()
@@ -703,7 +746,7 @@ describe('tabs in the page', () => {
     await render('/notes/soup')
     await act(async () => openNoteBeside('shop'))
     for (const id of ['bath', 'meet', 'pack', 'gift']) await act(async () => openNoteInNewTab(id))
-    await settle(80)
+    await idle()
     expect($$('tab')).toHaveLength(6)
     expect(openSockets()).toHaveLength(2)
   })
@@ -749,7 +792,7 @@ describe('tabs in the page', () => {
     withText('soup', 'the secret recipe')
     await render('/notes/soup')
     await act(async () => openNoteBeside('shop'))
-    await settle(80)
+    await idle()
     // Offline, A types into both sides: the changes wait.
     networkDown = true
     await act(async () => window.dispatchEvent(new Event('offline')))
@@ -762,9 +805,12 @@ describe('tabs in the page', () => {
     me = 2
     networkDown = false
     await act(async () => document.dispatchEvent(new Event('visibilitychange')))
-    await settle(120)
+    await until(() => expect(where).toBe('/'))
+    await idle()
+    // The line comes back: nothing of A may arrive late.
     await act(async () => window.dispatchEvent(new Event('online')))
-    await settle(120)
+    await settle(60)
+    await idle()
 
     expect(where).toBe('/')
     expect($('tab-bar')).toBeNull()
@@ -781,8 +827,7 @@ describe('tabs in the page', () => {
 
     // B opens a note of its own beside nothing of A's: the tab is B's alone.
     await act(async () => openNoteInNewTab('mine'))
-    await settle(80)
-    expect(tabTitles()).toEqual(['Bea list'])
+    await until(() => expect(tabTitles()).toEqual(['Bea list']))
     for (const secret of ['Lentil soup', 'SECRET']) expect(box.textContent).not.toContain(secret)
     expect(localStorage.getItem(storageKey(2)) ?? '').not.toMatch(/soup|shop/)
   })
