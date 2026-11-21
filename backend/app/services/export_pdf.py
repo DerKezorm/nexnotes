@@ -190,6 +190,11 @@ class Writer:
             return self.table(inner)
         if kind in (s.IMAGE, s.ATTACHMENT):
             return self.attachment(kind, attrs)
+        if kind == s.DRAWING:
+            # A sketch (NOTES-18) stands over the whole width, as in the note.
+            return self.attachment(kind, {**attrs, "size": "full"})
+        if kind == s.RECORDING:
+            return self.recording(attrs)
         if kind == s.LINK_PREVIEW:
             return self.card(attrs)
         return ""
@@ -212,6 +217,29 @@ class Writer:
                 return (f"#nn-sized({string(shown)}, {width})\n\n"
                         "#text(size: 8.5pt, fill: nn-muted)[" + label + "]")
         return "#nn-file[" + label + "]"
+
+    def recording(self, attrs: dict[str, Any]) -> str:
+        """A recording (NOTES-18): a line with name, size and length, its transcript under it."""
+        found = self.files.get(str(attrs.get("id") or ""))
+        length = _length_text(attrs.get("duration"))
+        if found is None:
+            name = str(attrs.get("name") or "")
+            line = "#nn-file[" + words(" · ".join(part for part in (name, length) if part)) + "]" if name else ""
+        else:
+            file, _number = found
+            self.placed.add(file.id)
+            line = "#nn-file[" + words(" · ".join(part for part in (file.name, _size_text(file.size), length)
+                                                  if part)) + "]"
+        transcript = self.files.get(str(attrs.get("transcript") or ""))
+        if transcript is None:
+            return line
+        file, _number = transcript
+        self.placed.add(file.id)
+        with contextlib.closing(file.open()) as stream:
+            text = stream.read(MAX_TRANSCRIPT).decode("utf-8", "replace").strip()
+        if not text:
+            return line
+        return line + "\n\n#text(size: 9.5pt, fill: nn-muted)[" + words(text) + "]"
 
     def card(self, attrs: dict[str, Any]) -> str:
         """The card of a link: its title as the link, the description and the site under it."""
@@ -351,6 +379,20 @@ def _footer(title: str, page_text: str) -> str:
     return ("context { set text(size: 8pt, fill: nn-muted); " + string(title) + "; h(1fr); " + string(before)
             + "; counter(page).display(); " + string(middle) + "; str(counter(page).final().first()); "
             + string(end) + " }")
+
+
+#: Bytes of a transcript the PDF prints under its recording (two hours of talk are far below).
+MAX_TRANSCRIPT = 1024 * 1024
+
+
+def _length_text(value: Any) -> str:
+    """A recording's length as the note shows it (``m:ss`` or ``h:mm:ss``), empty without one."""
+    if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+        return ""
+    seconds = round(value / 1000)
+    hours, rest = divmod(seconds, 3600)
+    minutes, seconds = divmod(rest, 60)
+    return f"{hours}:{minutes:02d}:{seconds:02d}" if hours else f"{minutes}:{seconds:02d}"
 
 
 def _size_text(size: int) -> str:

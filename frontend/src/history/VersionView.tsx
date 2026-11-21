@@ -8,6 +8,8 @@
 import type { ReactNode } from 'react'
 
 import { AttachmentBlock, LinkCardBlock } from '../attachments/blocks'
+import { DrawingBlock } from '../sketches/DrawingBlock'
+import { RecordingBlock } from '../sketches/RecordingBlock'
 import type { LinkCard } from '../attachments/api'
 import type { ImageSize } from '../attachments/open'
 import { safeHref } from '../editor/extensions'
@@ -132,6 +134,29 @@ function draw(node: ProseNode, key: string, noteId: string): ReactNode {
       return (
         <div key={key} className="nn-attachment-node">
           <AttachmentBlock noteId={noteId} id={attrs.id ?? null} name={attrs.name ?? null} size={(attrs.size as ImageSize | null) ?? undefined} nodeType={node.type} actions={READ_ONLY} />
+        </div>
+      )
+    }
+    case 'drawing': {
+      const attrs = (node.attrs ?? {}) as Record<string, string | null>
+      return (
+        <div key={key} className="nn-attachment-node">
+          <DrawingBlock noteId={noteId} id={attrs.id ?? null} name={attrs.name ?? null} actions={READ_ONLY} />
+        </div>
+      )
+    }
+    case 'recording': {
+      const attrs = (node.attrs ?? {}) as Record<string, string | number | null>
+      return (
+        <div key={key} className="nn-attachment-node">
+          <RecordingBlock
+            noteId={noteId}
+            id={typeof attrs.id === 'string' ? attrs.id : null}
+            name={typeof attrs.name === 'string' ? attrs.name : null}
+            duration={typeof attrs.duration === 'number' ? attrs.duration : null}
+            transcript={typeof attrs.transcript === 'string' ? attrs.transcript : null}
+            actions={READ_ONLY}
+          />
         </div>
       )
     }
