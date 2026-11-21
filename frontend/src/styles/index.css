@@ -196,3 +196,23 @@
     scroll-behavior: auto !important;
   }
 }
+
+/* A tab a menu brought to the front (NOTES-8): a short honey pulse, so one sees where it is. */
+@keyframes nn-tab-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 3px 0 var(--color-accent-500);
+  }
+  50% {
+    box-shadow: inset 0 3px 0 var(--color-accent-500), 0 0 0 3px rgb(242 193 78 / 0.55);
+  }
+}
+.nn-tab-pulse {
+  animation: nn-tab-pulse 0.4s ease-in-out 3;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nn-tab-pulse {
+    animation: none;
+    box-shadow: inset 0 3px 0 var(--color-accent-500), 0 0 0 3px rgb(242 193 78 / 0.55);
+  }
+}

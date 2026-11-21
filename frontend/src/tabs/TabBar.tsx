@@ -12,6 +12,7 @@ import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 
 import { useTranslation } from 'react-i18next'
 
 import { NoteIcon } from '../components/NoteIcon'
+import { usePulsingTab } from './pulse'
 import { colorOf } from '../folders/palette'
 import { useCurrentFolder, useFolders } from '../folders/store'
 import { createNote } from '../notes/newNote'
@@ -116,6 +117,9 @@ export function TabBar({ state, metas, split, open }: Props) {
       .catch(() => undefined)
   }
 
+  // A tab a menu brought to the front pulses for a moment.
+  const pulsing = usePulsingTab()
+
   const renderTab = (tab: Tab, index: number) => {
     const meta = metas.get(tab.note)
     const title = titleOf(tab)
@@ -133,6 +137,7 @@ export function TabBar({ state, metas, split, open }: Props) {
         aria-selected={shown}
         aria-current={active ? 'true' : undefined}
         data-active={active || undefined}
+        data-pulse={pulsing === tab.key || undefined}
         aria-keyshortcuts={`Alt+Shift+${index + 1}`}
         tabIndex={tab.key === (focused ?? state.tabs[0]?.key) ? 0 : -1}
         title={hint}
@@ -176,7 +181,8 @@ export function TabBar({ state, metas, split, open }: Props) {
             : shown
               ? 'border-ink-700 bg-ink-850 text-mist-300'
               : 'border-transparent text-mist-500 hover:bg-ink-900 hover:text-mist-300') +
-          (over === tab.key ? ' shadow-[inset_2px_0_0_var(--color-accent-500)]' : '')
+          (over === tab.key ? ' shadow-[inset_2px_0_0_var(--color-accent-500)]' : '') +
+          (pulsing === tab.key ? ' nn-tab-pulse' : '')
         }
       >
         {meta?.icon ? <NoteIcon icon={meta.icon} color={meta.color} size={13} /> : <span aria-hidden className="h-2 w-2 shrink-0 rounded-[3px]" style={{ background: colorFor(meta) }} />}

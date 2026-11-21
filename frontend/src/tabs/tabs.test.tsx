@@ -648,6 +648,45 @@ describe('tabs in the page', () => {
     expect(made()).toBe(2)
   })
 
+  it('NOTES-8 AC-3 no choice of the list menu seems to do nothing: new tab, go to tab with a pulse, already open', async () => {
+    await render('/notes/soup')
+    const menuOf = async (note: string) => {
+      const row = box.querySelector(`[data-testid="note-row-box"][data-note="${note}"]`) as HTMLElement
+      await act(async () => row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })))
+      return { tab: $('menu-open-tab')!, beside: $('menu-open-beside')! }
+    }
+    const tabOfNote = (note: string) => $$('tab').find((one) => one.dataset.note === note)!
+    // Not open: a new tab.
+    let menu = await menuOf('shop')
+    expect(menu.tab.textContent).toBe('Open in a new tab')
+    expect(menu.tab.getAttribute('aria-disabled')).toBeNull()
+    await act(async () => menu.tab.click())
+    await idle()
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    // The front tab already: greyed, "already open", and nothing happens.
+    menu = await menuOf('shop')
+    expect(menu.tab.getAttribute('aria-disabled')).toBe('true')
+    expect(menu.tab.textContent).toContain('already open')
+    await act(async () => menu.tab.click())
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    await act(async () => void document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    await act(async () => void document.querySelector<HTMLElement>('[data-testid="note-item-menu"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+    // Open in the background: "Go to tab", and the tab pulses as it comes to the front.
+    menu = await menuOf('soup')
+    expect(menu.tab.textContent).toBe('Go to tab')
+    await act(async () => menu.tab.click())
+    await idle()
+    expect(tabOfNote('soup').getAttribute('aria-current')).toBe('true')
+    expect(tabOfNote('soup').dataset.pulse).toBe('true')
+    expect(tabOfNote('soup').className).toContain('nn-tab-pulse')
+    // Beside: once the note stands on the right, "Open beside" is greyed too.
+    menu = await menuOf('meet')
+    await act(async () => menu.beside.click())
+    await idle()
+    menu = await menuOf('meet')
+    expect(menu.beside.getAttribute('aria-disabled')).toBe('true')
+  })
+
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {
     await render('/notes/soup')
     await act(async () => {

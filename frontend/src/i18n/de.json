@@ -1269,7 +1269,9 @@
       "deleted": "im Papierkorb",
       "gone": "nicht mehr verfügbar",
       "locked": "gesperrt"
-    }
+    },
+    "goToTab": "Zum Tab wechseln",
+    "alreadyOpen": "schon offen"
   },
   "tags": {
     "heading": "Schlagwörter",

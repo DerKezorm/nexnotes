@@ -1269,7 +1269,9 @@
       "deleted": "in the trash",
       "gone": "no longer available",
       "locked": "locked"
-    }
+    },
+    "goToTab": "Go to tab",
+    "alreadyOpen": "already open"
   },
   "tags": {
     "heading": "Tags",
