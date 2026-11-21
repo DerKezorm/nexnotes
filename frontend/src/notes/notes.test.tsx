@@ -117,6 +117,9 @@ async function answer(call: Call): Promise<Response> {
 
 // ---- The stand-in room ---------------------------------------------------------------------------------------------
 
+/** Every connection made, the newest last: a test closes one the way the room does. */
+const sockets: RoomSocket[] = []
+
 class RoomSocket {
   readyState = 0
   binaryType = 'arraybuffer'
@@ -127,6 +130,7 @@ class RoomSocket {
   doc: Y.Doc
   constructor(url: string) {
     const id = decodeURIComponent(/\/api\/notes\/([^/]+)\/live/.exec(url)![1])
+    sockets.push(this)
     if (!rooms.has(id)) rooms.set(id, new Y.Doc())
     this.doc = rooms.get(id)!
     setTimeout(() => {
@@ -495,5 +499,56 @@ describe('a note on the page', () => {
     expect(bodyOf('n1')).toBeTruthy()
     await settle(400)
     expect($('note-saved')!.textContent).toBe('saved')
+  })
+})
+
+describe('NOTES-13 a shared note in the editor', () => {
+  const lena = { id: 7, name: 'Lena' }
+
+  it('NOTES-13 AC-4 AC-7 AC-11 a reader gets no toolbar, sees whose note it is and cannot share it further', async () => {
+    notes.set('n1', note('n1', { title: 'Recipe', owner: lena, can_write: false, level: 'read', can_share: false, shared_with: [] }))
+    await render('/notes/n1')
+    await settle(40)
+    expect(box.querySelector('[data-testid^="tool-"]')).toBeNull()
+    expect($('note-shared-mark')!.textContent).toBe('from Lena · read only')
+    await act(async () => $('note-menu')!.click())
+    expect($('note-share')).toBeNull()
+    expect(($('note-delete') as HTMLButtonElement).disabled).toBe(true)
+    // Pinning is the reader's own look at its list: there.
+    expect(($('note-pin') as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it('NOTES-13 AC-1 AC-7 the owner shares from the menu and sees with whom; a writer keeps the toolbar', async () => {
+    notes.set('n2', note('n2', { title: 'Shopping', can_share: true, shared_with: ['Anna', 'Lena'] }))
+    await render('/notes/n2')
+    await settle(40)
+    expect(box.querySelector('[data-testid^="tool-"]')).not.toBeNull()
+    expect($('note-shared-mark')!.textContent).toBe('shared with Anna, Lena')
+    await act(async () => $('note-menu')!.click())
+    await act(async () => $('note-share')!.click())
+    await settle(30)
+    expect(document.querySelector('[role="dialog"][aria-label="Share “Shopping”"]')).not.toBeNull()
+    await act(async () => root.unmount())
+    notes.set('n3', note('n3', { title: 'Together', owner: lena, can_write: true, level: 'write', can_share: false }))
+    await render('/notes/n3')
+    await settle(40)
+    expect(box.querySelector('[data-testid^="tool-"]')).not.toBeNull()
+    expect($('note-shared-mark')!.textContent).toBe('from Lena · can edit')
+  })
+
+  it('NOTES-13 AC-5 a right taken while the note is open: the bar names who ended it; lowered, a notice says so', async () => {
+    notes.set('n1', note('n1', { title: 'Parents evening', owner: lena, can_write: true, level: 'write' }))
+    await render('/notes/n1')
+    await settle(60)
+    // Writing becomes reading: the room closes with 4409, the editor comes back and hears it.
+    notes.set('n1', note('n1', { title: 'Parents evening', owner: lena, can_write: false, level: 'read' }))
+    await act(async () => sockets.at(-1)!.onclose?.({ code: 4409 } as CloseEvent))
+    await settle(1400)
+    expect(document.body.textContent).toContain('Lena changed your right: you can only read this note now.')
+    expect(box.querySelector('[data-testid^="tool-"]')).toBeNull()
+    // Taken back: 4403.
+    await act(async () => sockets.at(-1)!.onclose?.({ code: 4403 } as CloseEvent))
+    await settle(30)
+    expect($('stopped-bar')!.textContent).toContain('“Parents evening” is not here any more: Lena stopped sharing it.')
   })
 })

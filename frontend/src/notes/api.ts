@@ -29,6 +29,11 @@ export type NoteHead = NoteItem & {
   can_write: boolean
   /** The paper (NOTES-3 AC-17): blank, lined, grid or dots. */
   paper?: string
+  /** Sharing (NOTES-13): whom an own note is shared with; only the owner shares; a member's right and own pin. */
+  shared_with?: string[]
+  can_share?: boolean
+  level?: 'read' | 'write'
+  pinned?: boolean
 }
 
 export type NewNote = { id?: string; folder_id?: string; title?: string; markdown?: string; origin?: string; title_suggested?: boolean }

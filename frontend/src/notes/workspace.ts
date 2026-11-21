@@ -12,7 +12,7 @@ import { focusedKey, tabOf } from '../tabs/state'
 
 const NOTE_PATH = /^\/notes\/([^/]+)$/
 /** The paths that show a list beside the notes. */
-const LIST_PATH = /^\/(?:|notes\/[^/]+|folder\/[^/]+|inbox|folders|tags|tags\/[^/]+|search)$/
+const LIST_PATH = /^\/(?:|notes\/[^/]+|folder\/[^/]+|inbox|folders|tags|tags\/[^/]+|search|shared|shared\/folder\/[^/]+)$/
 
 export function isListPath(pathname: string): boolean {
   return LIST_PATH.test(pathname)
