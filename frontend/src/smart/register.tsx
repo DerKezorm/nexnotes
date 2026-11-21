@@ -1,10 +1,10 @@
 /**
  * Smart folders dock onto the frame (`extensions.ts`, NOTES-7): the section "Intelligent" in the sidebar right after
- * the folders (drawing "Seitenleiste"), the list `/smart/<id>` in the notes' workspace, the pages to make and change
- * one, and the buttons "Als intelligenten Ordner sichern" of the search (NOTES-9 AC-6) and of a tag's page (NOTES-5
+ * the folders (drawing "Seitenleiste"; on the phone's page "Ordner" the same), the list `/smart/<id>` in the notes'
+ * workspace, the pages to make and change one, and the buttons "Als intelligenten Ordner sichern" of the search (NOTES-9 AC-6) and of a tag's page (NOTES-5
  * AC-6), which appear once this is here.
  */
-import { FEATURE_ROUTES, SIDEBAR_SECTIONS } from '../extensions'
+import { FEATURE_ROUTES, PHONE_FOLDER_SECTIONS, SIDEBAR_SECTIONS } from '../extensions'
 import { goTo } from '../notes/context'
 import { registerListName } from '../notes/workspace'
 import { registerSmartFolderSave, type SearchConditions } from '../search'
@@ -14,11 +14,13 @@ import { smartApi } from './api'
 import { fromSearch, nameFromSearch, smartName } from './conditions'
 import { SmartEditor, type NewSmartFolder } from './SmartEditor'
 import { SmartFolderPage } from './SmartFolderPage'
-import { SmartSection } from './SmartSection'
+import { PhoneSmartSection, SmartSection } from './SmartSection'
 import { currentSmartFolders, refreshSmartFolders } from './store'
 
 const folders = SIDEBAR_SECTIONS.findIndex((section) => section.key === 'folders')
 SIDEBAR_SECTIONS.splice(folders >= 0 ? folders + 1 : SIDEBAR_SECTIONS.length, 0, { key: 'smart', render: () => <SmartSection /> })
+// On the phone's page "Ordner" after the folders, as in the sidebar (NOTES-23 AC-1).
+PHONE_FOLDER_SECTIONS.push({ key: 'smart', render: () => <PhoneSmartSection /> })
 FEATURE_ROUTES.push(
   { path: 'smart/new', element: <SmartEditor /> },
   { path: 'smart/:id/edit', element: <SmartEditor /> },

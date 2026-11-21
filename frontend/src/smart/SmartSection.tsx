@@ -31,6 +31,55 @@ function keep(ids: string[]): void {
     .finally(() => void refreshSmartFolders())
 }
 
+function SmartIcon({ preset, className }: { preset: Preset; className: string }) {
+  const Icon = PRESET_ICONS[preset]
+  return Icon ? (
+    <Icon className={className} strokeWidth={2} aria-hidden data-testid={`smart-icon-${preset}`} />
+  ) : (
+    <Filter className={className} strokeWidth={2} aria-hidden data-testid="smart-filter-icon" />
+  )
+}
+
+/** The same section on the phone's page "Ordner" (NOTES-23 AC-1): the same smart folders in the same order with the
+ * same symbols, rows large enough for a finger, "+" to make one. The order is changed at the computer. */
+export function PhoneSmartSection() {
+  const { t } = useTranslation()
+  const { folders } = useSmartFolders()
+  return (
+    <section aria-label={t('smart.heading')} className="space-y-3.5" data-testid="folders-smart">
+      <div className="flex items-center justify-between">
+        <h2 className="px-1 text-xs font-semibold tracking-[0.06em] text-mist-500 uppercase">{t('smart.heading')}</h2>
+        <Link to="/smart/new" aria-label={t('smart.new')} title={t('smart.new')} className="flex h-11 w-11 items-center justify-center text-mist-500" data-testid="folders-smart-new">
+          <Plus className="h-4 w-4" strokeWidth={2.2} aria-hidden />
+        </Link>
+      </div>
+      {folders.length > 0 && (
+        <div className="nn-card overflow-hidden rounded-[14px]">
+          {folders.map((folder) => {
+            const name = smartName(folder, t)
+            return (
+              <Link
+                key={folder.id}
+                to={`/smart/${encodeURIComponent(folder.id)}`}
+                className="flex min-h-[50px] items-center justify-between gap-2 border-b border-ink-800 px-3.5 text-base last:border-b-0 hover:bg-ink-800"
+                data-testid="folders-smart-folder"
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <SmartIcon preset={folder.preset} className="h-4 w-4 shrink-0 text-mist-500" />
+                  <span className="truncate" title={name}>
+                    {name}
+                  </span>
+                </span>
+                <span className="shrink-0 text-[15px] text-mist-500">›</span>
+              </Link>
+            )
+          })}
+        </div>
+      )}
+    </section>
+  )
+}
+
 export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation()
   const { folders } = useSmartFolders()
@@ -78,7 +127,6 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
       <ul className="flex flex-col">
         {folders.map((folder) => {
           const name = smartName(folder, t)
-          const Icon = PRESET_ICONS[folder.preset]
           return (
             <li key={folder.id}>
               <NavLink
@@ -109,11 +157,7 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
                   (dragging === folder.id ? ' opacity-60' : '')
                 }
               >
-                {Icon ? (
-                  <Icon className="h-3.5 w-3.5 shrink-0 text-mist-500" strokeWidth={2} aria-hidden data-testid={`smart-icon-${folder.preset}`} />
-                ) : (
-                  <Filter className="h-3.5 w-3.5 shrink-0 text-mist-500" strokeWidth={2} aria-hidden data-testid="smart-filter-icon" />
-                )}
+                <SmartIcon preset={folder.preset} className="h-3.5 w-3.5 shrink-0 text-mist-500" />
                 <span className="min-w-0 truncate">{name}</span>
               </NavLink>
             </li>

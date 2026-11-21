@@ -12,6 +12,9 @@ import { FolderPage, FoldersPage, InboxPage } from '../folders/pages'
 import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
 import { NotesPage } from '../notes/NotesPage'
+// Smart folders docked on, as `main.tsx` does: their section stands on the page "Ordner" too.
+import '../smart'
+import { forgetSmartFolders } from '../smart/store'
 import { followAccount, forgetAccount } from '../state/account'
 import { AuthProvider, unreachable as offlineError, useAuth } from '../state/auth'
 import { ApiError } from '../api/client'
@@ -62,6 +65,15 @@ function server() {
         ],
       })
     if (path.startsWith('/api/folders/inbox')) return json({ id: 'inbox-1', notes: [] })
+    if (path === '/api/smart-folders')
+      return json({
+        items: [
+          { id: 's-open', name: '', preset: 'open_tasks', match: 'all', conditions: [{ kind: 'tasks', op: 'open' }], position: 0 },
+          { id: 's-shared', name: '', preset: 'shared_with_me', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
+          { id: 's-files', name: '', preset: 'attachments', match: 'all', conditions: [{ kind: 'attachment', type: 'any' }], position: 2 },
+          { id: 's-own', name: 'Rezepte offen', preset: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 3 },
+        ],
+      })
     if (path.startsWith('/api/note-list/stamp')) return json({ stamp: 's' })
     if (path.startsWith('/api/note-list')) return json({ key: 'k', view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }, counts: { own: 0, shared: 0 }, items: [] })
     if (path.startsWith('/api/notes')) return json([])
@@ -135,6 +147,7 @@ beforeEach(() => {
   registerNoteActions({ newNote, noteHref: (id: string) => `/notes/${id}` })
   newNote.mockReset()
   forgetFolders()
+  forgetSmartFolders()
   forgetAccount()
   forgetStart()
   localStorage.clear()
@@ -153,14 +166,33 @@ afterEach(() => {
 // ---- AC-1 -------------------------------------------------------------------------------------------------------------
 
 describe('NOTES-23 AC-1 on a phone one view after the other', () => {
+  it('NOTES-23 AC-1 NOTES-7 AC-8 the page "Ordner" has the section "Intelligent" of the sidebar: same entries, order, symbols, "+"', async () => {
+    await render('/folders')
+    const section = find('folders-smart')!
+    expect(section.querySelector('h2')!.textContent).toBe(t('smart.heading'))
+    // After the folders, as in the sidebar.
+    const tree = find('folders-page')!.querySelector('a[href="/folder/f-home"]')!
+    expect(tree.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const rows = [...section.querySelectorAll<HTMLAnchorElement>('[data-testid="folders-smart-folder"]')]
+    expect(rows.map((row) => row.textContent)).toEqual([t('smart.preset.open_tasks') + '›', t('smart.preset.shared_with_me') + '›', t('smart.preset.attachments') + '›', 'Rezepte offen›'])
+    expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/smart/s-open', '/smart/s-shared', '/smart/s-files', '/smart/s-own'])
+    expect(rows[0].querySelector('[data-testid="smart-filter-icon"]')).not.toBeNull()
+    expect(rows[1].querySelector('[data-testid="smart-icon-shared_with_me"]')).not.toBeNull()
+    expect(rows[2].querySelector('[data-testid="smart-icon-attachments"]')).not.toBeNull()
+    expect(find('folders-smart-new')!.getAttribute('href')).toBe('/smart/new')
+    await click(rows[1])
+    expect(where()).toBe('/smart/s-shared')
+  })
+
   it('NOTES-23 AC-1 opened at 390 px, nexnotes starts with the folders, then a folder, then the note, each with "‹ Back"', async () => {
     await render('/')
-    // The folders first (drawing "Handy-Ordner"): the inbox, all notes, shared with me, the tree.
+    // The folders first (drawing "Handy-Ordner"): the inbox, all notes, the tree, then the smart folders as in the sidebar.
     expect(where()).toBe('/folders')
     const page = find('folders-page')!
     expect(page.textContent).toContain(t('folders.inbox.name'))
     expect(find('folders-all')?.getAttribute('href')).toBe('/')
-    expect(find('folders-shared')?.getAttribute('href')).toBe('/shared')
+    // What others shared is a smart folder now (NOTES-7), no fixed place of its own.
+    expect(find('folders-shared')).toBeNull()
     expect(page.textContent).toContain('Haushalt')
     // "New note" large at the bottom right.
     const fab = page.querySelector<HTMLButtonElement>(`button[aria-label="${t('folders.page.newNote', { name: t('folders.inbox.name') })}"]`)
@@ -321,7 +353,7 @@ describe('NOTES-23 AC-7 every button and field is 44 px to tap', () => {
       const controls = [...box.querySelectorAll('button, input, select, textarea')]
       expect(controls.length, at).toBeGreaterThan(0)
       for (const control of controls) expect(control.matches(rule.selector), `${at}: ${control.outerHTML.slice(0, 120)}`).toBe(true)
-      for (const link of box.querySelectorAll('[data-testid="phone-back"], [data-testid="folders-all"], [data-testid="folders-shared"], [data-testid="folders-page"] a'))
+      for (const link of box.querySelectorAll('[data-testid="phone-back"], [data-testid="folders-all"], [data-testid="folders-page"] a'))
         expect(link.className, `${at}: ${link.outerHTML.slice(0, 120)}`).toMatch(big)
     }
   })
