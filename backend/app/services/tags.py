@@ -14,9 +14,9 @@ The rule, the same in ``frontend/src/tags/rules.ts`` (both read ``frontend/src/t
 * text in inline code or in a link, and code blocks, hold no tags (EC-1); a heading's ``#`` is no text at all;
 * ``#Einkauf`` and ``#einkauf`` are one tag (``key_of``), shown in the spelling used most (EC-2).
 
-Renaming and deleting change the text of the member's own notes through the live room (``notes.change``), so an open
-editor sees it at once and someone typing at the same moment loses nothing (EC-7). Notes others shared stay as they
-are (AC-4, AC-5).
+Renaming and deleting change the text of all the member's own notes, those in the trash too, through the live room
+(``notes.change``), so an open editor sees it at once and someone typing at the same moment loses nothing (EC-7).
+Notes others shared stay as they are (AC-4, AC-5).
 
 Sharing (NOTES-13) and locked notes (NOTES-16) come later; they dock on through ``SHARED_NOTES`` and ``HIDDEN_NOTES``.
 """
@@ -285,13 +285,16 @@ def list_tags(db: Session, account: Account) -> list[dict[str, Any]]:
 
 
 def with_tags(db: Session, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Adds ``tags`` (labels, sorted) to notes of a list, with one query for all of them."""
+    """Adds ``tags`` (labels, sorted) to notes of a list, with one query for all of them. A locked note shows none
+    (EC-6), even when the list itself carries it."""
     ids = [item["id"] for item in items]
     per_note: dict[str, dict[str, tuple[int, str]]] = {}
     for start in range(0, len(ids), 500):
         for note_id, key, label, count in db.execute(
                 select(NoteTag.note_id, NoteTag.key, NoteTag.label, NoteTag.count)
-                .where(NoteTag.note_id.in_(ids[start:start + 500]))):
+                .join(Note, Note.id == NoteTag.note_id)
+                .where(NoteTag.note_id.in_(ids[start:start + 500]),
+                       *(not_(hidden()) for hidden in HIDDEN_NOTES))):
             mine = per_note.setdefault(note_id, {})
             best = mine.get(key)
             if best is None or (count, best[1]) > (best[0], label):
@@ -370,6 +373,10 @@ def _rewrite_text(text: Any, key: str, new_label: str | None) -> int:
     for tag in reversed(hits):
         if new_label is None:
             start, end = tag.start, tag.end
+            # A ``-`` or ``_`` right after the tag belongs to the word the member typed, though not to the tag: it
+            # goes too, so that no ``_`` stays behind on its own.
+            while end < len(original) and original[end] in "-_" and masked[end] == original[end]:
+                end += 1
             # One blank goes with it, so that no double blank stays behind (AC-5).
             if original[end:end + 1] == " ":
                 end += 1
@@ -425,8 +432,12 @@ def rewrite(doc: Any, key: str, new_label: str | None) -> Counter[str]:
 
 
 def _own_notes(db: Session, account: Account, key: str) -> list[str]:
+    """Every note of the account's own with the tag, those in the trash too (AC-4, AC-5 say "all of its own notes"):
+    a note that comes back from the trash carries the new name. Locked notes stay as they are (EC-6)."""
     return list(db.scalars(select(Note.id).join(NoteTag, NoteTag.note_id == Note.id)
-                           .where(visible(account.id, own_only=True), NoteTag.key == key).group_by(Note.id)))
+                           .where(Note.owner_id == account.id, NoteTag.key == key,
+                                  *(not_(hidden()) for hidden in HIDDEN_NOTES))
+                           .group_by(Note.id)))
 
 
 def _kept(db: Session, account: Account, key: str) -> int:
