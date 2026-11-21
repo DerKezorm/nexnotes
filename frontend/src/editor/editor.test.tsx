@@ -196,7 +196,7 @@ describe('NOTES-3 AC-3 the toolbar, shortcuts and Markdown typing', () => {
       press(editor, key, modifiers)
       expect(check(editor), `${key} ${JSON.stringify(modifiers)}`).toBe(true)
     }
-    // Ctrl+K opens the link dialog.
+    // Ctrl+Alt+K opens the link dialog (Ctrl+K is the search).
     let asked = false
     const hooks = { onLink: () => (asked = true) }
     const withHook = new Editor({
@@ -204,7 +204,7 @@ describe('NOTES-3 AC-3 the toolbar, shortcuts and Markdown typing', () => {
       extensions: editorExtensions({ doc: new Y.Doc(), provider: new NoteProvider('x', undefined, { socket: () => { throw new Error('x') } }), me: presenceUser(1, 'a'), t, placeholder: '', hooks }),
     })
     made.push(withHook)
-    press(withHook, 'k', { ctrl: true })
+    press(withHook, 'k', { ctrl: true, alt: true })
     expect(asked).toBe(true)
   })
 
