@@ -182,7 +182,7 @@ def test_notes20_ac2_a_key_sees_what_its_member_sees_and_never_more(client, oper
     assert secret["id"] not in listed and {mine["id"], readable["id"], writable["id"]} <= listed
     # A note of somebody else that is not shared is not there, whatever the tool.
     for tool, args in (("read_note", {}), ("append_to_note", {"text": "x"}), ("trash_note", {}),
-                       ("check_item", {"index": 0}), ("move_note", {"folder_id": "inbox"})):
+                       ("check_item", {"index": 0, "text": "x"}), ("move_note", {"folder_id": "inbox"})):
         assert refused(client, token, tool, note_id=secret["id"], **args) == "Not found."
     assert stored(secret["id"]).deleted_at is None
     # Shared to read: read, never written.
@@ -291,17 +291,36 @@ def test_notes20_ac4_a_write_key_appends_ticks_moves_makes_folders_and_trashes(c
     ok(client, token, "check_item", note_id=note["id"], index=1, text="Brot")
     items = ok(client, token, "read_note", note_id=note["id"])["checklist"]
     assert [(item["text"], item["checked"]) for item in items] == [("Milch", False), ("Brot", True), ("Eier", False)]
-    ok(client, token, "check_item", note_id=note["id"], index=1, checked=False)
+    ok(client, token, "check_item", note_id=note["id"], index=1, checked=False, text="Brot")
     assert ok(client, token, "read_note", note_id=note["id"])["checklist"][1]["checked"] is False
     # The item changed meanwhile: nothing is ticked.
     assert "different one" in refused(client, token, "check_item", note_id=note["id"], index=0, text="Brot")
-    assert "No checklist item 9" in refused(client, token, "check_item", note_id=note["id"], index=9)
+    assert "No checklist item 9" in refused(client, token, "check_item", note_id=note["id"], index=9, text="Brot")
+    # Without its text an item is not ticked: by its place alone it may be another one by now.
+    assert refused(client, token, "check_item", note_id=note["id"], index=0)
+    assert ok(client, token, "read_note", note_id=note["id"])["checklist"][0]["checked"] is False
     moved = ok(client, token, "move_note", note_id=note["id"], folder_id=sub["id"])
     assert moved["folder"]["id"] == sub["id"] and stored(note["id"]).folder_id == sub["id"]
     assert ok(client, token, "move_note", note_id=note["id"], folder_id="inbox")["folder"]["inbox"] is True
     assert refused(client, token, "move_note", note_id=note["id"], folder_id=secrets.token_hex(8)) == "Folder not found."
     assert ok(client, token, "trash_note", note_id=note["id"]) == {"id": note["id"], "in_trash": True}
     assert stored(note["id"]).deleted_at is not None
+
+
+def test_notes20_ac4_a_long_checklist_item_is_ticked_with_the_text_read_note_showed(client, operator):
+    token = key_for(operator)
+    long_item = " ".join(f"Wort{number:03d}" for number in range(86))
+    assert len(long_item) > 600
+    note = ok(client, token, "create_note", text=f"Liste\n\n- [ ] {long_item}\n- [ ] Mil")
+    shown = ok(client, token, "read_note", note_id=note["id"])["checklist"]
+    assert len(shown[0]["text"]) == 500 and long_item.startswith(shown[0]["text"])
+    ok(client, token, "check_item", note_id=note["id"], index=0, text=shown[0]["text"])
+    assert ok(client, token, "read_note", note_id=note["id"])["checklist"][0]["checked"] is True
+    # Only the shortened text exactly as shown counts; any other beginning is another item.
+    assert "different one" in refused(client, token, "check_item", note_id=note["id"], index=0,
+                                      text=shown[0]["text"][:499], checked=False)
+    assert "different one" in refused(client, token, "check_item", note_id=note["id"], index=1, text="Mi")
+    assert ok(client, token, "read_note", note_id=note["id"])["checklist"][0]["checked"] is True
 
 
 def test_notes20_ac6_ec6_a_tool_writing_while_somebody_types_loses_nothing_and_the_history_names_the_key(
@@ -360,26 +379,36 @@ def _connect(client: TestClient, level: str, client_id: str | None = None) -> tu
                                   json={"client_name": "Chat program", "redirect_uris": [redirect]})
         assert registered.status_code == 201, registered.text
         client_id = registered.json()["client_id"]
+    code, verifier = _agree(client, client_id, redirect, level)
+    traded = _trade(program, client_id, code, verifier, redirect)
+    assert traded.status_code == 200, traded.text
+    return traded.json(), client_id
+
+
+def _agree(client: TestClient, client_id: str, redirect: str, level: str) -> tuple[str, str]:
+    """The member agrees on the consent page: the code the program gets back, and the verifier that belongs to it."""
     verifier, challenge = _pkce()
     asked = {"client_id": client_id, "redirect_uri": redirect, "code_challenge": challenge,
              "code_challenge_method": "S256"}
     info = client.get("/api/oauth/authorize", params=asked)
-    assert info.status_code == 200 and info.json()["client_name"] == "Chat program"
+    assert info.status_code == 200, info.text
     agreed = client.post("/api/oauth/authorize", json={**asked, "state": "abc", "approve": True, "level": level})
     assert agreed.status_code == 200, agreed.text
     back = urlsplit(agreed.json()["redirect"])
     query = parse_qs(back.query)
-    assert back.netloc == "127.0.0.1:33418" and query["state"] == ["abc"]
-    traded = program.post("/api/oauth/token", data={"grant_type": "authorization_code", "code": query["code"][0],
-                                                     "client_id": client_id, "redirect_uri": redirect,
-                                                     "code_verifier": verifier})
-    assert traded.status_code == 200, traded.text
-    # A code goes once.
-    again = program.post("/api/oauth/token", data={"grant_type": "authorization_code", "code": query["code"][0],
-                                                    "client_id": client_id, "redirect_uri": redirect,
-                                                    "code_verifier": verifier})
-    assert again.status_code == 400 and again.json()["error"] == "invalid_grant"
-    return traded.json(), client_id
+    assert back.netloc == urlsplit(redirect).netloc and query["state"] == ["abc"]
+    return query["code"][0], verifier
+
+
+def _trade(program: TestClient, client_id: str, code: str, verifier: str, redirect: str) -> Any:
+    return program.post("/api/oauth/token", data={"grant_type": "authorization_code", "code": code,
+                                                   "client_id": client_id, "redirect_uri": redirect,
+                                                   "code_verifier": verifier})
+
+
+def _refresh(program: TestClient, client_id: str, refresh_token: str) -> Any:
+    return program.post("/api/oauth/token", data={"grant_type": "refresh_token", "client_id": client_id,
+                                                   "refresh_token": refresh_token})
 
 
 def test_notes20_ac7_a_connector_signs_in_with_oauth_choosing_read_or_read_and_write(client, operator):
@@ -405,6 +434,101 @@ def test_notes20_ac7_a_connector_signs_in_with_oauth_choosing_read_or_read_and_w
                                                      "refresh_token": tokens["refresh_token"]})
     assert stolen.status_code == 400
     assert rpc(client, fresh.json()["access_token"], "ping").status_code == 401
+    assert client.get("/api/mcp/keys").json()["keys"] == []
+
+
+def test_notes20_ac7_any_spent_refresh_token_brought_again_ends_the_connector(client, operator):
+    tokens, client_id = _connect(client, "write")
+    program = _program()
+    first = tokens["refresh_token"]
+    second = _refresh(program, client_id, first).json()
+    third = _refresh(program, client_id, second["refresh_token"]).json()
+    assert rpc(client, third["access_token"], "ping").status_code == 200
+    # Two changes ago, not only the one before: a copy all the same.
+    stolen = _refresh(program, client_id, first)
+    assert stolen.status_code == 400 and stolen.json()["error"] == "invalid_grant"
+    assert rpc(client, third["access_token"], "ping").status_code == 401
+    assert _refresh(program, client_id, third["refresh_token"]).status_code == 400
+    assert client.get("/api/mcp/keys").json()["keys"] == []
+
+
+def test_notes20_ac7_only_the_last_spent_tokens_are_kept_and_go_with_their_connector(client, operator):
+    from app.models_mcp import OAuthSpent
+
+    tokens, client_id = _connect(client, "read")
+    program = _program()
+    refresh = tokens["refresh_token"]
+    for _ in range(oauth.SPENT_KEPT + 5):
+        refresh = _refresh(program, client_id, refresh).json()["refresh_token"]
+    with SessionLocal() as db:
+        assert len(db.scalars(select(OAuthSpent)).all()) == oauth.SPENT_KEPT
+    key_id = client.get("/api/mcp/keys").json()["keys"][0]["id"]
+    assert client.delete(f"/api/mcp/keys/{key_id}").status_code in (200, 204)
+    with SessionLocal() as db:
+        assert db.scalars(select(OAuthSpent)).all() == []
+
+
+def test_notes20_ac7_a_refresh_token_spent_before_the_update_still_ends_the_connector(client, operator):
+    """Keys refreshed by an earlier version know only the refresh token before their last one."""
+    tokens, client_id = _connect(client, "read")
+    old = "nnr_" + secrets.token_urlsafe(32)
+    with SessionLocal() as db:
+        key = db.scalar(select(ApiToken).where(ApiToken.client_id == client_id))
+        key.refresh_old_hash = apitokens.digest(old)
+        db.commit()
+    assert _refresh(_program(), client_id, old).status_code == 400
+    assert rpc(client, tokens["access_token"], "ping").status_code == 401
+    assert client.get("/api/mcp/keys").json()["keys"] == []
+
+
+def test_notes20_ac7_a_code_traded_twice_ends_the_tokens_it_gave(client, operator):
+    program = _program()
+    redirect = "http://127.0.0.1:33418/callback"
+    client_id = program.post("/api/oauth/register", json={"client_name": "Chat program",
+                                                          "redirect_uris": [redirect]}).json()["client_id"]
+    code, verifier = _agree(client, client_id, redirect, "write")
+    traded = _trade(program, client_id, code, verifier, redirect)
+    assert traded.status_code == 200, traded.text
+    access = traded.json()["access_token"]
+    assert rpc(client, access, "ping").status_code == 200
+    again = _trade(program, client_id, code, verifier, redirect)
+    assert again.status_code == 400 and again.json()["error"] == "invalid_grant"
+    assert rpc(client, access, "ping").status_code == 401
+    assert _refresh(program, client_id, traded.json()["refresh_token"]).status_code == 400
+    assert client.get("/api/mcp/keys").json()["keys"] == []
+    # Brought under another program's name, a spent code ends nothing: that is not its connector.
+    code, verifier = _agree(client, client_id, redirect, "read")
+    tokens = _trade(program, client_id, code, verifier, redirect).json()
+    other_id = program.post("/api/oauth/register", json={"redirect_uris": [redirect]}).json()["client_id"]
+    assert _trade(program, other_id, code, verifier, redirect).status_code == 400
+    assert rpc(client, tokens["access_token"], "ping").status_code == 200
+
+
+def test_notes20_ac7_a_code_is_traded_only_with_the_return_address_it_was_given_for(client, operator):
+    program = _program()
+    given, other = "https://app.example/cb", "https://app.example/other"
+    client_id = program.post("/api/oauth/register", json={"redirect_uris": [given, other]}).json()["client_id"]
+    code, verifier = _agree(client, client_id, given, "write")
+    wrong = _trade(program, client_id, code, verifier, other)
+    assert wrong.status_code == 400 and wrong.json()["error"] == "invalid_grant"
+    assert client.get("/api/mcp/keys").json()["keys"] == []
+
+
+def test_notes20_ac7_a_blocked_account_trades_no_code(client, operator):
+    from app.models import utcnow
+
+    program = _program()
+    redirect = "https://app.example/cb"
+    client_id = program.post("/api/oauth/register", json={"redirect_uris": [redirect]}).json()["client_id"]
+    code, verifier = _agree(client, client_id, redirect, "write")
+    with SessionLocal() as db:
+        db.get(Account, operator.id).blocked_at = utcnow()
+        db.commit()
+    refused = _trade(program, client_id, code, verifier, redirect)
+    assert refused.status_code == 400 and refused.json()["error"] == "invalid_grant"
+    with SessionLocal() as db:
+        db.get(Account, operator.id).blocked_at = None
+        db.commit()
     assert client.get("/api/mcp/keys").json()["keys"] == []
 
 
@@ -503,7 +627,8 @@ def test_notes20_ec3_a_locked_note_gives_its_title_and_locked_and_nothing_else(c
     assert ok(client, token, "search_notes", query="4711")["total"] == 0
     listed = ok(client, token, "list_notes")["notes"]
     assert listed[0]["locked"] is True and "4711" not in str(listed)
-    for tool, args in (("append_to_note", {"text": "mehr"}), ("check_item", {"index": 0}), ("trash_note", {}),
+    for tool, args in (("append_to_note", {"text": "mehr"}), ("check_item", {"index": 0, "text": "x"}),
+                       ("trash_note", {}),
                        ("move_note", {"folder_id": "inbox"})):
         assert "locked" in refused(client, token, tool, note_id=note["id"], **args)
     assert stored(note["id"]).deleted_at is None

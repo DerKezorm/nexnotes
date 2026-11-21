@@ -20,8 +20,24 @@ from . import schema as s
 from .doc import body_of, check_format, clean_doc, set_title, write_blocks
 from .markdown import from_markdown
 
-__all__ = ["Task", "TaskNotFound", "append_markdown", "append_paragraph", "append_task", "list_tasks", "set_title",
-           "toggle_task"]
+__all__ = ["SHOWN_TASK_TEXT", "Task", "TaskNotFound", "append_markdown", "append_paragraph", "append_task",
+           "list_tasks", "set_title", "shown_task_text", "toggle_task"]
+
+
+#: The most characters of a checklist item a program is shown (MCP ``read_note``, the nexdeck card). Ticking with that
+#: shortened text still finds the item (``toggle_task``).
+SHOWN_TASK_TEXT = 500
+
+
+def shown_task_text(text: str) -> str:
+    """A checklist item's text as programs are shown it: its first ``SHOWN_TASK_TEXT`` characters."""
+    return text[:SHOWN_TASK_TEXT]
+
+
+def _same_task(text: str, expect: str) -> bool:
+    """Whether ``expect`` names the item with ``text``: its whole text, or the shortened one a program was shown."""
+    expect = expect.strip()
+    return text.strip() == expect or (len(text) > SHOWN_TASK_TEXT and shown_task_text(text).strip() == expect)
 
 
 class TaskNotFound(LookupError):
@@ -137,14 +153,15 @@ def append_task(doc: Doc, text: str, checked: bool = False) -> int:
 
 def toggle_task(doc: Doc, index: int, checked: bool | None = None, expect: str | None = None) -> bool:
     """Ticks or unticks the checklist item at ``index`` (``list_tasks`` order); ``checked`` sets it, ``None`` flips it.
-    With ``expect``, the item's text must still be that text. Returns the new state."""
+    With ``expect``, the item's text must still be that text, or begin with it as ``shown_task_text`` shortened it.
+    Returns the new state."""
     check_format(doc)
     with doc.transaction():
         items = _task_elements(body_of(doc))
         if not 0 <= index < len(items):
             raise TaskNotFound(f"No checklist item {index}.")
         item = items[index][0]
-        if expect is not None and _task_text(item).strip() != str(expect).strip():
+        if expect is not None and not _same_task(_task_text(item), str(expect)):
             raise TaskNotFound(f"Checklist item {index} is a different one now.")
         current = item.attributes.get("checked") is True
         wanted = (not current) if checked is None else bool(checked)

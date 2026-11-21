@@ -339,8 +339,8 @@ async def read_note(caller: Caller, args: dict[str, Any]) -> Any:
         "markdown": markdown[:MAX_ANSWER_CHARS],
         "truncated": truncated,
         "tags": labels,
-        "checklist": [{"index": item.index, "text": item.text[:500], "checked": item.checked, "depth": item.depth}
-                      for item in items[:MAX_LIST * 5]],
+        "checklist": [{"index": item.index, "text": edit.shown_task_text(item.text), "checked": item.checked,
+                       "depth": item.depth} for item in items[:MAX_LIST * 5]],
     }
 
 
@@ -481,7 +481,10 @@ async def check_item(caller: Caller, args: dict[str, Any]) -> Any:
     note_id = _text(args, "note_id")
     index = args.get("index")
     checked = args.get("checked", True)
-    expect = args.get("text") if isinstance(args.get("text"), str) else None
+    expect = args.get("text")
+    if not isinstance(expect, str):
+        # Without its text an item is ticked by its place alone: after a change, that may be another item.
+        raise ToolError("Give the item's text as read_note showed it.")
     if not isinstance(index, int) or isinstance(index, bool) or index < 0:
         raise ToolError("'index' must be a whole number from 0.")
     if not isinstance(checked, bool):
@@ -610,10 +613,10 @@ TOOLS: list[Tool] = [
          _schema({"note_id": _ID, "text": _MARKDOWN}, ["note_id", "text"]), append_to_note),
     Tool("check_item", "write",
          "Tick a checklist item off, or open it again with checked=false. Give its index as read_note numbered it, "
-         "and its text to be sure it is still the same item.",
+         "and its text as read_note showed it, to be sure it is still the same item.",
          _schema({"note_id": _ID, "index": {"type": "integer", "minimum": 0, "maximum": 1_000_000},
                   "checked": {"type": "boolean"}, "text": {"type": "string", "maxLength": s.MAX_TASK_TEXT}},
-                 ["note_id", "index"]), check_item),
+                 ["note_id", "index", "text"]), check_item),
     Tool("move_note", "write", "Move one of your notes into one of your folders, or back into the inbox.",
          _schema({"note_id": _ID, "folder_id": _FOLDER}, ["note_id", "folder_id"]), move_note),
     Tool("create_folder", "write", "Make a folder, at the top or inside another of your folders.",

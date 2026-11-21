@@ -288,7 +288,8 @@ class ApiToken(Base):
     last_used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     #: An MCP key a connector got by signing in with OAuth (NOTES-20 AC-7): its client, the SHA-256 of its refresh
-    #: token and of the one before (brought again, it ends the connector), and when its account last agreed.
+    #: token, and when its account last agreed. Tokens traded in already are rows of ``oauth_spent``;
+    #: ``refresh_old_hash`` is no longer written, only read for keys refreshed before that table came.
     client_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     refresh_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     refresh_old_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
