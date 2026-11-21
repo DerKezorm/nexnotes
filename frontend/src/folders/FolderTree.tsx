@@ -87,6 +87,12 @@ export function FolderTree({ onNavigate }: { onNavigate?: () => void }) {
     document.getElementById(rowId(focused))?.focus()
   }, [focused, rows.length])
 
+  // The open folder stays in sight in a long sidebar (a deep path opened from a link or the page's path).
+  const shownVisible = rows.some((row) => row.folder.id === shownId)
+  useEffect(() => {
+    if (shownId && shownVisible) document.getElementById(rowId(shownId))?.scrollIntoView?.({ block: 'nearest' })
+  }, [shownId, shownVisible])
+
   const go = (id: string) => {
     moveFocus.current = true
     setFocused(id)

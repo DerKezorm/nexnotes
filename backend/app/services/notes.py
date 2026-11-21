@@ -555,22 +555,20 @@ def _drop_old_empty_notes() -> None:
             logger.info("Empty notes removed count=%s", gone)
 
 
-_registered = False
-
-
 def register() -> None:
-    """Once per process: the note count for the accounts side, a nudge of every live connection when sessions end or
-    an account goes, the cleanup of empty notes left behind."""
-    global _registered
-    if _registered:
-        return
-    _registered = True
+    """At every start, each hook once: the note count for the accounts side, a nudge of every live connection when
+    sessions end or an account goes, the cleanup of empty notes left behind. Looked up rather than remembered: a hook
+    list emptied meanwhile (a test that put its own in) is filled again."""
     from ..security import SESSIONS_ENDED
     from . import cleanup
 
-    content.register_counter(_count)
-    content.on_deleted(_account_went)
-    SESSIONS_ENDED.append(nudge_all)
-    cleanup.register("empty notes", _drop_old_empty_notes)
+    if _count not in content._counters:
+        content.register_counter(_count)
+    if _account_went not in content._deleted:
+        content.on_deleted(_account_went)
+    if nudge_all not in SESSIONS_ENDED:
+        SESSIONS_ENDED.append(nudge_all)
+    if all(job is not _drop_old_empty_notes for _, job in cleanup._jobs):
+        cleanup.register("empty notes", _drop_old_empty_notes)
 
 

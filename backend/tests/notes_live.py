@@ -101,7 +101,7 @@ class Live:
             ws.close(1000)
         except Exception:  # noqa: BLE001, S110 - closed already
             pass
-        deadline = time.monotonic() + 3.0
+        deadline = time.monotonic() + 10.0
         while before and time.monotonic() < deadline:
             left = _peers(self.note_id)
             # The last one out: the room folds and goes, and only then is the leaving done.

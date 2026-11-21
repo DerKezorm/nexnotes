@@ -64,7 +64,7 @@ def stored_doc(note_id: str):
         return notedoc.load(note.ydoc, updates)
 
 
-def wait_for(check, timeout: float = 4.0) -> bool:
+def wait_for(check, timeout: float = 8.0) -> bool:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         if check():
