@@ -34,22 +34,27 @@ if (typeof window !== 'undefined') {
   })
 }
 
-/** The note open on the side used last, as far as "New note" needs it (NOTES-3 AC-1, EC-4). */
-export type OpenNote = { noteId: string; folderId: string; isBlank: () => boolean; focusTitle: () => void }
+/** An open note, as far as "New note" needs it (NOTES-3 AC-1, EC-4). `guarded`: the one on the side used last (the
+ * only one without a second side). `focusTitle` brings its side to the front first, if it has to. */
+export type OpenNote = { noteId: string; folderId: string; guarded: boolean; isBlank: () => boolean; focusTitle: () => void }
 
-let openNote: OpenNote | null = null
+const openNotes = new Set<OpenNote>()
 
-export function setOpenNote(next: OpenNote | null): void {
-  openNote = next
+/** An open editor tells "New note" about its note; the function it gets back takes it out again. */
+export function addOpenNote(note: OpenNote): () => void {
+  openNotes.add(note)
+  return () => void openNotes.delete(note)
 }
 
 /**
- * The open note when it is quite empty (no title, no text) and lies in `folderId`: "New note" there takes it instead
- * of making a second one, which the first would make vanish again a moment later (EC-4).
+ * An open note that is quite empty (no title, no text) and lies in `folderId`: "New note" there, in the sidebar or
+ * as "+" in the row of tabs, takes it instead of making a second one, which the first would make vanish again a
+ * moment later (EC-4). The note on the side used last first, then the other side's (fifth review).
  */
 export function blankOpenNoteIn(folderId: string | null | undefined): OpenNote | null {
-  if (!openNote || !folderId || openNote.folderId !== folderId) return null
-  return openNote.isBlank() ? openNote : null
+  if (!folderId) return null
+  const candidates = [...openNotes].filter((note) => note.folderId === folderId).sort((a, b) => Number(b.guarded) - Number(a.guarded))
+  return candidates.find((note) => note.isBlank()) ?? null
 }
 
 /** Leaves at once, or after the open note had its say. Going `to` another list on a wider screen leaves no note

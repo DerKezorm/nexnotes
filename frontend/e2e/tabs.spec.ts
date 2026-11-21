@@ -220,8 +220,8 @@ test('NOTES-8 EC-1 NOTES-12 the same note on both sides, as "Jürgen": typed on 
   await page.keyboard.type(' typed on the left')
   await expect(right.getByTestId('note-body')).toContainText('typed on the left', { timeout: 1000 })
   expect(Date.now() - started).toBeLessThan(1000)
-  // Each side sees the other as "you, other window" (NOTES-12 EC-8).
-  await expect(right.getByTestId('presence-own')).toHaveText('you, other window')
+  // The other side of the same window is no "other window" (fifth review; NOTES-12 EC-8 is a second browser tab).
+  await expect(page.getByTestId('presence-own')).toHaveCount(0)
   await expect(left.getByTestId('note-saved')).toHaveText('saved')
 
   // The network goes: what is typed on the right still shows on the left at once, and waits on both sides.

@@ -15,7 +15,8 @@
  *   the other hands its guard to the page (`onGuard`), which asks it before closing that side. The connection comes
  *   from `tabs/live.ts`, which keeps it open while changes still wait and bridges two editors of the same note.
  * - Two notes side by side (NOTES-8, 21.11.2026): the text tools stand once over both sides (`sharedTools.ts`), so
- *   the note hands its editor to the page and keeps in its head only what concerns the whole note.
+ *   the note hands its editor to the page and keeps only what concerns the whole note, as a small bar at the top right
+ *   inside its sheet; no head above the sheet then (fifth review).
  * - A locked note (NOTES-16) has no live room: the room closes with 4423 or the head says `locked`, and the vault's
  *   view (`LOCKED_VIEW`) takes the place, which opens the note in this browser with the same editor (`LiveNote`,
  *   `sealed`).
@@ -39,13 +40,14 @@ import { ShareDialog } from '../shares/ShareDialog'
 import { problemText } from '../lib/errors'
 import { pageTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
-import { setLeaveGuard, setOpenNote, setPopGuard, type LeaveGuard } from '../notes/context'
+import { addOpenNote, setLeaveGuard, setPopGuard, type LeaveGuard } from '../notes/context'
 import { isListPath, keepsNotesOpen, noteOf } from '../notes/workspace'
 import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
 import { noteHref } from '../notes/newNote'
 import { NotifyBell, useJumpToChange, useViewing } from '../notify'
 import { useAuth } from '../state/auth'
 import { acquireProvider, othersOpen, releaseProvider } from '../tabs/live'
+import { noteInUse, noteLeftEmpty } from '../tabs/open'
 import { noteTitle } from '../tabs/meta'
 import './editor.css'
 import { bodyIsEmpty, editorExtensions, editorProps, safeHref } from './extensions'
@@ -84,10 +86,16 @@ type Props = {
   /** The sharing of the open note ended (NOTES-13 AC-5): the sentence that names who ended it, for the side that shows
    * "no longer available" in the editor's place a moment later (NOTES-8 EC-6). */
   onEnded?: (said: string) => void
+  /** Brings this note's side to the front (beside another note): "New note" takes a quite empty note there too. */
+  reveal?: () => void
 }
 
 /** Leaving a note runs a moment later: React's strict mode unmounts and mounts again at once, which is no leaving. */
 const leaving = new Map<string, ReturnType<typeof setTimeout>>()
+
+/** Below this width of the sheet the line under the title keeps to the folder, "geändert …" and the saving, which then
+ * stay on one or two lines instead of three (fifth review: a sheet of 380 px beside a second note). */
+export const NARROW_SHEET = 560
 
 export function NoteEditor(props: Props) {
   return <OneNote key={props.noteId} {...props} />
@@ -156,7 +164,7 @@ function useKeyboardInset(): number {
 /** One note in the editor. `provider` is the live room's connection, or (`sealed`) a locked note's opened in this
  * browser (NOTES-16); then nothing of it goes to the server but encrypted, and what needs the server to read the text
  * (a copy, the export, the suggested title) is not offered. */
-export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra, onEnded, sealed = false, onLocked }: Props & { provider: EditorConnection; sealed?: boolean; onLocked?: () => void }) {
+export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra, onEnded, reveal, sealed = false, onLocked }: Props & { provider: EditorConnection; sealed?: boolean; onLocked?: () => void }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const here = useLocation().pathname
@@ -204,6 +212,8 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const measureHead = useCallback((element: HTMLDivElement | null) => {
     headObserver.current?.disconnect()
     headObserver.current = null
+    // Beside a second note there is no head above the sheet: nothing stays at the top of the side then.
+    if (!element) setHeadHeight(0)
     if (!element || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(() => setHeadHeight(element.offsetHeight))
     observer.observe(element)
@@ -211,6 +221,16 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   }, [])
   const titleField = useRef<TitleFieldHandle>(null)
   const sheet = useRef<HTMLElement>(null)
+  // The sheet's width: a narrow one says less in the line under the title (fifth review).
+  const [sheetWidth, setSheetWidth] = useState(0)
+  useEffect(() => {
+    const element = sheet.current
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setSheetWidth(Math.floor(entry.borderBoxSize?.[0]?.inlineSize ?? entry.contentRect.width)))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [])
+  const narrowSheet = sheetWidth > 0 && sheetWidth < NARROW_SHEET
   const titleRef = useRef(title)
   const deleted = useRef(false)
   const titleAtSync = useRef<string | null>(null)
@@ -369,18 +389,23 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
     return () => onGuard(null)
   }, [onGuard, guard])
 
-  // "New note" asks the open note whether it is still quite empty and where it lies.
+  // "New note" asks the open notes whether one is still quite empty and where it lies.
   const headFolder = head?.folder_id ?? ''
   useEffect(() => {
-    if (!guarded || !headFolder) return
-    setOpenNote({
+    if (!headFolder) return
+    return addOpenNote({
       noteId,
       folderId: headFolder,
+      guarded,
       isBlank: () => !cleanTitle(titleRef.current) && Boolean(editor && bodyIsEmpty(editor)),
-      focusTitle: () => titleField.current?.focus(),
+      focusTitle: () => {
+        if (guarded || !reveal) return titleField.current?.focus()
+        // The other side (or the one the switcher hides): to the front first, then into its title.
+        reveal()
+        requestAnimationFrame(() => titleField.current?.focus())
+      },
     })
-    return () => setOpenNote(null)
-  }, [guarded, headFolder, noteId, editor])
+  }, [guarded, headFolder, noteId, editor, reveal])
 
   // Leaving the note: the editor goes (another note, a tab closed, the page left).
   useEffect(() => {
@@ -389,17 +414,20 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       clearTimeout(pendingLeave)
       leaving.delete(noteId)
     }
+    noteInUse(noteId)
     return () => {
       const emptyTitle = !cleanTitle(titleRef.current)
       const emptyBody = bodyIsEmpty(editor)
       // The same note still open on the other side: it is not left. A locked note is never tidied by the server.
       if (sealed || deleted.current || !emptyTitle || !provider.synced) return
       if (provider instanceof NoteProvider && othersOpen(provider) > 0) return
+      if (emptyBody) noteLeftEmpty(noteId)
       leaving.set(
         noteId,
         setTimeout(() => {
           leaving.delete(noteId)
-          // Neither title nor text: nothing stays (EC-4). Text without a title: the suggestion, to be checked (AC-10).
+          // Neither title nor text: nothing stays (EC-4), not even its tab: the tabs close it once its head says it is
+          // gone (`TabbedNotes`, fifth review). Text without a title: the suggestion, to be checked (AC-10).
           const done = emptyBody ? notesApi.discard(noteId) : notesApi.suggestTitle(noteId)
           void done
             .then(() => {
@@ -570,6 +598,110 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   else if (status === 'online') saved = { text: t('editor.saved'), tone: 'text-ok-500' }
   else saved = { text: t('editor.connecting'), tone: 'text-mist-500' }
 
+  // The note's own buttons (the whole note, not its text): at the right of the toolbar in the head of a note alone; beside
+  // a second note a small quiet bar at the top right of the sheet, symbols only, breaking into further rows at the
+  // right on a narrow sheet instead of being cut off (NOTES-3 EC-11, fifth review).
+  const noteTools = (
+    <div
+      className={'flex items-center ' + (toolsSlot ? 'min-w-0 flex-wrap justify-end gap-0.5' : 'ml-auto shrink-0 gap-3')}
+      role={toolsSlot ? 'group' : undefined}
+      aria-label={toolsSlot ? t('editor.tools.noteTools') : undefined}
+      data-testid="note-tools"
+    >
+      {toolsSlot && <NoteViewTools />}
+      {editor && NOTE_HEAD_PARTS.map((Part, index) => <Part key={index} noteId={noteId} editor={editor} head={head} sealed={sealed} />)}
+      {editor && canAttach && <AttachButton editor={editor} noteId={noteId} iconOnly={Boolean(toolsSlot)} />}
+      <PresenceBar presence={presence} />
+      <NotePinButton noteId={noteId} head={head} />
+      {head && <NotifyBell noteId={noteId} on={Boolean(head.notify)} shared={Boolean(head.owner && head.owner.id !== myId) || Boolean(head.shared_with?.length)} />}
+      <span className="relative">
+        <button
+          type="button"
+          className="nn-btn nn-btn-ghost h-[34px] w-[34px] border-transparent px-0"
+          aria-label={t('editor.more')}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          data-testid="note-menu"
+          ref={menuButton}
+          onClick={() => setMenuOpen(!menuOpen)}
+        >
+          <Ellipsis className="h-4 w-4" aria-hidden />
+        </button>
+        {menuOpen && (
+          <Menu anchor={menuButton.current!} onClose={() => setMenuOpen(false)} label={t('editor.more')} testId="note-menu-panel">
+            {titleCheck && (
+              <button type="button" role="menuitem" className="nn-menu-item" onClick={() => void titleOk()}>
+                {t('notes.titleOk')}
+              </button>
+            )}
+            {head?.can_share && !sealed && (
+              <button
+                type="button"
+                role="menuitem"
+                className="nn-menu-item"
+                data-testid="note-share"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setShareOpen(true)
+                }}
+              >
+                <Share2 className="h-4 w-4" aria-hidden />
+                {t('shares.menu')}
+              </button>
+            )}
+            {!sealed && (
+              <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-duplicate" onClick={() => void duplicate()}>
+                <Copy className="h-4 w-4" aria-hidden />
+                {t('editor.duplicate')}
+              </button>
+            )}
+            {!sealed && (
+              <button
+                type="button"
+                role="menuitem"
+                className="nn-menu-item"
+                data-testid="note-export"
+                onClick={() => {
+                  setMenuOpen(false)
+                  setExportOpen(true)
+                }}
+              >
+                <Upload className="h-4 w-4" aria-hidden />
+                {t('export.menu')}
+              </button>
+            )}
+            {NOTE_MENU_ITEMS.map((Item, index) => (
+              <Item key={index} noteId={noteId} head={head} sealed={sealed} mine={Boolean(head && head.owner?.id === myId)} close={() => setMenuOpen(false)} />
+            ))}
+            <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
+              <History className="h-4 w-4" aria-hidden />
+              {t('history.menu')}
+            </Link>
+            <button type="button" role="menuitem" className="nn-menu-item text-bad-500" data-testid="note-delete" onClick={() => void remove()} disabled={!head?.can_write}>
+              <Trash2 className="h-4 w-4" aria-hidden />
+              {t('editor.delete')}
+            </button>
+            {head?.can_write && <NoteColorRow noteId={noteId} head={head} onDone={() => setMenuOpen(false)} />}
+            {head?.can_write && (
+              <div className="border-t border-ink-700 px-2 pt-2 pb-1">
+                <p className="mb-1.5 px-1 text-[11px] font-semibold tracking-wide text-mist-500 uppercase">{t('editor.paper.label')}</p>
+                <PaperPicker
+                  value={paperOf(head.paper)}
+                  role="menuitemradio"
+                  onChange={(paper) => {
+                    setMenuOpen(false)
+                    setHead({ ...head, paper })
+                    notesApi.setPaper(noteId, paper).then(setHead, (error) => setProblem(problemText(error)))
+                  }}
+                />
+              </div>
+            )}
+          </Menu>
+        )}
+      </span>
+    </div>
+  )
+
   const suggestion = suggestTitle(editor?.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n') ?? '') || t('editor.leave.fallback', { date: new Date().toLocaleDateString(lang) })
 
   return (
@@ -597,113 +729,16 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
           buttons are never cut off (NOTES-12 AC-5). Not even "More" beside them (a narrow side with someone else in
           the note): they go below the tools. It stays at the top of the side's one scroll area while the text scrolls
           (third review); title, path and info scroll away. On a phone the tools sit above the keyboard instead. */}
+      {!toolsSlot && (
       <div
         ref={measureHead}
         className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:sticky md:top-0 md:z-20 md:bg-ink-950 md:px-5"
         data-testid="editor-head"
       >
-        {!toolsSlot && <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={openLink} />}</div>}
-        {/* Side by side the note's own bar stands alone in the head, and a side may be as narrow as 340 px: its buttons
-            break into a second row at the right instead of being cut off (NOTES-3 EC-11). */}
-        <div
-          className={'ml-auto flex items-center gap-3 ' + (toolsSlot ? 'min-w-0 flex-wrap justify-end gap-y-2' : 'shrink-0')}
-          role={toolsSlot ? 'group' : undefined}
-          aria-label={toolsSlot ? t('editor.tools.noteTools') : undefined}
-          data-testid="note-tools"
-        >
-          {toolsSlot && <NoteViewTools />}
-          {editor && NOTE_HEAD_PARTS.map((Part, index) => <Part key={index} noteId={noteId} editor={editor} head={head} sealed={sealed} />)}
-          {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
-          <PresenceBar presence={presence} />
-          <NotePinButton noteId={noteId} head={head} />
-          {head && <NotifyBell noteId={noteId} on={Boolean(head.notify)} shared={Boolean(head.owner && head.owner.id !== myId) || Boolean(head.shared_with?.length)} />}
-          <span className="relative">
-            <button
-              type="button"
-              className="nn-btn nn-btn-ghost h-[34px] w-[34px] border-transparent px-0"
-              aria-label={t('editor.more')}
-              aria-haspopup="menu"
-              aria-expanded={menuOpen}
-              data-testid="note-menu"
-              ref={menuButton}
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <Ellipsis className="h-4 w-4" aria-hidden />
-            </button>
-            {menuOpen && (
-              <Menu anchor={menuButton.current!} onClose={() => setMenuOpen(false)} label={t('editor.more')} testId="note-menu-panel">
-                {titleCheck && (
-                  <button type="button" role="menuitem" className="nn-menu-item" onClick={() => void titleOk()}>
-                    {t('notes.titleOk')}
-                  </button>
-                )}
-                {head?.can_share && !sealed && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="nn-menu-item"
-                    data-testid="note-share"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      setShareOpen(true)
-                    }}
-                  >
-                    <Share2 className="h-4 w-4" aria-hidden />
-                    {t('shares.menu')}
-                  </button>
-                )}
-                {!sealed && (
-                  <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-duplicate" onClick={() => void duplicate()}>
-                    <Copy className="h-4 w-4" aria-hidden />
-                    {t('editor.duplicate')}
-                  </button>
-                )}
-                {!sealed && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="nn-menu-item"
-                    data-testid="note-export"
-                    onClick={() => {
-                      setMenuOpen(false)
-                      setExportOpen(true)
-                    }}
-                  >
-                    <Upload className="h-4 w-4" aria-hidden />
-                    {t('export.menu')}
-                  </button>
-                )}
-                {NOTE_MENU_ITEMS.map((Item, index) => (
-                  <Item key={index} noteId={noteId} head={head} sealed={sealed} mine={Boolean(head && head.owner?.id === myId)} close={() => setMenuOpen(false)} />
-                ))}
-                <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
-                  <History className="h-4 w-4" aria-hidden />
-                  {t('history.menu')}
-                </Link>
-                <button type="button" role="menuitem" className="nn-menu-item text-bad-500" data-testid="note-delete" onClick={() => void remove()} disabled={!head?.can_write}>
-                  <Trash2 className="h-4 w-4" aria-hidden />
-                  {t('editor.delete')}
-                </button>
-                {head?.can_write && <NoteColorRow noteId={noteId} head={head} onDone={() => setMenuOpen(false)} />}
-                {head?.can_write && (
-                  <div className="border-t border-ink-700 px-2 pt-2 pb-1">
-                    <p className="mb-1.5 px-1 text-[11px] font-semibold tracking-wide text-mist-500 uppercase">{t('editor.paper.label')}</p>
-                    <PaperPicker
-                      value={paperOf(head.paper)}
-                      role="menuitemradio"
-                      onChange={(paper) => {
-                        setMenuOpen(false)
-                        setHead({ ...head, paper })
-                        notesApi.setPaper(noteId, paper).then(setHead, (error) => setProblem(problemText(error)))
-                      }}
-                    />
-                  </div>
-                )}
-              </Menu>
-            )}
-          </span>
-        </div>
+        <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={openLink} />}</div>
+        {noteTools}
       </div>
+      )}
 
       {/* The sheet: the note's own surface on the page (white on nex gray in light, a step lighter in dark), as wide as
           the text width says; a paper pattern is its background. The outline's column stands right beside it, 24 px
@@ -717,7 +752,14 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
         data-testid="note-page"
         data-width={textWidth}
       >
-        <div className="group flex items-center gap-1.5">
+        {/* The head of the sheet: the symbol and the title, which breaks into further lines and is never cut off. Beside a
+            second note the sheet's own small bar stands at its right, or above it at the right where the sheet is too
+            narrow for both in one row (the row wraps upwards). It moves with the sheet: kept in sight while the text
+            scrolls, it would need a strip of its own over the text, the row the fifth review wanted gone; the text
+            tools that writing needs stay in sight in the bar over both sides. */}
+        {/* `wrap-reverse` turns the cross axis round: `items-end` puts both at the top of their row. */}
+        <div className="flex flex-wrap-reverse items-end gap-x-3 gap-y-2" data-testid="sheet-head">
+        <div className="group flex min-w-0 flex-[1_1_14rem] items-start gap-1.5">
         {head && (
           <TitleIcon
             icon={head.icon ?? ''}
@@ -741,6 +783,12 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
           onEnter={() => focusTextStart(editor)}
         />
         </div>
+        {toolsSlot && (
+          <div className="ml-auto flex max-w-full min-w-0" data-testid="sheet-tools">
+            {noteTools}
+          </div>
+        )}
+        </div>
         {askLeave && (
           <span id="nn-title-required" className="-mt-1 text-[13px] font-medium text-bad-500">
             {t('editor.titleRequired')}
@@ -757,9 +805,15 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
           {head && (
             <>
               {path && <span aria-hidden>·</span>}
-              <span>{t('editor.meta.created', { date: new Date(head.created_at).toLocaleDateString(lang) })}</span>
-              <span aria-hidden>·</span>
-              <span data-testid="note-changed">
+              {/* A narrow sheet (below 560 px) says only the folder, "geändert …" and the saving: the date it was made
+                  goes into the tooltip of "geändert", in full (fifth review). */}
+              {!narrowSheet && (
+                <>
+                  <span data-testid="note-created">{t('editor.meta.created', { date: new Date(head.created_at).toLocaleDateString(lang) })}</span>
+                  <span aria-hidden>·</span>
+                </>
+              )}
+              <span data-testid="note-changed" title={narrowSheet ? t('editor.meta.created', { date: new Date(head.created_at).toLocaleString(lang) }) : undefined}>
                 {changedBy
                   ? t('editor.meta.changedBy', { when: whenText(head.updated_at, lang, t), name: changedBy })
                   : t('editor.meta.changed', { when: whenText(head.updated_at, lang, t) })}

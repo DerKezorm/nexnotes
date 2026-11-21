@@ -37,7 +37,7 @@ import { openNoteBeside, openNoteInNewTab, showTab } from './open'
 import { startNewNote } from '../notes/newNote'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabs, tabsNow } from './store'
-import { listStand, MIN_PANE, rowsFor, SEPARATOR, SIDE_LABEL, SPLIT_ROOM, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
+import { COLUMN_PANE, listStand, MIN_PANE, rowsFor, SEPARATOR, SIDE_LABEL, SPLIT_ROOM, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
@@ -47,6 +47,9 @@ const sockets: RoomSocket[] = []
 let me = 1
 /** The account a note belongs to (1 unless named): any other gets 404 for it, and its room refuses them. */
 const belongs = new Map<string, number>()
+/** The stand-in server keeps an empty note left by the page and throws it away only later (its grace after the last
+ * connection left). */
+let discardLater = false
 /** The network is away: the room refuses every new connection, as a dead line does. */
 let networkDown = false
 /** Answers of the stand-in server whose callers may still be busy with them. */
@@ -126,6 +129,14 @@ async function answer(method: string, path: string): Promise<Response> {
       return reply(200, notes.get(id))
     }
     if (method === 'POST' && tail === '/title/suggestion') return reply(200, found)
+    // As the server: a note without title and text goes for good; while `discardLater`, only later (after the grace).
+    if (method === 'POST' && tail === '/discard') {
+      const doc = rooms.get(id)
+      const empty = !found.title && !doc?.getText('title').toString() && !doc?.getXmlFragment('body').toString().replace(/<\/?paragraph>/g, '')
+      if (!empty || discardLater) return reply(200, { discarded: false })
+      notes.delete(id)
+      return reply(200, { discarded: true })
+    }
   }
   return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
 }
@@ -382,8 +393,8 @@ const $$ = (testId: string, inside: ParentNode = document.body) => [...inside.qu
 const tabTitles = () => $$('tab-title').map((element) => element.textContent)
 const pane = (side: 'left' | 'right') => box.querySelector(`[data-testid="tab-pane"][data-side="${side}"]`) as HTMLElement | null
 
-function typeTitle(input: HTMLInputElement, value: string) {
-  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+function typeTitle(input: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input) as object, 'value')!.set!
   setter.call(input, value)
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
@@ -429,6 +440,7 @@ beforeEach(() => {
   sockets.length = 0
   belongs.clear()
   networkDown = false
+  discardLater = false
   me = 1
   width = 1400
   localStorage.clear()
@@ -647,6 +659,7 @@ describe('tabs in the page', () => {
   })
 
   it('NOTES-6 AC-10 the list beside a note is as wide as set on this device, and still leaves the notes their widths', async () => {
+    width = 1600
     await render('/notes/soup')
     const handle = $('column-handle-list')!
     const column = () => handle.parentElement!
@@ -659,7 +672,8 @@ describe('tabs in the page', () => {
     await act(async () => handle.dispatchEvent(new MouseEvent('pointerup', {})))
     expect(column().style.width).toBe('560px')
     expect(localStorage.getItem(prefKey('column.list', 1))).toBe('560')
-    // Two notes beside it keep 414 px each, more than their least 340 px: the list stays as a column (NOTES-8 AC-9).
+    // Two notes beside it keep 514 px each, more than the 480 px a side keeps beside the column: the list stays as a
+    // column (NOTES-8 AC-9).
     await act(async () => openNoteBeside('shop'))
     await idle()
     expect($('list-column')!.style.width).toBe('560px')
@@ -1520,10 +1534,15 @@ describe('the list beside two notes', () => {
     await act(async () => void target.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
   }
 
-  it('NOTES-8 AC-9 the list stands as a column beside two notes while both keep their 340 px, else it is a drawer', () => {
-    expect(SPLIT_ROOM).toBe(2 * MIN_PANE + SEPARATOR)
+  it('NOTES-8 AC-9 the list stands as a column beside two notes while both keep 480 px (fifth review), else it is a drawer', () => {
+    // 480 px a side: the sheet keeps about 350 px inside, for a title word and the sheet's own bar in one row.
+    expect(COLUMN_PANE).toBe(480)
+    expect(COLUMN_PANE).toBeGreaterThan(MIN_PANE)
+    expect(SPLIT_ROOM).toBe(2 * COLUMN_PANE + SEPARATOR)
     expect(listStand(true, 300 + SPLIT_ROOM, 300)).toBe('column')
     expect(listStand(true, 300 + SPLIT_ROOM - 1, 300)).toBe('drawer')
+    // Room for two sides of 340 px is not room for the column any more (a sheet of 380 px cut its title off).
+    expect(listStand(true, 300 + 2 * MIN_PANE + SEPARATOR + 100, 300)).toBe('drawer')
     // One note: as before, the list gives way to the note, never a drawer.
     expect(listStand(false, 300 + MIN_PANE, 300)).toBe('column')
     expect(listStand(false, 300 + MIN_PANE - 1, 300)).toBe('none')
@@ -1684,10 +1703,41 @@ describe('the list beside two notes', () => {
     await act(async () => void (pane('right')!.querySelector('[data-testid="note-title"]') as HTMLElement).focus())
     expect(pane('right')!.dataset.split).toBe('active')
     expect(pane('left')!.dataset.split).toBe('passive')
-    // What the marks look like: a calm frame of 2 px in honey, the other side's sheet on the page's gray, its tools quieter.
+    // What the marks look like: a calm frame of 2 px in honey; the other side clearly set back by its own values of the
+    // colors (fifth review): its sheet below the page's gray in light, on it in dark, its text one dimmed gray that
+    // still reads at 4.5:1 or more, in light and dark, on the sheet and on code.
     expect(sheetStyles).toMatch(/\[data-split='active'\] \.nn-sheet \{\s*outline: 2px solid var\(--color-accent-500\);/)
-    expect(sheetStyles).toMatch(/\[data-split='passive'\] \.nn-sheet \{\s*background-color: var\(--color-ink-950\);/)
-    expect(sheetStyles).toMatch(/\[data-split='passive'\] \[data-testid='editor-head'\] \{\s*opacity: 0\.75;/)
+    // The colors a rule of the style sheet sets, by its selector at the start of a line.
+    const theme = (selector: string) => {
+      const css = sheetStyles.replace(/\r\n/g, '\n')
+      const at = css.indexOf(`\n${selector} {`)
+      expect(at, selector).toBeGreaterThanOrEqual(0)
+      const body = css.slice(at, css.indexOf('}', at))
+      return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/g)].map((match) => [match[1], match[2]]))
+    }
+    const block = theme
+    const luminance = (hex: string) => {
+      const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16) / 255).map((c) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4))
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b
+    }
+    const contrast = (a: string, b: string) => {
+      const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x)
+      return (high + 0.05) / (low + 0.05)
+    }
+    const dark = { ...theme('@theme'), ...block("[data-split='passive']") }
+    const light = { ...theme('@theme'), ...theme(":root[data-theme='light']"), ...block(":root[data-theme='light'] [data-split='passive']") }
+    const before = { dark: theme('@theme'), light: { ...theme('@theme'), ...theme(":root[data-theme='light']") } }
+    for (const [mode, colors] of Object.entries({ dark, light })) {
+      const sheet = colors['--color-ink-850']
+      // The sheet set back from the sheet on the active side, the text dimmed from the full text color.
+      expect(sheet, mode).not.toBe(before[mode as 'dark' | 'light']['--color-ink-850'])
+      expect(contrast(colors['--color-mist-100'], sheet), mode).toBeLessThan(contrast(before[mode as 'dark' | 'light']['--color-mist-100'], before[mode as 'dark' | 'light']['--color-ink-850']) * 0.6)
+      for (const text of ['--color-mist-100', '--color-mist-300', '--color-mist-500', '--color-mist-600', '--color-accent-400']) {
+        expect(contrast(colors[text], sheet), `${mode} ${text}`).toBeGreaterThanOrEqual(4.5)
+        expect(contrast(colors[text], colors['--color-ink-800']), `${mode} ${text} on code`).toBeGreaterThanOrEqual(4.5)
+      }
+    }
+    expect(sheetStyles).toMatch(/\[data-split='passive'\] \.nn-sheet \{\s*box-shadow: none;/)
     // One side with the switcher (a narrow window), and one note alone: no marks.
     await act(async () => unmountPage())
     width = 600
@@ -1746,15 +1796,25 @@ describe('the one toolbar over two notes', () => {
     // It names the note it works on, and the side.
     expect($('toolbar', bar())!.getAttribute('role')).toBe('toolbar')
     expect(label()).toBe('Tools for “Saturday shopping” (right)')
-    // Each sheet: a small bar at the top right with the width, the outline, the pin, the others and the note's menu.
+    // Each sheet: a small bar at the top right inside the sheet, beside or above the title, with the width, the outline,
+    // the clip, the pin, the others and the note's menu; no row of its own above the sheet (fifth review).
     for (const side of ['left', 'right'] as const) {
-      const head = $('editor-head', pane(side)!)!
-      expect(head.querySelector('[data-tool]')).toBeNull()
-      expect($('toolbar', head)).toBeNull()
-      const own = $('note-tools', head)!
+      expect($('editor-head', pane(side)!)).toBeNull()
+      const sheet = $('note-page', pane(side)!)!
+      const head = $('sheet-head', sheet)!
+      const tools = $('sheet-tools', head)!
+      expect(tools.compareDocumentPosition($('note-title', head)!) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy()
+      expect(head.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex-wrap-reverse']))
+      expect(tools.className).toMatch(/\bml-auto\b/)
+      expect(tools.querySelector('[data-tool]')).toBeNull()
+      expect($('toolbar', tools)).toBeNull()
+      const own = $('note-tools', tools)!
       expect(own.getAttribute('role')).toBe('group')
       expect(own.getAttribute('aria-label')).toBe('Tools of the note')
-      for (const one of ['tool-width', 'tool-outline', 'note-menu']) expect($(one, own)).not.toBeNull()
+      for (const one of ['tool-width', 'tool-outline', 'attach', 'note-menu']) expect($(one, own)).not.toBeNull()
+      // "Attach" only as the clip, no word.
+      expect($('attach', own)!.textContent).toBe('')
+      expect($('attach', own)!.getAttribute('aria-label')).toBe('Attach')
       // NOTES-3 EC-11: a side may be 340 px narrow; the buttons then break into a second row, never cut off.
       expect(own.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex-wrap', 'min-w-0']))
       expect(own.className).not.toMatch(/\bshrink-0\b/)
@@ -1864,6 +1924,138 @@ describe('the one toolbar over two notes', () => {
     expect($('side-switch')).not.toBeNull()
     expect($('shared-toolbar')).toBeNull()
     expect($('toolbar', pane('right')!)).not.toBeNull()
+  })
+})
+
+describe('fifth review (21.11.2026)', () => {
+  const made = () => requests.filter((request) => request === 'POST /api/notes').length
+  const tabOfNote = (id: string) => $$('tab').find((one) => one.dataset.note === id)
+  const titleOf = (side: 'left' | 'right') => pane(side)!.querySelector('[data-testid="note-title"]') as HTMLTextAreaElement
+  const plus = async () => {
+    await act(async () => $('tab-new')!.click())
+    await idle()
+  }
+
+  it('NOTES-8 NOTES-3 AC-1 "+" in the row of tabs takes a quite empty new note that is open instead of making another', async () => {
+    await render('/folder/garden?note=shop')
+    await plus()
+    expect(made()).toBe(1)
+    const blank = tabsNow().tabs.at(-1)!.note
+    expect(tabOfNote(blank)).toBeTruthy()
+    expect($$('tab')).toHaveLength(2)
+    await act(async () => void (document.activeElement as HTMLElement | null)?.blur())
+    // Again, and again: the same note, with the cursor in its title; no second one.
+    await plus()
+    await plus()
+    expect(made()).toBe(1)
+    expect($$('tab')).toHaveLength(2)
+    expect(document.activeElement).toBe(titleOf('left'))
+    expect(pane('left')!.dataset.note).toBe(blank)
+    // The empty note on the left, another note beside it used last: "+" brings the left side to the front and goes
+    // into its title.
+    await act(async () => openNoteBeside('bath'))
+    await idle()
+    expect(pane('left')!.dataset.note).toBe(blank)
+    expect(pane('right')!.dataset.focused).toBe('true')
+    await act(async () => void (document.activeElement as HTMLElement | null)?.blur())
+    await plus()
+    expect(made()).toBe(1)
+    expect(pane('left')!.dataset.focused).toBe('true')
+    await until(() => document.activeElement === titleOf('left'))
+    // Once something is written in it, "+" makes a new note.
+    await act(async () => typeTitle(titleOf('left'), 'Seeds'))
+    await plus()
+    expect(made()).toBe(2)
+  })
+
+  it('NOTES-3 EC-4 NOTES-8 a quite empty note thrown away closes its tab by itself, without asking; the tab beside moves up', async () => {
+    await render('/folder/garden?note=shop')
+    await plus()
+    const blank = tabsNow().tabs.at(-1)!.note
+    expect(pane('left')!.dataset.note).toBe(blank)
+    // Another tab on its side: the empty note goes out of view, the page throws it away, and its tab closes.
+    await act(async () => showTab(tabsNow().tabs[0].key))
+    await idle()
+    await until(() => requests.includes(`POST /api/notes/${blank}/discard`))
+    await until(() => !tabOfNote(blank))
+    expect($$('tab').map((one) => one.dataset.note)).toEqual(['shop'])
+    expect($('leave-dialog')).toBeNull()
+    expect(where).toBe('/folder/garden?note=shop')
+    // Thrown away by the server only a moment later (its grace after the last connection): the tab closes as soon as
+    // its head says the note is gone, never struck through as "Untitled".
+    discardLater = true
+    await plus()
+    const later = tabsNow().tabs.at(-1)!.note
+    await act(async () => showTab(tabsNow().tabs[0].key))
+    await idle()
+    await until(() => requests.includes(`POST /api/notes/${later}/discard`))
+    await settle(30)
+    expect(tabOfNote(later)).toBeTruthy()
+    notes.delete(later)
+    await act(async () => refreshMeta([later]))
+    await until(() => !tabOfNote(later))
+    expect($$('tab').map((one) => one.dataset.note)).toEqual(['shop'])
+    // A note left with a title is not thrown away: its tab stays.
+    await act(async () => openNoteInNewTab('bath'))
+    await idle()
+    await act(async () => showTab(tabsNow().tabs[0].key))
+    await idle()
+    expect(tabOfNote('bath')).toBeTruthy()
+  })
+
+  it('NOTES-8 the button that ends side by side says "Show one note only" and stands apart from "List"', async () => {
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('shop'))
+    await idle()
+    const end = $('tab-end-split')!
+    expect(end.getAttribute('aria-label')).toBe('Show one note only')
+    expect(end.getAttribute('title')).toBe('Show one note only')
+    expect(i18n.getResource('de', 'translation', 'tabs.endSplit')).toBe('Nur eine Notiz zeigen')
+    // A thin line between "List" and it.
+    const gap = $('tab-buttons-gap')!
+    expect(gap.previousElementSibling).toBe($('tab-list-toggle'))
+    expect(gap.nextElementSibling).toBe(end)
+  })
+
+  it('NOTES-3 a long title breaks into further lines in the sheet, never cut off (one note and side by side)', async () => {
+    const long = 'Pfannkuchen mit Apfelmus, Zimt und sehr viel Puderzucker obendrauf'
+    notes.set('long', note('long', long))
+    const doc = new Y.Doc()
+    doc.getText('title').insert(0, long)
+    rooms.set('long', doc)
+    await render('/notes/long')
+    const field = titleOf('left')
+    expect(field.tagName).toBe('TEXTAREA')
+    expect(field.rows).toBe(1)
+    expect(field.className).not.toMatch(/\b(truncate|whitespace-nowrap|text-ellipsis)\b/)
+    expect(field.className).toMatch(/\bresize-none\b/)
+    expect(field.value).toBe(long)
+    // Side by side the same.
+    await act(async () => openNoteBeside('soup'))
+    await idle()
+    expect(titleOf('left').tagName).toBe('TEXTAREA')
+    expect(titleOf('right').tagName).toBe('TEXTAREA')
+    // A line break typed or pasted never goes into the title.
+    await act(async () => typeTitle(titleOf('right'), 'Lentil\nsoup'))
+    expect(rooms.get('soup')!.getText('title').toString()).toBe('Lentil soup')
+  })
+
+  it('NOTES-3 a narrow sheet says only folder, "changed" and saving under the title; the day it was made is in the tooltip', async () => {
+    width = 500
+    await render('/notes/shop')
+    await until(() => Boolean($('note-changed')))
+    expect($('note-created')).toBeNull()
+    expect($('note-changed')!.getAttribute('title')).toBe(i18n.t('editor.meta.created', { date: new Date('2026-11-14T08:00:00Z').toLocaleString('en') }))
+    expect($('note-path')!.textContent).toBe('Garden')
+    await until(() => Boolean($('note-saved')))
+    // A wide sheet: as before, "created …" in the line, no tooltip.
+    await act(async () => unmountPage())
+    width = 1400
+    box.remove()
+    await render('/notes/shop')
+    await until(() => Boolean($('note-created')))
+    expect($('note-created')!.textContent).toBe(i18n.t('editor.meta.created', { date: new Date('2026-11-14T08:00:00Z').toLocaleDateString('en') }))
+    expect($('note-changed')!.hasAttribute('title')).toBe(false)
   })
 })
 

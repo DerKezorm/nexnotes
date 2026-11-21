@@ -35,9 +35,10 @@ for (const width of [1280, 1024, 900]) {
     const report: string[] = []
     for (const pane of await page.locator('[data-testid="tab-pane"]').all()) {
       if (!(await pane.isVisible())) continue
-      const head = pane.getByTestId('editor-head')
       const shared = page.getByTestId('shared-toolbar')
       const both = (await shared.count()) > 0
+      // Both sides on show: the note's own buttons in the sheet's small bar (fifth review), else in the head.
+      const head = both ? pane.getByTestId('sheet-tools') : pane.getByTestId('editor-head')
       // Both sides on show: the one bar over both, measured in its own row; the head holds no text tools.
       if (both) await expect(head.locator('[data-tool]')).toHaveCount(0)
       const frame = both ? shared : head
@@ -61,7 +62,8 @@ for (const width of [1280, 1024, 900]) {
     const left = page.locator('[data-testid="tab-pane"][data-side="left"]')
     if (await left.isVisible()) {
       await expect(left.getByTestId('presence-own')).toBeVisible()
-      await inside(left.getByTestId('editor-head'), left.getByTestId('presence-own'))
+      const both = (await page.getByTestId('shared-toolbar').count()) > 0
+      await inside(left.getByTestId(both ? 'sheet-tools' : 'editor-head'), left.getByTestId('presence-own'))
     }
     test.info().annotations.push({ type: 'toolbar', description: report.join('; ') })
     console.log(`toolbar ${width}: ${report.join('; ')}`)

@@ -28,11 +28,19 @@ export const TAB_DRAG = 'application/x-nexnotes-tab'
 export const MIN_PANE = 340
 export const SEPARATOR = 12
 /**
- * Beside two notes the list stands as a column while each side keeps its least width (`MIN_PANE`) and the line between
- * them; a side's outline opens as a panel over its text then. With less room the list is a drawer over the left note,
- * opened by the sidebar or the button "List" (21.11.2026).
+ * The least a side keeps while the list stands as a column beside two notes (fifth review, 21.11.2026). At 340 px a
+ * sheet had about 210 px for its title after the side's margins (2 × 24) and its own (2 × 40): "Pfannkuchen" in the
+ * title's 28 px bold ran out of it. 480 px leave the sheet about 350 px inside: a word of 12 to 14 letters and a
+ * symbol before it fit on a line, and the sheet's own small bar (eight buttons of 34 px, about 290 px) stands whole in
+ * one row above the title. Below that the list gives its room to the notes and comes as a drawer.
  */
-export const SPLIT_ROOM = 2 * MIN_PANE + SEPARATOR
+export const COLUMN_PANE = 480
+/**
+ * Beside two notes the list stands as a column while each side keeps `COLUMN_PANE` and the line between them; a
+ * side's outline opens as a panel over its text then. With less room the list is a drawer over the left note, opened
+ * by the sidebar or the button "List" (21.11.2026). The sides themselves still go down to `MIN_PANE`.
+ */
+export const SPLIT_ROOM = 2 * COLUMN_PANE + SEPARATOR
 
 /** How the list stands beside the open notes: a column, a drawer over the left note, or not at all (one note and too
  * little room: it gives way to the note, as before). */

@@ -7,8 +7,8 @@
  *   takes exactly that connection and its document back. Six tabs never mean six connections, and a tab that goes
  *   out of view or is pushed out by a seventh loses nothing.
  * - **The same note twice in this window** (EC-1): two connections, as two windows would have (each with its own
- *   presence, "du, anderes Fenster", and its own undo), and a bridge between their documents here, so that what is
- *   typed on one side shows on the other at once, offline too. When a second one joins, both hand each other their
+ *   presence and its own undo; neither shows the other as "du, anderes Fenster", `presence.ts`), and a bridge between
+ *   their documents here, so that what is typed on one side shows on the other at once, offline too. When a second one joins, both hand each other their
  *   whole state; afterwards each change typed on one side goes into the other document and out over both
  *   connections (the room takes an update twice without harm).
  * - **Each connection belongs to the account it was opened for.** Bridges and parked connections are kept per account

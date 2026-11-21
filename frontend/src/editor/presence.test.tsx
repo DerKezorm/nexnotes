@@ -8,7 +8,7 @@ import * as Y from 'yjs'
 import { Awareness } from 'y-protocols/awareness'
 
 import i18n from '../i18n'
-import { caretLook, colorFor, colorsFor, OWN_COLOR, PERSON_COLORS, presenceFromAwareness, presenceOf, presenceSentence } from './presence'
+import { caretLook, colorFor, colorsFor, OWN_COLOR, PERSON_COLORS, presenceFromAwareness, presenceOf, presenceSentence, presenceUser, WINDOW_ID } from './presence'
 import { PresenceBar } from './PresenceBar'
 
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
@@ -114,5 +114,29 @@ describe('presence', () => {
     expect(box.querySelector('[data-testid="presence-person"]')).toBeNull()
     await act(async () => root.unmount())
     one.destroy()
+  })
+
+  it('NOTES-12 EC-8 NOTES-8 EC-1 the same note on the other side of the same window is no "other window" (fifth review)', () => {
+    // What this window's editors tell the room carries this window's number.
+    const me = presenceUser(1, 'Me')
+    expect(me.window).toBe(WINDOW_ID)
+    expect(WINDOW_ID).toMatch(/^[0-9a-f]{16}$/)
+    const states = new Map<number, Record<string, unknown>>([
+      [10, { user: me }],
+      // The same note on the other side of this window: the same account, the same window.
+      [11, { user: { ...me } }],
+      // A second browser tab of the same account: another window.
+      [12, { user: { ...me, window: 'another-window-id' } }],
+      // Somebody else who claims this window's number is still somebody else.
+      [13, { user: { accountId: 7, name: 'Anna', color: colorFor(7), window: WINDOW_ID } }],
+    ])
+    const presence = presenceOf(states, 10, 1)
+    expect(presence.ownWindows).toBe(1)
+    expect(presence.people.map((person) => person.name)).toEqual(['Anna'])
+    // Only the other side of this window: nobody at all, no "you, other window".
+    expect(presenceOf(new Map([...states].slice(0, 2)), 10, 1)).toEqual({ people: [], ownWindows: 0 })
+    // Its caret: honey, without a label; a caret of another window keeps "you, other window".
+    expect(caretLook(me, 1, 'you, other window')).toEqual({ color: OWN_COLOR, label: '' })
+    expect(caretLook({ ...me, window: 'another-window-id' }, 1, 'you, other window')).toEqual({ color: OWN_COLOR, label: 'you, other window' })
   })
 })

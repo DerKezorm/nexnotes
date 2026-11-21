@@ -199,26 +199,45 @@
 
 /*
  * Two notes side by side (NOTES-8 AC-1): the side used last, where a tab opens its note, stands out by more than the
- * honey line. Its sheet has a calm honey frame; the other side is dimmed: its sheet on the page's gray without a
- * shadow (the text keeps its full contrast), its toolbar at 75 % (its text still 4.5:1 on the page in light and dark).
+ * honey line. Its sheet has a calm honey frame. The other side is clearly set back (fifth review: it was hardly
+ * dimmed): its sheet sinks below the page's gray in light and onto it in dark, without a shadow, and its text, its
+ * title and its small bar take one dimmed gray. It is done by the side's own values of the colors, so that every part
+ * of it follows (the text, the info, the outline, the buttons). Contrast of the dimmed text, worked out after WCAG:
+ * dark #8a8a97 on the sheet #0b0b0f 5.8:1 (on code #1d1d26 4.9:1), the small text #858594 5.4:1; light #61616f on the
+ * sheet #ececf2 5.2:1 (on code #e3e3ea 4.8:1, also the small text), links #7a5800 5.5:1 (5.1:1 on code). Never below 4.5:1 (the test
+ * `NOTES-8 AC-1 two notes side by side` works it out again from this sheet).
  * The change fades in 150 ms; with reduced motion at once (the rule above).
  */
-[data-split] .nn-sheet,
-[data-split] [data-testid='editor-head'] {
+[data-split] .nn-sheet {
   transition:
     background-color 150ms ease,
-    opacity 150ms ease;
+    color 150ms ease;
 }
 [data-split='active'] .nn-sheet {
   outline: 2px solid var(--color-accent-500);
   outline-offset: -1px;
 }
-[data-split='passive'] .nn-sheet {
-  background-color: var(--color-ink-950);
-  box-shadow: none;
+[data-split='passive'] {
+  --color-ink-850: #0b0b0f;
+  --color-mist-100: #8a8a97;
+  --color-mist-200: #8a8a97;
+  --color-mist-300: #8a8a97;
+  --color-mist-400: #8a8a97;
+  --color-mist-500: #858594;
 }
-[data-split='passive'] [data-testid='editor-head'] {
-  opacity: 0.75;
+:root[data-theme='light'] [data-split='passive'] {
+  --color-ink-850: #ececf2;
+  --color-ink-800: #e3e3ea;
+  --color-mist-100: #61616f;
+  --color-mist-200: #61616f;
+  --color-mist-300: #61616f;
+  --color-mist-400: #61616f;
+  --color-mist-500: #61616f;
+  --color-mist-600: #61616f;
+  --color-accent-400: #7a5800;
+}
+[data-split='passive'] .nn-sheet {
+  box-shadow: none;
 }
 
 /* A tab a menu brought to the front (NOTES-8): a short honey pulse, so one sees where it is. */
