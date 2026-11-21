@@ -124,7 +124,8 @@ test('NOTES-11 AC-1 AC-2 AC-3 AC-8 a PDF with text: read in the background, show
   await expect(hit).toContainText('Wasserrechnung')
   await expect(hit.getByTestId('search-hit-attachment')).toContainText('Wasser.pdf')
   await hit.click()
-  await expect(page).toHaveURL(new RegExp(`/notes/${id}`))
+  // Since the lists share one workspace (NOTES-8 AC-9), a hit opens the note beside the search: `?note=<id>`.
+  await expect(page).toHaveURL(new RegExp(`(/notes/|[?&]note=)${id}`))
   await expect(viewer).toBeVisible()
   await expect(page.getByTestId('ocr-where')).toHaveText('PDF · Page 1 of 2')
   await expect(page.getByTestId('ocr-mark')).toHaveText('Kundennummer')
