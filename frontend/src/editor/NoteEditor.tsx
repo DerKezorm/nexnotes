@@ -43,6 +43,7 @@ import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
 import { Outline } from './Outline'
+import { TableControls } from './TableControls'
 import { TitleIcon } from './TitleIcon'
 import { paperOf } from './paper'
 import { PaperPicker } from './PaperPicker'
@@ -134,6 +135,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
     paneObserver.current = observer
   }, [])
   const titleField = useRef<TitleFieldHandle>(null)
+  const sheet = useRef<HTMLElement>(null)
   const titleRef = useRef(title)
   const deleted = useRef(false)
   const titleAtSync = useRef<string | null>(null)
@@ -519,7 +521,8 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           the text width says; a paper pattern is its background. */}
       <div ref={measurePane} className="flex min-h-0 w-full flex-1 items-start md:gap-6 md:px-6 md:pt-5 md:pb-8">
       <article
-        className="nn-sheet mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch bg-ink-850 px-5 pt-6 pb-28 md:rounded-[14px] md:border md:border-ink-700 md:px-10 md:pb-10 md:shadow-[0_1px_3px_rgb(0_0_0/0.08),0_8px_24px_-12px_rgb(0_0_0/0.18)]"
+        ref={sheet}
+        className="nn-sheet relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch bg-ink-850 px-5 pt-6 pb-28 md:rounded-[14px] md:border md:border-ink-700 md:px-10 md:pb-10 md:shadow-[0_1px_3px_rgb(0_0_0/0.08),0_8px_24px_-12px_rgb(0_0_0/0.18)]"
         style={{ maxWidth: TEXT_MAX[textWidth] ?? 'none' }}
         data-testid="note-page"
         data-width={textWidth}
@@ -591,6 +594,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         <div className="nn-paper mt-1 flex flex-1 flex-col" data-paper={paperOf(head?.paper)} data-testid="note-paper">
           <EditorContent editor={editor} className="nn-editor flex-1" />
         </div>
+        {editor && <TableControls editor={editor} frame={sheet} />}
       </article>
       {editor && outlineShown && paneWidth >= OUTLINE_FROM && (
         <Outline

@@ -259,7 +259,10 @@
       "deleteTable": "Delete table",
       "label": "Edit table",
       "rowDown": "Move row down",
-      "rowUp": "Move row up"
+      "rowUp": "Move row up",
+      "toggleHeaderRow": "Header row",
+      "appendColumn": "Add a column",
+      "appendRow": "Add a row"
     },
     "tasks": {
       "checkbox": "Tick off: {{text}}",

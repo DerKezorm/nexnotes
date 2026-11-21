@@ -13,6 +13,7 @@ import { bodyIsEmpty, cleanPastedHtml, collapseKey, editorExtensions, editorProp
 import { presenceUser } from './presence'
 import { NoteProvider } from './provider'
 import { tableActions } from './table'
+import { TableControls } from './TableControls'
 import { TitleField } from './TitleField'
 import { Toolbar } from './Toolbar'
 import { forgetPrefs, prefKey } from '../lib/devicePref'
@@ -298,42 +299,134 @@ describe('NOTES-3 AC-5 tables', () => {
     return rows
   }
 
-  it('NOTES-3 AC-5 rows and columns added, removed and moved keep the other cells, the table scrolls in its box', () => {
+  it('NOTES-3 AC-5 the visible controls add, move and remove rows and columns, the other cells stay, the table scrolls in its box', async () => {
     const editor = makeEditor()
-    editor.commands.setContent('<table><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>a1</p></td><td><p>b1</p></td></tr><tr><td><p>a2</p></td><td><p>b2</p></td></tr></table>')
+    editor.commands.setContent('<p>Before</p><table><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>a1</p></td><td><p>b1</p></td></tr><tr><td><p>a2</p></td><td><p>b2</p></td></tr></table>')
     expect(editor.view.dom.querySelector('.tableWrapper > table')).not.toBeNull()
-    const at = (text: string) => {
+    const sheet = document.createElement('article')
+    document.body.appendChild(sheet)
+    sheet.appendChild(editor.view.dom.parentElement ?? editor.view.dom)
+    const frame = { current: sheet }
+    const host = document.createElement('div')
+    sheet.appendChild(host)
+    const root = createRoot(host)
+    await act(async () => root.render(<TableControls editor={editor} frame={frame} />))
+    const at = async (text: string) => {
+      let found = -1
+      editor.state.doc.descendants((node, pos) => {
+        if (found < 0 && node.isText && node.text === text) found = pos
+      })
+      await act(async () => void editor.commands.setTextSelection(found + 1))
+    }
+    const choose = async (action: string) => {
+      await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="table-menu-button"]')!.click())
+      const menu = document.querySelector<HTMLElement>('[data-testid="table-menu"]')!
+      // The menu stands over everything, not inside the table's box that scrolls.
+      expect(menu.parentElement).toBe(document.body)
+      await act(async () => menu.querySelector<HTMLButtonElement>(`[data-testid="table-${action}"]`)!.click())
+    }
+    // Outside a table: no controls.
+    await act(async () => void editor.commands.setTextSelection(2))
+    expect(host.querySelector('[data-testid="table-menu-button"]')).toBeNull()
+    await at('a1')
+    expect(host.querySelector('[data-testid="table-menu-button"]')).not.toBeNull()
+    await choose('addRowAfter')
+    expect(cells(editor)).toEqual([['A', 'B'], ['a1', 'b1'], ['', ''], ['a2', 'b2']])
+    await at('b1')
+    await choose('addColumnAfter')
+    expect(cells(editor)).toEqual([['A', 'B', ''], ['a1', 'b1', ''], ['', '', ''], ['a2', 'b2', '']])
+    await at('a2')
+    await choose('rowUp')
+    expect(cells(editor)).toEqual([['A', 'B', ''], ['a1', 'b1', ''], ['a2', 'b2', ''], ['', '', '']])
+    await at('b1')
+    await choose('columnLeft')
+    expect(cells(editor)).toEqual([['B', 'A', ''], ['b1', 'a1', ''], ['b2', 'a2', ''], ['', '', '']])
+    await at('a1')
+    await choose('columnRight')
+    expect(cells(editor)).toEqual([['B', '', 'A'], ['b1', '', 'a1'], ['b2', '', 'a2'], ['', '', '']])
+    await at('b1')
+    await choose('rowDown')
+    expect(cells(editor)).toEqual([['B', '', 'A'], ['b2', '', 'a2'], ['b1', '', 'a1'], ['', '', '']])
+    await at('b2')
+    await choose('deleteColumn')
+    expect(cells(editor)).toEqual([['', 'A'], ['', 'a2'], ['', 'a1'], ['', '']])
+    await at('a2')
+    await choose('deleteRow')
+    expect(cells(editor)).toEqual([['', 'A'], ['', 'a1'], ['', '']])
+    // The quiet "+" along the edges append a column and a row at the end.
+    await at('a1')
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="table-add-column"]')!.click())
+    expect(cells(editor)).toEqual([['', 'A', ''], ['', 'a1', ''], ['', '', '']])
+    await at('a1')
+    await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="table-add-row"]')!.click())
+    expect(cells(editor)).toEqual([['', 'A', ''], ['', 'a1', ''], ['', '', ''], ['', '', '']])
+    // The header row on and off.
+    await at('A')
+    await choose('toggleHeaderRow')
+    const headers = () => {
+      let count = 0
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'tableHeader') count++
+      })
+      return count
+    }
+    expect(headers()).toBe(0)
+    await choose('toggleHeaderRow')
+    expect(headers()).toBe(3)
+    // A right click in a cell opens the same menu at the pointer.
+    const cell = editor.view.dom.querySelector('td')!
+    await act(async () => void cell.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })))
+    expect(document.querySelector('[data-testid="table-menu"] [data-testid="table-deleteTable"]')).not.toBeNull()
+    await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="table-deleteTable"]')!.click())
+    expect(types(editor)).not.toContain('table')
+    await act(async () => root.unmount())
+    sheet.remove()
+  })
+
+  it('NOTES-3 AC-5 Tab in the last cell adds a row', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<table><tr><td><p>a</p></td><td><p>b</p></td></tr></table>')
+    let last = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === 'b') last = pos
+    })
+    editor.commands.setTextSelection(last + 1)
+    press(editor, 'Tab')
+    expect(cells(editor)).toEqual([['a', 'b'], ['', '']])
+  })
+})
+
+describe('NOTES-3 AC-5 NOTES-12 a table changed by two at once', () => {
+  it('NOTES-3 AC-5 one adds a row while the other adds a column: both stay, no cell loses its text', () => {
+    const mine = new Y.Doc()
+    const anna = makeEditor(mine, 1)
+    anna.commands.setContent('<table><tr><td><p>a1</p></td><td><p>b1</p></td></tr><tr><td><p>a2</p></td><td><p>b2</p></td></tr></table>')
+    const theirs = new Y.Doc()
+    Y.applyUpdate(theirs, Y.encodeStateAsUpdate(mine))
+    const lena = makeEditor(theirs, 2)
+    const at = (editor: Editor, text: string) => {
       let found = -1
       editor.state.doc.descendants((node, pos) => {
         if (found < 0 && node.isText && node.text === text) found = pos
       })
       editor.commands.setTextSelection(found + 1)
     }
-    const table = tableActions(editor)
-    at('a1')
-    table.addRowAfter()
-    expect(cells(editor)).toEqual([['A', 'B'], ['a1', 'b1'], ['', ''], ['a2', 'b2']])
-    at('b1')
-    table.addColumnAfter()
-    expect(cells(editor)).toEqual([['A', 'B', ''], ['a1', 'b1', ''], ['', '', ''], ['a2', 'b2', '']])
-    at('a2')
-    table.rowUp()
-    expect(cells(editor)).toEqual([['A', 'B', ''], ['a1', 'b1', ''], ['a2', 'b2', ''], ['', '', '']])
-    at('b1')
-    table.columnLeft()
-    expect(cells(editor)).toEqual([['B', 'A', ''], ['b1', 'a1', ''], ['b2', 'a2', ''], ['', '', '']])
-    at('a1')
-    table.columnRight()
-    expect(cells(editor)).toEqual([['B', '', 'A'], ['b1', '', 'a1'], ['b2', '', 'a2'], ['', '', '']])
-    at('b1')
-    table.rowDown()
-    expect(cells(editor)).toEqual([['B', '', 'A'], ['b2', '', 'a2'], ['b1', '', 'a1'], ['', '', '']])
-    at('b2')
-    table.deleteColumn()
-    expect(cells(editor)).toEqual([['', 'A'], ['', 'a2'], ['', 'a1'], ['', '']])
-    at('a2')
-    table.deleteRow()
-    expect(cells(editor)).toEqual([['', 'A'], ['', 'a1'], ['', '']])
+    // At the same time, before either hears of the other.
+    at(anna, 'a2')
+    tableActions(anna).addRowAfter()
+    at(lena, 'b1')
+    tableActions(lena).addColumnAfter()
+    Y.applyUpdate(theirs, Y.encodeStateAsUpdate(mine))
+    Y.applyUpdate(mine, Y.encodeStateAsUpdate(theirs))
+    const text = (editor: Editor) => editor.state.doc.textContent
+    expect(text(anna)).toBe(text(lena))
+    for (const word of ['a1', 'b1', 'a2', 'b2']) expect(text(anna)).toContain(word)
+    let rows = 0
+    anna.state.doc.descendants((node) => {
+      if (node.type.name === 'tableRow') rows++
+    })
+    expect(rows).toBe(3)
+    expect(anna.getHTML()).toBe(lena.getHTML())
   })
 })
 

@@ -259,7 +259,10 @@
       "deleteTable": "Tabelle löschen",
       "label": "Tabelle bearbeiten",
       "rowDown": "Zeile nach unten",
-      "rowUp": "Zeile nach oben"
+      "rowUp": "Zeile nach oben",
+      "toggleHeaderRow": "Kopfzeile",
+      "appendColumn": "Spalte anhängen",
+      "appendRow": "Zeile anhängen"
     },
     "tasks": {
       "checkbox": "Punkt abhaken: {{text}}",

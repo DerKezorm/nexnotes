@@ -36,7 +36,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Menu } from '../components/Menu'
 import { HIGHLIGHT_COLORS } from './extensions'
-import { tableActions } from './table'
+import { TableMenuItems } from './TableControls'
 import { useOutlineShown } from './outlineData'
 import { TEXT_WIDTHS, useTextWidth } from './textWidth'
 
@@ -130,7 +130,6 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   }, [editor])
 
   if (!state) return null
-  const table = tableActions(editor)
   const sinkOrLift = (sink: boolean) => {
     const kind = editor.isActive('taskItem') ? 'taskItem' : 'listItem'
     return sink ? chain().sinkListItem(kind).run() : chain().liftListItem(kind).run()
@@ -413,35 +412,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
       )}
       {menu === 'table' && (
         <Popover label={t('editor.table.label')} onClose={() => setMenu(null)} anchor={anchorOf('table')}>
-          {(
-            [
-              ['addRowBefore', 'editor.table.addRowBefore'],
-              ['addRowAfter', 'editor.table.addRowAfter'],
-              ['rowUp', 'editor.table.rowUp'],
-              ['rowDown', 'editor.table.rowDown'],
-              ['deleteRow', 'editor.table.deleteRow'],
-              ['addColumnBefore', 'editor.table.addColumnBefore'],
-              ['addColumnAfter', 'editor.table.addColumnAfter'],
-              ['columnLeft', 'editor.table.columnLeft'],
-              ['columnRight', 'editor.table.columnRight'],
-              ['deleteColumn', 'editor.table.deleteColumn'],
-              ['deleteTable', 'editor.table.deleteTable'],
-            ] as const
-          ).map(([action, label]) => (
-            <button
-              key={action}
-              type="button"
-              role="menuitem"
-              className="nn-menu-item"
-              data-testid={`table-${action}`}
-              onClick={() => {
-                setMenu(null)
-                table[action]()
-              }}
-            >
-              {t(label)}
-            </button>
-          ))}
+          <TableMenuItems editor={editor} onDone={() => setMenu(null)} />
         </Popover>
       )}
     </div>
