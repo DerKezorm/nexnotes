@@ -23,6 +23,7 @@ const VALUES: Record<string, Record<string, unknown>> = {
   fresh_sign_in_required: { minutes: 10, providers: [] },
   folder_name_taken: { name: 'Arbeit' },
   folder_name_too_long: { maximum: 60 },
+  tag_exists: { label: 'einkauf', count: 2 },
 }
 const WITH_PLACEHOLDER = Object.entries({ ...en.errors, ...de.errors })
   .filter(([, text]) => /\{\{/.test(String(text)))

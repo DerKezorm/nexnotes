@@ -19,7 +19,7 @@ from ..deps import Account, DbSession
 from ..models import Note
 from ..notedoc.room import CLOSE_FORBIDDEN, CLOSE_GONE, Access
 from ..security import SESSION_COOKIE, session_account
-from ..services import notes, settings_service, totp
+from ..services import notes, settings_service, tags, totp
 
 logger = logging.getLogger("nexnotes.notes")
 
@@ -103,7 +103,8 @@ def _out(note_id: str, account: Any) -> dict[str, Any]:
 @router.get("")
 def list_notes(db: DbSession, account: Account, folder_id: str | None = Query(default=None, max_length=36)
                ) -> list[dict[str, Any]]:
-    return [item_out(note) for note in notes.list_notes(db, account, folder_id)]
+    # Every note with its tags (NOTES-5), read for the whole list at once.
+    return tags.with_tags(db, [item_out(note) for note in notes.list_notes(db, account, folder_id)])
 
 
 @router.post("", status_code=201)

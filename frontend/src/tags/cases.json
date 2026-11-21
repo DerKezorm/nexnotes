@@ -1,0 +1,30 @@
+{
+  "about": "Texts and the tags in them: the rule of the server (services/tags.py) and of the editor (src/tags/rules.ts) read these the same way.",
+  "cases": [
+    { "id": "plain", "text": "Milch holen #einkauf", "tags": ["einkauf"] },
+    { "id": "start", "text": "#einkauf Milch", "tags": ["einkauf"] },
+    { "id": "two", "text": "#bad und #küche", "tags": ["bad", "küche"] },
+    { "id": "umlaut", "text": "#Gemüsegärten und #straße", "tags": ["Gemüsegärten", "straße"] },
+    { "id": "hyphen underscore", "text": "#to-do und #nächste_woche", "tags": ["to-do", "nächste_woche"] },
+    { "id": "emoji", "text": "Urlaub #🏖 und #reise✈️ und #🇩🇪", "tags": ["🏖", "reise✈️", "🇩🇪"] },
+    { "id": "emoji joined", "text": "#familie👨‍👩‍👧 ok", "tags": ["familie👨‍👩‍👧"] },
+    { "id": "punctuation", "text": "Fliesen fürs #bad. Dann #küche, #flur! #keller? #dach: #garten; ok", "tags": ["bad", "küche", "flur", "keller", "dach", "garten"] },
+    { "id": "trailing hyphen", "text": "#bad- und #flur_", "tags": ["bad", "flur"] },
+    { "id": "brackets", "text": "(#bad) [#küche] \"#flur\" „#keller“", "tags": ["bad", "küche", "flur", "keller"] },
+    { "id": "number", "text": "Punkt #1 und #2026 und #3.5", "tags": [] },
+    { "id": "number with letter", "text": "#1a und #2026er", "tags": ["1a", "2026er"] },
+    { "id": "address fragment", "text": "https://example.com/#abschnitt und example.com/seite#teil", "tags": [] },
+    { "id": "address query", "text": "https://example.com/?q=#wort&x=1", "tags": [] },
+    { "id": "inside a word", "text": "C#programm und a#b", "tags": [] },
+    { "id": "heading mark", "text": "# Überschrift\n## Noch eine", "tags": [] },
+    { "id": "double hash", "text": "##doppelt", "tags": [] },
+    { "id": "lone hash", "text": "# und #, und #-", "tags": [] },
+    { "id": "glued", "text": "#a#b", "tags": ["a"] },
+    { "id": "case", "text": "#Einkauf #einkauf #EINKAUF", "tags": ["Einkauf", "einkauf", "EINKAUF"] },
+    { "id": "line start", "text": "erste Zeile\n#zweite", "tags": ["zweite"] },
+    { "id": "long", "text": "#xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "tags": [] },
+    { "id": "longest", "text": "#xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "tags": ["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"] },
+    { "id": "no break space", "text": "Bad\u00a0#fliesen", "tags": ["fliesen"] },
+    { "id": "decomposed", "text": "#käse", "tags": ["käse"] }
+  ]
+}
