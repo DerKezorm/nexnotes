@@ -1,9 +1,15 @@
 /**
  * Who else has the note open (NOTES-12 AC-5, AC-6, EC-6, EC-8).
  *
- * Every person has a colour of their own from a fixed row, never honey, the same in every window and every note (it
- * follows the account). One's own caret is honey. A second window of the same account is not somebody else: it shows
- * as "du, anderes Fenster", in honey too.
+ * Every person has a colour of their own from a fixed row, never honey. One's own caret is honey. A second window of
+ * the same account is not somebody else: it shows as "du, anderes Fenster", in honey too.
+ *
+ * How a colour is given (`colorsFor`): every account has its place in the row, its id modulo the row's length. Everyone
+ * in the note, oneself included, is taken in the order of their account ids; who finds their place taken (ids 1 and 9)
+ * takes the next free one along the row. So, up to eight people in a note, nobody shares a colour; everybody sees the
+ * same colour for the same person, since every window counts the same people; and a person keeps their colour in every
+ * note where nobody with a lower id shares their place, which with a handful of people is nearly always. A colour
+ * changes only while such a person comes or goes.
  */
 import type { Awareness } from 'y-protocols/awareness'
 
@@ -14,8 +20,40 @@ export const PERSON_COLORS = ['#60a5fa', '#4ade80', '#fb7185', '#a78bfa', '#22d3
 /** Initials shown at the top before the rest is counted as "+n". */
 export const SHOWN_PEOPLE = 4
 
-export function colorFor(accountId: number): string {
-  return PERSON_COLORS[Math.abs(Math.trunc(accountId)) % PERSON_COLORS.length]
+/** The colour of every account in one note (see above). Beyond eight people, colours repeat. */
+export function colorsFor(accountIds: Iterable<number>): Map<number, string> {
+  const ids = [...new Set(accountIds)].filter((id) => Number.isFinite(id)).sort((a, b) => a - b)
+  const size = PERSON_COLORS.length
+  const taken = new Set<number>()
+  const colors = new Map<number, string>()
+  for (const id of ids) {
+    if (taken.size >= size) taken.clear() // the ninth person starts the row again
+    const place = Math.abs(Math.trunc(id)) % size
+    let slot = place
+    for (let step = 1; taken.has(slot); step++) slot = (place + step) % size
+    taken.add(slot)
+    colors.set(id, PERSON_COLORS[slot])
+  }
+  return colors
+}
+
+/** One account's colour among the others in the note (`present`, oneself included or not). */
+export function colorFor(accountId: number, present: Iterable<number> = []): string {
+  return colorsFor([...present, accountId]).get(accountId) ?? PERSON_COLORS[0]
+}
+
+/** Every account in the note, from the awareness states (one's own window included). */
+export function presentAccounts(awareness: Awareness): number[] {
+  return accountsOf(awareness.getStates() as Map<number, Record<string, unknown>>)
+}
+
+function accountsOf(states: Map<number, Record<string, unknown>>): number[] {
+  const ids: number[] = []
+  for (const state of states.values()) {
+    const user = state?.user as Partial<PresenceUser> | undefined
+    if (user && typeof user.accountId === 'number') ids.push(user.accountId)
+  }
+  return ids
 }
 
 export function initialOf(name: string): string {
@@ -40,6 +78,7 @@ export type Presence = {
 /** The others in the note, from the awareness states (one's own state left out). */
 export function presenceOf(states: Map<number, Record<string, unknown>>, ownClient: number, ownAccount: number): Presence {
   const people = new Map<number, Person>()
+  const colors = colorsFor([ownAccount, ...accountsOf(states)])
   let ownWindows = 0
   for (const [client, state] of states) {
     if (client === ownClient) continue
@@ -51,7 +90,7 @@ export function presenceOf(states: Map<number, Record<string, unknown>>, ownClie
     }
     if (!people.has(user.accountId)) {
       const name = String(user.name ?? '').trim() || '?'
-      people.set(user.accountId, { accountId: user.accountId, name, color: colorFor(user.accountId), initial: initialOf(name) })
+      people.set(user.accountId, { accountId: user.accountId, name, color: colors.get(user.accountId) ?? colorFor(user.accountId), initial: initialOf(name) })
     }
   }
   return { people: [...people.values()], ownWindows }
@@ -61,10 +100,10 @@ export function presenceFromAwareness(awareness: Awareness, ownAccount: number):
   return presenceOf(awareness.getStates() as Map<number, Record<string, unknown>>, awareness.clientID, ownAccount)
 }
 
-/** How a caret of someone else looks to this window: its colour and its label. */
-export function caretLook(user: Partial<PresenceUser>, ownAccount: number, otherWindow: string): { color: string; label: string } {
+/** How a caret of someone else looks to this window: its colour among those `present` and its label. */
+export function caretLook(user: Partial<PresenceUser>, ownAccount: number, otherWindow: string, present: Iterable<number> = []): { color: string; label: string } {
   if (user.accountId === ownAccount) return { color: OWN_COLOR, label: otherWindow }
-  return { color: typeof user.accountId === 'number' ? colorFor(user.accountId) : PERSON_COLORS[0], label: String(user.name ?? '?') }
+  return { color: typeof user.accountId === 'number' ? colorFor(user.accountId, [ownAccount, ...present]) : PERSON_COLORS[0], label: String(user.name ?? '?') }
 }
 
 /** "Anna ist auch hier", "Anna und Lena sind auch hier", "Anna, Lena und 3 weitere sind auch hier". */

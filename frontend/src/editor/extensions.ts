@@ -26,7 +26,7 @@ import type {} from '@tiptap/extension-list'
 import type {} from '@tiptap/extension-table'
 import type {} from '@tiptap/starter-kit'
 
-import { caretLook, type PresenceUser } from './presence'
+import { caretLook, presentAccounts, type PresenceUser } from './presence'
 import type { NoteProvider } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
 
@@ -373,16 +373,24 @@ export type EditorSetup = {
   hooks?: EditorHooks
 }
 
+/** A checklist's checkbox read out in the page's language (NOTES-3 EC-11), not TipTap's English. */
+function withCheckboxLabel(extension: AnyExtension, t: T): AnyExtension {
+  return extension.configure({
+    ...extension.options,
+    a11y: { checkboxLabel: (node: PMNode) => t('editor.tasks.checkbox', { text: node.textContent.trim() || t('editor.tasks.empty') }) },
+  }) as AnyExtension
+}
+
 /** Everything the editor of one note runs with. */
 export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {} }: EditorSetup): AnyExtension[] {
   return [
-    ...schemaExtensions(),
+    ...schemaExtensions().map((extension) => (extension.name === 'taskItem' ? withCheckboxLabel(extension, t) : extension)),
     Collaboration.configure({ document: doc, field: 'body' }),
     CollaborationCaret.configure({
       provider,
       user: me,
       render: (user: Partial<PresenceUser>) => {
-        const look = caretLook(user, me.accountId, t('presence.otherWindow'))
+        const look = caretLook(user, me.accountId, t('presence.otherWindow'), presentAccounts(provider.awareness))
         const caret = document.createElement('span')
         caret.className = 'collaboration-carets__caret'
         caret.style.borderColor = look.color
@@ -394,7 +402,7 @@ export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}
         return caret
       },
       selectionRender: (user: Partial<PresenceUser>) => {
-        const look = caretLook(user, me.accountId, t('presence.otherWindow'))
+        const look = caretLook(user, me.accountId, t('presence.otherWindow'), presentAccounts(provider.awareness))
         return { nodeName: 'span', class: 'collaboration-carets__selection', style: `background-color: ${look.color}40`, 'data-user': look.label }
       },
     }),
