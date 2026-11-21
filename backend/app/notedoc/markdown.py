@@ -9,7 +9,7 @@ Markdown (export, MCP) is CommonMark with the GitHub additions:
 * bold ``**``, italic ``*``, strike ``~~``, code in backticks, links ``[text](href)``.
 * Underline and highlight have no Markdown of their own; they are written as the HTML most renderers show:
   ``<u>text</u>`` and ``<mark>text</mark>`` (``<mark data-color="green">`` for a colour other than the default). Reading
-  Markdown, ``==text==`` (Obsidian, nexlore) is a highlight too.
+  Markdown, ``==text==`` (as Obsidian writes it) is a highlight too.
 
 Reading Markdown (``from_markdown``), a single line break inside a paragraph is a line break in the note, not a space:
 a snippet from MCP or nexdeck means its lines.
