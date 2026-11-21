@@ -36,3 +36,15 @@ class OAuthCode(Base):
     #: ``read`` or ``write``, as the account chose.
     level: Mapped[str] = mapped_column(String(8), default="read")
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+
+
+class OAuthSpent(Base):
+    """A code or refresh token of a connector that was traded in already. Brought again, it is a copy in somebody
+    else's hands: the whole connector ends (RFC 6749 section 4.1.2, OAuth 2.1 section 4.3.1). Only SHA-256, and only
+    the last ``SPENT_KEPT`` of a key; they go with their key."""
+
+    __tablename__ = "oauth_spent"
+
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    key_id: Mapped[int] = mapped_column(ForeignKey("api_tokens.id", ondelete="CASCADE"), index=True)
+    spent_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

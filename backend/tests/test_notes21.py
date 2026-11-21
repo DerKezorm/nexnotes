@@ -46,10 +46,10 @@ def get(token: str | None, path: str, **params):
     return program().get(path, headers=headers, params=params)
 
 
-def tick(token: str, note_id: str, index: int, checked: bool = True, text: str | None = None,
+def tick(token: str, note_id: str, index: int, checked: bool = True, text: str | None = "",
          via: TestClient | None = None, **headers):
     """``via``: the test client whose event loop holds the live room a test watches (one room per loop); the card's
-    request still carries nothing but its key."""
+    request still carries nothing but its key. ``text=None`` leaves the item's text out."""
     body: dict = {"checked": checked}
     if text is not None:
         body["text"] = text
@@ -210,6 +210,33 @@ def test_notes21_ac2_a_card_of_a_checklist_ticks_an_item_in_nexnotes(client, ope
     assert tick(token, note["id"], 99).status_code == 409
 
 
+def test_notes21_ac2_a_long_item_is_ticked_with_the_text_the_card_showed(client, operator):
+    token = make_key(client, "write")
+    long_item = " ".join(f"Wort{number:03d}" for number in range(86))
+    assert len(long_item) > 600
+    note = new_note(client, markdown=f"- [ ] {long_item}\n- [ ] Mil")
+    shown = get(token, f"/api/v1/notes/{note['id']}").json()["items"]
+    assert len(shown[0]["text"]) == 500 and long_item.startswith(shown[0]["text"])
+    ticked = tick(token, note["id"], 0, text=shown[0]["text"])
+    assert ticked.status_code == 200, ticked.text
+    assert [task.checked for task in edit.list_tasks(stored_doc(note["id"]))] == [True, False]
+    # Only the shortened text exactly as shown counts.
+    assert code(tick(token, note["id"], 0, checked=False, text=shown[0]["text"][:499])) == "item_changed"
+    assert code(tick(token, note["id"], 1, text="Mi")) == "item_changed"
+    assert [task.checked for task in edit.list_tasks(stored_doc(note["id"]))] == [True, False]
+
+
+def test_notes21_ac2_ticking_needs_the_text_of_the_item(client, operator):
+    token = make_key(client, "write")
+    note = new_note(client, markdown=SHOPPING)
+    # By its place alone an item may be another one after a change: without its text nothing is ticked.
+    refused = tick(token, note["id"], 0, text=None)
+    assert refused.status_code == 422
+    assert refused.json()["detail"]["code"] == "invalid_input" and refused.json()["detail"]["message"]
+    assert "text" in refused.json()["detail"]["fields"]
+    assert [task.checked for task in edit.list_tasks(stored_doc(note["id"]))] == [False, False, True, False]
+
+
 def test_notes21_ac4_a_card_of_a_note_without_checklist_shows_its_first_lines_and_its_link(client, operator):
     token = make_key(client)
     note = new_note(client, title="Müllabfuhr", markdown="Gelb Mittwoch\n\nPapier Freitag")
@@ -277,6 +304,30 @@ def test_notes21_ec2_a_note_deleted_locked_or_no_longer_shared_says_so_without_c
         db.delete(db.get(Note, trashed["id"]))
         db.commit()
     assert code(get(token, f"/api/v1/notes/{trashed['id']}")) == "not_found"
+
+
+def test_notes21_ec2_a_note_pinned_and_then_no_longer_shared_leaves_the_card_and_its_pin_goes(client, operator):
+    from app.models_shares import SharePin
+
+    from .test_notes13 import share, unshare
+
+    token = make_key(client)
+    anna = make_account("anna")
+    with new_client(anna) as as_anna:
+        theirs = new_note(as_anna, title="Babysitter", markdown="Nummern und Allergien")
+        share(as_anna, "note", theirs["id"], operator, "read")
+        pin(client, theirs["id"])
+        assert [item["id"] for item in get(token, "/api/v1/dashboard").json()["pinned"]] == [theirs["id"]]
+        unshare(as_anna, "note", theirs["id"], operator)
+    card = get(token, "/api/v1/dashboard")
+    assert card.json()["pinned"] == [] and "Babysitter" not in card.text and "Allergien" not in card.text
+    with SessionLocal() as db:
+        assert db.scalars(select(SharePin).where(SharePin.account_id == operator.id)).all() == []
+        # A pin left over from before (or by any other way) still shows nothing that is no longer shared.
+        db.add(SharePin(account_id=operator.id, note_id=theirs["id"]))
+        db.commit()
+    card = get(token, "/api/v1/dashboard")
+    assert card.json()["pinned"] == [] and "Babysitter" not in card.text
 
 
 def test_notes21_ec3_a_revoked_key_or_one_that_only_reads_leaves_the_items_as_they_are(client, operator):

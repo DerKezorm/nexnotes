@@ -111,7 +111,9 @@ def fake(monkeypatch) -> Iterator[FakeNextasks]:
     stand_in = FakeNextasks()
     monkeypatch.setattr(nextasks, "RESOLVER", stand_in.resolve)
     monkeypatch.setattr(nextasks, "TRANSPORT", httpx.MockTransport(stand_in.handle))
+    nextasks.forget()
     yield stand_in
+    nextasks.forget()
     Live.close_all()
 
 
@@ -302,7 +304,9 @@ def test_notes19_ac1_a_list_nextasks_does_not_know_any_more_is_said(client, oper
 # --- EC-1: nextasks away, a wrong key ------------------------------------------------------------------------------
 
 
-def test_notes19_ec1_unreachable_slow_or_a_revoked_key_is_said_and_the_note_stays_as_it_was(client, operator, fake):
+def test_notes19_ec1_unreachable_slow_or_a_revoked_key_is_said_and_the_note_stays_as_it_was(client, operator, fake,
+                                                                                            caplog):
+    caplog.set_level("INFO", logger="nexnotes.nextasks")
     connected(client)
     note = new_note(client, markdown="- [ ] Silikon")
     before = stored(note["id"])
@@ -312,7 +316,10 @@ def test_notes19_ec1_unreachable_slow_or_a_revoked_key_is_said_and_the_note_stay
     fake.down = False
     fake.slow = True
     slow = send(client, note["id"], ["Silikon"])
-    assert slow.status_code == 504 and code(slow) == "nextasks_timeout"
+    # Away, too slow or something else answering: one code for the caller, the way it went wrong in the log only.
+    assert slow.status_code == 502 and code(slow) == "nextasks_unreachable"
+    assert slow.json()["detail"] == down.json()["detail"]
+    assert "no connection (ConnectError)" in caplog.text and "no answer in time" in caplog.text
     fake.slow = False
     del fake.tokens[GOOD]
     revoked = send(client, note["id"], ["Silikon"])
@@ -444,7 +451,9 @@ def test_notes19_an_address_in_the_own_network_needs_the_operator_s_switch(clien
 
 
 @pytest.mark.parametrize("address", ["127.0.0.1", "::1", "169.254.169.254", "0.0.0.0", "::ffff:127.0.0.1",
-                                     "64:ff9b::a9fe:a9fe", "224.0.0.1", "192.0.0.192"])
+                                     "64:ff9b::a9fe:a9fe", "224.0.0.1", "192.0.0.192",
+                                     # Metadata services inside the own networks the switch opens (100.64/10, fc00::/7).
+                                     "100.100.100.200", "fd00:ec2::254"])
 def test_notes19_the_machine_itself_and_special_addresses_never_even_with_the_switch(client, operator, fake,
                                                                                      address):
     allow_home(client)
@@ -468,7 +477,7 @@ def test_notes19_a_redirect_is_never_followed(client, operator, fake):
     allow_home(client)
     fake.redirect = True
     refused = connect(client)
-    assert refused.status_code == 502 and code(refused) == "nextasks_failed"
+    assert refused.status_code == 502 and code(refused) == "nextasks_unreachable"
     assert len(fake.requests) == 1
 
 
@@ -499,3 +508,75 @@ def test_notes19_a_due_date_that_is_no_date_is_refused(client, operator, fake):
     answer = send(client, note["id"], ["x"], due="morgen")
     assert answer.status_code == 422 and fake.tasks == {}
     assert send(client, note["id"], ["x"], due=date(2026, 12, 24).isoformat()).status_code == 200
+
+
+# --- The server as nobody's network tool ---------------------------------------------------------------------------
+
+
+def test_notes19_an_answer_nexnotes_cannot_use_says_no_status_of_what_answered(client, operator, fake, monkeypatch):
+    connected(client)
+    for status in (500, 418, 302):
+        answer_with = httpx.MockTransport(lambda _request, status=status: httpx.Response(status, json={"detail": "x"}))
+        monkeypatch.setattr(nextasks, "TRANSPORT", answer_with)
+        answer = client.get("/api/nextasks/lists")
+        assert answer.status_code == 502
+        assert answer.json()["detail"] == {"code": "nextasks_unreachable",
+                                           "message": "nextasks cannot be reached or gave no usable answer."}
+
+
+@pytest.mark.parametrize("port", [1, 21, 22, 25, 110, 389, 445, 1023])
+def test_notes19_ports_below_1024_other_than_80_and_443_are_refused(client, operator, fake, port):
+    allow_home(client)
+    refused = connect(client, url=f"http://nextasks.home:{port}")
+    assert refused.status_code == 422 and code(refused) == "nextasks_address_port"
+    assert fake.requests == []
+
+
+@pytest.mark.parametrize("url", ["http://nextasks.home:80", "https://nextasks.home:443", "http://nextasks.home",
+                                 "http://nextasks.home:1024"])
+def test_notes19_the_web_ports_and_the_ones_from_1024_are_asked(client, operator, fake, url):
+    allow_home(client)
+    assert connect(client, url=url).status_code == 200
+
+
+def test_notes19_requests_to_nextasks_are_braked_per_account(client, operator, fake, monkeypatch):
+    monkeypatch.setattr(nextasks, "CONNECTS_PER_MINUTE", 3)
+    monkeypatch.setattr(nextasks, "REQUESTS_PER_MINUTE", 4)
+    allow_home(client)
+    for _ in range(3):
+        assert connect(client, token="ntk_wrong").status_code == 409
+    braked = connect(client)
+    assert braked.status_code == 429 and code(braked) == "slow_down"
+    assert 1 <= int(braked.headers["retry-after"]) <= 61
+    asked = len(fake.requests)
+    assert connect(client).status_code == 429 and len(fake.requests) == asked
+    # The other requests have a brake of their own; another account is not held by this one.
+    anna = make_account("anna")
+    with new_client(anna) as as_anna:
+        assert as_anna.put("/api/nextasks", json={"url": HOME, "token": GOOD}).status_code == 200
+        for _ in range(4):
+            assert as_anna.get("/api/nextasks/lists").status_code == 200
+        slowed = as_anna.get("/api/nextasks/lists")
+        assert slowed.status_code == 429 and code(slowed) == "slow_down" and "retry-after" in slowed.headers
+        note = new_note(as_anna, markdown="x")
+        assert code(send(as_anna, note["id"], ["x"])) == "slow_down"
+    assert fake.tasks == {}
+
+
+def test_notes19_at_most_two_requests_of_an_account_run_at_once(client, operator, fake):
+    connected(client)
+    note = new_note(client, markdown="x")
+    asked = len(fake.requests)
+    with nextasks.outgoing(operator.id), nextasks.outgoing(operator.id):
+        busy = client.get("/api/nextasks/lists")
+        assert busy.status_code == 429 and code(busy) == "nextasks_busy" and busy.headers["retry-after"] == "2"
+        assert code(send(client, note["id"], ["x"])) == "nextasks_busy"
+        assert len(fake.requests) == asked
+        # Another account has its own two.
+        with nextasks.outgoing(operator.id + 1000):
+            pass
+    assert client.get("/api/nextasks/lists").status_code == 200
+    # A request that fails gives its place back.
+    fake.down = True
+    for _ in range(3):
+        assert code(client.get("/api/nextasks/lists")) == "nextasks_unreachable"

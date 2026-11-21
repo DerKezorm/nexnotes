@@ -141,8 +141,8 @@ async def card(note_id: NoteId, caller: CardCaller, request: Request) -> dict[st
 
 class CheckIn(BaseModel):
     checked: bool = True
-    #: The item's text as the card showed it: a different item at that place by now is left alone.
-    text: str | None = Field(default=None, max_length=4000)
+    #: The item's text as the card showed it, always: a different item at that place by now is left alone.
+    text: str = Field(max_length=4000)
 
 
 @router.post("/api/v1/notes/{note_id}/items/{index}", summary="Tick a checklist item off, or open it again")

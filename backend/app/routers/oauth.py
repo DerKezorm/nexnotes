@@ -7,8 +7,8 @@ the code the program gets is traded for tokens once.
 
 What comes out is an MCP key like one made by hand (a row of ``api_tokens`` with ``kind = mcp`` and its ``client_id``):
 it acts as its account, shows in the member's list under Connections and is revoked there. Its access token runs out
-after an hour and is refreshed with a refresh token that changes every time; an old one brought again ends the
-connector. Nothing secret is stored: only SHA-256 of codes and tokens.
+after an hour and is refreshed with a refresh token that changes every time; any of its last spent ones, or its code,
+brought again ends the connector. Nothing secret is stored: only SHA-256 of codes and tokens.
 
 Only public clients with PKCE; return addresses only over HTTPS or to the own machine. Everything here is off while
 the operator has MCP switched off (``mcp_enabled``).
@@ -39,7 +39,7 @@ from ..deps import Account, DbSession, client_ip
 from ..errors import error
 from ..models import TOKEN_MCP, ApiToken, utcnow
 from ..models import Account as AccountRow
-from ..models_mcp import OAuthClient, OAuthCode
+from ..models_mcp import OAuthClient, OAuthCode, OAuthSpent
 from ..security import account_out, brake
 from ..services import apitokens, mcp, settings_service, totp
 
@@ -53,6 +53,8 @@ REFRESH_PREFIX = "nnr_"
 #: A connector signs in again after this long, and after ``IDLE_DAYS`` without a refresh.
 REFRESH_DAYS = 90
 IDLE_DAYS = 30
+#: Spent codes and refresh tokens remembered per connector, to know a copy when it is brought again.
+SPENT_KEPT = 20
 #: Registered clients kept at most; the ones used longest ago go first.
 MAX_CLIENTS = 500
 #: Registrations per minute for the whole server (registering needs no account), and per sender in an hour.
@@ -324,13 +326,43 @@ def _verifier_fits(verifier: str, challenge: str) -> bool:
     return secrets.compare_digest(made.decode(), challenge)
 
 
-def _issue(db: Any, key: ApiToken) -> dict[str, Any]:
+def _spend(db: Any, key: ApiToken, token_hash: str) -> None:
+    """Remembers a code or refresh token traded in for ``key``; only the last ``SPENT_KEPT``."""
+    db.merge(OAuthSpent(token_hash=token_hash, key_id=key.id, spent_at=utcnow()))
+    db.flush()
+    kept = select(OAuthSpent.token_hash).where(OAuthSpent.key_id == key.id).order_by(
+        OAuthSpent.spent_at.desc(), OAuthSpent.token_hash).limit(SPENT_KEPT)
+    db.execute(delete(OAuthSpent).where(OAuthSpent.key_id == key.id, OAuthSpent.token_hash.not_in(kept)))
+
+
+def _spent_key(db: Any, token_hash: str, client_id: str) -> ApiToken | None:
+    """The connector a spent code or refresh token belonged to, if it is still there."""
+    spent = db.get(OAuthSpent, token_hash)
+    key = db.get(ApiToken, spent.key_id) if spent is not None else None
+    if key is None:
+        # Keys refreshed before ``oauth_spent`` came still know the refresh token before their last one.
+        key = db.scalar(select(ApiToken).where(ApiToken.refresh_old_hash == token_hash))
+    if key is None or key.client_id != client_id or key.kind != TOKEN_MCP:
+        return None
+    return key
+
+
+def _end(db: Any, key: ApiToken, what: str) -> None:
+    key_id = key.id
+    db.delete(key)
+    db.commit()
+    logger.warning("OAuth %s used twice, connector ended key_id=%s", what, key_id)
+
+
+def _issue(db: Any, key: ApiToken, spent: str) -> dict[str, Any]:
     access = apitokens.PREFIXES[TOKEN_MCP] + secrets.token_urlsafe(32)
     refresh = REFRESH_PREFIX + secrets.token_urlsafe(32)
     key.token_hash = apitokens.digest(access)
     key.prefix = access[: len(apitokens.PREFIXES[TOKEN_MCP]) + 4]
-    key.refresh_old_hash = key.refresh_hash
+    key.refresh_old_hash = None
     key.refresh_hash = apitokens.digest(refresh)
+    db.flush()
+    _spend(db, key, spent)
     key.expires_at = utcnow() + timedelta(hours=ACCESS_HOURS)
     db.commit()
     return {"access_token": access, "token_type": "Bearer", "expires_in": ACCESS_HOURS * 3600,
@@ -365,6 +397,12 @@ async def token(request: Request) -> JSONResponse:
             # Taken away first: a code is traded once, even when two requests bring it at the same moment.
             gone = db.execute(delete(OAuthCode).where(OAuthCode.code_hash == code_hash)).rowcount
             db.commit()
+            if row is None and gone == 0:
+                # A code traded in already: whoever brings it again has a copy. What it gave ends (RFC 6749, 4.1.2).
+                used = _spent_key(db, code_hash, client.id)
+                if used is not None:
+                    _end(db, used, "code")
+                return _oauth_error("invalid_grant", "The code is not valid (any more).")
             if (
                 row is None or gone != 1 or row.expires_at <= utcnow() or row.client_id != client.id
                 or row.redirect_uri != form.get("redirect_uri", "")
@@ -387,7 +425,7 @@ async def token(request: Request) -> JSONResponse:
             key.signed_in_at = utcnow()
             key.refresh_hash = None
             client.last_used_at = utcnow()
-            answer = _issue(db, key)
+            answer = _issue(db, key, code_hash)
             logger.info("OAuth tokens issued key_id=%s", key.id)
             return JSONResponse(answer, headers={"Cache-Control": "no-store"})
         if grant == "refresh_token":
@@ -395,14 +433,12 @@ async def token(request: Request) -> JSONResponse:
             key = db.scalar(select(ApiToken).where(ApiToken.refresh_hash == brought, ApiToken.client_id == client.id,
                                                    ApiToken.kind == TOKEN_MCP))
             if key is None:
-                # A refresh token traded in already: whoever brings it has a copy. The whole connector ends, for the
-                # thief and the program alike; its member signs it in again (OAuth 2.1, section 4.3.1).
-                used = db.scalar(select(ApiToken).where(ApiToken.refresh_old_hash == brought,
-                                                        ApiToken.client_id == client.id, ApiToken.kind == TOKEN_MCP))
+                # A refresh token traded in already, however many changes ago: whoever brings it has a copy. The
+                # whole connector ends, for the thief and the program alike; its member signs it in again
+                # (OAuth 2.1, section 4.3.1).
+                used = _spent_key(db, brought, client.id)
                 if used is not None:
-                    db.delete(used)
-                    db.commit()
-                    logger.warning("OAuth refresh token used twice, connector ended key_id=%s", used.id)
+                    _end(db, used, "refresh token")
                 return _oauth_error("invalid_grant", "The refresh token is not valid (any more).")
             now = utcnow()
             started = key.signed_in_at or key.created_at
@@ -412,7 +448,7 @@ async def token(request: Request) -> JSONResponse:
             if not _account_may(db, key.account_id):
                 return _oauth_error("invalid_grant", "The account may not sign in now.")
             client.last_used_at = utcnow()
-            answer = _issue(db, key)
+            answer = _issue(db, key, brought)
             logger.info("OAuth tokens refreshed key_id=%s", key.id)
             return JSONResponse(answer, headers={"Cache-Control": "no-store"})
     return _oauth_error("unsupported_grant_type", "Only authorization_code and refresh_token.")
