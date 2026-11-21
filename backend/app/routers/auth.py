@@ -40,7 +40,7 @@ from ..security import (
     session_account,
     start_session,
 )
-from ..services import accounts, locales, mailer, mounts, settings_service, totp
+from ..services import accounts, locales, mailer, mounts, settings_service, storage, totp
 from ..services.accounts import AccountError
 from ..services.oidc_store import SqlStore, offered_address
 from ..vendor.nexoidc import providers
@@ -181,6 +181,7 @@ def setup_state(request: Request, db: DbSession) -> dict[str, Any]:
         "min_password": MIN_PASSWORD,
         # Only while nobody has set it up: the setup page warns when the data folder lies on a share.
         "data_on_share": mounts.locate(get_settings().data_dir).network if needs_setup else False,
+        "data_free": storage.usage(get_settings().data_dir).free if needs_setup else None,
     }
 
 

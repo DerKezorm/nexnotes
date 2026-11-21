@@ -266,6 +266,16 @@ def test_notes2_ec9_the_device_of_a_blocked_or_deleted_account_gets_nothing_acce
         assert _row(f"p{way}").language == "de"
         with SessionLocal() as db:
             assert db.scalar(select(func.count()).select_from(ApiToken).where(ApiToken.account_id == person.id)) == 0
+    # A token that is still there counts for nothing while its account is blocked, however the block came about.
+    late = make_account("plate")
+    with SessionLocal() as db:
+        row = db.get(Account, late.id)
+        assert row is not None
+        _device, token = apitokens.make(db, row, "iPad")
+        row.blocked_at = utcnow()
+        db.commit()
+    device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {token}"})
+    assert device.get("/api/auth/me").status_code == 401
 
 
 # --- AC-5, EC-8: deleting, 30 days to bring it back -------------------------------------------------------------

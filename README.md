@@ -1,3 +1,67 @@
 # nexnotes
 
-Quick notes, self-hosted.
+Quick notes, self-hosted. A notes app for the browser, iPhone and iPad, with your own server instead of somebody
+else's cloud.
+
+> Early days: this is the frame (accounts, sign-in, backups, settings). The notes themselves come next.
+
+## Run it
+
+```yaml
+services:
+  nexnotes:
+    image: nexnotes
+    build: .
+    ports:
+      - "8570:8000"
+    volumes:
+      - ./data:/data
+    environment:
+      PUID: 1000
+      PGID: 1000
+      # NEXNOTES_SETUP_TOKEN: choose-a-long-one
+```
+
+Open `http://<your-host>:8570`. The first account you create is the operator; it needs the setup code that nexnotes
+writes to its log at every start until it is set up (`docker logs nexnotes`), or the one you set in
+`NEXNOTES_SETUP_TOKEN`.
+
+Keep the data folder on a local disk: SQLite's locking does not work reliably over SMB or NFS, and nexnotes warns
+about a data folder on a network share.
+
+## Settings from the environment
+
+| Variable | Meaning |
+|---|---|
+| `NEXNOTES_DATA_DIR` | Database, attachments, backups, log and your own language files (`/data` in the image). |
+| `NEXNOTES_SETUP_TOKEN` | The code the first account needs. Without it nexnotes makes one at every start until set up. |
+| `NEXNOTES_PUBLIC_URL` | The address people use, for invitation links and the sign-in providers' redirect. Also in the settings. |
+| `NEXNOTES_TRUSTED_PROXIES` | Addresses or networks of your reverse proxy, so the sign-in brake sees the real sender. |
+| `NEXNOTES_SECRET_KEY` | Signs sign-in attempts and encrypts stored secrets. Empty: a random key in the data folder. |
+| `NEXNOTES_OPERATOR_NETWORKS` | Networks the operator's settings may be changed from. Empty: anywhere. |
+| `NEXNOTES_COOKIE_SECURE` | `auto` (default), `true` or `false`. |
+| `NEXNOTES_LOG_LEVEL` | Overrides the log level set in the interface. |
+
+A variable with a value nexnotes cannot use stops the start with a line in the log that names the variable and the
+values it takes.
+
+## Sign-in
+
+Password with an optional second factor (TOTP with recovery codes), and any number of OpenID Connect providers
+(authentik, Microsoft Entra ID, Keycloak, Authelia, Pocket ID). authentik can be set up in one step from the settings.
+
+## Languages
+
+English and German ship with nexnotes. Put a language file (`nl.json`, same keys as the English one) into
+`<data>/locales` and restart: it is offered in the language menu, marked as yours.
+
+## Development
+
+- Backend: `cd backend && python -m venv .venv && .venv/bin/pip install -r requirements-dev.txt`, then
+  `.venv/bin/python -m pytest -q`.
+- Frontend: `cd frontend && npm install`, `npm run dev` (port 5570, the API proxied to 8570), `npm test`,
+  `npm run build`.
+
+## Licence
+
+AGPL-3.0, see `LICENSE`.

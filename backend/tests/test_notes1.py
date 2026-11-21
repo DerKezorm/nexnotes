@@ -96,7 +96,8 @@ def test_notes1_ec7_a_double_click_on_create_account_makes_exactly_one_operator(
 
     def press() -> None:
         with TestClient(app, base_url="http://testserver", headers={"X-Nexnotes-Client": "tab-double000"}) as tab:
-            results.append(tab.post("/api/setup", json=SETUP).status_code)
+            # Without an address: nothing but the setup itself keeps a second operator out.
+            results.append(tab.post("/api/setup", json={**SETUP, "email": ""}).status_code)
 
     presses = [threading.Thread(target=press) for _ in range(4)]
     for thread in presses:

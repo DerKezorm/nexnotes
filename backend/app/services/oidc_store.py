@@ -52,7 +52,7 @@ logger = logging.getLogger("nexnotes.oidc")
 APP_NAME = "nexnotes"
 #: Where nexnotes' sign-in and account pages are, as the module sends the browser there.
 LOGIN_PAGE = "/login"
-ACCOUNT_PAGE = "/account"
+ACCOUNT_PAGE = "/settings"
 HOME = "/"
 #: Longest account name (``accounts.NAME_PATTERN``).
 NAME_MAX = 64

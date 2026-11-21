@@ -46,6 +46,8 @@ class Adapter(StandardAdapter):
     supports_coupling = False
     old_callback_paths: tuple[str, ...] = ()
     operator_name = OPERATOR_NAME
+    #: The own account lives in the settings (tab "My account").
+    account_page = "/settings"
 
     def start(self) -> None:
         # tests/conftest.py emptied the database before this test.

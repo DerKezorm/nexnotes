@@ -94,7 +94,7 @@ def test_no_api_message_is_the_code_spelt_out() -> None:
 
 
 def test_no_other_app_speaks_in_the_server() -> None:
-    assert re.findall(r"nexcanvas|nexlore|boards?|Give an address", _sources(APP, (".py",))) == []
+    assert re.findall(r"nexcanvas|nexlore|\bboards?\b|Give an address", _sources(APP, (".py",))) == []
 
 
 def test_the_public_address_refusal_names_no_other_app(client: TestClient, operator: Account) -> None:
