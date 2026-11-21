@@ -903,6 +903,36 @@
     "title": "Set up nexnotes",
     "version": "Version {{version}}"
   },
+  "tabs": {
+    "close": "Close tab: {{title}}",
+    "closeTab": "Close tab",
+    "closedOldest": "“{{title}}” was closed because {{max}} tabs were open already.",
+    "count": "{{count}} of {{max}}",
+    "dropBeside": "Drop here to open beside",
+    "endSplit": "Stop side by side",
+    "gone": {
+      "text": "It was deleted for good, or it is no longer shared with you.",
+      "title": "This note is no longer available."
+    },
+    "keys": {
+      "help": "Shortcuts: {{mod}}+1 to 6 picks a tab, {{mod}}+right or left arrow the next or previous one, {{mod}}+S the other side, {{mod}}+W closes the tab.",
+      "mod": "Alt+Shift"
+    },
+    "label": "Open notes",
+    "left": "left",
+    "newTab": "New note in a new tab",
+    "openBeside": "Open beside",
+    "openInNewTab": "Open in a new tab",
+    "openTrash": "Open the trash",
+    "resize": "Change the width",
+    "right": "right",
+    "sides": "Which side",
+    "state": {
+      "deleted": "in the trash",
+      "gone": "no longer available",
+      "locked": "locked"
+    }
+  },
   "tags": {
     "heading": "Tags",
     "showAll": "Show all ({{count}})",

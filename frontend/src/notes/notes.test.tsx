@@ -19,6 +19,7 @@ import { forgetFolders } from '../folders/store'
 import { hideNotice, UNDO_MS } from '../folders/notice'
 import i18n from '../i18n'
 import { AuthProvider } from '../state/auth'
+import { forgetParked } from '../tabs/live'
 import type { NoteHead } from './api'
 import { tryLeave } from './context'
 import { NotesPage } from './NotesPage'
@@ -248,6 +249,8 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   hideNotice()
   box?.remove()
+  // A connection kept for changes still waiting belongs to this test's stand-in room, not to the next test.
+  forgetParked()
   vi.unstubAllGlobals()
   await new Promise((resolve) => setTimeout(resolve, 80))
 })

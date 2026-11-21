@@ -2,6 +2,9 @@
  * The notes: the list in the middle column and the open note beside it (drawing "N3-Editor"); on a phone one or the
  * other. `/` shows all notes, `/notes/<id>` one of them; `?folder=<id>` keeps the list of the folder it was opened
  * from beside it, and a new note made there lands in that folder.
+ *
+ * On a wider screen the tabs and the two sides of NOTES-8 take over the page (`tabs/TabbedNotes.tsx`); on a phone one
+ * note at a time, as here.
  */
 import { ArrowLeft, Plus } from 'lucide-react'
 import { useEffect } from 'react'
@@ -11,6 +14,8 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'reac
 import { NoteEditor } from '../editor/NoteEditor'
 import { setCurrentFolder, useFolders } from '../folders/store'
 import { useTitle } from '../lib/title'
+import { useDesktop } from '../tabs/desktop'
+import { TabbedNotes } from '../tabs/TabbedNotes'
 import { NoteList } from './NoteList'
 import { useNewNote } from './newNote'
 
@@ -27,6 +32,7 @@ export function NotesPage() {
   const inbox = folderId !== undefined && tree.inbox?.id === folderId
   const heading = folder?.name ?? (inbox ? t('notes.inbox') : t('notes.all'))
   const { start, busy } = useNewNote()
+  const desktop = useDesktop()
   useTitle(noteId ? null : heading)
 
   // A note opened from a folder: "Neue Notiz" goes there too (NOTES-4 AC-9).
@@ -37,6 +43,8 @@ export function NotesPage() {
   }, [folderId])
 
   const back = folderId ? (inbox ? '/inbox' : `/folder/${encodeURIComponent(folderId)}`) : '/'
+  if (desktop)
+    return <TabbedNotes noteId={noteId} folderId={folderId} fresh={fresh} back={back} list={<NoteList folderId={folderId} selectedId={noteId} heading={heading} />} />
   // Without an open note the list takes the whole width (drawing N6-Liste); beside a note it is the column of N3-Editor.
   return (
     <div className="flex h-full min-h-0" data-testid="notes-page">
