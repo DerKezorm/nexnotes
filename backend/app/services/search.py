@@ -293,7 +293,34 @@ def ensure_schema(db: Session | None = None) -> None:
                 connection.execute(text(f'DROP TABLE IF EXISTS "{name}"'))
                 logger.info("Old search index dropped table=%s", name)
         _create(connection.execute)
+        _secure_delete(connection)
     _ready = True
+
+
+#: Whether the index overwrites what it deletes (FTS5 ``secure-delete``, SQLite 3.44 and later).
+_secure = False
+
+
+def _secure_delete(connection: Any) -> None:
+    """Entries of a deleted or rewritten row are removed from the index at once, not only marked: the content of a
+    note locked in the vault (NOTES-16) leaves nothing behind in the index's pages. Older SQLite: merged after each
+    lock instead (``forget_deleted``)."""
+    global _secure
+    try:
+        connection.execute(_sql("INSERT INTO @index(@index, rank) VALUES('secure-delete', 1)"))
+        _secure = True
+    except Exception:  # noqa: BLE001 - an SQLite before 3.44 knows no such option
+        _secure = False
+        logger.info("The search index cannot overwrite deleted entries; it is merged after each lock instead")
+
+
+def forget_deleted() -> None:
+    """After a note was locked: without ``secure-delete`` the index is merged into one segment, which drops what was
+    deleted from it."""
+    if _secure:
+        return
+    with engine.begin() as connection:
+        connection.execute(_sql("INSERT INTO @index(@index) VALUES('optimize')"))
 
 
 def _row_values(db: Session, note: Note) -> dict[str, str]:

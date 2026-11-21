@@ -15,6 +15,8 @@ export type VersionItem = {
   restored_from: string | null
   /** The newest version, and nothing was written since: it is the note as it is. */
   current: boolean
+  /** Encrypted: a version of a locked note (NOTES-16). */
+  sealed?: boolean
 }
 
 export type VersionPage = {
@@ -30,11 +32,21 @@ export type VersionPage = {
   updated_by: PersonRef | null
   can_restore: boolean
   history_days: number
+  /** The note is locked (NOTES-16): its versions open only with the vault. */
+  locked?: boolean
 }
 
 export type ProseNode = { type: string; attrs?: Record<string, unknown>; content?: ProseNode[]; text?: string; marks?: { type: string; attrs?: Record<string, unknown> }[] }
 
-export type Version = Omit<VersionItem, 'current'> & { note_id: string; content: ProseNode; text: string; can_restore: boolean }
+export type Version = Omit<VersionItem, 'current'> & {
+  note_id: string
+  /** The text; `null` for a version of a locked note the vault has not opened (NOTES-16). */
+  content: ProseNode | null
+  text?: string
+  can_restore: boolean
+  /** A locked note's version as the device encrypted it (base64). */
+  content_sealed?: string
+}
 
 export type LastRestore = { id: number; at: string; version_at: string; authors: Author[] } | null
 

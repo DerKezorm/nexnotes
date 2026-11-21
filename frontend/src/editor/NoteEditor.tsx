@@ -14,6 +14,9 @@
  * - Beside another note (NOTES-8) only the side used last guards the ways out of the page and names the browser tab;
  *   the other hands its guard to the page (`onGuard`), which asks it before closing that side. The connection comes
  *   from `tabs/live.ts`, which keeps it open while changes still wait and bridges two editors of the same note.
+ * - A locked note (NOTES-16) has no live room: the room closes with 4423 or the head says `locked`, and the vault's
+ *   view (`LOCKED_VIEW`) takes the place, which opens the note in this browser with the same editor (`LiveNote`,
+ *   `sealed`).
  */
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
@@ -44,7 +47,8 @@ import './editor.css'
 import { bodyIsEmpty, editorExtensions, editorProps, safeHref } from './extensions'
 import { presenceFromAwareness, presenceUser, type Presence } from './presence'
 import { PresenceBar } from './PresenceBar'
-import type { LiveStatus, NoteProvider } from './provider'
+import { NoteProvider, type EditorConnection, type LiveStatus } from './provider'
+import { LOCKED_VIEW, NOTE_MENU_ITEMS } from './noteParts'
 import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
@@ -79,7 +83,31 @@ export function NoteEditor(props: Props) {
   return <OneNote key={props.noteId} {...props} />
 }
 
+/** The live editor, or the locked note's view (NOTES-16) once the room or the head says the note is locked. */
 function OneNote(props: Props) {
+  const [locked, setLocked] = useState(false)
+  const [round, setRound] = useState(0)
+  if (locked) {
+    const onUnlocked = () => {
+      setLocked(false)
+      setRound((value) => value + 1)
+    }
+    if (LOCKED_VIEW.render) return <>{LOCKED_VIEW.render({ ...props, onUnlocked })}</>
+    return <LockedPlaceholder />
+  }
+  return <LiveConnection key={round} {...props} onLocked={() => setLocked(true)} />
+}
+
+function LockedPlaceholder() {
+  const { t } = useTranslation()
+  return (
+    <p className="p-6 text-sm text-mist-400" data-testid="note-locked">
+      {t('noteList.locked')}
+    </p>
+  )
+}
+
+function LiveConnection(props: Props & { onLocked: () => void }) {
   const { noteId } = props
   const [provider, setProvider] = useState<NoteProvider | null>(null)
   useEffect(() => {
@@ -111,7 +139,10 @@ function useKeyboardInset(): number {
   return inset
 }
 
-function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra }: Props & { provider: NoteProvider }) {
+/** One note in the editor. `provider` is the live room's connection, or (`sealed`) a locked note's opened in this
+ * browser (NOTES-16); then nothing of it goes to the server but encrypted, and what needs the server to read the text
+ * (a copy, the export, the suggested title) is not offered. */
+export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra, sealed = false, onLocked }: Props & { provider: EditorConnection; sealed?: boolean; onLocked?: () => void }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const here = useLocation().pathname
@@ -207,7 +238,13 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   )
   const presence = JSON.parse(presenceInfo) as Presence
 
-  const stopped = ['gone', 'forbidden', 'tooLarge', 'broken'].includes(status)
+  const stopped = ['gone', 'forbidden', 'tooLarge', 'broken', 'locked'].includes(status)
+
+  // Locked in the vault (NOTES-16), here or on another device: the locked note's view takes over.
+  const headLocked = Boolean(head?.locked)
+  useEffect(() => {
+    if (!sealed && onLocked && (status === 'locked' || headLocked)) onLocked()
+  }, [sealed, onLocked, status, headLocked])
   const editable = !stopped && (head?.can_write ?? true)
 
   const extensions = useMemo(
@@ -295,8 +332,9 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
     return () => {
       const emptyTitle = !cleanTitle(titleRef.current)
       const emptyBody = bodyIsEmpty(editor)
-      // The same note still open on the other side: it is not left.
-      if (deleted.current || !emptyTitle || !provider.synced || othersOpen(provider) > 0) return
+      // The same note still open on the other side: it is not left. A locked note is never tidied by the server.
+      if (sealed || deleted.current || !emptyTitle || !provider.synced) return
+      if (provider instanceof NoteProvider && othersOpen(provider) > 0) return
       leaving.set(
         noteId,
         setTimeout(() => {
@@ -312,7 +350,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         }, 50),
       )
     }
-  }, [noteId, editor, provider])
+  }, [noteId, editor, provider, sealed])
 
   // The ways out of the page ask the note on the side used last.
   useEffect(() => {
@@ -464,7 +502,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
 
   return (
     <div className="flex min-h-full flex-col" data-testid="note-editor" data-status={status}>
-      <RestoreWatch noteId={noteId} doc={provider.doc} origin={provider} />
+      {!sealed && <RestoreWatch noteId={noteId} doc={provider.doc} origin={provider} />}
       {status === 'offline' && (
         <div role="status" data-testid="offline-bar" className="flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] font-medium text-warn-500" style={{ background: 'rgb(251 146 60 / 0.14)' }}>
           <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
@@ -511,23 +549,32 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
                     {t('notes.titleOk')}
                   </button>
                 )}
-                <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-duplicate" onClick={() => void duplicate()}>
-                  <Copy className="h-4 w-4" aria-hidden />
-                  {t('editor.duplicate')}
-                </button>
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="nn-menu-item"
-                  data-testid="note-export"
-                  onClick={() => {
-                    setMenuOpen(false)
-                    setExportOpen(true)
-                  }}
-                >
-                  <Upload className="h-4 w-4" aria-hidden />
-                  {t('export.menu')}
-                </button>
+                {!sealed && (
+                  <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-duplicate" onClick={() => void duplicate()}>
+                    <Copy className="h-4 w-4" aria-hidden />
+                    {t('editor.duplicate')}
+                  </button>
+                )}
+                {!sealed && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="nn-menu-item"
+                    data-testid="note-export"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      setExportOpen(true)
+                    }}
+                  >
+                    <Upload className="h-4 w-4" aria-hidden />
+                    {t('export.menu')}
+                  </button>
+                )}
+                {NOTE_MENU_ITEMS.map((item, index) => (
+                  <span key={index} className="contents">
+                    {item({ noteId, head, sealed, mine: Boolean(head && head.owner?.id === myId), close: () => setMenuOpen(false) })}
+                  </span>
+                ))}
                 <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
                   <History className="h-4 w-4" aria-hidden />
                   {t('history.menu')}

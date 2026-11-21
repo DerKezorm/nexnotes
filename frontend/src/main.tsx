@@ -15,6 +15,8 @@ import './search'
 import './tags'
 import './history'
 import './export'
+// Locked notes: their view in the editor's place, the menu entries, the part of Settings, Connections.
+import './vault'
 // The trash closes the sidebar's places (drawing "Seitenleiste"): imported after every feature with an entry there.
 import './trash'
 import './i18n'

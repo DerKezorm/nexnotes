@@ -20,6 +20,7 @@ import { notesChanged } from '../notes/api'
 import { noteHref } from '../notes/newNote'
 import { historyApi, type Version, type VersionItem, type VersionPage } from './api'
 import { groupVersions, whoText } from './groups'
+import { SEALED_HISTORY } from './sealed'
 import { VersionView } from './VersionView'
 
 export function HistoryPage() {
@@ -58,7 +59,11 @@ export function HistoryPage() {
     let live = true
     historyApi
       .get(noteId, shownId)
-      .then((found) => live && setVersion(found))
+      .then(async (found) => {
+        // A locked note's version (NOTES-16): opened here with the vault, or shown as closed.
+        if (found.sealed && found.content_sealed) found = { ...found, content: SEALED_HISTORY.open ? await SEALED_HISTORY.open(noteId, found.content_sealed) : null }
+        if (live) setVersion(found)
+      })
       .catch((error) => live && setProblem(problemText(error)))
     return () => {
       live = false
@@ -91,14 +96,15 @@ export function HistoryPage() {
 
   const groups = useMemo(() => groupVersions(items, lang, (date) => t('history.weekOf', { date })), [items, lang, t])
   const shown = items.find((item) => item.id === shownId)
-  const canRestore = Boolean(page?.can_restore && version?.can_restore)
+  const canRestore = Boolean(page?.can_restore && version?.can_restore && (!version?.sealed || version.content))
   const close = () => navigate(noteHref(noteId))
 
   const restore = async () => {
     if (!version) return
     setBusy(true)
     try {
-      await historyApi.restore(noteId, version.id)
+      if (version.sealed && version.content_sealed && SEALED_HISTORY.restore) await SEALED_HISTORY.restore(noteId, version.id, version.content_sealed)
+      else await historyApi.restore(noteId, version.id)
       notesChanged()
       showNotice({ text: t('history.restored', { when: moment(version.created_at, lang) }) })
       close()
@@ -142,9 +148,11 @@ export function HistoryPage() {
               </button>
               {canRestore && (
                 <>
-                  <button type="button" className="nn-btn nn-btn-ghost h-9 px-3 text-[13px]" onClick={() => void copy()} disabled={busy} data-testid="history-copy">
-                    {t('history.asCopy')}
-                  </button>
+                  {!version.sealed && (
+                    <button type="button" className="nn-btn nn-btn-ghost h-9 px-3 text-[13px]" onClick={() => void copy()} disabled={busy} data-testid="history-copy">
+                      {t('history.asCopy')}
+                    </button>
+                  )}
                   {!shown?.current && (
                     <button type="button" className="nn-btn nn-btn-accent h-9 px-3.5 text-[13px]" onClick={() => void restore()} disabled={busy} data-testid="history-restore">
                       {t('history.restore')}
@@ -163,7 +171,13 @@ export function HistoryPage() {
               <span className="min-w-0">{version.title || t('notes.untitled')}</span>
             </h1>
             {version.restored_from && <p className="text-[12.5px] text-mist-500">{t('history.restoredFrom', { when: moment(version.restored_from, lang) })}</p>}
-            <VersionView doc={version.content} noteId={version.note_id} />
+            {version.content ? (
+              <VersionView doc={version.content} noteId={version.note_id} />
+            ) : (
+              <p className="text-sm text-mist-400" data-testid="version-sealed">
+                {t('history.sealed')}
+              </p>
+            )}
           </article>
         ) : (
           page &&

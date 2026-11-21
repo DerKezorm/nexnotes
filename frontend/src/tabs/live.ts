@@ -25,7 +25,7 @@ import { currentAccount, onAccountChange, onWaiting } from '../state/account'
 /** The origin of an update brought over by the bridge: its document counts it as its own and sends it too. */
 export const BRIDGE = Symbol('nexnotes-tab-bridge')
 
-const STOPPED: LiveStatus[] = ['gone', 'tooLarge', 'broken']
+const STOPPED: LiveStatus[] = ['gone', 'tooLarge', 'broken', 'locked']
 
 type Parked = { provider: NoteProvider; stop: () => void }
 

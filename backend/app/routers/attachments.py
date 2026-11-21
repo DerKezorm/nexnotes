@@ -206,6 +206,9 @@ async def link_preview(note_id: NoteId, body: LinkIn, request: Request, account:
     with SessionLocal() as db:
         note = notes.note_for(db, account, note_id, write=True)
         owner_id = note.owner_id
+        if note.locked:
+            # The server would see the address of a link in a locked note (NOTES-16): it stays a plain link.
+            return {"preview": None, "reason": "locked"}
         if not settings_service.get(db, "link_previews"):
             # Switched off by the operator (AC-9): nothing is asked, the link stays plain.
             return {"preview": None, "reason": "off"}

@@ -110,6 +110,8 @@ CLOSE_FORBIDDEN = 4403
 CLOSE_GONE = 4404
 CLOSE_RIGHTS = 4409
 CLOSE_TOO_LARGE = 4413
+#: The note is locked in the vault, or being locked (NOTES-16): it has no live room; the browser opens it locked.
+CLOSE_LOCKED = 4423
 
 #: y-websocket message types beyond sync and awareness.
 MESSAGE_AUTH = 2

@@ -64,6 +64,9 @@ def access_to(db: Session, account: Account | None, note: Note | None) -> Access
     if account is None or note is None or account_out(account):
         return Access.NONE
     found = Access.WRITE if note.owner_id == account.id else Access.NONE
+    if found == Access.NONE and note.locked:
+        # A locked note is its owner's alone (NOTES-16), whatever a share of its folder says (NOTES-13 EC-3).
+        return Access.NONE
     if found == Access.NONE:
         for rule in ACCESS_RULES:
             answer = rule(db, account, note)
@@ -86,6 +89,28 @@ def note_for(db: Session, account: Account, note_id: str, *, write: bool = False
         raise error("not_found", "Not found.", 404)
     assert note is not None
     return note
+
+
+# --- Locked notes (NOTES-16) --------------------------------------------------------------------------------------
+
+
+def busy(db: Session, note_id: str) -> bool:
+    """The note is locked in the vault, or being locked or unlocked (``services/vault.py``): no live room, no change
+    by the server."""
+    from ..models_vault import VaultPending
+    from .vault import PENDING_FOR
+
+    row = db.execute(select(Note.locked).where(Note.id == note_id)).first()
+    if row is not None and row.locked:
+        return True
+    started = db.scalar(select(VaultPending.started_at).where(VaultPending.note_id == note_id))
+    return started is not None and started >= utcnow() - PENDING_FOR
+
+
+def _refuse_locked(note_id: str) -> None:
+    with SessionLocal() as db:
+        if busy(db, note_id):
+            raise error("note_locked", "The note is locked.", 409)
 
 
 # --- Hooks on the text --------------------------------------------------------------------------------------------
@@ -183,6 +208,9 @@ class SqlNoteStore:
 
     def _save_update(self, note_id: str, update: bytes, account_id: int | None) -> int:
         with self.sessions() as db:
+            if busy(db, note_id):
+                # Locked meanwhile (NOTES-16): nothing plain is stored any more; the room closes the sender.
+                raise RuntimeError("the note is locked")
             db.add(NoteUpdate(note_id=note_id, update=update, account_id=account_id))
             if account_id is not None:
                 note = db.get(Note, note_id)
@@ -200,7 +228,7 @@ class SqlNoteStore:
     def _fold(self, note_id: str, folded: Folded) -> None:
         with self.sessions() as db:
             note = db.get(Note, note_id)
-            if note is None:
+            if note is None or note.locked:
                 return
             last = db.scalar(select(func.max(NoteUpdate.id)).where(NoteUpdate.note_id == note_id))
             note.ydoc = folded.state
@@ -217,7 +245,7 @@ class SqlNoteStore:
     def _summary(self, note_id: str, title: str, text: str) -> None:
         with self.sessions() as db:
             note = db.get(Note, note_id)
-            if note is None:
+            if note is None or note.locked:
                 return
             note.text = text
             _take_title(note, title)
@@ -232,6 +260,8 @@ def _check_now(peer: Peer) -> Access:
     with SessionLocal() as db:
         account = session_account(db, session.token)
         if account is None or account.id != peer.account_id:
+            return Access.NONE
+        if busy(db, session.note_id):
             return Access.NONE
         return access_to(db, account, db.get(Note, session.note_id))
 
@@ -286,6 +316,9 @@ async def shutdown() -> None:
 
 async def change(note_id: str, edit: Callable[[Any], Any], account_id: int | None = None,
                  rescue: Callable[[Any, Any], None] | None = None) -> Any:
+    """A change by the server. A locked note takes none (``note_locked``, NOTES-16 EC-3): MCP, nexdeck, a suggested
+    title, a copy or a restored version never read or write what the device encrypted."""
+    await asyncio.to_thread(_refuse_locked, note_id)
     return await rooms().change(note_id, edit, account_id=account_id, rescue=rescue)
 
 
@@ -420,6 +453,9 @@ async def duplicate(account: Account, note_id: str) -> Note:
 
     with SessionLocal() as db:
         source = note_for(db, account, note_id)
+        if source.locked:
+            # The server cannot read a locked note to copy it (NOTES-16).
+            raise error("note_locked", "The note is locked.", 409)
         folder_id = source.folder_id
         origin = source.origin
         # The copy keeps the paper and the symbol of its original (NOTES-3 AC-17, AC-18).
@@ -457,6 +493,10 @@ async def set_title(account: Account, note_id: str, title: str) -> Note:
             note.title_check = False
         _written(db, note)
         db.commit()
+        locked = note.locked
+    if locked:
+        # The title of a locked note stays readable (NOTES-16 AC-6): the column only; the device writes the rest.
+        return _fresh(note_id)
     await change(note_id, lambda doc: notedoc.set_title(doc, clean), account_id=account.id)
     return _fresh(note_id)
 
@@ -465,6 +505,9 @@ async def suggest(note_id: str, title: str | None = None, *, confirmed: bool = F
     """The suggested title (given, or from the first words) into the column, then into the document as a change of
     the server. With "Titel prüfen" unless the person ``confirmed`` it, having seen it (NOTES-3 AC-9, AC-10). Empty
     when there is nothing to suggest."""
+    with SessionLocal() as db:
+        if busy(db, note_id):
+            return ""
     if title is None:
         _, text = await read_live(note_id)
         title = suggest_title(text)
@@ -536,7 +579,10 @@ def _remove_for_good(note_id: str) -> None:
 
 async def discard_if_empty(note_id: str) -> bool:
     """A note without title and text goes without a trace (NOTES-3 EC-4); True when it went. A note that holds only
-    an attachment (NOTES-10) is not empty."""
+    an attachment (NOTES-10) is not empty. A locked note is never empty: the server cannot know (NOTES-16)."""
+    with SessionLocal() as db:
+        if busy(db, note_id):
+            return False
     title, text, attached = await change(
         note_id, lambda doc: (notedoc.title_of(doc), to_plain(doc), notedoc.attachment_refs(doc)))
     if title or text.strip() or attached:
@@ -555,7 +601,7 @@ async def after_last_left(note_id: str, grace: float | None = None) -> None:
         return
     with SessionLocal() as db:
         note = db.get(Note, note_id)
-        if note is None or note.deleted_at is not None or note.title:
+        if note is None or note.deleted_at is not None or note.title or busy(db, note_id):
             return
     try:
         if not await discard_if_empty(note_id):
@@ -639,7 +685,7 @@ def _drop_old_empty_notes() -> None:
     limit = utcnow() - EMPTY_NOTE_AGE
     with SessionLocal() as db:
         rows = list(db.scalars(select(Note).where(Note.title == "", Note.text == "", Note.updated_at < limit,
-                                                  Note.deleted_at.is_(None))))
+                                                  Note.deleted_at.is_(None), Note.locked.is_(False))))
         gone = 0
         for note in rows:
             if db.scalar(select(func.count()).select_from(NoteUpdate).where(NoteUpdate.note_id == note.id)):

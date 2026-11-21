@@ -341,7 +341,8 @@
       "broken": "The server did not accept this change. Reload the page.",
       "forbidden": "You no longer have access to this note. What has not arrived is not saved.",
       "gone": "This note was deleted and is in the trash.",
-      "tooLarge": "This note has grown too large. The last change was not saved."
+      "tooLarge": "This note has grown too large. The last change was not saved.",
+      "locked": "This note is locked."
     },
     "table": {
       "addColumnAfter": "Insert column right",
@@ -538,7 +539,20 @@
     "typeset_failed": "The PDF could not be made.",
     "export_pdf_busy": "A PDF is being made already. Try again in a few seconds.",
     "export_waiting": "Another export of yours is waiting already. Start the next one once it runs.",
-    "export_no_room": "The server does not have enough room for this export right now."
+    "export_no_room": "The server does not have enough room for this export right now.",
+    "vault_missing": "There is no vault yet. It comes with the first note you lock.",
+    "vault_exists": "The vault is set up already.",
+    "vault_wrong": "The vault password is wrong.",
+    "vault_wait": "Too many wrong passwords. Wait a moment.",
+    "vault_changed": "The vault password was changed. Enter the new one.",
+    "vault_count": "The number of locked notes changed. Have another look.",
+    "vault_not_understood": "Confirm that a forgotten password cannot be reset.",
+    "note_not_locked": "The note is not locked.",
+    "note_shared": "The note is shared. Stop sharing it first, then it can be locked.",
+    "note_busy": "The note is being locked or unlocked right now.",
+    "lock_incomplete": "Not everything arrived. The note is unchanged; try again.",
+    "lock_not_started": "Locking was interrupted. Try again.",
+    "attachment_id_taken": "This attachment exists already."
   },
   "folders": {
     "section": "Folders",
@@ -681,7 +695,8 @@
     "title": "History",
     "versionOf": "Version of",
     "viaKey": "MCP · {{key}}",
-    "weekOf": "Week of {{date}}"
+    "weekOf": "Week of {{date}}",
+    "sealed": "This version is encrypted. Unlock the note to see it here."
   },
   "home": {
     "empty": "Your notes appear here. New notes, folders and search come with the next steps.",
@@ -1576,5 +1591,72 @@
     "locked": "The note is locked. Its text is not recognized.",
     "loading": "Loading …",
     "picture": "Page of the attachment"
+  },
+  "vault": {
+    "password": "Vault password",
+    "repeat": "Repeat",
+    "tooShort_one": "At least {{count}} character.",
+    "tooShort_other": "At least {{count}} characters.",
+    "differs": "The two passwords are not the same.",
+    "titleHint": "The title stays readable so that you can find the note. Keep secrets out of the title.",
+    "progress": "Encrypting {{done}} of {{of}} …",
+    "setup": {
+      "title": "Set up the vault",
+      "text": "Locked notes are encrypted on your device. The server and its operator see nothing but encrypted data. One password covers all your locked notes.",
+      "warning": "A forgotten password means the content is gone. Nobody can bring it back, not even the operator.",
+      "understood": "I understand that a forgotten password cannot be reset.",
+      "tick": "Tick the box first."
+    },
+    "lock": {
+      "menu": "Lock",
+      "title": "Lock note",
+      "text": "Enter your vault password. The note is encrypted here before it goes to the server.",
+      "submit": "Lock note"
+    },
+    "unlock": {
+      "title": "This note is locked",
+      "text": "It is decrypted here in the browser. When you close the tab, it is locked again.",
+      "submit": "Unlock",
+      "wrong_one": "Wrong. One more try, then you will have to wait.",
+      "wrong_other": "Wrong. After three wrong tries: wait 30 seconds.",
+      "tooMany": "Too many wrong tries. Wait until the time is up.",
+      "wait": "Unlock in {{time}}"
+    },
+    "remove": {
+      "menu": "Remove lock",
+      "title": "Remove lock",
+      "text": "Enter your vault password. The note then is a normal note again: the server can read it, the search finds its text.",
+      "submit": "Remove lock"
+    },
+    "change": {
+      "title": "Change password",
+      "text": "All locked notes then open with the new password, on every device. Where one is open right now, it locks.",
+      "old": "Current password",
+      "new": "New password",
+      "submit": "Change password",
+      "done": "The new vault password counts from now on.",
+      "wrong": "The current password is wrong."
+    },
+    "forgot": {
+      "link": "Forgot password?",
+      "title": "Start a new vault",
+      "warning_one": "Without the old password only a new vault is possible. Your {{count}} locked note is lost then, for the operator too.",
+      "warning_other": "Without the old password only a new vault is possible. All {{count}} locked notes are lost then, for the operator too.",
+      "submit_one": "Start anew, delete {{count}} note",
+      "submit_other": "Start anew, delete {{count}} notes",
+      "done_one": "The new vault is ready. {{count}} locked note was deleted.",
+      "done_other": "The new vault is ready. {{count}} locked notes were deleted."
+    },
+    "section": {
+      "title": "Vault",
+      "text": "One password for all locked notes. It never leaves your device.",
+      "none": "No vault yet. It comes with the first note you lock.",
+      "count_one": "{{count}} locked note",
+      "count_other": "{{count}} locked notes"
+    },
+    "attachment": {
+      "locked": "Encrypted attachment",
+      "failed": "Could not be decrypted"
+    }
   }
 }

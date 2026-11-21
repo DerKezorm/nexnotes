@@ -25,6 +25,7 @@ import { fileUrl, thumbUrl, viewUrl, type AttachmentInfo, type LinkCard } from '
 import { downloadFile, duration, hostOf, IMAGE_SIZES, openFile, openLink, WIDTH, type ImageSize } from './open'
 import { useAttachment } from './info'
 import { largeViewFor } from './large'
+import { SEALED_BLOCK } from './sealed'
 import { cancelUpload, retryUpload, useUpload, type Upload } from './uploads'
 
 /** What a block can do with its attachment; nothing of it in an old version or a note one only reads. */
@@ -55,6 +56,13 @@ function Remove({ onRemove }: { onRemove?: () => void }) {
   )
 }
 
+/** A sketch or a recording of a locked note shows as its encrypted file does; every other as it is. */
+export function SealedOr({ noteId, id, name, actions, children }: { noteId: string; id: string | null; name: string | null; actions: BlockActions; children: ReactNode }) {
+  const { info } = useAttachment(noteId, id)
+  if (info?.sealed && SEALED_BLOCK.render) return <>{SEALED_BLOCK.render({ noteId, id: info.id, name, actions })}</>
+  return <>{children}</>
+}
+
 /** The block of an attachment in a note: what this tab uploads, what the server describes, or that it is missing. */
 export function AttachmentBlock({ noteId, id, name, size, nodeType, actions }: { noteId: string; id: string | null; name: string | null; size?: ImageSize; nodeType: 'image' | 'attachment'; actions: BlockActions }) {
   const upload = useUpload(id)
@@ -63,6 +71,7 @@ export function AttachmentBlock({ noteId, id, name, size, nodeType, actions }: {
   let inner: ReactNode
   if (upload) inner = <UploadCard upload={upload} onRemove={actions.editable ? actions.onRemove : undefined} kind={nodeType} />
   else if (!info) inner = <MissingCard name={shownName} loaded={loaded} kind={nodeType} onRemove={actions.editable ? actions.onRemove : undefined} />
+  else if (info.sealed && SEALED_BLOCK.render) inner = SEALED_BLOCK.render({ noteId, id: info.id, name, size, actions })
   else if (['image', 'scan', 'drawing', 'linkimage'].includes(info.kind)) inner = <PictureBlock info={info} noteId={noteId} size={size ?? 'medium'} actions={actions} />
   else if (info.kind === 'pdf') inner = <PdfCard info={info} noteId={noteId} actions={actions} />
   else if (info.kind === 'video') inner = <VideoBlock info={info} actions={actions} />

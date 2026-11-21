@@ -371,6 +371,9 @@ class Note(Base):
     paper: Mapped[str] = mapped_column(String(8), default="blank", server_default="blank")
     #: The note's symbol before its title (NOTES-3 AC-18): a name of ``services/symbols.py``, empty for none.
     icon: Mapped[str] = mapped_column(String(32), default="", server_default="")
+    #: Locked in the vault (NOTES-16): the content lies encrypted in ``sealed_notes`` (``models_vault.py``); ``ydoc``
+    #: and ``text`` are empty, only the title stays readable.
+    locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), index=True)
 
 
 class NoteUpdate(Base):

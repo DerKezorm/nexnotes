@@ -141,10 +141,15 @@ def _write_lock(db: Session) -> None:
 
 
 def _current_state(db: Session, note_id: str) -> bytes | None:
-    """The note as it is now, as one Yjs update; ``None`` when there is no such note. Call inside the lock."""
-    found = db.execute(select(Note.ydoc).where(Note.id == note_id)).first()
+    """The note as it is now, as one Yjs update; ``None`` when there is no such note. Call inside the lock. A locked
+    note (NOTES-16): its content as the device encrypted it."""
+    found = db.execute(select(Note.ydoc, Note.locked).where(Note.id == note_id)).first()
     if found is None:
         return None
+    if found.locked:
+        from ..models_vault import SealedNote
+
+        return db.scalar(select(SealedNote.content).where(SealedNote.note_id == note_id))
     updates = list(db.scalars(select(NoteUpdate.update).where(NoteUpdate.note_id == note_id).order_by(NoteUpdate.id)))
     return notedoc.load(found.ydoc or None, updates).get_update()
 
@@ -181,9 +186,14 @@ def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, f
     now = until or clock.now()
     ended = max((min(edit.last_at, now) for edit in edits), default=now) if restored_from is None else now
     started = min((edit.first_at for edit in edits), default=ended)
-    title = notedoc.title_of(notedoc.load(state))
+    sealed = bool(db.scalar(select(Note.locked).where(Note.id == note_id)))
+    # A locked note's content is encrypted (NOTES-16): its version takes the title the note shows.
+    if sealed:
+        title = db.scalar(select(Note.title).where(Note.id == note_id)) or ""
+    else:
+        title = notedoc.title_of(notedoc.load(state))
     version = NoteVersion(note_id=note_id, created_at=ended, started_at=min(started, ended), state=state, title=title,
-                          size=len(state), authors=authors, restored_from=restored_from)
+                          size=len(state), authors=authors, restored_from=restored_from, sealed=sealed)
     db.add(version)
     return version
 
@@ -315,7 +325,7 @@ def listing(db: Session, account: Account, note_id: str, before: int | None = No
     note = notes.note_for(db, account, note_id)
     limit = max(1, min(limit, PAGE_MAX))
     query = (select(NoteVersion.id, NoteVersion.created_at, NoteVersion.started_at, NoteVersion.title,
-                    NoteVersion.authors, NoteVersion.restored_from)
+                    NoteVersion.authors, NoteVersion.restored_from, NoteVersion.sealed)
              .where(NoteVersion.note_id == note.id)
              .order_by(NoteVersion.created_at.desc(), NoteVersion.id.desc()))
     if before is not None:
@@ -339,6 +349,7 @@ def listing(db: Session, account: Account, note_id: str, before: int | None = No
             "authors": _authors_out(row.authors, names),
             "restored_from": row.restored_from.isoformat() if row.restored_from else None,
             "current": before is None and index == 0 and not pending,
+            "sealed": bool(row.sealed),
         }
         for index, row in enumerate(rows)
     ]
@@ -350,6 +361,8 @@ def listing(db: Session, account: Account, note_id: str, before: int | None = No
         "updated_by": notes.person(db, note.updated_by_id),
         "can_restore": can_restore(db, account, note),
         "history_days": settings_service.history_days(db),
+        # A locked note (NOTES-16): its versions are shown and restored only in a browser that opened the vault.
+        "locked": bool(note.locked),
         # The note's symbol and colour for the head of its history (NOTES-3 AC-18); not part of a version.
         "icon": note.icon or "",
         "color": note.color or "",
@@ -374,8 +387,24 @@ def read(db: Session, account: Account, note_id: str, version_id: int) -> dict[s
     """One version whole (AC-3): its title and text, when, who."""
     note = notes.note_for(db, account, note_id)
     version = _version(db, note.id, version_id)
-    title, blocks = content_of(version.state)
     names = _names(db, _account_ids([version]))
+    if version.sealed:
+        # Encrypted on the device (NOTES-16): the page opens it with the vault key, the server reads nothing of it.
+        import base64
+
+        return {
+            "id": version.id,
+            "note_id": note.id,
+            "created_at": version.created_at.isoformat(),
+            "started_at": version.started_at.isoformat(),
+            "title": version.title,
+            "sealed": True,
+            "content_sealed": base64.b64encode(version.state).decode("ascii"),
+            "authors": _authors_out(version.authors, names),
+            "restored_from": version.restored_from.isoformat() if version.restored_from else None,
+            "can_restore": can_restore(db, account, note),
+        }
+    title, blocks = content_of(version.state)
     return {
         "id": version.id,
         "note_id": note.id,
@@ -468,6 +497,8 @@ async def restore(account: Account, note_id: str, version_id: int) -> dict[str, 
     with SessionLocal() as db:
         note = notes.note_for(db, account, note_id, write=True)
         version = _version(db, note.id, version_id)
+        if version.sealed or note.locked:
+            raise error("note_locked", "The note is locked.", 409)
         state, at = version.state, version.created_at
     title, blocks = await asyncio.to_thread(content_of, state)
 
@@ -512,6 +543,8 @@ def copy(db: Session, account: Account, note_id: str, version_id: int, when: str
     the date as the person's device shows it; without it the server's date."""
     source = notes.note_for(db, account, note_id, write=True)
     version = _version(db, source.id, version_id)
+    if version.sealed or source.locked:
+        raise error("note_locked", "The note is locked.", 409)
     title, blocks = content_of(version.state)
     label = notedoc.clean_title(when)[:WHEN_MAX] if when else ""
     label = label or _when_label(account, version.created_at)

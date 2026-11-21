@@ -31,15 +31,20 @@ export const CLOSE_FORBIDDEN = 4403
 export const CLOSE_GONE = 4404
 export const CLOSE_RIGHTS = 4409
 export const CLOSE_TOO_LARGE = 4413
+/** The note is locked in the vault, or being locked (NOTES-16): no live room; the page opens it with the password. */
+export const CLOSE_LOCKED = 4423
 
 /**
  * - `connecting`: the first connection is being made.
  * - `online`: connected and in sync.
  * - `offline`: the connection broke; changes wait in this window.
  * - `gone`: the note was deleted (EC-2). `forbidden`: no right any more (EC-5). `tooLarge`, `broken`: the room refused
- *   the content.
+ *   the content. `locked`: the note is locked in the vault (NOTES-16), or its vault closed.
  */
-export type LiveStatus = 'connecting' | 'online' | 'offline' | 'gone' | 'forbidden' | 'tooLarge' | 'broken'
+export type LiveStatus = 'connecting' | 'online' | 'offline' | 'gone' | 'forbidden' | 'tooLarge' | 'broken' | 'locked'
+
+/** What an editor needs of its connection: the live room's (`NoteProvider`), or a locked note's (`vault/provider.ts`). */
+export type EditorConnection = Pick<NoteProvider, 'noteId' | 'doc' | 'awareness' | 'status' | 'pending' | 'synced' | 'subscribe' | 'retryNow'>
 
 type SocketLike = Pick<WebSocket, 'send' | 'close' | 'readyState' | 'binaryType'> & {
   onopen: ((event: Event) => void) | null
@@ -218,6 +223,7 @@ export class NoteProvider {
     if (code === CLOSE_FORBIDDEN) return this.stop('forbidden')
     if (code === CLOSE_TOO_LARGE) return this.stop('tooLarge')
     if (code === CLOSE_BAD) return this.stop('broken')
+    if (code === CLOSE_LOCKED) return this.stop('locked')
     this.setStatus(this.wasOnline ? 'offline' : 'connecting')
     if (code === CLOSE_RIGHTS) {
       this.open()

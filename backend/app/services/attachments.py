@@ -78,7 +78,7 @@ GALLERY_KINDS = ("image", "scan", "pdf", "recording", "drawing", "video", "file"
 LINK_PICTURE = "linkimage"
 #: Kinds that only stand behind a block of their own (a card's picture, a sketch's data, a transcript): never in the
 #: gallery.
-HIDDEN_KINDS = (LINK_PICTURE, "drawingdata", "transcript")
+HIDDEN_KINDS = (LINK_PICTURE, "drawingdata", "transcript", "sealed")
 #: Called with every attachment once it is stored and committed (NOTES-18: the search reads a transcript's note again).
 #: A hook must not raise.
 STORED_HOOKS: list[Callable[[Attachment], None]] = []
@@ -227,6 +227,9 @@ def begin(db: Session, account: Account, note_id: str, attachment_id: str, name:
     from . import sketches
 
     note = notes.note_for(db, account, note_id, write=True)
+    if note.locked:
+        # A locked note takes only what the device encrypted (NOTES-16, ``PUT /api/vault/attachments``).
+        raise AttachmentError("note_locked", "The note is locked.", 409)
     if not _ID.match(attachment_id or ""):
         raise AttachmentError("invalid_input", "The input is not valid.", 422, fields=["id"])
     if role is not None and role not in sketches.ROLES:
@@ -452,6 +455,8 @@ def out(attachment: Attachment) -> dict[str, Any]:
         "inline": attachment.inline,
         "preview_failed": attachment.preview_failed,
         "created_at": attachment.created_at.isoformat() if attachment.created_at else None,
+        # Encrypted on the device (NOTES-16): the file is all the server has, the page opens it with the vault key.
+        "sealed": attachment.kind == "sealed",
     }
 
 
@@ -583,6 +588,11 @@ def _purging(db: Session, note_ids: list[str]) -> None:
     gone: list[str] = []
     versions: dict[str, set[str]] = {}
     for row in rows:
+        if row.kind == "sealed":
+            # Encrypted for its own note only (NOTES-16): nowhere else could open it.
+            gone.append(row.id)
+            db.delete(row)
+            continue
         other = db.scalar(select(AttachmentRef.note_id).join(Note, Note.id == AttachmentRef.note_id)
                           .where(AttachmentRef.attachment_id == row.id, Note.owner_id == row.owner_id,
                                  AttachmentRef.note_id.not_in(going)).limit(1))
@@ -617,10 +627,13 @@ def _named_by_versions(db: Session, note_id: str, skip: set[int]) -> set[str]:
     from ..models_history import NoteVersion
 
     found: set[str] = set()
-    for version_id, state in db.execute(select(NoteVersion.id, NoteVersion.state)
-                                        .where(NoteVersion.note_id == note_id)):
+    for version_id, state, sealed in db.execute(select(NoteVersion.id, NoteVersion.state, NoteVersion.sealed)
+                                                .where(NoteVersion.note_id == note_id)):
         if version_id in skip:
             continue
+        if sealed:
+            # Encrypted (NOTES-16): what it names is unknown, so it keeps everything.
+            return {"*"}
         try:
             found.update(notedoc.attachment_refs(notedoc.load(state)))
         except Exception:  # noqa: BLE001 - a version that cannot be read keeps everything
@@ -633,7 +646,8 @@ def collect(db: Session, note_ids: Iterable[str] | None = None, skip_versions: I
     """Removes attachments no note names for longer than ``GRACE`` and no version of a note of their owner that named
     them names either (but those in ``skip_versions``, which are about to go). With ``note_ids`` only the attachments
     of those notes or named by them. The caller commits. Returns how many went."""
-    query = select(Attachment).where(Attachment.unref_at.is_not(None), Attachment.unref_at < utcnow() - GRACE)
+    query = select(Attachment).where(Attachment.unref_at.is_not(None), Attachment.unref_at < utcnow() - GRACE,
+                                     Attachment.kind != "sealed")
     if note_ids is not None:
         wanted = list(set(note_ids))
         if not wanted:

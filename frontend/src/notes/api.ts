@@ -29,6 +29,8 @@ export type NoteHead = NoteItem & {
   can_write: boolean
   /** The paper (NOTES-3 AC-17): blank, lined, grid or dots. */
   paper?: string
+  /** Locked in the vault (NOTES-16): the editor asks for the vault password, tabs show the lock. */
+  locked?: boolean
 }
 
 export type NewNote = { id?: string; folder_id?: string; title?: string; markdown?: string; origin?: string; title_suggested?: boolean }

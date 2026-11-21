@@ -48,6 +48,9 @@ def _pragmas(dbapi_connection: Any, _record: Any) -> None:
     cursor.execute("PRAGMA foreign_keys=ON")
     cursor.execute(f"PRAGMA busy_timeout={BUSY_SECONDS * 1000}")
     cursor.execute("PRAGMA synchronous=NORMAL")
+    # What a row held is overwritten when it goes: a note locked in the vault (NOTES-16) leaves no plain text behind
+    # in free pages of the file.
+    cursor.execute("PRAGMA secure_delete=ON")
     cursor.close()
     # SQLite's own lower() and LIKE fold only ASCII: "Ä" never met "ä". This folds like ``paths.fold``.
     dbapi_connection.create_function("nx_fold", 1, _fold, deterministic=True)

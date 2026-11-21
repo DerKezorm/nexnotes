@@ -133,13 +133,14 @@ def test_notes2_ac3_every_refusal_with_a_placeholder_sends_its_value(client: Tes
 
 
 def test_notes2_ac2_no_word_of_another_app_is_left_in_the_frame() -> None:
-    # Spaces, vaults, boards, teams and AI keys belong to nexlore and nexcanvas; nexnotes has none of them.
+    # Spaces, boards, teams and AI keys belong to nexlore and nexcanvas; nexnotes has none of them. Its own vault
+    # (NOTES-16, locked notes) is nexnotes' word, not one left over from nexlore.
     import re
 
     from app.services import mailer
 
     app_dir = Path(__file__).resolve().parents[1] / "app"
-    foreign = re.compile(r"\bvaults?\b|\bAI (key|list)\b|\bboards?\b|\bteams?\b|Bereich|\{space\}|\bspace=|to the space \"", re.I)
+    foreign = re.compile(r"\bAI (key|list)\b|\bboards?\b|\bteams?\b|Bereich|\{space\}|\bspace=|to the space \"", re.I)
     found = [
         f"{path.relative_to(app_dir)}:{number}: {line.strip()}"
         for path in sorted(app_dir.rglob("*.py")) if "vendor" not in path.parts

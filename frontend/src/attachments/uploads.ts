@@ -48,6 +48,23 @@ function subscribe(listener: () => void): () => void {
   return () => listeners.delete(listener)
 }
 
+/** How a file of a note leaves this tab: a feature may take over for its notes (the vault encrypts a locked note's
+ * files first, NOTES-16); otherwise the plain upload. */
+export type Sender = (noteId: string, id: string, file: Blob, name: string, onProgress: (part: number) => void) => Sending
+const senders: ((noteId: string) => Sender | null)[] = []
+
+export function registerSender(pick: (noteId: string) => Sender | null): void {
+  if (!senders.includes(pick)) senders.push(pick)
+}
+
+function senderFor(noteId: string): Sender {
+  for (const pick of senders) {
+    const found = pick(noteId)
+    if (found) return found
+  }
+  return sendFile
+}
+
 /** Heard when an upload is through: the note's attachments are read again. */
 export function onUploaded(listener: (noteId: string, info: AttachmentInfo) => void): () => void {
   finished.add(listener)
@@ -70,7 +87,7 @@ function start(entry: Entry): void {
   entry.progress = 0
   entry.error = undefined
   entry.values = undefined
-  const sending = sendFile(entry.noteId, entry.id, entry.file, entry.name, (part) => {
+  const sending = senderFor(entry.noteId)(entry.noteId, entry.id, entry.file, entry.name, (part) => {
     if (entries.get(entry.id) !== entry) return
     entry.progress = part
     publish()

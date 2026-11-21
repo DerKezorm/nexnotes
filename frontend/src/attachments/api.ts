@@ -27,6 +27,8 @@ export type AttachmentInfo = {
   /** Reading it went past the server's limits (memory, time, pixels): a file to download, without a preview. */
   preview_failed?: boolean
   created_at: string | null
+  /** Encrypted on the device (NOTES-16, a locked note): the vault opens it here, the server knows nothing of it. */
+  sealed?: boolean
 }
 
 export type Limits = { max_mb: number; used: number; limit: number | null; full: boolean; link_previews: boolean }

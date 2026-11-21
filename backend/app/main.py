@@ -35,6 +35,7 @@ from .routers import search as search_router
 from .routers import settings as settings_router
 from .routers import tags as tags_router
 from .routers import totp as totp_router
+from .routers import vault as vault_router
 from .security import HashingBusy, purge_sessions
 from .services import accounts, backups, cleanup, locales, logs, mounts, oidc_store, settings_service, totp
 from .vendor import nexoidc
@@ -47,8 +48,9 @@ ROUTERS = [
     backups_router, avatars_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.
-FEATURE_ROUTERS: list = [folders, notes_router, tags_router, search_router, history, trash, notes_list_router, export,
-                         attachments_router, ocr_router]
+#: The vault comes early: its start puts the locked notes into the hooks the others read at their own start.
+FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, search_router, history, trash,
+                         notes_list_router, export, attachments_router, ocr_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:

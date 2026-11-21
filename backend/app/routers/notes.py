@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from ..db import SessionLocal
 from ..deps import Account, DbSession
 from ..models import Note
-from ..notedoc.room import CLOSE_FORBIDDEN, CLOSE_GONE, Access
+from ..notedoc.room import CLOSE_FORBIDDEN, CLOSE_GONE, CLOSE_LOCKED, Access
 from ..security import SESSION_COOKIE, session_account
 from ..services import notes, settings_service, tags, totp
 
@@ -89,6 +89,8 @@ def note_out(db: Any, note: Note, account: Any) -> dict[str, Any]:
     access = notes.access_to(db, account, note)
     return {
         **item_out(note),
+        # NOTES-16: locked in the vault; the editor asks for the vault password, tabs show the lock.
+        "locked": bool(note.locked),
         "path": [notes.folder_out(folder) for folder in notes.folder_path(db, note.folder_id)],
         "updated_by": notes.person(db, note.updated_by_id),
         "owner": notes.person(db, note.owner_id),
@@ -211,14 +213,15 @@ def _origin_ok(socket: WebSocket) -> bool:
     return bool(host) and host in allowed
 
 
-def _admit(token: str, note_id: str) -> tuple[Any, Access]:
+def _admit(token: str, note_id: str) -> tuple[Any, Access, bool]:
     with SessionLocal() as db:
         account = session_account(db, token)
         if account is None or totp.setup_required(db, account):
-            return None, Access.NONE
+            return None, Access.NONE, False
         access = notes.access_to(db, account, db.get(Note, note_id) if len(note_id) <= 36 else None)
+        locked = access in (Access.WRITE, Access.READ) and notes.busy(db, note_id)
         db.expunge(account)
-        return account, access
+        return account, access, locked
 
 
 async def _refuse(socket: WebSocket, code: int) -> None:
@@ -235,7 +238,11 @@ async def live(socket: WebSocket, note_id: str) -> None:
         await _refuse(socket, CLOSE_FORBIDDEN)
         return
     token = socket.cookies.get(SESSION_COOKIE, "")
-    account, access = await asyncio.to_thread(_admit, token, note_id)
+    account, access, locked = await asyncio.to_thread(_admit, token, note_id)
+    if locked:
+        # Locked in the vault (NOTES-16): no live room; the page opens the note with the vault password.
+        await _refuse(socket, CLOSE_LOCKED)
+        return
     if access == Access.GONE:
         await _refuse(socket, CLOSE_GONE)
         return

@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, LargeBinary, String
+from sqlalchemy import JSON, Boolean, ForeignKey, Index, Integer, LargeBinary, String, false
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .models import Base, UtcDateTime
@@ -38,6 +38,9 @@ class NoteVersion(Base):
     authors: Mapped[Any] = mapped_column(JSON, default=list)
     #: Set on the version a restore made: the time of the version it brought back.
     restored_from: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The version of a locked note (NOTES-16): ``state`` is encrypted on the member's device; the server reads
+    #: nothing of it but its title and times.
+    sealed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
 
 
 class NoteEdit(Base):

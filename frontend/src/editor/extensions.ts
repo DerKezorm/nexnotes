@@ -34,7 +34,7 @@ import type {} from '@tiptap/starter-kit'
 
 import { ATTACHMENT_NODES, attachmentEditing, withAttachmentView } from '../attachments/editing'
 import { caretLook, presentAccounts, type PresenceUser } from './presence'
-import type { NoteProvider } from './provider'
+import type { EditorConnection } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
 import { COLUMN_MIN, columnWidthPlugin } from './table'
 import { noteTags } from './tags'
@@ -416,7 +416,7 @@ export function schemaExtensions(): AnyExtension[] {
 
 export type EditorSetup = {
   doc: Y.Doc
-  provider: NoteProvider
+  provider: EditorConnection
   me: PresenceUser
   t: T
   placeholder: string
