@@ -23,6 +23,7 @@ import type { ListItem } from '../notes/list/api'
 import type { ItemDecor } from '../notes/list/ItemParts'
 import type { ListSource } from '../notes/list/useNoteList'
 import { NoteList } from '../notes/NoteList'
+import { PhoneListWays } from '../pwa/phone'
 import { tagsApi, type TagHead } from './api'
 import { smartFolderSaver, tagCondition } from './actions'
 import { DeleteDialog, RenameDialog } from './dialogs'
@@ -144,6 +145,7 @@ export function TagPage() {
 
   return (
     <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="tag-page">
+      <PhoneListWays />
       {saveProblem && <p className="text-sm text-bad-500">{saveProblem}</p>}
       <NoteList
         heading={`#${label}`}
@@ -194,6 +196,7 @@ export function AllTagsPage() {
   useListTitle(t('tags.allTitle'))
   return (
     <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="all-tags">
+      <PhoneListWays />
       <h1 className="m-0 text-2xl font-bold text-mist-100">{t('tags.allTitle')}</h1>
       {status === 'failed' && <p className="text-sm text-bad-500">{t('tags.failed')}</p>}
       {status === 'ready' && tags.length === 0 && <p className="text-sm text-mist-500">{t('tags.none')}</p>}

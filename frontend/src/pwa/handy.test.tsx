@@ -22,6 +22,12 @@ import { OfflinePage } from './OfflinePage'
 import { APP_START, forgetStart, lastPlace, PLACE_KEY, rememberPlace, startPlace } from './place'
 import { StartPlace, UpdateBanner } from './register'
 import { setPwaState } from './worker'
+import { SearchPage } from '../search/SearchPage'
+import { SharedPage } from '../shares/SharedPage'
+import { SmartEditor } from '../smart/SmartEditor'
+import { SmartFolderPage } from '../smart/SmartFolderPage'
+import { SmartSection } from '../smart/SmartSection'
+import { TagPage } from '../tags/TagPage'
 
 vi.mock('../editor/NoteEditor', () => ({ NoteEditor: ({ noteId }: { noteId: string }) => <p data-testid="editor">{noteId}</p> }))
 
@@ -46,14 +52,42 @@ function phone(width = PHONE_WIDTH) {
 }
 
 let signedIn = true
+const SMART = [
+  { id: 's-open', name: '', preset: 'open_tasks', icon: 'filter', color: '', match: 'all', conditions: [{ kind: 'tasks', op: 'open' }], position: 0 },
+  { id: 's-shared', name: '', preset: 'shared_with_me', icon: 'people', color: '', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
+  { id: 's-files', name: '', preset: 'attachments', icon: 'paperclip', color: '', match: 'all', conditions: [{ kind: 'attachment', type: 'any' }], position: 2 },
+  { id: 's-own', name: 'Rezepte offen', preset: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 3 },
+]
+/** The notes "New note" made, as the server got them. */
+let made: { id: string; folder_id?: string }[] = []
 const ME = { id: 7, name: 'anna', display_name: 'Anna', email: 'a@example.com', role: 'member', sign_in: 'password', language: '', two_factor: false, two_factor_recovery_left: 0, version: '0.1.0', whats_new_seen: '0.1.0' }
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 let unreachable = false
 
 function server() {
-  return vi.fn(async (input: RequestInfo | URL) => {
+  return vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     if (unreachable) throw new TypeError('Failed to fetch')
     const path = String(input)
+    if (path === '/api/notes' && init?.method === 'POST') {
+      const body = JSON.parse(String(init.body)) as { id: string; folder_id?: string }
+      made.push(body)
+      return json({ id: body.id, title: '', folder_id: body.folder_id ?? 'inbox-1' }, 201)
+    }
+    // The lists that are no folder (NOTES-23 AC-1): a smart folder (one pointing nowhere, one with "Mit mir geteilt"),
+    // "Mit mir geteilt", a tag, the search, the editor of a smart folder.
+    const smart = /^\/api\/smart-folders\/(s-[a-z]+)\/(notes|stamp)/.exec(path)
+    if (smart && smart[2] === 'stamp') return json({ stamp: 's' })
+    if (smart) {
+      const folder = SMART.find((item) => item.id === smart[1])!
+      const broken = folder.id === 's-open' ? [{ index: 0, kind: 'tag', name: 'weg' }] : []
+      return json({ key: `s:${folder.id}`, view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }, counts: { own: 0, shared: 0 }, items: [], folder, broken })
+    }
+    if (path.startsWith('/api/smart-folders/preview')) return json({ total: 0, items: [], broken: [] })
+    if (path.startsWith('/api/shares/with-me')) return json({ groups: [], count: 0, notices: [] })
+    if (/^\/api\/tags\/[^/]+\/stamp/.test(path)) return json({ stamp: 't' })
+    if (/^\/api\/tags\/[^/]+\/notes/.test(path)) return json({ key: 't:rezept', view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }, counts: { own: 0, shared: 0 }, items: [], tag: 'rezept', label: 'rezept', count: 0, mine: 0, others: [] })
+    if (path.startsWith('/api/tags')) return json({ tags: [], total: 0 })
+    if (path.startsWith('/api/search')) return json({ total: 0, offset: 0, items: [], unfiltered: null, terms: [], tags: [] })
     if (path.startsWith('/api/setup')) return json({ needs_setup: false, code_required: false, signed_in: signedIn, version: '0.1.0', min_password: 12 })
     if (path.startsWith('/api/auth/me')) return json(ME)
     if (path === '/api/folders')
@@ -65,15 +99,7 @@ function server() {
         ],
       })
     if (path.startsWith('/api/folders/inbox')) return json({ id: 'inbox-1', notes: [] })
-    if (path === '/api/smart-folders')
-      return json({
-        items: [
-          { id: 's-open', name: '', preset: 'open_tasks', icon: 'filter', color: '', match: 'all', conditions: [{ kind: 'tasks', op: 'open' }], position: 0 },
-          { id: 's-shared', name: '', preset: 'shared_with_me', icon: 'people', color: '', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
-          { id: 's-files', name: '', preset: 'attachments', icon: 'paperclip', color: '', match: 'all', conditions: [{ kind: 'attachment', type: 'any' }], position: 2 },
-          { id: 's-own', name: 'Rezepte offen', preset: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 3 },
-        ],
-      })
+    if (path === '/api/smart-folders') return json({ items: SMART })
     if (path.startsWith('/api/note-list/stamp')) return json({ stamp: 's' })
     if (path.startsWith('/api/note-list')) return json({ key: 'k', view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }, counts: { own: 0, shared: 0 }, items: [] })
     if (path.startsWith('/api/notes')) return json([])
@@ -112,6 +138,11 @@ async function render(at: string, extra: React.ReactNode = null): Promise<void> 
                 <Route path="/folders" element={<FoldersPage />} />
                 <Route path="/folder/:id" element={<FolderPage />} />
                 <Route path="/inbox" element={<InboxPage />} />
+                <Route path="/smart/new" element={<SmartEditor />} />
+                <Route path="/smart/:id" element={<SmartFolderPage />} />
+                <Route path="/shared" element={<SharedPage />} />
+                <Route path="/tags/:tag" element={<TagPage />} />
+                <Route path="/search" element={<SearchPage />} />
               </Route>
               <Route path="*" element={null} />
             </Route>
@@ -142,6 +173,7 @@ beforeAll(async () => {
 beforeEach(() => {
   signedIn = true
   unreachable = false
+  made = []
   phone()
   vi.stubGlobal('fetch', server())
   registerNoteActions({ newNote, noteHref: (id: string) => `/notes/${id}` })
@@ -233,6 +265,37 @@ describe('NOTES-23 AC-1 on a phone one view after the other', () => {
     expect(newNote).toHaveBeenCalledWith('inbox-1')
   })
 
+  it('NOTES-23 AC-1 a smart folder (also "Mit mir geteilt" and "Anhänge"), the page "Mit mir geteilt", a tag and the search at 390 px have "‹ Ordner" and "New note" into the inbox', async () => {
+    const lists = ['/smart/s-shared', '/smart/s-files', '/smart/s-own', '/shared', '/tags/rezept', '/search']
+    for (const at of lists) {
+      act(() => root.unmount())
+      root = createRoot(box)
+      made = []
+      await render(at)
+      const back = find('phone-back') as HTMLAnchorElement | null
+      expect(back, at).not.toBeNull()
+      expect(back!.getAttribute('href'), at).toBe('/folders')
+      expect(back!.textContent, at).toBe(t('folders.section'))
+      expect(back!.className, at).toContain('md:hidden')
+      const fab = find('phone-new-note') as HTMLButtonElement | null
+      expect(fab, at).not.toBeNull()
+      expect(fab!.className, at).toMatch(/fixed.*right-4.*bottom-7.*h-14.*w-14.*md:hidden/)
+      expect(fab!.getAttribute('aria-label'), at).toBe(t('folders.page.newNote', { name: t('folders.inbox.name') }))
+      // A list that is no place: the note goes into the inbox and opens beside the list (NOTES-4 AC-9).
+      await click(fab)
+      expect(made, at).toHaveLength(1)
+      expect(made[0].folder_id, at).toBe('inbox-1')
+      expect(where(), at).toContain(`note=${made[0].id}`)
+    }
+    // Back from a smart folder leads to the page "Ordner".
+    act(() => root.unmount())
+    root = createRoot(box)
+    await render('/smart/s-shared')
+    await click(find('phone-back'))
+    expect(where()).toBe('/folders')
+    expect(find('folders-page')).not.toBeNull()
+  })
+
   it('NOTES-23 AC-1 only the first address of the page is the start: "All notes" later stays all notes', async () => {
     await render('/')
     expect(where()).toBe('/folders')
@@ -302,14 +365,16 @@ describe('NOTES-23 EC-6 the installed app comes back to where it was', () => {
 
 const CSS = files.readFileSync('src/styles/index.css', 'utf-8')
 
-/** The selector of the rule for a finger's size, and the conditions it holds under. */
-function touchRule(): { media: string; selector: string; body: string } {
+/** The selector of the rule for a finger's size, and the conditions it holds under; `wide` lifts the width too. */
+function touchRule(): { media: string; selector: string; wide: string; body: string } {
   const media = /@media ([^{]*\(max-width: 767px\)[^{]*)\{([\s\S]*?)\n\}/.exec(CSS)
   expect(media, 'the rule for a finger on a phone').not.toBeNull()
   const block = media![2]
   const rule = /(:where\([\s\S]*?\):not\(\.ProseMirror \*\))\s*\{\s*min-height:\s*44px;/.exec(block)
   expect(rule, 'min-height 44px').not.toBeNull()
-  return { media: media![1], selector: rule![1].replace(/\s+/g, ' '), body: block }
+  const wide = /(:where\([^)]*\):not\(\.ProseMirror \*\))\s*\{\s*min-width:\s*44px;/.exec(block)
+  expect(wide, 'min-width 44px').not.toBeNull()
+  return { media: media![1], selector: rule![1].replace(/\s+/g, ' '), wide: wide![1].replace(/\s+/g, ' '), body: block }
 }
 
 describe('NOTES-23 AC-7 every button and field is 44 px to tap', () => {
@@ -319,6 +384,8 @@ describe('NOTES-23 AC-7 every button and field is 44 px to tap', () => {
     const probe = document.createElement('div')
     probe.innerHTML = [
       '<button>a</button>',
+      '<a href="/x">link</a>',
+      '<input type="color">',
       '<input type="text">',
       '<input type="search">',
       '<input type="password">',
@@ -335,22 +402,33 @@ describe('NOTES-23 AC-7 every button and field is 44 px to tap', () => {
     probe.innerHTML = '<div class="ProseMirror"><p><button>in text</button></p></div><input type="hidden">'
     expect(probe.querySelector('button')!.matches(rule.selector)).toBe(false)
     expect(probe.querySelector('input')!.matches(rule.selector)).toBe(false)
+    // A link in the text of a note keeps its line too.
+    probe.innerHTML = '<div class="ProseMirror"><p><a href="/x">in text</a></p></div>'
+    expect(probe.querySelector('a')!.matches(rule.selector)).toBe(false)
+    // Buttons and links are wide enough for a finger as well.
+    probe.innerHTML = '<button>a</button><a href="/x">b</a><span role="button">c</span><input type="color">'
+    for (const element of probe.children) expect(element.matches(rule.wide), element.outerHTML).toBe(true)
     expect(rule.body).toMatch(/min-width:\s*44px/)
     // A checklist's box gets an area around it.
     expect(rule.body).toMatch(/taskList'\] li > label::after \{[^}]*inset: -12px/)
   })
 
-  it('NOTES-23 AC-7 at 390 px every button and field of the phone views falls under the rule, every way back and row is 44 px', async () => {
+  it('NOTES-23 AC-7 at 390 px every link, button and field of the phone views falls under the rule, every way back and row is 44 px', async () => {
     const rule = touchRule()
     const big = /(^|\s)(min-h-11|h-11|min-h-12|h-12|min-h-\[50px\]|h-\[50px\]|h-\[52px\]|h-14)(\s|$)/
-    for (const at of ['/folders', '/folder/f-home', '/inbox']) {
+    // Every list of the phone, the smart folders' (one pointing nowhere, one with "Mit mir geteilt", an empty one) and
+    // their editor too, with the sidebar's section "Intelligent" as the drawer shows it.
+    const pages = ['/folders', '/folder/f-home', '/inbox', '/smart/s-open', '/smart/s-shared', '/smart/s-own', '/smart/new', '/shared', '/tags/rezept', '/search']
+    for (const at of pages) {
       act(() => root.unmount())
       root = createRoot(box)
       forgetStart()
-      await render(at)
-      const controls = [...box.querySelectorAll('button, input, select, textarea')]
+      await render(at, <SmartSection />)
+      const controls = [...box.querySelectorAll('a[href], button, [role="button"], input, select, textarea')].filter((control) => !control.closest('.ProseMirror') && (control as HTMLInputElement).type !== 'hidden')
       expect(controls.length, at).toBeGreaterThan(0)
       for (const control of controls) expect(control.matches(rule.selector), `${at}: ${control.outerHTML.slice(0, 120)}`).toBe(true)
+      for (const control of controls.filter((control) => control.matches('a[href], button, [role="button"]')))
+        expect(control.matches(rule.wide), `${at}: ${control.outerHTML.slice(0, 120)}`).toBe(true)
       for (const link of box.querySelectorAll('[data-testid="phone-back"], [data-testid="folders-all"], [data-testid="folders-page"] a'))
         expect(link.className, `${at}: ${link.outerHTML.slice(0, 120)}`).toMatch(big)
     }

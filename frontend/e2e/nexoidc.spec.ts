@@ -74,7 +74,11 @@ test('sign-in through the provider button ends in a session', async ({ page, bro
   const visitor = await fresh.newPage()
   const problems = collectProblems(visitor)
   await visitor.goto('/login')
-  await visitor.getByRole('button', { name: 'Sign in with Stand-in 33' }).click()
+  // The buttons stand on top with the focus, the password form below "or" (decision of 21.11.2026).
+  const providerButton = visitor.getByRole('button', { name: 'Sign in with Stand-in 33' })
+  await expect(providerButton).toBeFocused()
+  expect((await providerButton.boundingBox())!.y).toBeLessThan((await visitor.getByLabel('Email').boundingBox())!.y)
+  await providerButton.click()
   await visitor.waitForURL((url) => !url.pathname.startsWith('/login') && !url.pathname.startsWith('/api/'))
   await expect(visitor).not.toHaveURL(/error=/)
   expect((await (await visitor.request.get('/api/auth/me')).json()).name).toBe('ossie')

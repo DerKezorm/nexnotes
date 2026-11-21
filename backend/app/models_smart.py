@@ -26,7 +26,8 @@ class SmartFolder(Base):
     #: As the member named it; empty for one that came with the account (``preset``) and was never renamed: the
     #: interface shows that one's name in its own language.
     name: Mapped[str] = mapped_column(String(60), default="")
-    #: The name as names are compared (EC-6: no two of the same name); for a preset its key (``preset:recent``).
+    #: The name as names are compared (EC-6: no two of the same name); for a preset its key (``\x1fpreset:recent``, out
+    #: of the reach of any name).
     name_key: Mapped[str] = mapped_column(String(200))
     #: ``open_tasks`` or ``recent`` for the two every account gets (AC-7); empty for the member's own.
     preset: Mapped[str] = mapped_column(String(16), default="")

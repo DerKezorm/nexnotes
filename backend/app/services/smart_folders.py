@@ -75,6 +75,8 @@ SEEDED = "smart_folders_seeded"
 SEEDED_PLACES = "smart_folders_seeded_places"
 #: Marks that the presets from before symbols got theirs, once (the column came with the filter for every row).
 SEEDED_ICONS = "smart_folders_seeded_icons"
+#: Marks that the keys of the presets moved out of the names' reach (``PRESET_KEY_MARK``), once.
+SEEDED_KEYS = "smart_folders_seeded_keys"
 #: The presets ``SEEDED_PLACES`` gives.
 PLACES = (SHARED_WITH_ME, ATTACHMENTS)
 
@@ -93,8 +95,13 @@ def name_key(name: str) -> str:
     return unicodedata.normalize("NFC", name).strip().casefold()
 
 
+#: Starts the key of a preset that keeps its name in the interface's language: a control character, which no name
+#: may hold (``_clean_name``), so a folder of one's own named ``preset:recent`` is no clash (EC-6).
+PRESET_KEY_MARK = "\x1f"
+
+
 def _preset_key(preset: str) -> str:
-    return f"preset:{preset}"
+    return f"{PRESET_KEY_MARK}preset:{preset}"
 
 
 # --- Reading and writing ------------------------------------------------------------------------------------------
@@ -239,7 +246,9 @@ def reorder(db: Session, account: Account, ids: list[str]) -> list[SmartFolder]:
     """The order the member dragged them into (AC-8); folders not named keep their order after those named."""
     folders = list_for(db, account)
     by_id = {folder.id: folder for folder in folders}
-    if len(set(ids)) != len(ids) or any(folder_id not in by_id for folder_id in ids):
+    if len(set(ids)) != len(ids):
+        raise error("smart_folder_order_invalid", "Every smart folder may be named once in the order.", 422)
+    if any(folder_id not in by_id for folder_id in ids):
         raise _not_found()
     ordered = [by_id[folder_id] for folder_id in ids] + [folder for folder in folders if folder.id not in ids]
     for position, folder in enumerate(ordered):
@@ -394,6 +403,12 @@ def seed_existing(db: Session) -> int:
                 db.execute(sql_update(SmartFolder).where(SmartFolder.preset == preset, SmartFolder.icon == DEFAULT_ICON)
                            .values(icon=icon))
         db.add(Setting(key=SEEDED_ICONS, value=True))
+    if db.get(Setting, SEEDED_KEYS) is None:
+        # Presets from before kept the key ``preset:<name>``, which a name of one's own could reach.
+        db.execute(sql_update(SmartFolder).where(SmartFolder.preset != "", SmartFolder.name == "",
+                                                 SmartFolder.name_key.like("preset:%"))
+                   .values(name_key=PRESET_KEY_MARK + SmartFolder.name_key))
+        db.add(Setting(key=SEEDED_KEYS, value=True))
     try:
         db.commit()
     except IntegrityError:

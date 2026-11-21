@@ -117,7 +117,7 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
           onClick={onNavigate}
           aria-label={t('smart.new')}
           title={t('smart.new')}
-          className="mt-2.5 rounded-md p-1 text-mist-500 hover:bg-ink-800 hover:text-mist-100"
+          className="mt-2.5 flex items-center justify-center rounded-md p-1 text-mist-500 hover:bg-ink-800 hover:text-mist-100"
           data-testid="sidebar-smart-new"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />

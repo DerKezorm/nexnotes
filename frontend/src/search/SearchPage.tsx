@@ -20,6 +20,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
+import { PhoneListWays } from '../pwa/phone'
 import { PAGE, searchApi, type Hit } from './api'
 import { askable, hasFilters, readConditions, toQuery, withoutFilters, writeConditions, type SearchConditions } from './conditions'
 import { Filters } from './Filters'
@@ -206,6 +207,7 @@ export function SearchPage() {
 
   return (
     <div className={'flex min-h-full flex-col gap-3.5 ' + padding} data-testid="search-page">
+      <PhoneListWays />
       <div className="flex max-w-[880px] items-center gap-2.5">
         <label className="flex h-11 flex-1 items-center gap-2.5 rounded-xl border border-edge bg-ink-850 px-3.5 focus-within:border-accent-500 focus-within:shadow-[0_0_0_3px_rgb(242_193_78/0.30)] md:h-12">
           <Search className="h-[18px] w-[18px] shrink-0 text-mist-500" strokeWidth={2} aria-hidden />

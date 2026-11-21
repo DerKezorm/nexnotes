@@ -10,9 +10,10 @@ password, the vault key or anything of a locked note but its title.
 ``CLOSE_LOCKED``), takes the last version, and names what the device must encrypt (the content, every version, every
 attachment of the note); the device lays each part down encrypted (``stage``) and the finish swaps them in one
 transaction: the note is ``locked``, its plain text, Yjs updates, tags, versions, recognised text and attachment files
-go, the search index keeps the title only. Deleted rows are overwritten (``PRAGMA secure_delete``, FTS5
-``secure-delete``) and the write-ahead log is emptied after. Unlocking (``unlock_start``, ``unlock_finish``) is the
-same step backwards; the attachments run through the checks of NOTES-10 again.
+go, the search index keeps the title only. Deleted rows are overwritten (``PRAGMA secure_delete``), the search
+index is merged so that nothing deleted stays in it, and the write-ahead log is emptied after. Unlocking
+(``unlock_start``, ``unlock_finish``) is the same step backwards; the attachments run through the checks of NOTES-10
+again.
 
 **A locked note open in a browser** is saved whole (``save``): the encrypted Yjs state with the revision it started
 from. One that arrives on an older revision still becomes the current one, and the content it replaces goes into the
@@ -594,8 +595,8 @@ def _drop_exports(account_id: int) -> None:
 
 
 def wipe_traces() -> None:
-    """What deleted rows left behind goes from the database file: the search index merged (its deleted entries were
-    overwritten already with FTS5 ``secure-delete``), the write-ahead log written back and emptied."""
+    """What deleted rows left behind goes from the database file: the search index merged (which drops its deleted
+    entries), the write-ahead log written back and emptied."""
     from . import search
 
     try:
