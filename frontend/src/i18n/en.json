@@ -325,6 +325,12 @@
       "lined": "Lined",
       "grid": "Grid",
       "dots": "Dotted"
+    },
+    "icon": {
+      "add": "Add symbol",
+      "change": "Change symbol",
+      "title": "Symbol of the note",
+      "remove": "Remove"
     }
   },
   "errors": {
@@ -412,7 +418,8 @@
     "search_tag_invalid": "This is no tag: a tag needs at least one letter or emoji, like #invoice.",
     "search_too_many_terms": "A search takes at most {{maximum}} words, phrases and tags. Leave some out.",
     "search_term_too_long": "A word or a phrase in quotes may have at most {{maximum}} characters. Shorten it.",
-    "paper_unknown": "Choose blank, lined, grid or dotted."
+    "paper_unknown": "Choose blank, lined, grid or dotted.",
+    "note_icon_unknown": "Choose a symbol from the list."
   },
   "folders": {
     "section": "Folders",

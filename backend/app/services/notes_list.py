@@ -175,7 +175,8 @@ _CREATED = cast(Note.created_at, String).label("created_at")
 _UPDATED = cast(Note.updated_at, String).label("updated_at")
 _COLUMNS = (Note.id, Note.owner_id, Note.folder_id, Note.title, Note.title_check, Note.origin,
             func.substr(Note.text, 1, _PREVIEW_SOURCE).label("text"), _CREATED, _UPDATED,
-            Note.pinned_at.is_not(None).label("pinned"), Note.color, Note.tasks_done, Note.tasks_total)
+            Note.pinned_at.is_not(None).label("pinned"), Note.color, Note.tasks_done, Note.tasks_total,
+            Note.icon)
 _NEWEST_FIRST = (Note.updated_at.desc(), Note.id.desc())
 
 
@@ -214,6 +215,7 @@ def item_of(note: Any) -> dict[str, Any]:
         "updated_at": _stored_iso(note.updated_at),
         "pinned": bool(note.pinned),
         "color": note.color or "",
+        "icon": note.icon or "",
         "tasks": tasks_out(note),
     }
 

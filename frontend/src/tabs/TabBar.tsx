@@ -11,6 +11,7 @@ import { Ban, Lock, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { NoteIcon } from '../components/NoteIcon'
 import { colorOf } from '../folders/palette'
 import { useCurrentFolder, useFolders } from '../folders/store'
 import { createNote } from '../notes/newNote'
@@ -169,7 +170,7 @@ export function TabBar({ state, metas, split, open }: Props) {
           (over === tab.key ? ' shadow-[inset_2px_0_0_var(--color-accent-500)]' : '')
         }
       >
-        <span aria-hidden className="h-2 w-2 shrink-0 rounded-[3px]" style={{ background: colorFor(meta) }} />
+        {meta?.icon ? <NoteIcon icon={meta.icon} color={meta.color} size={13} /> : <span aria-hidden className="h-2 w-2 shrink-0 rounded-[3px]" style={{ background: colorFor(meta) }} />}
         <span className={'min-w-0 flex-1 truncate' + (mark === 'deleted' || mark === 'gone' ? ' line-through decoration-mist-500' : '')} data-testid="tab-title">
           {title}
         </span>

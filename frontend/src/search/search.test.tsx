@@ -21,7 +21,7 @@ import { REFRESH_MS, SearchPage } from './SearchPage'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
-type Stored = { id: string; title: string; text: string; folder: string; updated: string; attachment?: Hit['attachment'] }
+type Stored = { id: string; title: string; text: string; folder: string; updated: string; attachment?: Hit['attachment']; icon?: string; color?: string }
 type Call = { path: string; params: URLSearchParams }
 
 let calls: Call[] = []
@@ -91,6 +91,8 @@ function answerSearch(params: URLSearchParams): Response {
     id: note.id,
     title: note.title,
     title_parts: pieces(note.title, words),
+    icon: note.icon ?? '',
+    color: note.color ?? '',
     excerpt: pieces(note.text, words),
     where: note.attachment ? 'attachment' : 'text',
     attachment: note.attachment ?? null,
@@ -259,6 +261,17 @@ describe('NOTES-9 search page', () => {
     await answered()
     expect($$('search-hit')).toHaveLength(1)
     expect($('search-count')!.textContent).toBe('1 Treffer')
+  })
+
+  it('NOTES-3 AC-18 a hit shows the symbol of its note before the title, in the color of the note', async () => {
+    stored = stored.map((note, index) => (index === 0 ? { ...note, icon: 'receipt', color: 'green' } : note))
+    await render('/search')
+    await type('rechn')
+    await answered()
+    const marks = $$('search-hit').map((hit) => hit.querySelector('[data-testid="note-icon"]')?.getAttribute('data-icon') ?? '')
+    expect(marks.filter(Boolean)).toEqual(['receipt'])
+    const drawn = $$('search-hit').find((hit) => hit.querySelector('[data-testid="note-icon"]'))!.querySelector('svg') as SVGElement
+    expect(drawn.style.color).toBe('rgb(74, 222, 128)')
   })
 
   it('NOTES-9 AC-1 an answer that comes late never replaces a newer one', async () => {

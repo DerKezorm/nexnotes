@@ -763,6 +763,8 @@ def _hit(db: Session, note: Note, query: Query, folders: dict[str, Folder]) -> d
         "id": note.id,
         "title": note.title,
         "title_parts": _segments(note.title or "", title_spans),
+        "icon": note.icon or "",
+        "color": note.color or "",
         "excerpt": shown,
         "where": where,
         "attachment": attachment,

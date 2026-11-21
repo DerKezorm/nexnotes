@@ -42,6 +42,7 @@ import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
 import { Outline } from './Outline'
+import { TitleIcon } from './TitleIcon'
 import { paperOf } from './paper'
 import { PaperPicker } from './PaperPicker'
 import { OUTLINE_FROM, useOutlineShown } from './outlineData'
@@ -505,6 +506,19 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         data-testid="note-page"
         data-width={textWidth}
       >
+        <div className="group flex items-center gap-1.5">
+        {head && (
+          <TitleIcon
+            icon={head.icon ?? ''}
+            color={head.color ?? ''}
+            editable={Boolean(head.can_write) && editable}
+            onChange={(icon) => {
+              setHead({ ...head, icon })
+              notesApi.setIcon(noteId, icon).then(setHead, (error) => setProblem(problemText(error)))
+              notesChanged()
+            }}
+          />
+        )}
         <TitleField
           ref={titleField}
           doc={provider.doc}
@@ -515,6 +529,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           describedBy={askLeave ? 'nn-title-required' : undefined}
           onEnter={() => focusTextStart(editor)}
         />
+        </div>
         {askLeave && (
           <span id="nn-title-required" className="-mt-1 text-[13px] font-medium text-bad-500">
             {t('editor.titleRequired')}

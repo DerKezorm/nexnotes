@@ -385,6 +385,19 @@ def set_paper(db: Session, account: Account, note_id: str, paper: str) -> Note:
     return note
 
 
+def set_icon(db: Session, account: Account, note_id: str, icon: str) -> Note:
+    """The symbol before the title (NOTES-3 AC-18), from the same list as the folders'; empty takes it away. Only who
+    may write the note; open editors follow within seconds (they read the head again)."""
+    from .symbols import SYMBOLS
+
+    if icon and icon not in SYMBOLS:
+        raise error("note_icon_unknown", "Choose a symbol from the list.", 422)
+    note = note_for(db, account, note_id, write=True)
+    note.icon = icon
+    db.commit()
+    return note
+
+
 def copy_suffix(account: Account) -> str:
     language = (account.language or account.browser_language or "en").split("-")[0].lower()
     return COPY_SUFFIX.get(language, COPY_SUFFIX["en"])
@@ -409,8 +422,9 @@ async def duplicate(account: Account, note_id: str) -> Note:
         source = note_for(db, account, note_id)
         folder_id = source.folder_id
         origin = source.origin
-        # The copy keeps the paper of its original (NOTES-3 AC-17).
+        # The copy keeps the paper and the symbol of its original (NOTES-3 AC-17, AC-18).
         paper = source.paper or PAPERS[0]
+        icon = source.icon or ""
     title, body = await change(note_id, read)
     title = copy_title(title, copy_suffix(account))
     document = notedoc.new_doc(title, body)
@@ -421,7 +435,7 @@ async def duplicate(account: Account, note_id: str) -> Note:
         now = utcnow()
         note = Note(owner_id=account.id, folder_id=folder_id, title=title, origin=origin,
                     ydoc=document.get_update(), text=to_plain(document), created_at=now, updated_at=now,
-                    updated_by_id=account.id, paper=paper)
+                    updated_by_id=account.id, paper=paper, icon=icon)
         db.add(note)
         _written(db, note)
         db.commit()

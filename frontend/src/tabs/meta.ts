@@ -23,6 +23,9 @@ export type TabMeta = {
   state: 'ok' | 'deleted' | 'gone'
   locked: boolean
   canWrite: boolean
+  /** The note's symbol and color (NOTES-3 AC-18): the tab shows the symbol in place of the dot. */
+  icon?: string
+  color?: string
 }
 
 const cache = new Map<string, TabMeta>()
@@ -50,6 +53,8 @@ export function metaFromHead(head: NoteHead & { locked?: boolean }): TabMeta {
     state: head.deleted_at ? 'deleted' : 'ok',
     locked: Boolean(head.locked),
     canWrite: head.can_write,
+    icon: head.icon ?? '',
+    color: head.color ?? '',
   }
 }
 

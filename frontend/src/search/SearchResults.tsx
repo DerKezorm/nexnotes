@@ -5,6 +5,7 @@
  * Its own list, not the notes' `NoteList`: a hit is a note plus where it was found. Arrow keys go from hit to hit, up
  * from the first one back into the field.
  */
+import { NoteIcon } from '../components/NoteIcon'
 import { FileText } from 'lucide-react'
 import { forwardRef, useImperativeHandle, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -91,7 +92,8 @@ export const SearchResults = forwardRef<ResultsHandle, Props>(function SearchRes
               className="flex flex-col gap-1 rounded-[10px] border-b border-ink-800 px-0 py-3 hover:bg-ink-850 focus-visible:bg-ink-850 md:px-3"
             >
               <span className="flex justify-between gap-2.5">
-                <span className="min-w-0 text-base font-semibold md:text-[15px]" data-testid="search-hit-title">
+                <span className="flex min-w-0 items-center gap-1.5 text-base font-semibold md:text-[15px]" data-testid="search-hit-title">
+                  <NoteIcon icon={hit.icon} color={hit.color} />
                   <Marked pieces={hit.title_parts} fallback={t('notes.untitled')} />
                 </span>
                 <span className="hidden shrink-0 whitespace-nowrap text-[12.5px] text-mist-500 md:inline">{where}</span>

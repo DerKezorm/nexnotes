@@ -6,6 +6,7 @@
  *
  * Other lists (the search's hits) can draw their notes with it: only `item` and `href` are needed.
  */
+import { NoteIcon } from '../../components/NoteIcon'
 import { Image, Lock, MoreHorizontal, PenLine, Pin, ScanText, Users } from 'lucide-react'
 import type { DragEvent, MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -77,6 +78,7 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
       >
         <span className="flex min-w-0 items-center gap-2">
           {dot && <span aria-label={t('noteList.colorMark')} role="img" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dot }} data-testid="note-color" />}
+          <NoteIcon icon={item.icon} color={item.color} />
           <span className={'min-w-0 truncate text-[14.5px] font-semibold ' + (chosen ? 'text-accent-400' : 'text-mist-100')} title={item.title || undefined}>
             {title}
           </span>

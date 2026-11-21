@@ -4,6 +4,7 @@
  * and "Titel prüfen" as marks (AC-9). A locked note shows its title and the lock only (EC-3); everything is cut to the
  * tile (EC-4).
  */
+import { NoteIcon } from '../../components/NoteIcon'
 import { Lock, MoreHorizontal, Pin } from 'lucide-react'
 import type { DragEvent, MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -63,8 +64,11 @@ export function NoteTile({ item, href, chosen, date, onOpen, onMenu, onDragStart
         style={stripe ? { borderTop: `4px solid ${stripe}` } : undefined}
       >
         <span className="flex min-w-0 items-start justify-between gap-2 pr-6">
-          <span className="line-clamp-2 min-w-0 text-[14.5px] leading-[1.3] font-semibold break-words text-mist-100" title={item.title || undefined}>
-            {title}
+          <span className="flex min-w-0 items-start gap-1.5">
+            <NoteIcon icon={item.icon} color={item.color} className="mt-[3px]" />
+            <span className="line-clamp-2 min-w-0 text-[14.5px] leading-[1.3] font-semibold break-words text-mist-100" title={item.title || undefined}>
+              {title}
+            </span>
           </span>
           <span className="flex shrink-0 items-center gap-1 pt-0.5">
             {item.pinned && <Pin role="img" aria-label={t('noteList.pinned')} className="h-3.5 w-3.5 text-accent-400" strokeWidth={2.2} />}

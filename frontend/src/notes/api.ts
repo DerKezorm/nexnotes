@@ -11,6 +11,10 @@ export type NoteItem = {
   preview: string
   created_at: string
   updated_at: string
+  /** The note's color (NOTES-6 AC-8), empty for none. */
+  color?: string
+  /** The symbol before the title (NOTES-3 AC-18), empty for none. */
+  icon?: string
 }
 
 export type FolderStep = { id: string; name: string; kind: string; inbox: boolean }
@@ -44,6 +48,7 @@ export const notesApi = {
   /** Takes the suggested title (given, or the server's from the first words); the note gets "Titel prüfen". */
   suggestTitle: (id: string, title?: string) =>
     api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/title/suggestion`, { method: 'POST', body: title ? { title } : {} }),
+  setIcon: (id: string, icon: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/icon`, { method: 'PUT', body: { icon } }),
   setPaper: (id: string, paper: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/paper`, { method: 'PUT', body: { paper } }),
   titleOk: (id: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/title/ok`, { method: 'POST' }),
   duplicate: (id: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/duplicate`, { method: 'POST' }),

@@ -325,6 +325,12 @@
       "lined": "Liniert",
       "grid": "Kariert",
       "dots": "Gepunktet"
+    },
+    "icon": {
+      "add": "Symbol hinzufügen",
+      "change": "Symbol ändern",
+      "title": "Symbol der Notiz",
+      "remove": "Entfernen"
     }
   },
   "errors": {
@@ -412,7 +418,8 @@
     "search_tag_invalid": "Das ist kein Schlagwort: Ein Schlagwort braucht mindestens einen Buchstaben oder ein Emoji, etwa #rechnung.",
     "search_too_many_terms": "Eine Suche nimmt höchstens {{maximum}} Wörter, Wortfolgen und Schlagwörter. Lass ein paar weg.",
     "search_term_too_long": "Ein Wort oder eine Wortfolge in Anführungszeichen darf höchstens {{maximum}} Zeichen haben. Kürze sie.",
-    "paper_unknown": "Wähl leer, liniert, kariert oder gepunktet."
+    "paper_unknown": "Wähl leer, liniert, kariert oder gepunktet.",
+    "note_icon_unknown": "Wähl ein Symbol aus der Liste."
   },
   "folders": {
     "section": "Ordner",

@@ -369,6 +369,8 @@ class Note(Base):
     listed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     #: The paper the note is written on (NOTES-3 AC-17): one of ``PAPERS`` in ``services/notes.py``.
     paper: Mapped[str] = mapped_column(String(8), default="blank", server_default="blank")
+    #: The note's symbol before its title (NOTES-3 AC-18): a name of ``services/symbols.py``, empty for none.
+    icon: Mapped[str] = mapped_column(String(32), default="", server_default="")
 
 
 class NoteUpdate(Base):

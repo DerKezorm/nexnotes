@@ -76,6 +76,8 @@ def item_out(note: Note) -> dict[str, Any]:
         # NOTES-6: pinned, its color, the progress of its checklists.
         "pinned": note.pinned_at is not None,
         "color": note.color or "",
+        # NOTES-3 AC-18: the symbol before the title, in lists, tiles and tabs too.
+        "icon": note.icon or "",
         "tasks": {"done": note.tasks_done or 0, "total": note.tasks_total} if note.tasks_total else None,
     }
 
@@ -131,6 +133,15 @@ class PaperIn(BaseModel):
 @router.put("/{note_id}/paper", summary="The paper of a note: blank, lined, grid or dots (needs the right to write)")
 def put_paper(note_id: str, body: PaperIn, db: DbSession, account: Account) -> dict[str, Any]:
     return note_out(db, notes.set_paper(db, account, note_id, body.paper), account)
+
+
+class IconIn(BaseModel):
+    icon: str = Field(max_length=32)
+
+
+@router.put("/{note_id}/icon", summary="The symbol before a note's title, empty for none (needs the right to write)")
+def put_icon(note_id: str, body: IconIn, db: DbSession, account: Account) -> dict[str, Any]:
+    return note_out(db, notes.set_icon(db, account, note_id, body.icon), account)
 
 
 @router.put("/{note_id}/title")

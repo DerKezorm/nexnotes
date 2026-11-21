@@ -492,3 +492,32 @@ def test_notes3_ac17_new_notes_start_on_the_accounts_paper_and_a_copy_keeps_its_
     copy = client.post(f"/api/notes/{fresh['id']}/duplicate")
     assert copy.status_code in (200, 201)
     assert client.get(f"/api/notes/{copy.json()['id']}").json()["paper"] == "dots"
+
+
+# --- AC-18 a symbol before the title ----------------------------------------------------------------------------------
+
+
+def test_notes3_ac18_a_note_carries_a_symbol_of_the_list_shown_wherever_its_title_is(client, operator):
+    from app.services.symbols import SYMBOLS
+
+    note = new_note(client, title="Packing list", markdown="socks")
+    assert note["icon"] == ""
+    answer = client.put(f"/api/notes/{note['id']}/icon", json={"icon": "plane"})
+    assert answer.status_code == 200 and answer.json()["icon"] == "plane"
+    assert stored(note["id"]).icon == "plane"
+    # In the lists, the list of a folder and the search too.
+    assert client.get("/api/notes").json()[0]["icon"] == "plane"
+    assert [item["icon"] for item in client.get("/api/note-list").json()["items"]] == ["plane"]
+    assert client.get("/api/search", params={"q": "packing"}).json()["items"][0]["icon"] == "plane"
+    for wrong in ("skull-crossbones", "Plane", "plane ", "<svg>"):
+        refused_answer = client.put(f"/api/notes/{note['id']}/icon", json={"icon": wrong})
+        assert refused_answer.status_code == 422 and refused_answer.json()["detail"]["code"] == "note_icon_unknown"
+    assert client.put(f"/api/notes/{note['id']}/icon", json={"icon": SYMBOLS[-1]}).status_code == 200
+    # Somebody else: as if it were not there.
+    with new_client(make_account("stranger")) as stranger:
+        assert stranger.put(f"/api/notes/{note['id']}/icon", json={"icon": "star"}).status_code == 404
+    # A copy keeps it; taking it away leaves none.
+    client.put(f"/api/notes/{note['id']}/icon", json={"icon": "plane"})
+    copy = client.post(f"/api/notes/{note['id']}/duplicate").json()
+    assert client.get(f"/api/notes/{copy['id']}").json()["icon"] == "plane"
+    assert client.put(f"/api/notes/{note['id']}/icon", json={"icon": ""}).json()["icon"] == ""

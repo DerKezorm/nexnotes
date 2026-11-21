@@ -14,6 +14,9 @@ export type Hit = {
   id: string
   title: string
   title_parts: Piece[]
+  /** The note's symbol and color (NOTES-3 AC-18). */
+  icon?: string
+  color?: string
   excerpt: Piece[]
   where: 'title' | 'text' | 'attachment'
   attachment: AttachmentHit | null

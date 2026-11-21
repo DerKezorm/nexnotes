@@ -101,6 +101,10 @@ async function answer(method: string, path: string): Promise<Response> {
     const found = notes.get(id)
     if (!found || (belongs.get(id) ?? 1) !== me) return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
     if (method === 'GET' && !tail) return reply(200, found)
+    if (method === 'PUT' && tail === '/icon') {
+      notes.set(id, { ...found, icon: String(JSON.parse(lastBody ?? '{}').icon) })
+      return reply(200, notes.get(id))
+    }
     if (method === 'PUT' && tail === '/paper') {
       const paper = String(JSON.parse(lastBody ?? '{}').paper)
       notes.set(id, { ...found, paper })
@@ -543,6 +547,43 @@ describe('tabs in the page', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('NOTES-3 AC-18 a symbol before the title: added from the title row, shown in the list and the tab, removed again', async () => {
+    notes.set('shop', { ...notes.get('shop')!, icon: 'shopping-cart', color: 'green' } as NoteHead)
+    await render('/notes/soup')
+    // The list shows a symbol where a note has one.
+    const rows = $$('note-row')
+    const shopRow = rows.find((row) => row.textContent?.includes('Saturday shopping'))!
+    expect(shopRow.querySelector('[data-testid="note-icon"]')!.getAttribute('data-icon')).toBe('shopping-cart')
+    expect(rows.find((row) => row.textContent?.includes('Lentil soup'))!.querySelector('[data-testid="note-icon"]')).toBeNull()
+    // Without a symbol: the quiet button in the title row, reachable by keyboard.
+    const add = $('title-icon-add')!
+    expect(add.getAttribute('aria-label')).toBe('Add symbol')
+    expect(add.tabIndex).toBe(0)
+    await act(async () => add.click())
+    const dialog = $('note-icon-dialog')!
+    const search = dialog.querySelector<HTMLInputElement>('[data-testid="symbol-search"]')!
+    await act(async () => typeTitle(search, 'topf'))
+    const found = [...dialog.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    expect(found.length).toBeGreaterThan(0)
+    await act(async () => found[0].click())
+    await idle()
+    expect(requests).toContain('PUT /api/notes/soup/icon')
+    const chosen = notes.get('soup')!.icon
+    expect(chosen).toBeTruthy()
+    expect($('title-icon')!.querySelector('[data-testid="note-icon"]')!.getAttribute('data-icon')).toBe(chosen)
+    // The tab shows the symbol in place of the dot.
+    await act(async () => void refreshMeta(['soup']))
+    await idle()
+    expect($$('tab-title')[0].parentElement!.querySelector('[data-testid="note-icon"]')!.getAttribute('data-icon')).toBe(chosen)
+    // With a symbol, the picker offers to remove it.
+    await act(async () => $('title-icon')!.click())
+    const remove = [...$('note-icon-dialog')!.querySelectorAll('button')].find((button) => button.textContent === 'Remove')!
+    await act(async () => remove.click())
+    await idle()
+    expect(notes.get('soup')!.icon).toBe('')
+    expect($('title-icon')).toBeNull()
   })
 
   it('NOTES-8 AC-5 open tabs and the split are back after a reload on the same device, for the same account only', async () => {
