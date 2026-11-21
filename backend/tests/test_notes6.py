@@ -53,23 +53,25 @@ def stamp(client, folder_id: str | None = None) -> str:
 
 
 def test_notes6_ac1_the_view_is_kept_per_folder_on_every_device(client, operator):
+    """The sort and grouping per folder; how the notes look (tiles among them) is the account's for every list
+    (``test_list_look.py``): a folder's ``mode`` is no longer kept."""
     house = make_folder(client, "Haushalt")
     work = make_folder(client, "Arbeit")
-    answer = client.put("/api/note-list/view", json={"folder_id": house, "mode": "tiles"})
-    assert answer.status_code == 200 and answer.json()["mode"] == "tiles"
+    answer = client.put("/api/note-list/view", json={"folder_id": house, "mode": "tiles", "sort": "title"})
+    assert answer.status_code == 200 and answer.json()["mode"] == "list" and answer.json()["sort"] == "title"
     # A second device of the same account sees the same choice, the other folder and "All notes" keep theirs.
     with new_client(operator) as phone:
-        assert listed(phone, house)["view"]["mode"] == "tiles"
-        assert listed(phone, work)["view"]["mode"] == "list"
-        assert listed(phone)["view"]["mode"] == "list"
-        phone.put("/api/note-list/view", json={"mode": "tiles"})
-    assert listed(client)["view"]["mode"] == "tiles"
-    assert listed(client, work)["view"]["mode"] == "list"
+        assert listed(phone, house)["view"]["sort"] == "title"
+        assert listed(phone, work)["view"]["sort"] == "updated"
+        assert listed(phone)["view"]["sort"] == "updated"
+        phone.put("/api/note-list/view", json={"sort": "created"})
+    assert listed(client)["view"]["sort"] == "created"
+    assert listed(client, work)["view"]["sort"] == "updated"
     # Another account has a view of its own.
     other = make_account("other")
     with new_client(other) as theirs:
-        assert listed(theirs)["view"]["mode"] == "list"
-        assert theirs.put("/api/note-list/view", json={"folder_id": house, "mode": "list"}).status_code == 404
+        assert listed(theirs)["view"]["sort"] == "updated"
+        assert theirs.put("/api/note-list/view", json={"folder_id": house, "sort": "title"}).status_code == 404
 
 
 def test_notes6_ac4_sorting_and_direction_are_kept_per_folder(client, operator):

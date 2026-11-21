@@ -1,13 +1,18 @@
 /**
- * The notes of a folder, or all of them (NOTES-6): as a list or as tiles with a preview, sorted and grouped as the
- * account chose for this folder, pinned notes on top, colors, marks, an empty state, and the same on the phone.
- * Folder pages, the inbox's column and "All notes" use it; without `folderId` it shows all own notes and those shared
- * with the account, with their folders (AC-7).
+ * The notes of a folder, or all of them (NOTES-6): sorted and grouped as the account chose for this folder, drawn the
+ * way the account chose for every list (list, cards, compact, tiles; with hints or without, `list/look.ts`), pinned
+ * notes on top, groups to fold shut, colors, marks, an empty state, and the same on the phone and in the column or
+ * drawer beside open notes. Folder pages, smart folders and "All notes" use it; without `folderId` it shows all own
+ * notes and those shared with the account, with their folders (AC-7).
+ *
+ * Above the notes the head every list has (`list/ListHead.tsx`): path, symbol, name, count, "Ansicht" and the list's
+ * own "…", and a line saying how it is sorted and grouped. Without `heading` (a page with a head of its own) only that
+ * line and "Ansicht".
  *
  * The pieces live in `notes/list/`: the server's routes (`api.ts`), the order and the date groups (`order.ts`), the
- * fixed-height layout and the window over it (`layout.ts`, `Window.tsx`), rows, tiles, the menu and the bar.
+ * fixed-height layout and the window over it (`layout.ts`, `Window.tsx`), rows, cards, compact rows, tiles, the menus.
  */
-import { FileText, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -21,15 +26,23 @@ import { listDate } from './listDate'
 import { noteHref } from './newNote'
 import { noteOf } from './workspace'
 import type { ListItem, ListMode } from './list/api'
+import { useCollapsed } from './list/collapsed'
+import type { ItemProps, RowFolder } from './list/ItemParts'
 import { ItemMenu } from './list/ItemMenu'
 import { layout, SIZES, type Entry } from './list/layout'
-import { ListBar } from './list/ListBar'
+import { ListHead } from './list/ListHead'
 import './list/list.css'
-import { NoteRow, type RowFolder } from './list/NoteRow'
+import { saveListLook, useListLook } from './list/look'
+import { NoteCard } from './list/NoteCard'
+import { NoteCompact } from './list/NoteCompact'
+import { NoteRow } from './list/NoteRow'
 import { NoteTile } from './list/NoteTile'
 import { arrange, sectionLabel } from './list/order'
 import { useNoteList, type ListSource } from './list/useNoteList'
 import { useNow } from './list/useNow'
+import { useTouch } from './list/useTouch'
+import { viewSummary } from './list/summary'
+import { ViewMenu } from './list/ViewMenu'
 import { Window } from './list/Window'
 
 export type NoteListProps = {
@@ -41,13 +54,19 @@ export type NoteListProps = {
   onOpen?: (id: string) => void
   /** The address of a note, for the link (opening in a new tab); by default `/notes/<id>`, with the folder. */
   hrefFor?: (id: string) => string
-  /** A heading above the list. */
+  /** The name of the list in its head; without one only "Ansicht" and the line under it (the page has a head). */
   heading?: string
+  /** The path above the name (a folder's folders). */
+  crumb?: ReactNode
+  /** The list's symbol before its name. */
+  icon?: ReactNode
+  /** The list's own buttons in its head, after "Ansicht": a folder's "…". */
+  actions?: ReactNode
   /** Another list than a folder's (a smart folder, NOTES-7): where its notes come from. Rows show their folders. */
   source?: ListSource
   /** What an empty list says instead of the folder's empty state (a smart folder names its conditions, EC-2). */
   empty?: ReactNode
-  /** The views the list offers besides list and tiles: `gallery` shows `gallery` in the place of the notes. */
+  /** What the list can show besides its notes: `gallery` shows `gallery` in the place of the notes. */
   modes?: readonly ListMode[]
   gallery?: ReactNode
 }
@@ -68,7 +87,7 @@ function useWidth(box: React.RefObject<HTMLElement | null>): number {
   return width
 }
 
-export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, source, empty, modes, gallery }: NoteListProps) {
+export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, crumb, icon, actions, source, empty, modes, gallery }: NoteListProps) {
   const href = hrefFor ?? ((id: string) => noteHref(id, folderId))
   const location = useLocation()
   const selectedId = chosenId ?? noteOf(location.pathname, location.search) ?? undefined
@@ -81,6 +100,9 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
   // A gallery kept for a list that offers none (its conditions changed) shows as a list.
   const showsGallery = kept.mode === 'gallery' && Boolean(gallery) && Boolean(modes?.includes('gallery'))
   const view = useMemo(() => (kept.mode === 'gallery' && !showsGallery ? { ...kept, mode: 'list' as const } : kept), [kept, showsGallery])
+  const look = useListLook()
+  const touch = useTouch()
+  const { collapsed, toggle } = useCollapsed(source?.key ?? folderId ?? 'all')
   const now = useNow()
   const box = useRef<HTMLElement>(null)
   const width = useWidth(box)
@@ -90,7 +112,10 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
   const [over, setOver] = useState(false)
 
   const sections = useMemo(() => (answer ? arrange(answer.items, view, now, lang) : []), [answer, view, now, lang])
-  const { entries, height, columns } = useMemo(() => layout(sections, view.mode, width), [sections, view.mode, width])
+  const { entries, height, columns } = useMemo(
+    () => layout(sections, look.style, width, { hints: look.hints, collapsed, touch }),
+    [sections, look.style, look.hints, width, collapsed, touch],
+  )
 
   const folderOf = useCallback(
     (item: ListItem): RowFolder | null => {
@@ -114,47 +139,53 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
   const closeMenu = useCallback(() => setMenu(null), [])
   const dragOf = (item: ListItem) => (item.owner ? undefined : (event: DragEvent) => startNoteDrag(event, [item.id]))
 
-  // Rows and tiles show when a note last changed (AC-2), whatever the list is sorted by.
+  // Every look shows when a note last changed (AC-2), whatever the list is sorted by.
+  const propsOf = (item: ListItem, first = false): ItemProps => ({
+    item,
+    href: href(item.id),
+    chosen: item.id === selectedId,
+    date: listDate(item.updated_at, lang, now),
+    folder: folderOf(item),
+    hints: look.hints,
+    first,
+    onOpen: opener(item.id),
+    onMenu: item.owner ? undefined : openMenu,
+    onDragStart: dragOf(item),
+    onDragEnd: endDrag,
+  })
   const render = (entry: Entry) => {
-    if (entry.kind === 'header')
+    if (entry.kind === 'header') {
+      const Chevron = entry.collapsed ? ChevronRight : ChevronDown
       return (
-        <h2 className="flex h-full items-end px-2.5 pb-2 text-[12px] font-semibold tracking-[0.06em] text-mist-500 uppercase" data-testid="list-group-heading">
-          {sectionLabel(entry.section, t, lang, now)}
+        <h2 className="h-full">
+          <button
+            type="button"
+            aria-expanded={!entry.collapsed}
+            onClick={() => toggle(entry.section)}
+            className="flex h-full w-full items-end gap-1.5 rounded-md px-3 pb-1.5 text-left text-[11px] font-semibold tracking-[0.08em] text-mist-600 uppercase hover:text-mist-300"
+            data-testid="list-group-toggle"
+            data-section={entry.section}
+          >
+            <Chevron aria-hidden className="mb-px h-3 w-3 shrink-0" strokeWidth={2.6} />
+            <span className="min-w-0 truncate" data-testid="list-group-heading">
+              {sectionLabel(entry.section, t, lang, now)}
+            </span>
+            <span className="shrink-0 font-medium tracking-normal normal-case" data-testid="list-group-count">
+              · {entry.count}
+            </span>
+          </button>
         </h2>
       )
-    if (entry.kind === 'row') {
-      const item = entry.item
-      return (
-        <NoteRow
-          item={item}
-          href={href(item.id)}
-          chosen={item.id === selectedId}
-          date={listDate(item.updated_at, lang, now)}
-          folder={folderOf(item)}
-          wide={all && width >= 760}
-          onOpen={opener(item.id)}
-          onMenu={item.owner ? undefined : openMenu}
-          onDragStart={dragOf(item)}
-          onDragEnd={endDrag}
-        />
-      )
     }
-    const gap = narrow ? SIZES.smallGap : SIZES.gap
+    if (entry.kind === 'row') {
+      const props = propsOf(entry.item, entry.first)
+      return look.style === 'compact' ? <NoteCompact {...props} /> : <NoteRow {...props} />
+    }
+    const cards = look.style === 'cards'
+    const gap = cards ? SIZES.cardGap : narrow ? SIZES.smallGap : SIZES.gap
     return (
       <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap, paddingBottom: gap }}>
-        {entry.items.map((item) => (
-          <NoteTile
-            key={item.id}
-            item={item}
-            href={href(item.id)}
-            chosen={item.id === selectedId}
-            date={listDate(item.updated_at, lang, now)}
-            onOpen={opener(item.id)}
-            onMenu={item.owner ? undefined : openMenu}
-            onDragStart={dragOf(item)}
-            onDragEnd={endDrag}
-          />
-        ))}
+        {entry.items.map((item) => (cards ? <NoteCard key={item.id} {...propsOf(item)} /> : <NoteTile key={item.id} {...propsOf(item)} />))}
       </div>
     )
   }
@@ -168,6 +199,9 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
         ? t('noteList.countsShared', { own: counts.own, shared: counts.shared })
         : t('noteList.count', { count: counts.own })
       : t('noteList.count', { count: counts.own })
+
+  const viewMenu = <ViewMenu view={view} onChange={setView} look={look} onLook={(change) => void saveListLook(change)} modes={modes} />
+  const summary = viewSummary(view, look, t, showsGallery)
 
   const takeNotes = (event: DragEvent) => {
     if (!folderId || draggedNow()?.kind !== 'notes') return
@@ -184,18 +218,18 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
       data-testid="note-list"
       data-folder={folderId ?? ''}
       data-mode={view.mode}
+      data-style={look.style}
     >
-      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2 px-1">
-        {heading && (
-          <h1 className={'min-w-0 truncate font-bold text-mist-100 ' + (narrow ? 'text-[19px]' : 'text-2xl')} title={heading}>
-            {heading}
-          </h1>
-        )}
-        {heading && countText && <span className="shrink-0 text-[13px] text-mist-500" data-testid="list-counts">{countText}</span>}
-        <span className="ml-auto">
-          <ListBar view={view} onChange={setView} narrow={narrow} modes={modes} />
-        </span>
-      </div>
+      {heading ? (
+        <ListHead heading={heading} crumb={crumb} icon={icon} count={countText} view={viewMenu} actions={actions} summary={summary} narrow={narrow} />
+      ) : (
+        <div className="flex min-w-0 items-center gap-2 px-1">
+          <p className="min-w-0 flex-1 truncate text-[12px] text-mist-600" data-testid="list-state">
+            {summary}
+          </p>
+          {viewMenu}
+        </div>
+      )}
       {failed && <p className="px-2 text-sm text-bad-500">{t('notes.list.failed')}</p>}
       {showsGallery && gallery}
       {!showsGallery && answer && answer.items.length === 0 && empty}

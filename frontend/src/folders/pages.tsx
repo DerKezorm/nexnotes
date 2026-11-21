@@ -13,6 +13,7 @@ import { PHONE_FOLDER_SECTIONS } from '../extensions'
 import { NoteIcon } from '../components/NoteIcon'
 import { notesApi } from '../notes/api'
 import { NoteList } from '../notes/NoteList'
+import { ListHead } from '../notes/list/ListHead'
 import { ago } from '../lib/time'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
@@ -67,37 +68,48 @@ export function FolderPage() {
     setOver(true)
   }
 
-  return (
-    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="folder-page">
-      <PhoneBack to={parent ? `/folder/${parent.id}` : '/folders'} label={parent ? parent.name : t('folders.section')} />
-      <nav aria-label={t('folders.page.path')} className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-mist-500">
-        {path.map((step, index) =>
-          index < path.length - 1 ? (
-            <span key={step.id} className="flex min-w-0 items-center gap-1.5">
-              <Link to={`/folder/${step.id}`} className="max-w-[16ch] truncate text-mist-300 hover:text-accent-400 hover:underline" title={step.name}>
-                {step.name}
-              </Link>
-              <span aria-hidden>›</span>
-            </span>
-          ) : (
-            <span key={step.id} aria-current="page" className="max-w-[24ch] truncate" title={step.name}>
+  // The head every list has (`ListHead`): the path small above, symbol, name, count, "Ansicht" and the folder's menu.
+  const crumb = (
+    <nav aria-label={t('folders.page.path')} className="flex min-w-0 flex-wrap items-center gap-1">
+      {path.map((step, index) =>
+        index < path.length - 1 ? (
+          <span key={step.id} className="flex min-w-0 items-center gap-1">
+            <Link to={`/folder/${step.id}`} className="max-w-[16ch] truncate text-mist-500 hover:text-accent-400 hover:underline" title={step.name}>
               {step.name}
-            </span>
-          ),
-        )}
-      </nav>
-      <div className="flex min-w-0 items-center gap-3">
-        <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px]" style={{ background: `color-mix(in srgb, ${colorOf(folder.color)} 16%, transparent)` }}>
-          <FolderMark folder={folder.icon ? folder : { ...folder, icon: 'folder' }} size={18} />
-        </span>
-        <h1 className="min-w-0 truncate text-2xl font-bold" title={folder.name}>
-          {folder.name}
-        </h1>
-        <span className="shrink-0 text-[13px] text-mist-500">{t('folders.count.notes', { count: folder.count })}</span>
-        <button type="button" aria-label={t('folders.menu.label', { name: folder.name })} onClick={(event) => setMenu(event.currentTarget)} className="nn-btn nn-btn-ghost ml-auto h-9 w-9 shrink-0 px-0">
-          <MoreHorizontal aria-hidden className="h-4 w-4" />
-        </button>
-      </div>
+            </Link>
+            <span aria-hidden>›</span>
+          </span>
+        ) : (
+          <span key={step.id} aria-current="page" className="sr-only">
+            {step.name}
+          </span>
+        ),
+      )}
+    </nav>
+  )
+  const icon = (
+    <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-[8px]" style={{ background: `color-mix(in srgb, ${colorOf(folder.color)} 16%, transparent)` }}>
+      <FolderMark folder={folder.icon ? folder : { ...folder, icon: 'folder' }} size={17} />
+    </span>
+  )
+  const more = (
+    <button
+      type="button"
+      aria-label={t('folders.menu.label', { name: folder.name })}
+      aria-haspopup="menu"
+      aria-expanded={Boolean(menu)}
+      onClick={(event) => setMenu(menu ? null : event.currentTarget)}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mist-500 hover:bg-ink-800 hover:text-mist-100"
+      data-testid="folder-more"
+    >
+      <MoreHorizontal aria-hidden className="h-4 w-4" />
+    </button>
+  )
+
+  return (
+    <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="folder-page">
+      <PhoneBack to={parent ? `/folder/${parent.id}` : '/folders'} label={parent ? parent.name : t('folders.section')} />
+      {folder.count === 0 && <ListHead heading={folder.name} crumb={crumb} icon={icon} count={t('folders.count.notes', { count: 0 })} actions={more} />}
       {folder.count === 0 ? (
         <div
           data-testid="folder-empty"
@@ -123,7 +135,7 @@ export function FolderPage() {
           )}
         </div>
       ) : (
-        <NoteList folderId={folder.id} />
+        <NoteList folderId={folder.id} heading={folder.name} crumb={crumb} icon={icon} actions={more} />
       )}
       {newNote && <PhoneNewNote onClick={() => newNote(folder.id)} label={t('folders.page.newNote', { name: folder.name })} />}
       {menu && <FolderMenu folder={folder} anchor={menu} onClose={() => setMenu(null)} onAction={(action) => actions.act(action, folder)} />}

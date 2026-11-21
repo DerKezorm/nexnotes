@@ -7,7 +7,7 @@
  *
  * Addresses (`workspace.ts`): the list as the path, the open note as `?note=<id>`; beside all notes `/notes/<id>`.
  */
-import { ArrowLeft, Plus } from 'lucide-react'
+import { ArrowLeft, NotebookText, Plus } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useNavigate, useOutlet } from 'react-router-dom'
@@ -34,7 +34,7 @@ export function AllNotesList() {
     <div className={'flex min-h-full flex-col ' + padding}>
       {/* On a phone the lists come after the folders (NOTES-23 AC-1). */}
       {!open && <PhoneBack to="/folders" label={t('folders.section')} />}
-      <NoteList heading={t('notes.all')} />
+      <NoteList heading={t('notes.all')} icon={<NotebookText aria-hidden className="h-[18px] w-[18px] shrink-0 text-accent-400" strokeWidth={2} />} />
       {!open && (
         <button
           type="button"

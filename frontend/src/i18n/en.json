@@ -612,7 +612,8 @@
     "nextasks_list_unknown": "This list is no longer in nextasks, or the key may not write there.",
     "nextasks_slow_down": "nextasks asks for fewer requests. Try again in {{seconds}} seconds.",
     "nextasks_not_found": "nextasks does not know this.",
-    "nextasks_task_gone": "This task is no longer in nextasks."
+    "nextasks_task_gone": "This task is no longer in nextasks.",
+    "list_style_unknown": "Choose list, cards, compact or tiles."
   },
   "folders": {
     "section": "Folders",
@@ -880,7 +881,26 @@
       "label": "View",
       "list": "List",
       "tiles": "Tiles",
-      "gallery": "Attachments"
+      "gallery": "Attachments",
+      "show": "Show",
+      "notes": "Notes"
+    },
+    "groupNone": "No groups",
+    "state": {
+      "grouped": "grouped by date"
+    },
+    "style": {
+      "label": "Look",
+      "list": "List",
+      "cards": "Cards",
+      "compact": "Compact",
+      "tiles": "Tiles"
+    },
+    "hints": {
+      "label": "Hints",
+      "text": "Checklists, attachments, tags",
+      "attachments_one": "{{count}} attachment",
+      "attachments_other": "{{count}} attachments"
     }
   },
   "notes": {
@@ -1179,7 +1199,14 @@
     "jump": "Settings page",
     "ownPassword": "Your password",
     "saved": "Saved.",
-    "title": "Settings"
+    "title": "Settings",
+    "tabs": {
+      "account": "My account",
+      "accounts": "Accounts",
+      "connections": "Connections",
+      "log": "Log",
+      "server": "Server"
+    }
   },
   "setup": {
     "code": "Setup code",
@@ -2022,7 +2049,8 @@
       "unnamed": "without a name",
       "gone": "Deleted: {{name}}"
     },
-    "sharedPage": "Manage shares"
+    "sharedPage": "Manage shares",
+    "menu": "Actions for “{{name}}”"
   },
   "pwa": {
     "update": "A new version of nexnotes is here.",

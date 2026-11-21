@@ -60,7 +60,7 @@ test('NOTES-7 AC-7 AC-8 a new account has "Open checklists", "Recently edited", 
   await context.close()
 })
 
-test('NOTES-7 AC-1 AC-2 AC-3 AC-4 made with conditions and a preview, opened as tiles kept over a reload', async ({ page }) => {
+test('NOTES-7 AC-1 AC-2 AC-3 AC-4 made with conditions and a preview, its sort kept over a reload', async ({ page }) => {
   const stamp = Date.now().toString(36)
   const recipes = await folder(page, `Recipes ${stamp}`)
   await note(page, `Lentil soup ${stamp}`, `#try${stamp}\n\n- [ ] lentils\n- [x] stock`, recipes)
@@ -84,16 +84,18 @@ test('NOTES-7 AC-1 AC-2 AC-3 AC-4 made with conditions and a preview, opened as 
   await expect(page).toHaveURL(/\/smart\/[0-9a-f-]{36}$/)
   await expect(page.getByTestId('note-row')).toHaveCount(1)
   await expect(page.getByTestId('note-row').first()).toContainText(`Lentil soup ${stamp}`)
-  // Tiles, kept on the server: still tiles after a reload.
-  await page.getByTestId('list-mode-tiles').click()
-  await expect(page.getByTestId('note-list')).toHaveAttribute('data-mode', 'tiles')
+  // Sorted by title, kept on the server: still so after a reload.
+  await page.getByTestId('list-view').click()
+  await page.getByTestId('list-sort-title').click()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('list-state')).toHaveText('Title A to Z')
   await page.reload()
-  await expect(page.getByTestId('note-list')).toHaveAttribute('data-mode', 'tiles')
+  await expect(page.getByTestId('list-state')).toHaveText('Title A to Z')
   // Always the state of now: a second recipe with an open item shows up without touching the folder.
   await note(page, `Pancakes ${stamp}`, `#try${stamp}\n\n- [ ] eggs`)
-  await expect(page.getByTestId('note-tile')).toHaveCount(2, { timeout: 15_000 })
+  await expect(page.getByTestId('note-row')).toHaveCount(2, { timeout: 15_000 })
   // A note opens beside the list (NOTES-8 AC-9).
-  await page.getByTestId('note-tile').first().click()
+  await page.getByTestId('note-row').first().click()
   await expect(page).toHaveURL(/\/smart\/[0-9a-f-]{36}\?note=/)
 })
 
@@ -145,7 +147,8 @@ test('NOTES-7 AC-6 deleting asks once and leaves every note; EC-1 a deleted fold
   await page.getByTestId('smart-broken-edit').click()
   await expect(page).toHaveURL(new RegExp(`/smart/${id}/edit$`))
   await page.goBack()
-  // Deleting asks once, goes without the trash, the notes stay.
+  // Deleting asks once (from the "…" in the head), goes without the trash, the notes stay.
+  await page.getByTestId('smart-more').click()
   await page.getByTestId('smart-delete-open').click()
   await expect(page.getByTestId('smart-delete')).toContainText('The notes in it stay where they are.')
   await page.getByTestId('smart-delete-confirm').click()

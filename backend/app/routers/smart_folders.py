@@ -53,8 +53,9 @@ class PreviewIn(BaseModel):
 
 
 class ViewIn(BaseModel):
-    #: ``gallery``: the attachments of its notes (a smart folder with the condition "Anhang").
-    mode: Literal["list", "tiles", "gallery"] | None = None
+    #: ``gallery``: the attachments of its notes (a smart folder with the condition "Anhang"); ``list``: its notes, as
+    #: the account's lists look (``PUT /api/me/list-look``).
+    mode: Literal["list", "gallery"] | None = None
     sort: Literal["updated", "created", "title"] | None = None
     direction: Literal["asc", "desc"] | None = None
     grouped: bool | None = None

@@ -2,8 +2,9 @@
 and colors.
 
 The server hands a list over whole, in one query without the documents; sorting and grouping by date happen in the
-browser, which alone knows the device's time zone (EC-7). How a folder is looked at (rows or tiles, the sort, grouping)
-is kept per account and folder, so that every device shows it the same way (AC-1, AC-4).
+browser, which alone knows the device's time zone (EC-7). How a folder is sorted and grouped is kept per account and
+folder, so that every device shows it the same way (AC-4, AC-5). How the notes look (rows, cards, compact rows, tiles)
+and whether rows carry their hints is the account's, the same for every list (``list_look``).
 
 A list that is open asks for ``stamp`` every few seconds and loads again only when it changed (EC-6). ``listed_at`` is
 set by an ORM event whenever something a list shows changes, whichever way the change comes (the editor, a move, the
@@ -13,7 +14,7 @@ What other features bring dock on here, so that lists show it as soon as they ex
 
 - ``SHARED_NOTES``: the ids of notes shared with an account (sharing), for "All notes" and its count (AC-7).
 - ``ITEM_EXTRAS``: more fields per item, for many notes at once, e.g. ``tags``, ``shared`` (who a note is shared with)
-  or ``media`` (the first picture, scan or sketch and how many).
+  or ``media`` (the first picture, scan or sketch and how many) and ``attachments`` (how many of every kind).
 - ``LOCK_CHECKS``: the ids of locked notes; of those a list gets the title and the lock, nothing else (EC-3).
 """
 
@@ -29,7 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..errors import error
-from ..models import Account, Folder, Note, NoteListView, NoteUpdate, utcnow
+from ..models import LIST_STYLES, Account, Folder, Note, NoteListView, NoteUpdate, utcnow
 from ..notedoc import doc as notedoc
 from ..notedoc import schema as s
 from ..notedoc.room import Access
@@ -56,7 +57,7 @@ ITEM_EXTRAS: list[Extras] = []
 LOCK_CHECKS: list[LockCheck] = []
 
 #: What a locked note's item never carries.
-_HIDDEN_WHEN_LOCKED = ("preview", "tasks", "media", "tags")
+_HIDDEN_WHEN_LOCKED = ("preview", "tasks", "media", "attachments", "tags")
 
 
 # --- Checklists ---------------------------------------------------------------------------------------------------
@@ -315,10 +316,13 @@ def stamp(db: Session, account: Account, folder_id: str | None) -> str:
 
 
 def view_of(db: Session, account: Account, key: str) -> dict[str, Any]:
+    """The sort and grouping of a list; ``mode`` is ``gallery`` for a smart folder showing its attachments, else
+    ``list`` (tiles from before count as the list: how notes look is the account's, ``list_look``)."""
     row = db.scalar(select(NoteListView).where(NoteListView.account_id == account.id, NoteListView.key == key))
     if row is None:
         return dict(DEFAULT_VIEW)
-    return {"mode": row.mode, "sort": row.sort, "direction": row.direction, "grouped": row.grouped}
+    mode = "gallery" if row.mode == "gallery" else "list"
+    return {"mode": mode, "sort": row.sort, "direction": row.direction, "grouped": row.grouped}
 
 
 def save_view(db: Session, account: Account, folder_id: str | None, wanted: dict[str, Any]) -> dict[str, Any]:
@@ -346,6 +350,49 @@ def save_view_of(db: Session, account: Account, key: str, wanted: dict[str, Any]
             if attempt:
                 raise
     return view_of(db, account, key)
+
+
+def forget_tile_modes(db: Session) -> int:
+    """Lists kept as tiles per folder from before the account's look (``list_look``) become lists: tiles are chosen for
+    all lists at once now. Runs at every start; a database without such rows is left alone."""
+    changed = db.query(NoteListView).filter(NoteListView.mode == "tiles").update({NoteListView.mode: "list"},
+                                                                                synchronize_session=False)
+    if changed:
+        db.commit()
+    return int(changed or 0)
+
+
+# --- The account's look -------------------------------------------------------------------------------------------
+
+#: How lists look until the account chose: rows with their hints (checklists, attachments, tags).
+DEFAULT_LOOK: dict[str, Any] = {"style": LIST_STYLES[0], "hints": True}
+
+
+def list_look(account: Account) -> dict[str, Any]:
+    """How every list of the account looks, on every device: ``style`` (one of ``LIST_STYLES``) and ``hints``."""
+    chosen = account.preferences if isinstance(account.preferences, dict) else {}
+    style = chosen.get("list_style")
+    hints = chosen.get("list_hints")
+    return {"style": style if style in LIST_STYLES else DEFAULT_LOOK["style"],
+            "hints": hints if isinstance(hints, bool) else DEFAULT_LOOK["hints"]}
+
+
+def check_style(style: str) -> str:
+    if style not in LIST_STYLES:
+        raise error("list_style_unknown", "Choose list, cards, compact or tiles.", 422)
+    return style
+
+
+def set_list_look(db: Session, account: Account, style: str | None, hints: bool | None) -> dict[str, Any]:
+    """Keeps how the account's lists look; only what is given changes."""
+    preferences = dict(account.preferences) if isinstance(account.preferences, dict) else {}
+    if style is not None:
+        preferences["list_style"] = check_style(style)
+    if hints is not None:
+        preferences["list_hints"] = bool(hints)
+    account.preferences = preferences
+    db.commit()
+    return list_look(account)
 
 
 # --- Pins and colors ----------------------------------------------------------------------------------------------

@@ -273,12 +273,13 @@ def test_notes7_ac4_opened_it_shows_the_state_of_now_like_a_folder(client, opera
     # Checked off: out of "open checklists"; in the trash: out as well.
     set_fields(first, tasks_done=1)
     assert titles(shown(client, made["id"])) == ["Packliste"]
-    # Rows or tiles and the sort are kept per smart folder, on every device.
-    saved = client.put(f"/api/smart-folders/{made['id']}/view", json={"mode": "tiles", "sort": "title"})
-    assert saved.status_code == 200 and saved.json()["mode"] == "tiles"
+    # The sort is kept per smart folder, on every device; how notes look is the account's (no tiles per folder).
+    saved = client.put(f"/api/smart-folders/{made['id']}/view", json={"sort": "title"})
+    assert saved.status_code == 200 and saved.json()["mode"] == "list" and saved.json()["sort"] == "title"
     with new_client(operator) as other_device:
-        assert shown(other_device, made["id"])["view"]["mode"] == "tiles"
-    assert client.get("/api/note-list").json()["view"]["mode"] == "list"
+        assert shown(other_device, made["id"])["view"]["sort"] == "title"
+    assert client.get("/api/note-list").json()["view"]["sort"] == "updated"
+    assert client.put(f"/api/smart-folders/{made['id']}/view", json={"mode": "tiles"}).status_code == 422
 
 
 def test_notes7_ac4_only_its_owner_sees_or_changes_it(client, operator):
@@ -290,7 +291,7 @@ def test_notes7_ac4_only_its_owner_sees_or_changes_it(client, operator):
                        theirs.get(f"/api/smart-folders/{made['id']}/notes"),
                        theirs.get(f"/api/smart-folders/{made['id']}/stamp"),
                        theirs.put(f"/api/smart-folders/{made['id']}", json={"name": "Weg"}),
-                       theirs.put(f"/api/smart-folders/{made['id']}/view", json={"mode": "tiles"}),
+                       theirs.put(f"/api/smart-folders/{made['id']}/view", json={"mode": "list"}),
                        theirs.delete(f"/api/smart-folders/{made['id']}")):
             assert answer.status_code == 404
             assert answer.json()["detail"]["code"] == "smart_folder_not_found"
@@ -619,11 +620,16 @@ def test_notes7_ac7_attachments_opens_as_the_gallery_of_its_notes(client, operat
     # The account's own gallery stays its own: nothing of Anna's.
     own = client.get("/api/attachments").json()
     assert not {item["note"]["title"] for item in own["items"]} & {"Annas Rezept", "Annas Geheimnis"}
-    # A view saved without a mode keeps the gallery; another mode chosen is kept.
+    # A view saved without a mode keeps the gallery; the notes chosen instead are kept, per folder.
     kept = client.put(f"/api/smart-folders/{attachments_id}/view", json={"sort": "title"}).json()
     assert kept["mode"] == "gallery" and kept["sort"] == "title"
-    assert client.put(f"/api/smart-folders/{attachments_id}/view", json={"mode": "tiles"}).json()["mode"] == "tiles"
-    assert shown(client, attachments_id)["view"]["mode"] == "tiles"
+    assert client.put(f"/api/smart-folders/{attachments_id}/view", json={"mode": "list"}).json()["mode"] == "list"
+    assert shown(client, attachments_id)["view"]["mode"] == "list"
+    # The account's look does not touch it: cards for every list, the gallery stays a choice of this folder.
+    assert client.put("/api/me/list-look", json={"style": "cards"}).status_code == 200
+    client.put(f"/api/smart-folders/{attachments_id}/view", json={"mode": "gallery"})
+    assert shown(client, attachments_id)["view"]["mode"] == "gallery"
+    assert client.get("/api/auth/me").json()["list_style"] == "cards"
     # Somebody else's smart folder is nobody's gallery.
     with new_client(anna) as theirs:
         assert theirs.get(f"/api/smart-folders/{attachments_id}/attachments").status_code == 404

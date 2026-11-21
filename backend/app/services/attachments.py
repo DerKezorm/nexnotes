@@ -836,8 +836,9 @@ def gallery(db: Session, account: Account, kind: str | None = None, sort: str = 
 
 
 def media_of(db: Session, account: Account, rows: list[Any]) -> dict[str, dict[str, Any]]:
-    """The note's first picture, scan, sketch or video and how many of its kind there are, for a whole list at
-    once (``notes_list.ITEM_EXTRAS``). In a note of somebody else, what the owner did not put there is left out
+    """The note's first picture, scan, sketch or video and how many of its kind there are, and how many attachments
+    of every kind it holds (``attachments``, the hint of the lists), for a whole list at once in one query per 500
+    notes (``notes_list.ITEM_EXTRAS``). In a note of somebody else, what the owner did not put there is left out
     (NOTES-13, ``readable``)."""
     owners = {row.id: row.owner_id for row in rows}
     if not owners:
@@ -850,6 +851,7 @@ def media_of(db: Session, account: Account, rows: list[Any]) -> dict[str, dict[s
             .where(AttachmentMention.note_id.in_(theirs[start:start + 500]), AttachmentMention.vouched.is_(False))))
     found: dict[str, dict[str, Any]] = {}
     counted: dict[str, dict[str, int]] = {}
+    every: dict[str, set[str]] = {}
     ids = list(owners)
     for start in range(0, len(ids), 500):
         chunk = ids[start: start + 500]
@@ -857,19 +859,24 @@ def media_of(db: Session, account: Account, rows: list[Any]) -> dict[str, dict[s
             select(AttachmentRef.note_id, Attachment.id, Attachment.kind, Attachment.owner_id, Attachment.has_thumb,
                    Attachment.note_id)
             .join(Attachment, Attachment.id == AttachmentRef.attachment_id)
-            .where(AttachmentRef.note_id.in_(chunk), Attachment.kind.in_(PICTURE_KINDS))
+            .where(AttachmentRef.note_id.in_(chunk))
             .order_by(AttachmentRef.note_id, AttachmentRef.position)
         ):
             if owner_id != owners.get(note_id):
                 continue
             if home != note_id and (note_id, attachment_id) in unvouched:
                 continue
+            every.setdefault(note_id, set()).add(attachment_id)
+            if kind not in PICTURE_KINDS:
+                continue
             counted.setdefault(note_id, {}).setdefault(kind, 0)
             counted[note_id][kind] += 1
             if note_id not in found:
                 found[note_id] = {"kind": kind, "url": f"/api/attachments/{attachment_id}/thumb" if thumb else None}
-    return {note_id: {"media": {**first, "count": counted[note_id][first["kind"]]}}
-            for note_id, first in found.items()}
+    out: dict[str, dict[str, Any]] = {note_id: {"attachments": len(held)} for note_id, held in every.items()}
+    for note_id, first in found.items():
+        out[note_id]["media"] = {**first, "count": counted[note_id][first["kind"]]}
+    return out
 
 
 # --- The export (NOTES-17) ----------------------------------------------------------------------------------------

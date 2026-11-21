@@ -402,15 +402,20 @@ class NoteUpdate(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
 
 
-#: How a list of notes is shown (NOTES-6): as rows or as tiles, sorted by when it changed, when it was made or by title.
-LIST_MODES = ("list", "tiles")
+#: What a list of notes shows (NOTES-6): its notes, or the gallery of their attachments (a smart folder with "Anhang",
+#: NOTES-7). How the notes look (rows, cards, compact, tiles) is the account's for every list (``LIST_STYLES``), not a
+#: folder's: a ``mode`` of ``tiles`` from before is read as ``list``.
+LIST_MODES = ("list", "gallery")
+#: How the account's lists of notes look, every one of them (``preferences["list_style"]``); the first is the default.
+LIST_STYLES = ("list", "cards", "compact", "tiles")
 LIST_SORTS = ("updated", "created", "title")
 LIST_DIRECTIONS = ("asc", "desc")
 
 
 class NoteListView(Base):
-    """How one account looks at one folder's notes (NOTES-6 AC-1, AC-4, AC-5), on every device. ``key`` is the
-    folder's id, or ``all`` for "All notes". No row: a list, newest change first, grouped by date."""
+    """How one account looks at one folder's notes (NOTES-6 AC-4, AC-5), on every device: the sort and the grouping;
+    ``mode`` only says whether a smart folder shows its notes or the gallery (``LIST_MODES``). ``key`` is the folder's
+    id, or ``all`` for "All notes". No row: newest change first, grouped by date."""
 
     __tablename__ = "note_list_views"
     __table_args__ = (UniqueConstraint("account_id", "key"),)

@@ -612,7 +612,8 @@
     "nextasks_list_unknown": "Diese Liste gibt es in nextasks nicht mehr, oder der Schlüssel darf dort nicht schreiben.",
     "nextasks_slow_down": "nextasks bittet um weniger Anfragen. Versuch es in {{seconds}} Sekunden noch einmal.",
     "nextasks_not_found": "nextasks kennt das nicht.",
-    "nextasks_task_gone": "Diese Aufgabe gibt es in nextasks nicht mehr."
+    "nextasks_task_gone": "Diese Aufgabe gibt es in nextasks nicht mehr.",
+    "list_style_unknown": "Wähl Liste, Karten, Kompakt oder Kacheln."
   },
   "folders": {
     "section": "Ordner",
@@ -880,7 +881,26 @@
       "label": "Ansicht",
       "list": "Liste",
       "tiles": "Kacheln",
-      "gallery": "Anhänge"
+      "gallery": "Anhänge",
+      "show": "Zeigen",
+      "notes": "Notizen"
+    },
+    "groupNone": "Keine Gruppen",
+    "state": {
+      "grouped": "nach Datum gruppiert"
+    },
+    "style": {
+      "label": "Darstellung",
+      "list": "Liste",
+      "cards": "Karten",
+      "compact": "Kompakt",
+      "tiles": "Kacheln"
+    },
+    "hints": {
+      "label": "Hinweise",
+      "text": "Checklisten, Anhänge, Schlagwörter",
+      "attachments_one": "{{count}} Anhang",
+      "attachments_other": "{{count}} Anhänge"
     }
   },
   "notes": {
@@ -1179,7 +1199,14 @@
     "jump": "Seite der Einstellungen",
     "ownPassword": "Dein Passwort",
     "saved": "Gespeichert.",
-    "title": "Einstellungen"
+    "title": "Einstellungen",
+    "tabs": {
+      "account": "Mein Konto",
+      "accounts": "Konten",
+      "connections": "Verbindungen",
+      "log": "Log",
+      "server": "Server"
+    }
   },
   "setup": {
     "code": "Einrichtungscode",
@@ -2022,7 +2049,8 @@
       "unnamed": "ohne Namen",
       "gone": "Gelöscht: {{name}}"
     },
-    "sharedPage": "Freigaben verwalten"
+    "sharedPage": "Freigaben verwalten",
+    "menu": "Aktionen für „{{name}}“"
   },
   "pwa": {
     "update": "Es gibt eine neue Version von nexnotes.",
