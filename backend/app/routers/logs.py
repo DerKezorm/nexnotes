@@ -46,8 +46,9 @@ def read_logs(
     level: Annotated[Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] | None, Query()] = None,
     search: Annotated[str | None, Query(max_length=120)] = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 300,
+    offset: Annotated[int, Query(ge=0, le=1_000_000)] = 0,
 ) -> list[logs.LogLine]:
-    return logs.read(limit=limit, level=level, search=search)
+    return logs.read(limit=limit, level=level, search=search, offset=offset)
 
 
 @router.get("/level", response_model=LogMode, summary="Which level applies")

@@ -141,6 +141,21 @@ class _NoDuplicateAsgiTraceback(logging.Filter):
         return record.getMessage() != "Exception in ASGI application"
 
 
+#: What uvicorn says for every live connection of an editor: "connection open", "connection closed" and
+#: '... "WebSocket /api/notes/.../live" [accepted]'. Noise on "normal"; a detail of the deep modes.
+_CONNECTION_LINES = re.compile(r'^(connection (open|closed)|.*"WebSocket [^"]*" (\[accepted\]|403|\d{3}).*)$')
+
+
+class _QuietConnections(logging.Filter):
+    """uvicorn's lines about each live connection count as DEBUG: kept only while a deep mode is on."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno > logging.INFO or not _CONNECTION_LINES.match(record.getMessage()):
+            return True
+        record.levelno, record.levelname = logging.DEBUG, "DEBUG"
+        return _mode in DEEP_MODES
+
+
 @dataclass(frozen=True)
 class LogLine:
     time: str
@@ -227,6 +242,8 @@ def setup() -> None:
     uvicorn_error.addHandler(handler)
     if not any(isinstance(f, _NoDuplicateAsgiTraceback) for f in uvicorn_error.filters):
         uvicorn_error.addFilter(_NoDuplicateAsgiTraceback())
+    if not any(isinstance(f, _QuietConnections) for f in uvicorn_error.filters):
+        uvicorn_error.addFilter(_QuietConnections())
 
     apply_mode(env_mode() or DEFAULT_MODE)
     purge_old()
@@ -368,8 +385,9 @@ def parse_line(line: str) -> LogLine | None:
     )
 
 
-def read(limit: int = 200, level: str | None = None, search: str | None = None) -> list[LogLine]:
-    """The newest lines first. ``level`` means this level and higher."""
+def read(limit: int = 200, level: str | None = None, search: str | None = None, offset: int = 0) -> list[LogLine]:
+    """The newest lines first, from the ``offset``-th that fits on (the next page). ``level`` means this level and
+    higher."""
     path = log_file()
     if not path.is_file():
         return []
@@ -398,6 +416,9 @@ def read(limit: int = 200, level: str | None = None, search: str | None = None) 
             continue
         haystack = f"{parsed.message} {parsed.request_id or ''} {parsed.user or ''}".lower()
         if needle and needle not in haystack:
+            continue
+        if offset > 0:
+            offset -= 1
             continue
         result.append(parsed)
         if len(result) >= limit:

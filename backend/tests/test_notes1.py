@@ -688,3 +688,37 @@ def test_notes1_ec11_deadlines_follow_the_servers_clock_and_the_log_warns_when_i
         row.deleted_at = utcnow() - timedelta(days=29, hours=23)
         db.commit()
         assert accounts.purge_deleted(db) == 0
+
+
+def test_notes1_ac9_the_log_comes_as_rows_page_by_page_and_live_connections_stay_out_on_normal(
+    client: TestClient, operator: Account
+) -> None:
+    """The log as a table (time, level, source, request and account, message), page by page; uvicorn's two lines per
+    live connection are a detail of the deep modes, not of "normal" (review of 21.11.2026)."""
+    import logging as logging_
+
+    from app.services import logs as log_service
+
+    log_service.setup()
+    noise = logging_.getLogger("uvicorn.error")
+    noise.info("connection open")
+    noise.info('127.0.0.1:50000 - "WebSocket /api/notes/abc/live" [accepted]')
+    noise.info("connection closed")
+    for number in range(5):
+        logging_.getLogger("nexnotes.probe").warning("probe line %s", number)
+    rows = client.get("/api/logs", params={"search": "probe line", "limit": 2}).json()
+    assert [row["message"] for row in rows] == ["probe line 4", "probe line 3"]
+    assert set(rows[0]) >= {"time", "level", "logger", "message", "request_id", "user", "at"}
+    assert rows[0]["level"] == "WARNING" and rows[0]["logger"] == "nexnotes.probe"
+    following = client.get("/api/logs", params={"search": "probe line", "limit": 2, "offset": 2}).json()
+    assert [row["message"] for row in following] == ["probe line 2", "probe line 1"]
+    everything = " ".join(row["message"] for row in client.get("/api/logs", params={"limit": 1000}).json())
+    assert "connection open" not in everything and "connection closed" not in everything and "[accepted]" not in everything
+    # A deep mode wants them, as DEBUG.
+    assert client.put("/api/logs/level", json={"mode": "detailed", "minutes": 30}).status_code == 200
+    try:
+        noise.info("connection open")
+        found = [row for row in client.get("/api/logs", params={"search": "connection open"}).json()]
+        assert found and found[0]["level"] == "DEBUG"
+    finally:
+        client.put("/api/logs/level", json={"mode": "normal", "minutes": 0})

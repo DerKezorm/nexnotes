@@ -3,7 +3,7 @@
  * recognition, sign-in (`SignInCards.tsx`), the invitation mail and the operator's own languages; and the log. Everything
  * here is the server's; it applies to everyone.
  */
-import { Download, Globe, Info, Mail, RotateCcw, ScanText, ShieldCheck, SlidersHorizontal, Gauge, HardDrive, Trash2, Upload } from 'lucide-react'
+import { Download, Globe, Mail, RotateCcw, ScanText, ShieldCheck, SlidersHorizontal, Gauge, HardDrive, Trash2, Upload } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -22,7 +22,7 @@ import {
 } from '../../api/client'
 import { byName, forgetAddedLanguages, templateFile } from '../../i18n'
 import { bytes, dayTime } from '../../lib/format'
-import { clock, moment } from '../../lib/time'
+import { moment } from '../../lib/time'
 import { useAuth } from '../../state/auth'
 import { ASKED, Button, Card, Confirm, Feedback, Input, saveAsFile, Select, Toggle, useAction } from './ui'
 
@@ -495,97 +495,3 @@ export function LanguagesCard() {
   )
 }
 
-/** `at`: the moment with its offset, shown in the reader's own time; `time` is the server's clock. */
-type LogLine = { time: string; level: string; logger: string; message: string; at?: string | null }
-type LogMode = { mode: string; until: string | null; fixed_by_env: boolean; modes: string[] }
-
-export function LogCard() {
-  const { t, i18n } = useTranslation()
-  const [lines, setLines] = useState<LogLine[] | null>(null)
-  const [level, setLevel] = useState('')
-  const [words, setWords] = useState('')
-  const [mode, setMode] = useState<LogMode | null>(null)
-  const [clearing, setClearing] = useState(false)
-  const action = useAction()
-  const load = useCallback(() => {
-    api<LogLine[]>('/api/logs', { query: { level: level || undefined, search: words.trim() || undefined, limit: 300 } }).then(setLines, () => undefined)
-  }, [level, words])
-  useEffect(() => {
-    const timer = window.setTimeout(load, 250)
-    return () => window.clearTimeout(timer)
-  }, [load])
-  useEffect(() => {
-    api<LogMode>('/api/logs/level').then(setMode, () => undefined)
-  }, [])
-  const tone = (line: LogLine) => (line.level === 'ERROR' || line.level === 'CRITICAL' ? 'text-bad-500' : line.level === 'WARNING' ? 'text-warn-500' : 'text-mist-300')
-  return (
-    <Card id="log" icon={Info} title={t('server.log')} text={t('server.logHint')}>
-      <div className="flex flex-wrap items-end gap-2">
-        <Select
-          label={t('server.level')}
-          value={level}
-          onChange={setLevel}
-          options={[
-            { value: '', label: t('server.allLevels') },
-            { value: 'INFO', label: 'INFO' },
-            { value: 'WARNING', label: 'WARNING' },
-            { value: 'ERROR', label: 'ERROR' },
-          ]}
-          className="w-40"
-        />
-        <Input label={t('server.logSearch')} value={words} onChange={setWords} className="min-w-40 flex-1" />
-        <Button onClick={load}>{t('server.refresh')}</Button>
-      </div>
-      <div className="nn-scroll max-h-[28rem] overflow-auto rounded-[12px] border border-ink-700 bg-ink-950 p-3 font-mono text-[11px] leading-5" role="log">
-        {lines?.length === 0 && <p className="text-mist-500">{t('server.logEmpty')}</p>}
-        {lines?.map((line, index) => (
-          <div key={index} className={'break-words whitespace-pre-wrap ' + tone(line)}>
-            <span className="text-mist-600">{line.at ? moment(line.at, i18n.language, true) : line.time}</span> {line.level} <span className="text-mist-500">{line.logger}</span> {line.message}
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-end gap-2">
-        {mode && (
-          <label className="block text-sm">
-            <span className="text-xs font-medium text-mist-400">{t('server.detail')}</span>
-            <select
-              className="nn-field mt-1 w-56 px-2"
-              value={mode.mode}
-              disabled={mode.fixed_by_env}
-              onChange={(e) => void action.run(async () => setMode(await api<LogMode>('/api/logs/level', { method: 'PUT', body: { mode: e.target.value, minutes: e.target.value === 'detailed' || e.target.value === 'trace' ? 60 : 0 } })))}
-            >
-              {mode.modes.map((value) => (
-                <option key={value} value={value}>
-                  {t(`server.levels.${value}`)}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        <a href="/api/logs/download" className="nn-btn nn-btn-ghost">
-          <Download className="h-4 w-4" strokeWidth={1.8} />
-          {t('server.download')}
-        </a>
-        <Button danger onClick={() => setClearing(true)}>
-          {t('server.logClear')}
-        </Button>
-      </div>
-      {mode?.until && <p className="text-xs text-mist-500">{t('server.logUntil', { time: clock(mode.until, i18n.language) })}</p>}
-      <Feedback problem={action.problem} done={action.done} />
-      {clearing && (
-        <Confirm
-          title={t('server.logClear')}
-          text={t('server.logClearText')}
-          confirm={t('server.logClear')}
-          danger
-          onCancel={() => setClearing(false)}
-          onConfirm={async () => {
-            await api('/api/logs', { method: 'DELETE' })
-            setClearing(false)
-            setLines([])
-          }}
-        />
-      )}
-    </Card>
-  )
-}

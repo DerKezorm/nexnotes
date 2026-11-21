@@ -826,7 +826,7 @@
     "logClearText": "Every line is removed. New ones come as before.",
     "logEmpty": "Nothing in the log.",
     "logHint": "Four levels. The two deep ones switch themselves off after an hour. Never the content of notes, passwords or keys.",
-    "logSearch": "Containing …",
+    "logSearch": "Search in the text …",
     "logUntil": "Back to normal at {{time}}.",
     "mail": "Mail",
     "mailHint": "Only for invitations. Without a server, the link to copy is enough.",
@@ -901,7 +901,15 @@
       "normal": "Normal",
       "detailed": "Detailed (1 hour)",
       "trace": "Everything (1 hour)"
-    }
+    },
+    "logAll": "All",
+    "logLevelHint": "A filter always shows the higher levels too: WARNING includes the errors.",
+    "logTime": "Time",
+    "logSource": "Source",
+    "logRequest": "No. / account",
+    "logMessage": "Message",
+    "logMore": "Load older",
+    "logRequestHint": "Show only this request"
   },
   "session": {
     "again": "Sign in again",
