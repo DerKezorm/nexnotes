@@ -21,10 +21,10 @@ test('NOTES-3 AC-14 AC-15 width of the text and the outline at 2560 and 1280 px'
 
   const article = page.getByTestId('note-page')
   expect(Math.round((await article.boundingBox())!.width)).toBe(760)
-  await page.getByTestId('tool-width').click()
+  await page.getByTestId('tool-width').first().click()
   await page.getByTestId('width-wide').click()
   expect(Math.round((await article.boundingBox())!.width)).toBe(1100)
-  await page.getByTestId('tool-width').click()
+  await page.getByTestId('tool-width').first().click()
   await page.getByTestId('width-full').click()
   const full = (await article.boundingBox())!.width
   expect(full).toBeGreaterThan(1500)
@@ -32,7 +32,12 @@ test('NOTES-3 AC-14 AC-15 width of the text and the outline at 2560 and 1280 px'
   // Narrower: the outline goes by itself, the text keeps the whole width of its side.
   await page.setViewportSize({ width: 1280, height: 900 })
   await expect(outline).toBeHidden()
-  await page.getByTestId('tool-width').click()
+  // Narrower, the width may stand under "More".
+  if (await page.getByTestId('tool-width').first().isVisible()) await page.getByTestId('tool-width').first().click()
+  else {
+    await page.getByTestId('tool-more').first().click()
+    await page.getByTestId('more-width').click()
+  }
   await page.getByTestId('width-narrow').click()
   expect(Math.round((await article.boundingBox())!.width)).toBeLessThanOrEqual(760)
 })

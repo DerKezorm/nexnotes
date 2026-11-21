@@ -37,14 +37,14 @@ test('NOTES-4 AC-1 AC-3 AC-5 folders made in the sidebar, one dragged onto anoth
   const stamp = Date.now().toString(36)
   await page.goto('/')
   await page.getByRole('button', { name: 'New folder at the top' }).click()
-  await page.getByRole('dialog').getByRole('textbox').fill(`Work ${stamp}`)
-  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Folder name' }).fill(`Work ${stamp}`)
+  await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click()
   await expect(row(page, `Work ${stamp}`)).toBeVisible()
 
   await row(page, `Work ${stamp}`).click({ button: 'right' })
   await page.getByRole('menuitem', { name: 'New subfolder' }).click()
-  await page.getByRole('dialog').getByRole('textbox').fill('Projects')
-  await page.getByRole('dialog').getByRole('button', { name: 'Save' }).click()
+  await page.getByRole('dialog').getByRole('textbox', { name: 'Folder name' }).fill('Projects')
+  await page.getByRole('dialog').getByRole('button', { name: 'Create' }).click()
   await expect(row(page, 'Projects')).toBeVisible()
 
   const home = `Home ${stamp}`

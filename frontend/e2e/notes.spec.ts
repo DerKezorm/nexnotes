@@ -156,7 +156,7 @@ test('NOTES-3 AC-6 deleting moves the note to the trash, "Undo" within ten secon
   await expect(page.getByTestId('note-row').filter({ hasText: note.title })).toBeVisible()
 })
 
-test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which is marked for checking', async ({ page }) => {
+test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion; taken on purpose it is ok, made without typing it is marked', async ({ page }) => {
   await page.goto('/')
   await page.getByTestId('new-note').click()
   await expect(page.getByTestId('note-title')).toBeFocused()
@@ -173,16 +173,24 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which i
   await expect(page.getByTestId('leave-suggestion')).toHaveText('Dentist Tuesday 15:30 confirm')
   await page.getByTestId('leave-take').click()
   await expect(page).not.toHaveURL(/\/notes\//)
-  await expect.poll(async () => (await head(page, id)).title_check).toBe(true)
+  // Seen and taken: a title like a typed one, no mark (AC-9).
+  await expect.poll(async () => (await head(page, id)).title).toBe('Dentist Tuesday 15:30 confirm')
+  expect((await head(page, id)).title_check).toBe(false)
   // This very note's row (a repeated run leaves notes of the same words behind).
-  const row = page.locator(`[data-testid="note-row"][href="/notes/${id}"]`)
-  await expect(row).toContainText('Dentist Tuesday 15:30 confirm')
+  const seen = page.locator(`[data-testid="note-row"][href="/notes/${id}"]`)
+  await expect(seen).toContainText('Dentist Tuesday 15:30 confirm')
+  await expect(seen).not.toContainText('Check title')
+  // Made without typing (AC-10): the suggestion carries the mark until "Title OK".
+  const made = await page.request.post('/api/notes', { data: { markdown: 'Pick up the parcel at the post office' }, headers: { 'X-Nexnotes-Client': 'tab-e2e-notes0000' } })
+  const other = (await made.json()).id as string
+  expect((await head(page, other)).title_check).toBe(true)
+  await page.reload()
+  const row = page.locator(`[data-testid="note-row"][href="/notes/${other}"]`)
   await expect(row).toContainText('Check title')
-  // "Title OK" takes the mark away (AC-10).
   await row.click()
   await page.getByTestId('title-ok').click()
   await expect(page.getByTestId('title-check')).toHaveCount(0)
-  expect((await head(page, id)).title_check).toBe(false)
+  expect((await head(page, other)).title_check).toBe(false)
 })
 
 test("NOTES-3 AC-9 the browser's back button asks too and goes back only with the suggestion", async ({ page }) => {
