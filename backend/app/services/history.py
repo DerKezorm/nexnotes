@@ -480,6 +480,9 @@ def copy(db: Session, account: Account, note_id: str, version_id: int, when: str
                 ydoc=document.get_update(), text=to_plain(document), created_at=now, updated_at=now,
                 updated_by_id=account.id)
     db.add(note)
+    db.flush()
+    # The copy is found by the search like any note made by hand (NOTES-9).
+    notes._written(db, note)
     db.commit()
     logger.info("Version copied note=%s version=%s copy=%s", note_id, version_id, note.id)
     return note

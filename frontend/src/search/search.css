@@ -1,0 +1,9 @@
+/* The place a search hit jumped to (AC-5), marked for a moment. */
+::highlight(nexnotes-search) {
+  background: var(--color-highlight);
+}
+
+[data-search-hit] {
+  background: var(--color-highlight);
+  border-radius: 3px;
+}
