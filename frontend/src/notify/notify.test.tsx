@@ -15,7 +15,7 @@ import { FolderMenu } from '../folders/FolderMenu'
 import i18n from '../i18n'
 import type { NotifySettings } from './api'
 import { forgetWorker } from './browser'
-import { useViewing, textBlockAt, VIEWING_EVERY_MS } from './hooks'
+import { CHANGE_MARK_MS, ChangeFound, textBlockAt, useJumpToChange, useViewing, VIEWING_EVERY_MS } from './hooks'
 import { NotifyBell } from './NotifyBell'
 import { insidePath } from './open'
 
@@ -262,6 +262,40 @@ describe('NOTES-14 a tapped notification', () => {
     expect(textBlockAt(editor as never, 0)).not.toBeNull()
     expect(textBlockAt(editor as never, 9)).toBeNull()
     editor.destroy()
+  })
+
+  it('NOTES-14 AC-5 the named line stays marked while the editor draws it again, and the mark goes after a while', async () => {
+    const element = document.createElement('div')
+    document.body.appendChild(element)
+    const editor = new Editor({
+      element,
+      extensions: [StarterKit, TaskList, TaskItem.configure({ nested: true }), ChangeFound],
+      content: '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Milch</p></li><li data-type="taskItem" data-checked="false"><p>Eier</p></li></ul>',
+    })
+    function Jumper() {
+      useJumpToChange(editor as never, true)
+      return null
+    }
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    await act(async () =>
+      root.render(
+        <MemoryRouter initialEntries={['/notes/n1?change=1']}>
+          <Jumper />
+        </MemoryRouter>,
+      ),
+    )
+    // ProseMirror hears changes to its elements a moment later and draws the block again: the mark is still there.
+    await act(async () => void (await vi.advanceTimersByTimeAsync(50)))
+    const marked = () => Array.from(element.querySelectorAll('.nn-change-found')).map((each) => each.textContent)
+    expect(marked()).toEqual(['Eier'])
+    expect(editor.state.doc.resolve(editor.state.selection.from).parent.textContent).toBe('Eier')
+    // Typing elsewhere keeps it on its line.
+    await act(async () => void editor.commands.insertContentAt(1, 'Frische '))
+    expect(marked()).toEqual(['Eier'])
+    await act(async () => void (await vi.advanceTimersByTimeAsync(CHANGE_MARK_MS)))
+    expect(marked()).toEqual([])
+    editor.destroy()
+    element.remove()
   })
 
   it('NOTES-14 AC-5 opens only addresses inside nexnotes', () => {

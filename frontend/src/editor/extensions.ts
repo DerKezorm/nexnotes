@@ -33,6 +33,7 @@ import type {} from '@tiptap/extension-table'
 import type {} from '@tiptap/starter-kit'
 
 import { ATTACHMENT_NODES, attachmentEditing, withAttachmentView } from '../attachments/editing'
+import { ChangeFound } from '../notify/hooks'
 import { caretLook, presentAccounts, type PresenceUser } from './presence'
 import type { EditorConnection } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
@@ -468,6 +469,8 @@ export function editorExtensions({ doc, provider, me, t, placeholder, hooks = {}
     noteTags(t),
     // Attachments (NOTES-10): files dropped and pasted, links that become cards.
     attachmentEditing(noteId),
+    // Notifications (NOTES-14 AC-5): the line a tapped notification named, marked for a few seconds.
+    ChangeFound,
   ]
 }
 
