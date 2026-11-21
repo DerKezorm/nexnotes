@@ -1,6 +1,6 @@
 /**
  * The pages before signing in: the first account (with the setup code from the server's log), signing in (password,
- * then the second factor; or a provider's button, in the order of the sign-in blueprint), accepting an invitation, and
+ * then the second factor; or a provider's button, the buttons on top), accepting an invitation, and
  * setting a new password with the operator's reset link.
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
@@ -10,7 +10,7 @@ import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-r
 import { ApiError, authApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
 import { Logo } from '../components/Logo'
 import { PasswordConfirmField } from '../components/PasswordConfirm'
-import { ProviderButtons } from '../components/ProviderButtons'
+import { OrLine, ProviderButtons } from '../components/ProviderButtons'
 import { ThemeSwitcher } from '../components/ThemeSwitcher'
 import i18n from '../i18n'
 import { errorText, signInErrorText } from '../lib/errors'
@@ -288,38 +288,47 @@ export function LoginPage() {
     )
   }
 
-  // Blueprint 04: password form, below the line "or" a button per active provider. With the password sign-in off only
-  // the buttons, and small at the bottom the operator's way in with the password.
+  // As in the other nex apps (decision of 21.11.2026): a button per active provider at the top, below the line "or" the
+  // password form; without a provider only the form. With the password sign-in off (blueprint 04) only the buttons, and
+  // small at the bottom the operator's way in with the password. The focus goes to the first thing on the page: the
+  // first button, or the address field without a provider (and once the operator opens the form).
   const providers = methods.providers
-  const passwordShown = methods.password || providers.length === 0 || operatorWay
+  const withProviders = providers.length > 0
+  const passwordShown = methods.password || !withProviders || operatorWay
   const endedNote = ended && <Warning>{t('auth.login.ended')}</Warning>
+  // With buttons on top the note and a provider's refusal stand above them; a wrong password stays at the form.
+  const problemOnTop = withProviders && (fromAddress || !passwordShown)
   return (
     <AuthFrame title={t('auth.login.title')}>
-      {passwordShown ? (
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void submit()
-          }}
-        >
+      {withProviders && (endedNote || (problemOnTop && problem)) && (
+        <div className="mb-4 space-y-4">
           {endedNote}
-          <Problem problem={problem} fromAddress={fromAddress} />
-          <AuthField label={t('auth.email')} value={name} onChange={setName} autoComplete="username" autoFocus name="email" />
-          <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="current-password" />
-          <Primary busy={busy}>{t('auth.login.submit')}</Primary>
-          <button type="button" className="nn-btn-quiet block text-sm" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>
-            {t('auth.login.forgot')}
-          </button>
-          {forgot && <p className="text-xs text-mist-500">{t('auth.login.forgotText')}</p>}
-        </form>
-      ) : (
-        <div className="space-y-4">
-          {endedNote}
-          <Problem problem={problem} fromAddress={fromAddress} />
+          {problemOnTop && <Problem problem={problem} fromAddress={fromAddress} />}
         </div>
       )}
-      <ProviderButtons providers={providers} next={next} withOr={passwordShown} />
+      <ProviderButtons providers={providers} next={next} withOr={false} autoFocus />
+      {passwordShown && (
+        <>
+          {withProviders && <OrLine />}
+          <form
+            className="space-y-4"
+            onSubmit={(event) => {
+              event.preventDefault()
+              void submit()
+            }}
+          >
+            {!withProviders && endedNote}
+            {!problemOnTop && <Problem problem={problem} fromAddress={fromAddress} />}
+            <AuthField label={t('auth.email')} value={name} onChange={setName} autoComplete="username" autoFocus={!withProviders || operatorWay} name="email" />
+            <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="current-password" />
+            <Primary busy={busy}>{t('auth.login.submit')}</Primary>
+            <button type="button" className="nn-btn-quiet block text-sm" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>
+              {t('auth.login.forgot')}
+            </button>
+            {forgot && <p className="text-xs text-mist-500">{t('auth.login.forgotText')}</p>}
+          </form>
+        </>
+      )}
       {!passwordShown && (
         <button type="button" className="mt-4 w-full text-center text-xs text-mist-500 hover:text-mist-300" onClick={() => setOperatorWay(true)}>
           {t('oidc.login.operator')}
