@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from .config import get_settings
 from .db import SessionLocal, get_db
 from .errors import detail, error
-from .models import OPERATOR, SIGN_IN_PASSWORD, AuthSession, OidcLink, OidcProvider, utcnow
+from .models import OPERATOR, SIGN_IN_PASSWORD, TOKEN_DEVICE, AuthSession, OidcLink, OidcProvider, utcnow
 from .models import Account as AccountRow
 from .security import SESSION_COOKIE, account_out, brake, hash_token, session_account, session_owner
 from .services import accounts, apitokens, logs, totp
@@ -141,7 +141,8 @@ def require_account(request: Request) -> AccountRow:
     with SessionLocal() as db:
         token = _bearer(request)
         if token:
-            found = apitokens.authenticate(db, token)
+            # MCP keys only at /api/mcp (routers/mcp.py): here a paired device's token.
+            found = apitokens.authenticate(db, token, (TOKEN_DEVICE,))
             if found is None:
                 raise error("sign_in_required", "Sign in first.", 401)
             account = found[0]

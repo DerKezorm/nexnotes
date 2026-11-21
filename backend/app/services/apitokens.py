@@ -52,12 +52,14 @@ def make(db: Session, account: Account, name: str, *, kind: str = TOKEN_DEVICE, 
     return row, token
 
 
-def authenticate(db: Session, token: str | None) -> tuple[Account, ApiToken] | None:
-    """The account and the token behind a bearer token, or None: unknown, run out, or its account blocked or deleted."""
-    if not token:
+def authenticate(db: Session, token: str | None, kinds: tuple[str, ...] = KINDS) -> tuple[Account, ApiToken] | None:
+    """The account and the token behind a bearer token, or None: unknown, of another kind than ``kinds``, run out, or
+    its account blocked or deleted. An MCP key counts at ``/api/mcp`` only: the other routes would let a key that may
+    only read write through them (NOTES-20)."""
+    if not token or len(token) > 200:
         return None
     row = db.scalar(select(ApiToken).where(ApiToken.token_hash == digest(token)))
-    if row is None:
+    if row is None or row.kind not in kinds:
         return None
     now = utcnow()
     if row.expires_at is not None and row.expires_at <= now:

@@ -567,7 +567,17 @@
     "notify_not_shared": "Mitteilungen gibt es nur für geteilte Notizen und Ordner.",
     "browser_only": "Das geht nur im Browser.",
     "webpush_endpoint": "Der Browser hat keine gültige Adresse für Mitteilungen geliefert.",
-    "webpush_keys": "Der Browser hat keine gültigen Schlüssel für Mitteilungen geliefert."
+    "webpush_keys": "Der Browser hat keine gültigen Schlüssel für Mitteilungen geliefert.",
+    "key_invalid": "Dieser MCP-Schlüssel gilt nicht (mehr).",
+    "mcp_off": "Der Betreiber hat MCP abgeschaltet.",
+    "mcp_too_many_keys": "Ein Konto hat höchstens {{max}} MCP-Schlüssel. Widerrufe zuerst einen.",
+    "oauth_client": "Dieses Programm ist hier nicht angemeldet. Starte das Verbinden im Programm noch einmal.",
+    "oauth_pkce": "Das Programm meldet sich nicht auf dem sicheren Weg an (PKCE). Es kann sich nicht verbinden.",
+    "oauth_redirect": "Diese Rücksprungadresse ist für das Programm nicht hinterlegt.",
+    "oauth_response_type": "Das Programm fragt auf eine Art, die nexnotes nicht spricht.",
+    "origin_refused": "MCP ist nicht für Webseiten.",
+    "protocol_version": "Diese MCP-Fassung spricht nexnotes nicht.",
+    "slow_down": "Zu viele Anfragen mit diesem Schlüssel. Warte eine Minute."
   },
   "folders": {
     "section": "Ordner",
@@ -1777,5 +1787,47 @@
     "preview": "So kommt sie an",
     "notSharedNote": "Mitteilungen gibt es für geteilte Notizen: Sie melden, wenn andere etwas ändern.",
     "notSharedFolder": "Mitteilungen gibt es für geteilte Ordner: Teile den Ordner zuerst, dann melden sie, wenn andere darin etwas ändern."
+  },
+  "mcp": {
+    "section": {
+      "title": "MCP-Schlüssel für KI-Werkzeuge",
+      "text": "Mit einem Schlüssel liest ein KI-Werkzeug deine Notizen und, wenn du willst, schreibt es auch. Es sieht nie mehr als du.",
+      "new": "Neuer Schlüssel",
+      "none": "Noch kein Schlüssel.",
+      "off": "Der Betreiber hat MCP abgeschaltet. Deine Schlüssel ruhen, neue lassen sich nicht anlegen.",
+      "address": "Adresse für das Werkzeug",
+      "header": "Das Werkzeug schickt den Schlüssel als „Authorization: Bearer …“. Programme, die sich selbst verbinden, melden sich mit deiner Zustimmung an und stehen dann auch hier.",
+      "made": "„{{name}}“ angelegt · nur jetzt sichtbar",
+      "lastUsed": "zuletzt {{when}}",
+      "neverUsed": "noch nie benutzt",
+      "connector": "verbundenes Programm",
+      "revoke": "Widerrufen",
+      "revokeTitle": "„{{name}}“ widerrufen?",
+      "revokeText": "Das Werkzeug kommt sofort nicht mehr herein. Was es geschrieben hat, bleibt.",
+      "count": "{{count}} von {{max}} Schlüsseln"
+    },
+    "level": {
+      "read": "nur lesen",
+      "write": "lesen und schreiben"
+    },
+    "dialog": {
+      "title": "Neuer MCP-Schlüssel",
+      "name": "Name",
+      "namePlaceholder": "z. B. Einkaufsliste per Chat",
+      "right": "Recht",
+      "read": "Nur lesen",
+      "readHint": "Suchen, lesen, Ordner und Schlagwörter auflisten.",
+      "write": "Lesen und schreiben",
+      "writeHint": "Dazu Notizen anlegen, ergänzen, abhaken, verschieben, Ordner anlegen und Notizen in den Papierkorb legen.",
+      "make": "Schlüssel anlegen"
+    },
+    "consent": {
+      "title": "„{{name}}“ verbinden?",
+      "text": "Das Programm arbeitet dann als du mit deinen Notizen, nie mit mehr, als du darfst. Danach geht es zurück zu {{host}}.",
+      "allow": "Erlauben",
+      "deny": "Ablehnen",
+      "broken": "Diese Anfrage zum Verbinden ist unvollständig. Starte das Verbinden im Programm noch einmal.",
+      "later": "Du findest das Programm unter Einstellungen, Verbindungen, und widerrufst es dort."
+    }
   }
 }

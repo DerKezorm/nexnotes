@@ -287,6 +287,12 @@ class ApiToken(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: An MCP key a connector got by signing in with OAuth (NOTES-20 AC-7): its client, the SHA-256 of its refresh
+    #: token and of the one before (brought again, it ends the connector), and when its account last agreed.
+    client_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    refresh_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    refresh_old_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    signed_in_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
 
 #: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.

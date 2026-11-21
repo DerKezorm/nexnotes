@@ -544,8 +544,9 @@ def test_notes2_ac7_the_operator_gives_no_password_only_a_link_the_person_sets_o
         assert browser.get("/api/auth/me").status_code == 401
         device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {device_token}"})
         assert device.get("/api/auth/me").status_code == 401
+        # An MCP key counts at /api/mcp only (NOTES-20).
         mcp = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {mcp_token}"})
-        assert mcp.get("/api/auth/me").status_code == 200
+        assert mcp.post("/api/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"}).status_code == 200
     # Used once, then gone.
     again = fresh_browser().post(f"/api/reset/{token}", json={"password": "another twelve"})
     assert again.status_code == 404 and _code(again) == "reset_invalid"

@@ -567,7 +567,17 @@
     "notify_not_shared": "Notifications are only for shared notes and folders.",
     "browser_only": "This only works in a browser.",
     "webpush_endpoint": "The browser sent no valid address for notifications.",
-    "webpush_keys": "The browser sent no valid keys for notifications."
+    "webpush_keys": "The browser sent no valid keys for notifications.",
+    "key_invalid": "This MCP key is not valid (any more).",
+    "mcp_off": "The operator has switched MCP off.",
+    "mcp_too_many_keys": "An account can have at most {{max}} MCP keys. Revoke one first.",
+    "oauth_client": "This program is not registered here. Start connecting in the program again.",
+    "oauth_pkce": "The program does not sign in the safe way (PKCE). It cannot connect.",
+    "oauth_redirect": "This return address is not registered for the program.",
+    "oauth_response_type": "The program asks in a way nexnotes does not speak.",
+    "origin_refused": "MCP is not for web pages.",
+    "protocol_version": "This MCP version is not spoken here.",
+    "slow_down": "Too many requests with this key. Wait a minute."
   },
   "folders": {
     "section": "Folders",
@@ -1777,5 +1787,47 @@
     "preview": "How it arrives",
     "notSharedNote": "Notifications are for shared notes: they tell you when others change something.",
     "notSharedFolder": "Notifications are for shared folders: share the folder first, then they tell you when others change something in it."
+  },
+  "mcp": {
+    "section": {
+      "title": "MCP keys for AI tools",
+      "text": "With a key an AI tool reads your notes and, if you want, writes them too. It never sees more than you.",
+      "new": "New key",
+      "none": "No key yet.",
+      "off": "The operator has switched MCP off. Your keys rest, and no new key can be made.",
+      "address": "Address for the tool",
+      "header": "The tool sends the key as “Authorization: Bearer …”. Programs that connect themselves sign in with your consent and show up here too.",
+      "made": "“{{name}}” made · visible only now",
+      "lastUsed": "last used {{when}}",
+      "neverUsed": "never used",
+      "connector": "connected program",
+      "revoke": "Revoke",
+      "revokeTitle": "Revoke “{{name}}”?",
+      "revokeText": "The tool is out at once. What it wrote stays.",
+      "count": "{{count}} of {{max}} keys"
+    },
+    "level": {
+      "read": "read only",
+      "write": "read and write"
+    },
+    "dialog": {
+      "title": "New MCP key",
+      "name": "Name",
+      "namePlaceholder": "e.g. Shopping list from the chat",
+      "right": "Right",
+      "read": "Read only",
+      "readHint": "Search, read, list folders and tags.",
+      "write": "Read and write",
+      "writeHint": "Also make notes, add to them, tick items off, move them, make folders and put notes into the trash.",
+      "make": "Make key"
+    },
+    "consent": {
+      "title": "Connect “{{name}}”?",
+      "text": "The program then works with your notes as you: never more than you may. Afterwards you go back to {{host}}.",
+      "allow": "Allow",
+      "deny": "Deny",
+      "broken": "This connection request is incomplete. Start connecting in the program again.",
+      "later": "You find the program under Settings, Connections, and revoke it there."
+    }
   }
 }
