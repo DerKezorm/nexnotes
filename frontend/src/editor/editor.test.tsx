@@ -1,0 +1,473 @@
+/**
+ * NOTES-3 in the editor itself: the tools, shortcuts and Markdown typing (AC-3), checklists (AC-4), tables (AC-5),
+ * the highlighter (AC-11), folding (AC-12), undo of one's own changes only (AC-13), pasting (EC-3), links (EC-8),
+ * every script (EC-10). The editor runs on a Yjs document as in the app; the live connection is not needed here.
+ */
+import { Editor } from '@tiptap/core'
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import * as Y from 'yjs'
+
+import i18n from '../i18n'
+import { bodyIsEmpty, cleanPastedHtml, collapseKey, editorExtensions, editorProps, foldedRanges, openLink, safeHref, taskCount, toggleDoneToBottom, toggleFold } from './extensions'
+import { presenceUser } from './presence'
+import { NoteProvider } from './provider'
+import { tableActions } from './table'
+import { Toolbar } from './Toolbar'
+
+const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
+const made: Editor[] = []
+
+function makeEditor(doc = new Y.Doc(), accountId = 1): Editor {
+  const element = document.createElement('div')
+  document.body.appendChild(element)
+  const provider = new NoteProvider('note', doc, { socket: () => { throw new Error('offline in tests') } })
+  const editor = new Editor({
+    element,
+    extensions: editorExtensions({ doc, provider, me: presenceUser(accountId, `person ${accountId}`), t, placeholder: 'Start writing' }),
+    editorProps,
+  })
+  made.push(editor)
+  return editor
+}
+
+function typeText(editor: Editor, text: string): void {
+  // Character by character, as typing does: the input rules see every one.
+  for (const char of text) {
+    const { from, to } = editor.state.selection
+    const handled = editor.view.someProp('handleTextInput', (handler) => handler(editor.view, from, to, char, () => editor.state.tr.insertText(char, from, to)))
+    if (!handled) editor.view.dispatch(editor.state.tr.insertText(char, from, to))
+  }
+}
+
+function press(editor: Editor, key: string, modifiers: { ctrl?: boolean; shift?: boolean; alt?: boolean } = {}): boolean {
+  const event = new KeyboardEvent('keydown', { key, ctrlKey: !!modifiers.ctrl, shiftKey: !!modifiers.shift, altKey: !!modifiers.alt, bubbles: true, cancelable: true })
+  return Boolean(editor.view.someProp('handleKeyDown', (handler) => handler(editor.view, event)))
+}
+
+function types(editor: Editor): string[] {
+  const out: string[] = []
+  editor.state.doc.descendants((node) => {
+    out.push(node.type.name)
+  })
+  return out
+}
+
+function marksOf(editor: Editor): string[] {
+  const out = new Set<string>()
+  editor.state.doc.descendants((node) => node.marks.forEach((mark) => out.add(mark.type.name)))
+  return [...out]
+}
+
+/** The editor's style sheet as text (vitest leaves CSS out of the page). */
+type Files = { readFileSync: (file: string, encoding: string) => string }
+const fsName = 'node:fs'
+const css = ((await import(/* @vite-ignore */ fsName)) as Files).readFileSync('src/editor/editor.css', 'utf-8')
+
+beforeAll(async () => {
+  await i18n.changeLanguage('en')
+  // jsdom knows neither layout nor the clipboard; ProseMirror asks for both now and then.
+  const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
+  Range.prototype.getClientRects = noRects
+  Range.prototype.getBoundingClientRect = () => new DOMRect()
+  Element.prototype.getClientRects = noRects
+  if (!('ClipboardEvent' in globalThis)) {
+    ;(globalThis as Record<string, unknown>).ClipboardEvent = class extends Event {
+      clipboardData = null
+    }
+  }
+})
+
+afterEach(() => {
+  while (made.length) made.pop()!.destroy()
+  document.body.innerHTML = ''
+})
+
+describe('NOTES-3 AC-3 the toolbar, shortcuts and Markdown typing', () => {
+  it('NOTES-3 AC-3 the toolbar offers every tool of the spec, each with its shortcut', async () => {
+    const editor = makeEditor()
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    let root: Root
+    await act(async () => {
+      root = createRoot(box)
+      root.render(<Toolbar editor={editor} onLink={() => undefined} />)
+    })
+    const labels = Array.from(box.querySelectorAll('[data-tool]')).map((tool) => tool.getAttribute('aria-label') ?? tool.id)
+    expect(labels).toEqual(['', 'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Bulleted list', 'Numbered list', 'Checklist', 'Table', 'Link', 'Quote', 'Code', 'Indent', 'Outdent', 'Divider', 'Undo', 'Redo'].map((label, index) => (index === 0 ? 'nn-text-style' : label)))
+    const options = Array.from(box.querySelectorAll('option')).map((option) => option.textContent)
+    expect(options).toEqual(['Heading', 'Subheading', 'Minor heading', 'Body text'])
+    for (const tool of box.querySelectorAll('button[data-tool]')) expect(tool.getAttribute('title')).toMatch(/\(.+\)$/)
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-3 every tool of the toolbar changes the text', async () => {
+    const editor = makeEditor()
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    let root: Root
+    await act(async () => {
+      root = createRoot(box)
+      root.render(<Toolbar editor={editor} onLink={() => undefined} />)
+    })
+    const run = async (change: () => unknown) => {
+      await act(async () => {
+        change()
+      })
+    }
+    const click = async (key: string) => {
+      await act(async () => (box.querySelector(`[data-testid="tool-${key}"]`) as HTMLButtonElement).click())
+    }
+    await run(() => editor.commands.setContent('<p>word</p>'))
+    for (const [key, mark] of [['bold', 'bold'], ['italic', 'italic'], ['underline', 'underline'], ['strike', 'strike']] as const) {
+      editor.commands.selectAll()
+      await click(key)
+      expect(marksOf(editor)).toContain(mark)
+    }
+    for (const [key, node] of [['bullet', 'bulletList'], ['ordered', 'orderedList'], ['task', 'taskList'], ['quote', 'blockquote']] as const) {
+      editor.commands.setContent('<p>word</p>')
+      editor.commands.setTextSelection(2)
+      await click(key)
+      expect(types(editor)).toContain(node)
+    }
+    await run(() => editor.commands.setContent('<p>word</p>'))
+    await run(() => editor.commands.setTextSelection(2))
+    await click('code')
+    expect(types(editor)).toContain('codeBlock')
+    await run(() => editor.commands.setContent('<p>word</p>'))
+    await run(() => editor.commands.setTextSelection({ from: 1, to: 3 }))
+    await click('code')
+    expect(marksOf(editor)).toContain('code')
+    await run(() => editor.commands.setContent('<p>word</p>'))
+    await click('divider')
+    expect(types(editor)).toContain('horizontalRule')
+    await run(() => editor.commands.setContent('<p>word</p>'))
+    await click('table')
+    expect(types(editor)).toContain('table')
+    // Indenting nests a list item, outdenting takes it back.
+    await run(() => editor.commands.setContent('<ul><li><p>one</p></li><li><p>two</p></li></ul>'))
+    await run(() => editor.commands.setTextSelection(10))
+    await click('indent')
+    expect(editor.getHTML()).toContain('<li><p>one</p><ul><li><p>two</p></li></ul></li>')
+    await click('outdent')
+    expect(editor.getHTML()).not.toContain('<ul><li><p>two</p></li></ul></li>')
+    // The text style.
+    await run(() => editor.commands.setContent('<p>word</p>'))
+    await run(() => editor.commands.setTextSelection(2))
+    const select = box.querySelector('select') as HTMLSelectElement
+    await act(async () => {
+      select.value = 'h2'
+      select.dispatchEvent(new Event('change', { bubbles: true }))
+    })
+    expect(editor.getJSON().content?.[0]).toMatchObject({ type: 'heading', attrs: { level: 2 } })
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-3 the shortcuts', () => {
+    const editor = makeEditor()
+    const cases: Array<[string, { ctrl?: boolean; shift?: boolean; alt?: boolean }, (e: Editor) => boolean]> = [
+      ['b', { ctrl: true }, (e) => marksOf(e).includes('bold')],
+      ['i', { ctrl: true }, (e) => marksOf(e).includes('italic')],
+      ['u', { ctrl: true }, (e) => marksOf(e).includes('underline')],
+      ['s', { ctrl: true, shift: true }, (e) => marksOf(e).includes('strike')],
+      ['h', { ctrl: true, shift: true }, (e) => marksOf(e).includes('highlight')],
+      ['e', { ctrl: true }, (e) => marksOf(e).includes('code')],
+      ['8', { ctrl: true, shift: true }, (e) => types(e).includes('bulletList')],
+      ['7', { ctrl: true, shift: true }, (e) => types(e).includes('orderedList')],
+      ['9', { ctrl: true, shift: true }, (e) => types(e).includes('taskList')],
+      ['b', { ctrl: true, shift: true }, (e) => types(e).includes('blockquote')],
+      ['1', { ctrl: true, alt: true }, (e) => e.isActive('heading', { level: 1 })],
+      ['2', { ctrl: true, alt: true }, (e) => e.isActive('heading', { level: 2 })],
+      ['c', { ctrl: true, alt: true }, (e) => types(e).includes('codeBlock')],
+      ['t', { ctrl: true, alt: true }, (e) => types(e).includes('table')],
+    ]
+    for (const [key, modifiers, check] of cases) {
+      editor.commands.setContent('<p>word</p>')
+      editor.commands.selectAll()
+      if (['8', '7', '9', '1', '2', 'c', 't'].includes(key) || (key === 'b' && modifiers.shift)) editor.commands.setTextSelection(2)
+      press(editor, key, modifiers)
+      expect(check(editor), `${key} ${JSON.stringify(modifiers)}`).toBe(true)
+    }
+    // Ctrl+K opens the link dialog.
+    let asked = false
+    const hooks = { onLink: () => (asked = true) }
+    const withHook = new Editor({
+      element: document.createElement('div'),
+      extensions: editorExtensions({ doc: new Y.Doc(), provider: new NoteProvider('x', undefined, { socket: () => { throw new Error('x') } }), me: presenceUser(1, 'a'), t, placeholder: '', hooks }),
+    })
+    made.push(withHook)
+    press(withHook, 'k', { ctrl: true })
+    expect(asked).toBe(true)
+  })
+
+  it('NOTES-3 AC-3 Markdown signs while typing', () => {
+    const editor = makeEditor()
+    const cases: Array<[string, (e: Editor) => boolean]> = [
+      ['# ', (e) => e.isActive('heading', { level: 1 })],
+      ['## ', (e) => e.isActive('heading', { level: 2 })],
+      ['- ', (e) => types(e).includes('bulletList')],
+      ['1. ', (e) => types(e).includes('orderedList')],
+      ['[ ] ', (e) => types(e).includes('taskList')],
+      ['> ', (e) => types(e).includes('blockquote')],
+      ['```', (e) => types(e).includes('codeBlock')],
+      ['---', (e) => types(e).includes('horizontalRule')],
+      ['**bold** ', (e) => marksOf(e).includes('bold')],
+      ['*italic* ', (e) => marksOf(e).includes('italic')],
+      ['~~gone~~ ', (e) => marksOf(e).includes('strike')],
+      ['`code` ', (e) => marksOf(e).includes('code')],
+      ['==marked== ', (e) => marksOf(e).includes('highlight')],
+    ]
+    for (const [typed, check] of cases) {
+      editor.commands.setContent('<p></p>')
+      editor.commands.setTextSelection(1)
+      typeText(editor, typed)
+      if (typed === '```') typeText(editor, ' ')
+      expect(check(editor), typed).toBe(true)
+    }
+  })
+})
+
+describe('NOTES-3 AC-4 checklists', () => {
+  it('NOTES-3 AC-4 a ticked item is ticked and struck through, "x of y" is counted, done items can go to the bottom', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Milk</p></li><li data-type="taskItem" data-checked="false"><p>Bread</p></li><li data-type="taskItem" data-checked="false"><p>Eggs</p></li></ul>')
+    const box = editor.view.dom
+    const checkbox = box.querySelectorAll<HTMLInputElement>('li input[type="checkbox"]')[0]
+    checkbox.click()
+    checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+    const list = editor.state.doc.firstChild!
+    expect(taskCount(list)).toEqual({ done: 1, all: 3 })
+    expect(box.querySelector('li[data-checked="true"] > div')?.textContent).toBe('Milk')
+    expect(box.querySelector('[data-testid="task-summary"]')?.textContent).toContain('1 of 3')
+    // The checked item is struck through by the editor's style.
+    expect(css).toMatch(/li\[data-checked='true'\] > div \{ text-decoration: line-through/)
+    expect(css).toMatch(/\[data-done-to-bottom='true'\] > li\[data-checked='true'\] \{ order: 1; \}/)
+    // "Erledigtes nach unten" is the list's own choice, kept in the document.
+    toggleDoneToBottom(editor.view, 0)
+    expect(editor.state.doc.firstChild!.attrs.doneToBottom).toBe(true)
+    expect(box.querySelector('ul[data-type="taskList"]')?.getAttribute('data-done-to-bottom')).toBe('true')
+    const button = box.querySelector('[data-testid="task-summary"] button') as HTMLButtonElement
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    button.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(editor.state.doc.firstChild!.attrs.doneToBottom).toBe(false)
+    // Another list has its own choice.
+    editor.commands.setContent('<ul data-type="taskList" data-done-to-bottom="true"><li data-type="taskItem" data-checked="true"><p>a</p></li></ul><p>x</p><ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>b</p></li></ul>')
+    const lists: boolean[] = []
+    editor.state.doc.forEach((node) => node.type.name === 'taskList' && lists.push(node.attrs.doneToBottom))
+    expect(lists).toEqual([true, false])
+  })
+})
+
+describe('NOTES-3 AC-5 tables', () => {
+  const cells = (editor: Editor) => {
+    const rows: string[][] = []
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'tableRow') {
+        const row: string[] = []
+        node.forEach((cell) => row.push(cell.textContent))
+        rows.push(row)
+        return false
+      }
+      return true
+    })
+    return rows
+  }
+
+  it('NOTES-3 AC-5 rows and columns added, removed and moved keep the other cells, the table scrolls in its box', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<table><tr><th><p>A</p></th><th><p>B</p></th></tr><tr><td><p>a1</p></td><td><p>b1</p></td></tr><tr><td><p>a2</p></td><td><p>b2</p></td></tr></table>')
+    expect(editor.view.dom.querySelector('.tableWrapper > table')).not.toBeNull()
+    const at = (text: string) => {
+      let found = -1
+      editor.state.doc.descendants((node, pos) => {
+        if (found < 0 && node.isText && node.text === text) found = pos
+      })
+      editor.commands.setTextSelection(found + 1)
+    }
+    const table = tableActions(editor)
+    at('a1')
+    table.addRowAfter()
+    expect(cells(editor)).toEqual([['A', 'B'], ['a1', 'b1'], ['', ''], ['a2', 'b2']])
+    at('b1')
+    table.addColumnAfter()
+    expect(cells(editor)).toEqual([['A', 'B', ''], ['a1', 'b1', ''], ['', '', ''], ['a2', 'b2', '']])
+    at('a2')
+    table.rowUp()
+    expect(cells(editor)).toEqual([['A', 'B', ''], ['a1', 'b1', ''], ['a2', 'b2', ''], ['', '', '']])
+    at('b1')
+    table.columnLeft()
+    expect(cells(editor)).toEqual([['B', 'A', ''], ['b1', 'a1', ''], ['b2', 'a2', ''], ['', '', '']])
+    at('a1')
+    table.columnRight()
+    expect(cells(editor)).toEqual([['B', '', 'A'], ['b1', '', 'a1'], ['b2', '', 'a2'], ['', '', '']])
+    at('b1')
+    table.rowDown()
+    expect(cells(editor)).toEqual([['B', '', 'A'], ['b2', '', 'a2'], ['b1', '', 'a1'], ['', '', '']])
+    at('b2')
+    table.deleteColumn()
+    expect(cells(editor)).toEqual([['', 'A'], ['', 'a2'], ['', 'a1'], ['', '']])
+    at('a2')
+    table.deleteRow()
+    expect(cells(editor)).toEqual([['', 'A'], ['', 'a1'], ['', '']])
+  })
+})
+
+describe('NOTES-3 AC-11 highlighter', () => {
+  it('NOTES-3 AC-11 a marked text gets one of five fixed colours, nothing else', () => {
+    const editor = makeEditor()
+    for (const color of ['honey', 'green', 'blue', 'rose', 'violet']) {
+      editor.commands.setContent('<p>word</p>')
+      editor.commands.selectAll()
+      editor.commands.setHighlight({ color })
+      expect(editor.view.dom.querySelector('mark')?.getAttribute('data-color')).toBe(color)
+    }
+    editor.commands.setContent('<p><mark data-color="red" style="background: red">word</mark></p>')
+    expect(editor.view.dom.querySelector('mark')?.getAttribute('data-color')).toBeNull()
+    expect(editor.view.dom.querySelector('mark')?.getAttribute('style')).toBeNull()
+    for (const color of ['green', 'blue', 'rose', 'violet']) expect(css).toContain(`mark[data-color='${color}'] { background: var(--nn-mark-${color}); }`)
+  })
+})
+
+describe('NOTES-3 AC-12 folding headings', () => {
+  it('NOTES-3 AC-12 a folded heading hides everything up to the next heading of its size or larger, says how much, and stays folded', () => {
+    const doc = new Y.Doc()
+    const editor = makeEditor(doc)
+    editor.commands.setContent('<h2>Before</h2><p>one</p><h3>Inner</h3><p>two</p><h2>Offers</h2><p>three</p>')
+    toggleFold(editor.view, 0)
+    expect(editor.state.doc.firstChild!.attrs.collapsed).toBe(true)
+    expect(foldedRanges(editor.state.doc)).toEqual([expect.objectContaining({ heading: 0, count: 3 })])
+    const hidden = Array.from(editor.view.dom.querySelectorAll('.nn-hidden')).map((node) => node.textContent?.replace(/[▾▸]/g, ''))
+    expect(hidden).toEqual(['one', 'Inner', 'two'])
+    expect(editor.view.dom.querySelector('.nn-folded-count')?.textContent).toBe('folded · 3 paragraphs')
+    expect(collapseKey.getState(editor.state)).toBeTruthy()
+    // The state is part of the document: another window, or the next opening, shows it folded too.
+    const again = new Y.Doc()
+    Y.applyUpdate(again, Y.encodeStateAsUpdate(doc))
+    const reopened = makeEditor(again)
+    expect(reopened.state.doc.firstChild!.attrs.collapsed).toBe(true)
+    expect(Array.from(reopened.view.dom.querySelectorAll('.nn-hidden')).map((node) => node.textContent?.replace(/[▾▸]/g, ''))).toEqual(['one', 'Inner', 'two'])
+    // Clicking the arrow unfolds.
+    const arrow = reopened.view.dom.querySelector('[data-testid="fold"]') as HTMLElement
+    arrow.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }))
+    expect(reopened.state.doc.firstChild!.attrs.collapsed).toBe(false)
+    expect(reopened.view.dom.querySelectorAll('.nn-hidden')).toHaveLength(0)
+  })
+})
+
+describe('NOTES-3 AC-13 undo touches one\'s own changes only', () => {
+  it('NOTES-3 AC-13 undo and redo of two people writing the same note', () => {
+    const one = new Y.Doc()
+    const two = new Y.Doc()
+    one.on('update', (update: Uint8Array, origin: unknown) => origin !== 'wire' && Y.applyUpdate(two, update, 'wire'))
+    two.on('update', (update: Uint8Array, origin: unknown) => origin !== 'wire' && Y.applyUpdate(one, update, 'wire'))
+    const mine = makeEditor(one, 1)
+    const theirs = makeEditor(two, 2)
+    mine.commands.setContent('<p>start</p>')
+    expect(theirs.getText()).toBe('start')
+    mine.commands.setTextSelection(6)
+    typeText(mine, ' mine')
+    theirs.commands.setTextSelection(theirs.state.doc.content.size - 1)
+    typeText(theirs, ' theirs')
+    expect(mine.getText()).toBe('start mine theirs')
+    expect(mine.commands.undo()).toBe(true)
+    expect(mine.getText()).not.toContain('mine')
+    expect(mine.getText()).toContain('theirs')
+    expect(theirs.getText()).toBe(mine.getText())
+    expect(mine.commands.redo()).toBe(true)
+    expect(mine.getText()).toContain('mine')
+    expect(mine.getText()).toContain('theirs')
+  })
+})
+
+describe('NOTES-3 EC-3 pasting', () => {
+  const word = `<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>p.MsoNormal { color: red }</style><script>alert('x')</script></head>
+    <body><!--[if gte mso 9]>junk<![endif]--><h1 style="color:blue" class="MsoTitle">Plan</h1><p class="MsoNormal" style="font-size: 30pt"><b>bold</b> and <span style="font-family: Comic Sans">plain</span><o:p></o:p></p>
+    <form action="https://evil.example"><input value="secret"><button>Send</button><textarea>typed</textarea></form>
+    <ul><li>one</li><li>two</li></ul><img src="x" onerror="alert(1)"><p onclick="alert(2)">clicked</p></body></html>`
+
+  it('NOTES-3 EC-3 what nexnotes knows stays, the rest becomes plain text, scripts, forms and styles go', () => {
+    const cleaned = cleanPastedHtml(word)
+    expect(cleaned).not.toMatch(/script|style=|class=|onclick|onerror|<form|<input|<button|<textarea|<img|o:p|alert/i)
+    const editor = makeEditor()
+    editor.commands.setContent('<p></p>')
+    editor.view.pasteHTML(word)
+    const json = JSON.stringify(editor.getJSON())
+    expect(types(editor)).toEqual(expect.arrayContaining(['heading', 'paragraph', 'bulletList', 'listItem']))
+    expect(marksOf(editor)).toEqual(['bold'])
+    expect(editor.getText()).toContain('plain')
+    expect(json).not.toMatch(/alert|secret|typed|Send|Comic|30pt|MsoNormal/)
+  })
+
+  it('NOTES-3 EC-3 a page from the web and Apple Notes keep headings, lists, links and tables', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<p></p>')
+    editor.view.pasteHTML('<div><h2>Title</h2><table><tr><td>a</td><td>b</td></tr></table><p><a href="https://example.com" target="_top" onclick="x()">site</a> <i>it</i></p><iframe src="https://evil.example"></iframe></div>')
+    expect(types(editor)).toEqual(expect.arrayContaining(['heading', 'table', 'tableCell']))
+    expect(editor.getHTML()).toContain('href="https://example.com"')
+    expect(editor.getHTML()).not.toMatch(/onclick|iframe|_top/)
+  })
+})
+
+describe('NOTES-3 EC-8 links', () => {
+  it('NOTES-3 EC-8 javascript: and other dangerous targets never become links', () => {
+    for (const bad of ['javascript:alert(1)', ' JavaScript:alert(1)', 'data:text/html,<b>x</b>', 'vbscript:x', 'file:///etc/passwd', 'https://', 'mailto:', 'java\tscript:alert(1)', 'https://exa mple.com']) {
+      expect(safeHref(bad), bad).toBeNull()
+    }
+    for (const good of ['https://example.com/a?b=c', 'http://example.com', 'mailto:someone@example.com']) expect(safeHref(good)).toBe(good)
+    const editor = makeEditor()
+    editor.commands.setContent('<p></p>')
+    editor.view.pasteHTML('<p><a href="javascript:alert(1)">click me</a> <a href="https://example.com">ok</a></p>')
+    const anchors = Array.from(editor.view.dom.querySelectorAll('a'))
+    expect(anchors.map((anchor) => anchor.getAttribute('href'))).toEqual(['https://example.com'])
+    expect(editor.getText()).toContain('click me')
+    editor.commands.setContent('<p></p>')
+    typeText(editor, 'javascript:alert(1) ')
+    expect(editor.view.dom.querySelector('a')).toBeNull()
+  })
+
+  it('NOTES-3 EC-8 links open in a new tab without access to nexnotes, and only with Ctrl or ⌘', () => {
+    const opened: unknown[][] = []
+    const spy = vi.spyOn(window, 'open').mockImplementation((...args: unknown[]) => {
+      opened.push(args)
+      return null
+    })
+    const editor = makeEditor()
+    editor.commands.setContent('<p><a href="https://example.com">site</a></p>')
+    const anchor = editor.view.dom.querySelector('a') as HTMLAnchorElement
+    expect(anchor.getAttribute('target')).toBe('_blank')
+    expect(anchor.getAttribute('rel')).toContain('noopener')
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    expect(opened).toEqual([])
+    anchor.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }))
+    expect(opened).toEqual([['https://example.com', '_blank', 'noopener,noreferrer']])
+    expect(openLink('javascript:alert(1)')).toBe(false)
+    expect(opened).toHaveLength(1)
+    spy.mockRestore()
+  })
+})
+
+describe('NOTES-3 EC-10 every script', () => {
+  it('NOTES-3 EC-10 umlauts, emoji and right-to-left text stay as they are in the shared document', () => {
+    const doc = new Y.Doc()
+    const editor = makeEditor(doc)
+    const text = 'Grüße 👋🏽 مرحبا بالعالم שלום'
+    editor.commands.setContent('<p></p>')
+    editor.commands.setTextSelection(1)
+    typeText(editor, text)
+    expect(editor.getText()).toBe(text)
+    const copy = new Y.Doc()
+    Y.applyUpdate(copy, Y.encodeStateAsUpdate(doc))
+    expect(makeEditor(copy).getText()).toBe(text)
+    expect(getComputedStyle(editor.view.dom).direction === 'rtl').toBe(false)
+  })
+
+  it('NOTES-3 EC-4 an empty body counts as empty, a body with anything in it does not', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<p></p>')
+    expect(bodyIsEmpty(editor)).toBe(true)
+    editor.commands.setContent('<p>   </p>')
+    expect(bodyIsEmpty(editor)).toBe(true)
+    editor.commands.setContent('<hr>')
+    expect(bodyIsEmpty(editor)).toBe(false)
+  })
+})

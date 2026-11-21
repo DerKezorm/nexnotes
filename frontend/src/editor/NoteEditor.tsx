@@ -13,7 +13,7 @@ import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { Copy, Ellipsis, Trash2, WifiOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import * as Y from 'yjs'
 
 import { Dialog } from '../components/Dialog'
@@ -85,6 +85,7 @@ function useKeyboardInset(): number {
 function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: NoteProvider }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
+  const here = useLocation().pathname
   const { me } = useAuth()
   const myId = me?.id ?? 0
   const myName = me?.display_name || me?.name || ''
@@ -205,7 +206,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
       const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
       if (!anchor || anchor.target === '_blank' || editor?.view.dom.contains(anchor)) return
       const url = new URL(anchor.href, window.location.href)
-      if (url.origin !== window.location.origin || url.pathname === window.location.pathname) return
+      if (url.origin !== window.location.origin || url.pathname === here) return
       if (!needsTitle()) return
       event.preventDefault()
       event.stopPropagation()
@@ -233,7 +234,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
         }, 50),
       )
     }
-  }, [noteId, editor, needsTitle, navigate, provider])
+  }, [noteId, editor, needsTitle, navigate, provider, here])
 
   // Closing the tab while changes wait: the browser asks (NOTES-12 EC-4).
   useEffect(() => {
