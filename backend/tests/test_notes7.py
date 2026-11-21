@@ -431,7 +431,10 @@ def test_notes7_ac6_changing_renaming_and_deleting_leave_the_notes_as_they_are(c
     note(client, "Einkauf", "- [ ] Milch #liste")
     note(client, "Packliste", "#liste")
     made = make(client, "Listen", {"kind": "tag", "op": "has", "key": "liste", "label": "liste"})
-    client.put(f"/api/smart-folders/{made['id']}/view", json={"mode": "tiles"})
+    assert client.put(f"/api/smart-folders/{made['id']}/view", json={"sort": "title"}).status_code == 200
+    with SessionLocal() as db:
+        assert db.scalar(select(func.count()).select_from(NoteListView)
+                         .where(NoteListView.key == f"s:{made['id']}")) == 1
     before = _notes_now(operator)
     changed = client.put(f"/api/smart-folders/{made['id']}", json={"name": "Offene Listen", "match": "all",
                                                                    "conditions": [made["conditions"][0], TASKS]})
@@ -673,6 +676,113 @@ def test_notes7_ac7_a_shared_note_shows_in_the_gallery_only_what_its_owner_put_t
     assert sorted(item["kind"] for item in gallery["items"]) == ["image", "pdf"]
 
 
+def _gallery_kinds(client, folder_id: str) -> list[str]:
+    answer = client.get(f"/api/smart-folders/{folder_id}/attachments")
+    assert answer.status_code == 200, answer.text
+    return sorted(f"{item['note']['title']}:{item['kind']}" for item in answer.json()["items"])
+
+
+def test_notes7_ac1_an_attachment_counts_only_in_a_note_of_its_owner(client, operator):
+    """NOTES-10/13: an attachment belongs to the owner of the note it was put in. A note of Anna's that names an
+    attachment of a third account holds no attachment of its own: neither the condition "Anhang" nor the gallery
+    counts it, for the account it is shared with or for Anna."""
+    anna = make_account("anna-third")
+    bert = make_account("bert-third")
+    with new_client(bert) as theirs:
+        berts = note(theirs, "Berts Bild")
+        attach(berts, "image")
+    with new_client(anna) as theirs:
+        listing = note(theirs, "Annas Liste")
+        attach(listing, "pdf")
+        share(theirs, "note", listing, operator)
+    with SessionLocal() as db:
+        picture = db.scalar(select(Attachment).where(Attachment.note_id == berts))
+        assert picture is not None
+        db.add(AttachmentRef(note_id=listing, attachment_id=picture.id, position=0))
+        db.commit()
+    pictures = make(client, "Bilder", {"kind": "attachment", "type": "image"})
+    every = make(client, "Alles", {"kind": "attachment", "type": "any"})
+    assert found(client, {"kind": "attachment", "type": "image"}) == []
+    assert titles(shown(client, pictures["id"])) == []
+    assert _gallery_kinds(client, pictures["id"]) == []
+    # The note fits by its own PDF; Bert's picture stays out of its gallery.
+    assert titles(shown(client, every["id"])) == ["Annas Liste"]
+    assert _gallery_kinds(client, every["id"]) == ["Annas Liste:pdf"]
+    with new_client(anna) as theirs:
+        assert found(theirs, {"kind": "attachment", "type": "image"}) == []
+        hers = make(theirs, "Alles", {"kind": "attachment", "type": "any"})
+        assert _gallery_kinds(theirs, hers["id"]) == ["Annas Liste:pdf"]
+    # Bert's own note still has it, in his list and his gallery.
+    with new_client(bert) as theirs:
+        assert found(theirs, {"kind": "attachment", "type": "image"}) == ["Berts Bild"]
+        his = make(theirs, "Bilder", {"kind": "attachment", "type": "image"})
+        assert _gallery_kinds(theirs, his["id"]) == ["Berts Bild:image"]
+
+
+def test_notes7_ac1_has_attachments_and_the_gallery_give_the_same_notes(client, operator):
+    """NOTES-13: in a note shared to write, an attachment of the owner's other note that a member wrote in (the owner
+    never did) is no attachment of that note for the member: "Hat Anhänge" leaves the note out as the gallery leaves
+    the attachment out. For the owner, whose attachment it is, both count it; once the owner puts it there, both
+    count it for the member too."""
+    anna = make_account("anna-agree")
+    with new_client(anna) as theirs:
+        home = note(theirs, "Annas Fotos")
+        attach(home, "image")
+        listing = note(theirs, "Annas Liste")
+        attach(listing, "pdf")
+        share(theirs, "note", listing, operator, "write")
+    with SessionLocal() as db:
+        picture = db.scalar(select(Attachment).where(Attachment.note_id == home))
+        assert picture is not None
+        db.add(AttachmentRef(note_id=listing, attachment_id=picture.id, position=1))
+        db.add(AttachmentMention(note_id=listing, attachment_id=picture.id, vouched=False))
+        db.commit()
+    pictures = make(client, "Bilder", {"kind": "attachment", "type": "image"})
+    papers = make(client, "Papiere", {"kind": "attachment", "type": "pdf"})
+    assert titles(shown(client, pictures["id"])) == []
+    assert _gallery_kinds(client, pictures["id"]) == []
+    assert titles(shown(client, papers["id"])) == ["Annas Liste"]
+    assert _gallery_kinds(client, papers["id"]) == ["Annas Liste:pdf"]
+    with new_client(anna) as theirs:
+        hers = make(theirs, "Bilder", {"kind": "attachment", "type": "image"})
+        assert titles(shown(theirs, hers["id"])) == ["Annas Fotos", "Annas Liste"]
+        # The gallery shows the attachments of the notes that fit, each once, at its own note.
+        assert _gallery_kinds(theirs, hers["id"]) == ["Annas Fotos:image", "Annas Liste:pdf"]
+    with SessionLocal() as db:
+        db.execute(AttachmentMention.__table__.update().where(AttachmentMention.note_id == listing)
+                   .values(vouched=True))
+        db.commit()
+    assert titles(shown(client, pictures["id"])) == ["Annas Liste"]
+    assert _gallery_kinds(client, pictures["id"]) == ["Annas Liste:image", "Annas Liste:pdf"]
+
+
+def test_notes7_ac1_shared_by_me_counts_only_accounts_that_are_there(client, operator):
+    anna = make_account("anna-closed")
+    bert = make_account("bert-open")
+    to_anna = note(client, "Für Anna")
+    to_bert = note(client, "Für Bert")
+    note(client, "Für niemanden")
+    share(client, "note", to_anna, anna)
+    share(client, "note", to_bert, bert)
+    assert found(client, {"kind": "shared", "op": "by_me"}) == ["Für Anna", "Für Bert"]
+    with SessionLocal() as db:
+        row = db.get(Account, anna.id)
+        assert row is not None
+        row.deleted_at = datetime.now(UTC)
+        db.commit()
+    assert found(client, {"kind": "shared", "op": "by_me"}) == ["Für Bert"]
+
+
+def test_notes7_ac1_the_colour_condition_takes_its_colour_only(client, operator):
+    orange = note(client, "Orange")
+    blue = note(client, "Blau")
+    note(client, "Ohne Farbe")
+    set_fields(orange, color="orange")
+    set_fields(blue, color="blue")
+    assert found(client, {"kind": "color", "color": "orange"}) == ["Orange"]
+    assert found(client, {"kind": "color", "color": "blue"}) == ["Blau"]
+
+
 def test_notes7_ac7_a_preset_keeps_its_name_in_the_interface_language_until_renamed(client, operator):
     items = client.get("/api/smart-folders").json()["items"]
     preset = items[0]
@@ -691,7 +801,8 @@ def test_notes7_ac8_the_order_is_the_one_dragged(client, operator):
     answer = client.put("/api/smart-folders/order", json={"ids": [third["id"], first["id"]]})
     assert answer.status_code == 200
     assert [item["name"] for item in client.get("/api/smart-folders").json()["items"]] == ["Drei", "Eins", "Zwei"]
-    assert client.put("/api/smart-folders/order", json={"ids": [first["id"], first["id"]]}).status_code == 404
+    twice = client.put("/api/smart-folders/order", json={"ids": [first["id"], first["id"]]})
+    assert twice.status_code == 422 and twice.json()["detail"]["code"] == "smart_folder_order_invalid"
     assert client.put("/api/smart-folders/order", json={"ids": [str(uuid.uuid4())]}).status_code == 404
     assert second["id"]
 
@@ -763,6 +874,46 @@ def test_notes7_ec6_the_same_name_twice_is_said(client, operator):
     # Another account may use the same name.
     with new_client(make_account("anna")) as theirs:
         assert theirs.post("/api/smart-folders", json={"name": "Rezepte", "conditions": [TASKS]}).status_code == 201
+
+
+def test_notes7_ec6_a_name_like_the_inner_key_of_a_preset_is_free(client, operator):
+    """The presets' keys lie where no name reaches: a folder of one's own may be called "preset:recent"."""
+    for name in ("preset:recent", "preset:open_tasks", "PRESET:attachments"):
+        made = make(client, name, TASKS)
+        assert made["name"] == name
+    presets = [item for item in client.get("/api/smart-folders").json()["items"] if item["preset"]]
+    assert len(presets) == 4 and all(item["name"] == "" for item in presets)
+    # Renamed back to its language's name, a preset takes its key again without a clash.
+    recent = next(item for item in presets if item["preset"] == "recent")
+    assert client.put(f"/api/smart-folders/{recent['id']}", json={"name": "Neu"}).status_code == 200
+    assert client.put(f"/api/smart-folders/{recent['id']}", json={"name": ""}).status_code == 200
+
+
+def test_notes7_ec6_presets_from_before_get_their_key_moved_once(client, operator):
+    with SessionLocal() as db:
+        db.execute(SmartFolder.__table__.update().where(SmartFolder.owner_id == operator.id,
+                                                        SmartFolder.preset != "")
+                   .values(name_key="preset:" + SmartFolder.preset))
+        db.execute(SmartFolder.__table__.delete().where(SmartFolder.owner_id == operator.id,
+                                                        SmartFolder.preset == ""))
+        setting = db.get(Setting, smart_folders.SEEDED_KEYS)
+        if setting is not None:
+            db.delete(setting)
+        db.commit()
+    with SessionLocal() as db:
+        smart_folders.seed_existing(db)
+    keys = {row.preset: row.name_key for row in smart_rows(operator)}
+    assert keys == {preset: f"\x1fpreset:{preset}" for preset in PRESETS}
+    assert make(client, "preset:recent", TASKS)["name"] == "preset:recent"
+    # Once: a key set later is left alone.
+    with SessionLocal() as db:
+        db.execute(SmartFolder.__table__.update().where(SmartFolder.owner_id == operator.id,
+                                                        SmartFolder.preset == "open_tasks")
+                   .values(name_key="preset:open_tasks"))
+        db.commit()
+    with SessionLocal() as db:
+        smart_folders.seed_existing(db)
+    assert {row.preset: row.name_key for row in smart_rows(operator)}["open_tasks"] == "preset:open_tasks"
 
 
 # --- EC-4: 10,000 notes ----------------------------------------------------------------------------------------------
