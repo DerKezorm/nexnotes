@@ -1,14 +1,15 @@
 /**
  * The areas of the settings, each with its own address (`/settings/<slug>`): "My account" for every account, "Server"
- * for the operator only. `/settings` is the profile; the addresses of the tabs before the areas lead to their area.
+ * for the operator only, and "About nexnotes" (`/settings/about`) for everyone at the end of the navigation, outside the
+ * groups. `/settings` is the profile; the addresses of the tabs before the areas lead to their area.
  */
-import { HardDrive, KeyRound, Mail, Palette, Plug, ScanText, ScrollText, ShieldCheck, SlidersHorizontal, UserRound, Users, type LucideIcon } from 'lucide-react'
+import { HardDrive, Info, KeyRound, Mail, Palette, Plug, ScanText, ScrollText, ShieldCheck, SlidersHorizontal, UserRound, Users, type LucideIcon } from 'lucide-react'
 
 import type { Me } from '../../api/client'
 
 type Role = Me['role']
 
-export type AreaSlug = 'profile' | 'security' | 'appearance' | 'connections' | 'general' | 'sign-in' | 'mail' | 'storage' | 'ocr' | 'accounts' | 'log'
+export type AreaSlug = 'profile' | 'security' | 'appearance' | 'connections' | 'general' | 'sign-in' | 'mail' | 'storage' | 'ocr' | 'accounts' | 'log' | 'about'
 export type AreaGroup = 'account' | 'server'
 
 export type Area = { slug: AreaSlug; group: AreaGroup; icon: LucideIcon; key: string }
@@ -29,6 +30,14 @@ export const AREAS: Area[] = [
 ]
 
 export const GROUPS: AreaGroup[] = ['account', 'server']
+
+/** "About nexnotes": an area of every account, below the groups (its `group` only says who may open it). */
+export const ABOUT_AREA: Area = { slug: 'about', group: 'account', icon: Info, key: 'about' }
+
+/** The area of an address, the groups' and "About nexnotes". */
+export function findArea(slug: AreaSlug): Area | undefined {
+  return slug === ABOUT_AREA.slug ? ABOUT_AREA : AREAS.find((area) => area.slug === slug)
+}
 
 /** The addresses of the tabs before the areas: a saved link still leads to the place it meant. */
 const FORMER: Record<string, AreaSlug> = { account: 'profile', server: 'general' }
@@ -54,7 +63,7 @@ export function resolveArea(asked: string | undefined, role: Role | undefined, s
     if (params.has('linked') || params.has('error')) return { redirect: areaPath('security') + search }
     return { area: 'profile' }
   }
-  if (allowed.some((area) => area.slug === asked)) return { area: asked as AreaSlug }
+  if (asked === ABOUT_AREA.slug || allowed.some((area) => area.slug === asked)) return { area: asked as AreaSlug }
   const former = FORMER[asked]
   if (former && allowed.some((area) => area.slug === former)) return { redirect: areaPath(former) + search }
   return { redirect: '/settings' }

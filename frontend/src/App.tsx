@@ -3,10 +3,9 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import { AppShell } from './components/AppShell'
 import { NotFoundPage } from './components/NotFound'
-import { AboutPage } from './pages/AboutPage'
 import { InvitePage, LoginPage, ResetPage, SetupPage } from './pages/AuthPages'
 import { NotesHome } from './pages/NotesHome'
-import { SettingsPage } from './pages/SettingsPage'
+import { FormerAboutAddress, SettingsPage } from './pages/SettingsPage'
 import { FEATURE_ROUTES, LIST_LAYOUT, type FeatureRoute } from './extensions'
 import { OfflinePage } from './pwa/OfflinePage'
 import { SharePage } from './pwa/share/SharePage'
@@ -63,7 +62,8 @@ export default function App() {
         {FEATURE_ROUTES.filter((route) => !inLayout(route)).map(featureRoute)}
         <Route path="settings" element={<SettingsPage />} />
         <Route path="settings/:tab" element={<SettingsPage />} />
-        <Route path="about" element={<AboutPage />} />
+        {/* "About nexnotes" is an area of the settings; the address of before leads there. */}
+        <Route path="about" element={<FormerAboutAddress />} />
         {/* An address no page answers to says so, instead of silently showing the start. */}
         <Route path="*" element={<NotFoundPage />} />
       </Route>

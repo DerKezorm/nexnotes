@@ -68,9 +68,9 @@ function server() {
     if (path === '/api/smart-folders')
       return json({
         items: [
-          { id: 's-open', name: '', preset: 'open_tasks', match: 'all', conditions: [{ kind: 'tasks', op: 'open' }], position: 0 },
-          { id: 's-shared', name: '', preset: 'shared_with_me', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
-          { id: 's-files', name: '', preset: 'attachments', match: 'all', conditions: [{ kind: 'attachment', type: 'any' }], position: 2 },
+          { id: 's-open', name: '', preset: 'open_tasks', icon: 'filter', color: '', match: 'all', conditions: [{ kind: 'tasks', op: 'open' }], position: 0 },
+          { id: 's-shared', name: '', preset: 'shared_with_me', icon: 'people', color: '', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
+          { id: 's-files', name: '', preset: 'attachments', icon: 'paperclip', color: '', match: 'all', conditions: [{ kind: 'attachment', type: 'any' }], position: 2 },
           { id: 's-own', name: 'Rezepte offen', preset: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 3 },
         ],
       })
@@ -176,9 +176,7 @@ describe('NOTES-23 AC-1 on a phone one view after the other', () => {
     const rows = [...section.querySelectorAll<HTMLAnchorElement>('[data-testid="folders-smart-folder"]')]
     expect(rows.map((row) => row.textContent)).toEqual([t('smart.preset.open_tasks') + '›', t('smart.preset.shared_with_me') + '›', t('smart.preset.attachments') + '›', 'Rezepte offen›'])
     expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/smart/s-open', '/smart/s-shared', '/smart/s-files', '/smart/s-own'])
-    expect(rows[0].querySelector('[data-testid="smart-filter-icon"]')).not.toBeNull()
-    expect(rows[1].querySelector('[data-testid="smart-icon-shared_with_me"]')).not.toBeNull()
-    expect(rows[2].querySelector('[data-testid="smart-icon-attachments"]')).not.toBeNull()
+    expect(rows.map((row) => row.querySelector('[data-symbol]')!.getAttribute('data-symbol'))).toEqual(['filter', 'people', 'paperclip', 'filter'])
     expect(find('folders-smart-new')!.getAttribute('href')).toBe('/smart/new')
     await click(rows[1])
     expect(where()).toBe('/smart/s-shared')

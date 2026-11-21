@@ -10,7 +10,7 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import type { Me } from '../../api/client'
 import { Avatar } from '../../components/Avatar'
-import { areaPath, areasFor, GROUPS, type AreaSlug } from './areas'
+import { ABOUT_AREA, areaPath, areasFor, GROUPS, type AreaSlug } from './areas'
 
 const ENTRY = 'flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-sm transition-colors '
 const QUIET_ENTRY = 'text-mist-300 hover:bg-ink-800 hover:text-mist-100'
@@ -54,9 +54,14 @@ export function SettingsNav({ me, current }: { me: Me; current: AreaSlug }) {
         </div>
       ))}
       <div className="border-t border-ink-700 pt-2">
-        <Link to="/about" className={ENTRY + QUIET_ENTRY}>
+        <Link
+          to={areaPath(ABOUT_AREA.slug)}
+          aria-current={current === ABOUT_AREA.slug ? 'page' : undefined}
+          className={ENTRY + (current === ABOUT_AREA.slug ? 'nn-chosen font-medium' : QUIET_ENTRY)}
+          data-testid="settings-nav-about"
+        >
           <Info className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden />
-          <span className="min-w-0 truncate">{t('about.title')}</span>
+          <span className="min-w-0 truncate">{t(`settings.areas.${ABOUT_AREA.key}.title`)}</span>
         </Link>
       </div>
     </nav>
@@ -85,9 +90,16 @@ export function SettingsJump({ me, current }: { me: Me; current: AreaSlug }) {
                 ))}
             </optgroup>
           ))}
+          <option value={ABOUT_AREA.slug}>{t(`settings.areas.${ABOUT_AREA.key}.title`)}</option>
         </select>
       </label>
-      <Link to="/about" className="nn-btn nn-btn-ghost shrink-0" aria-label={t('about.title')} title={t('about.title')}>
+      <Link
+        to={areaPath(ABOUT_AREA.slug)}
+        aria-current={current === ABOUT_AREA.slug ? 'page' : undefined}
+        className="nn-btn nn-btn-ghost shrink-0"
+        aria-label={t(`settings.areas.${ABOUT_AREA.key}.title`)}
+        title={t(`settings.areas.${ABOUT_AREA.key}.title`)}
+      >
         <Info className="h-4 w-4" aria-hidden />
       </Link>
     </div>

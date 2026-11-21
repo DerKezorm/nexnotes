@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 
 import { Problem } from '../components/Field'
+import { LookFields } from '../folders/dialogs'
 import { FOLDER_COLORS } from '../folders/palette'
 import { flatten, useFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
@@ -19,6 +20,7 @@ import type { ListItem } from '../notes/list/api'
 import { useTags } from '../tags/store'
 import { smartApi, type Condition, type Match, type Preview, type SmartFolder } from './api'
 import { ATTACHMENT_TYPES, blank, complete, KINDS, kindOf, PERIODS, smartName, tagOf, type KindChoice } from './conditions'
+import { SmartMark } from './SmartMenu'
 import { refreshSmartFolders } from './store'
 
 /** How long the preview waits after a change before it asks (AC-3: "sofort", without a request per keystroke). */
@@ -259,6 +261,8 @@ export function SmartEditor() {
   const [loaded, setLoaded] = useState<SmartFolder | null>(null)
   const [name, setName] = useState(handed?.name ?? '')
   const [match, setMatch] = useState<Match>('all')
+  // Symbol and color as a folder's (fifth review): the filter and no color unless another is picked.
+  const [look, setLook] = useState({ icon: 'filter', color: '' })
   // Each row keeps its own key: taking one out leaves the others as they are (what is typed into them stays).
   const keys = useRef(0)
   const keyed = (list: Condition[]) => list.map((condition) => ({ key: ++keys.current, condition }))
@@ -283,6 +287,7 @@ export function SmartEditor() {
         setLoaded(folder)
         setName(smartName(folder, t))
         setMatch(folder.match)
+        setLook({ icon: folder.icon ?? 'filter', color: folder.color ?? '' })
         setRows(keyed(folder.conditions.length ? folder.conditions : [blank('tag')]))
       })
       .catch((error) => setProblem(problemText(error)))
@@ -328,7 +333,7 @@ export function SmartEditor() {
     setProblem('')
     // A folder that came with the account keeps its name in every language while it is not given another one.
     const keepsPreset = loaded?.preset && !loaded.name && name.trim() === smartName(loaded, t)
-    const body = { name: keepsPreset ? '' : name, match, conditions: ready }
+    const body = { name: keepsPreset ? '' : name, match, conditions: ready, icon: look.icon, color: look.color }
     try {
       const saved = loaded ? await smartApi.update(loaded.id, body) : await smartApi.create(body)
       await refreshSmartFolders()
@@ -347,8 +352,19 @@ export function SmartEditor() {
         <h1 className="m-0 text-xl font-bold">{id ? t('smart.editTitle') : t('smart.newTitle')}</h1>
         <label className="flex flex-col gap-1.5 text-[13px] font-semibold">
           {t('smart.name')}
-          <input className="nn-field h-10 text-sm font-normal" value={name} maxLength={60} onChange={(event) => setName(event.target.value)} autoFocus data-testid="smart-name" />
+          <span className="flex items-center gap-2.5">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[9px] border border-ink-700" data-testid="smart-look-preview">
+              <SmartMark folder={look} size={20} />
+            </span>
+            <input className="nn-field h-10 text-sm font-normal" value={name} maxLength={60} onChange={(event) => setName(event.target.value)} autoFocus data-testid="smart-name" />
+          </span>
         </label>
+        <details className="rounded-[12px] border border-ink-700 bg-ink-900 px-3.5 py-2.5" data-testid="smart-look">
+          <summary className="cursor-pointer text-[13px] font-semibold select-none">{t('folders.style.title')}</summary>
+          <div className="mt-3 space-y-4">
+            <LookFields look={look} onChange={(change) => setLook((now) => ({ ...now, ...change }))} />
+          </div>
+        </details>
         <div className="flex flex-wrap items-center gap-2 text-[13.5px]">
           {t('smart.matchBefore')}
           <span role="radiogroup" aria-label={t('smart.matchLabel')} className="flex rounded-[9px] border border-ink-700 bg-ink-900 p-[3px] text-[12.5px]">

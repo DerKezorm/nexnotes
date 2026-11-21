@@ -1,8 +1,9 @@
 /**
  * What each area of the settings shows: the cards as they were in the tabs before, only sorted by subject. The cards
  * themselves stay in their files (`AccountTab`, `ConnectionsTab`, `ServerCards`, `SignInCards`, `AccountsTab`,
- * `LogCard`); an area only picks them.
+ * `LogCard`, `AboutArea`); an area only picks them.
  */
+import { AboutArea } from './AboutArea'
 import { AccountsTab } from './AccountsTab'
 import { AccountTab } from './AccountTab'
 import type { AreaSlug } from './areas'
@@ -25,6 +26,8 @@ export function AreaContent({ area }: { area: AreaSlug }) {
       return <AccountsTab />
     case 'log':
       return <LogCard />
+    case 'about':
+      return <AboutArea />
     default:
       return <ServerCardsOf area={area} />
   }

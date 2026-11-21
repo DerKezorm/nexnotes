@@ -10,7 +10,6 @@
     "reportLink": "Auf GitHub melden",
     "source": "Quelltext",
     "subtitle": "Schnelle Notizen, selbst gehostet.",
-    "title": "Über nexnotes",
     "updates": {
       "checkedAt": "zuletzt nachgesehen {{when}}",
       "current": "Das ist die neueste Version.",
@@ -1149,6 +1148,10 @@
   },
   "settings": {
     "areas": {
+      "about": {
+        "text": "Version, Lizenz, Herkunft und ob es eine neuere Version gibt.",
+        "title": "Über nexnotes"
+      },
       "accounts": {
         "text": "Wer nexnotes nutzt, mit Rolle und Speicher, und offene Einladungen.",
         "title": "Konten"
@@ -2050,7 +2053,10 @@
       "gone": "Gelöscht: {{name}}"
     },
     "sharedPage": "Freigaben verwalten",
-    "menu": "Aktionen für „{{name}}“"
+    "menu": "Aktionen für „{{name}}“",
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten",
+    "keys": "Alt mit Pfeil hoch oder runter verschiebt einen intelligenten Ordner, Umschalt+F10 oder die Menütaste öffnet sein Menü."
   },
   "pwa": {
     "update": "Es gibt eine neue Version von nexnotes.",

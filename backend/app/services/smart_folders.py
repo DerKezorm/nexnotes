@@ -23,6 +23,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import delete, event, func, insert, not_, select
+from sqlalchemy import update as sql_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,7 @@ from ..errors import error
 from ..models import Account, Note, NoteListView, Setting, new_uuid, utcnow
 from ..models_smart import SmartFolder
 from . import attachments, notes_list, search
+from .folders import FOLDER_ICONS, folder_color
 
 logger = logging.getLogger("nexnotes.smart")
 
@@ -56,12 +58,23 @@ PRESET_NAMES: dict[str, tuple[str, ...]] = {
     SHARED_WITH_ME: ("Mit mir geteilt", "Shared with me"),
     ATTACHMENTS: ("Anhänge", "Attachments"),
 }
+#: The symbol of a smart folder unless its owner picks another (as a folder's ``DEFAULT_FOLDER_ICON``).
+DEFAULT_ICON = "filter"
+#: The symbols the presets come with: those of the sidebar's entries they took the place of.
+PRESET_ICONS: dict[str, str] = {
+    OPEN_TASKS: DEFAULT_ICON,
+    RECENT: DEFAULT_ICON,
+    SHARED_WITH_ME: "people",
+    ATTACHMENTS: "paperclip",
+}
 #: How a preset is looked at as long as the account chose no view of its own: "Anhänge" as the gallery.
 PRESET_MODES: dict[str, str] = {ATTACHMENTS: "gallery"}
 #: Marks that the accounts from before smart folders got theirs, once.
 SEEDED = "smart_folders_seeded"
 #: Marks that the accounts from before got "Mit mir geteilt" and "Anhänge", once (they came later than the first two).
 SEEDED_PLACES = "smart_folders_seeded_places"
+#: Marks that the presets from before symbols got theirs, once (the column came with the filter for every row).
+SEEDED_ICONS = "smart_folders_seeded_icons"
 #: The presets ``SEEDED_PLACES`` gives.
 PLACES = (SHARED_WITH_ME, ATTACHMENTS)
 
@@ -93,6 +106,8 @@ def out(folder: SmartFolder) -> dict[str, Any]:
         "name": folder.name,
         "preset": folder.preset,
         "match": folder.match,
+        "icon": folder.icon,
+        "color": folder.color,
         "conditions": folder.conditions or [],
         "position": folder.position,
         "created_at": folder.created_at.isoformat() if folder.created_at else None,
@@ -145,14 +160,26 @@ def _check_free(db: Session, account: Account, name: str, besides: str | None = 
         raise error("smart_folder_exists", f"There is already a smart folder named {taken}.", 409, name=taken)
 
 
-def create(db: Session, account: Account, name: str, match: str, conditions: Any) -> SmartFolder:
-    """A new smart folder at the end of the list (AC-1, AC-2, AC-5)."""
+def _icon(icon: str) -> str:
+    """A symbol from the folders' row, or empty; else 422 with the folders' refusal."""
+    if icon not in ("", *FOLDER_ICONS):
+        raise error("folder_style_unknown", "Choose a symbol from the list.", 422)
+    return icon
+
+
+def create(db: Session, account: Account, name: str, match: str, conditions: Any, *, icon: str | None = None,
+           color: str | None = None) -> SmartFolder:
+    """A new smart folder at the end of the list (AC-1, AC-2, AC-5), with the filter as its symbol unless another
+    is given, and a colour by the folders' rules (``folders.folder_color``)."""
     clean = _clean_name(name)
     checked = search.read_conditions(conditions)
+    look_icon = _icon(DEFAULT_ICON if icon is None else icon)
+    look_color = folder_color(color or "")
     _check_free(db, account, clean)
     last = db.scalar(select(func.max(SmartFolder.position)).where(SmartFolder.owner_id == account.id))
     folder = SmartFolder(owner_id=account.id, name=clean, name_key=name_key(clean), match=_match(match),
-                         conditions=checked, position=(last + 1) if last is not None else 0)
+                         conditions=checked, icon=look_icon, color=look_color,
+                         position=(last + 1) if last is not None else 0)
     db.add(folder)
     _commit_named(db, clean)
     return folder
@@ -174,10 +201,15 @@ def _commit_named(db: Session, name: str) -> None:
 
 
 def update(db: Session, account: Account, folder_id: str, *, name: str | None = None, match: str | None = None,
-           conditions: Any = None) -> SmartFolder:
-    """Renames it or changes its conditions; the notes stay as they are (AC-6). A folder that came with the account
-    keeps its name in the interface's language as long as it is given no other (``name`` empty)."""
+           conditions: Any = None, icon: str | None = None, color: str | None = None) -> SmartFolder:
+    """Renames it, changes its conditions or its symbol and colour; the notes stay as they are (AC-6). A folder that
+    came with the account keeps its name in the interface's language as long as it is given no other (``name``
+    empty)."""
     folder = own(db, account, folder_id)
+    if icon is not None:
+        folder.icon = _icon(icon)
+    if color is not None:
+        folder.color = folder_color(color)
     if name is not None:
         if not name.strip() and folder.preset:
             folder.name, folder.name_key = "", _preset_key(folder.preset)
@@ -311,6 +343,7 @@ def _preset_rows(account_id: int, presets: tuple[str, ...] = tuple(PRESETS), sta
     made = utcnow()
     return [{"id": new_uuid(), "owner_id": account_id, "name": "", "name_key": _preset_key(preset), "preset": preset,
              "match": PRESETS[preset]["match"], "conditions": PRESETS[preset]["conditions"], "position": position,
+             "icon": PRESET_ICONS[preset], "color": "",
              "created_at": made, "updated_at": made}
             for position, preset in enumerate(presets, start)]
 
@@ -353,6 +386,14 @@ def seed_existing(db: Session) -> int:
             db.execute(insert(SmartFolder), _preset_rows(account_id, tuple(missing), start))
             given.add(account_id)
         db.add(Setting(key=SEEDED_PLACES, value=True))
+    if db.get(Setting, SEEDED_ICONS) is None:
+        # The presets from before symbols got the filter with the new column: those that stand for an entry of the
+        # sidebar get that entry's symbol, once; one the member chose since is left alone.
+        for preset, icon in PRESET_ICONS.items():
+            if icon != DEFAULT_ICON:
+                db.execute(sql_update(SmartFolder).where(SmartFolder.preset == preset, SmartFolder.icon == DEFAULT_ICON)
+                           .values(icon=icon))
+        db.add(Setting(key=SEEDED_ICONS, value=True))
     try:
         db.commit()
     except IntegrityError:

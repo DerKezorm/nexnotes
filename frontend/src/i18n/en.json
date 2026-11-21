@@ -10,7 +10,6 @@
     "reportLink": "Report it on GitHub",
     "source": "Source code",
     "subtitle": "Quick notes, self-hosted.",
-    "title": "About nexnotes",
     "updates": {
       "checkedAt": "last checked {{when}}",
       "current": "This is the newest version.",
@@ -1149,6 +1148,10 @@
   },
   "settings": {
     "areas": {
+      "about": {
+        "text": "Version, licence, where it comes from and whether a newer version is out.",
+        "title": "About nexnotes"
+      },
       "accounts": {
         "text": "Who uses nexnotes, with role and storage, and open invitations.",
         "title": "Accounts"
@@ -2050,7 +2053,10 @@
       "gone": "Deleted: {{name}}"
     },
     "sharedPage": "Manage shares",
-    "menu": "Actions for “{{name}}”"
+    "menu": "Actions for “{{name}}”",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "keys": "Alt with arrow up or down moves a smart folder, Shift+F10 or the menu key opens its menu."
   },
   "pwa": {
     "update": "A new version of nexnotes is here.",

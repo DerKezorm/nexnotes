@@ -23,6 +23,9 @@ def test_notes20_ac3_a_read_key_lists_the_smart_folders_with_how_many_notes_fit(
     assert by_name["Open checklists"]["preset"] == "open_tasks" and by_name["Open checklists"]["notes"] == 1
     assert by_name["Recently edited"]["notes"] == 3
     assert by_name["Kompost"]["notes"] == 1 and by_name["Kompost"]["conditions"][0]["kind"] == "text"
+    # Symbol and colour as the sidebar shows them (fifth review).
+    assert (by_name["Kompost"]["icon"], by_name["Kompost"]["color"]) == ("filter", "")
+    assert by_name["Shared with me"]["icon"] == "people"
     assert refused(client, token, "list_smart_folders", folder_id="x") == "There is no argument 'folder_id'."
 
 

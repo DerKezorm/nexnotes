@@ -19,9 +19,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { Gallery, type GalleryLoad } from '../attachments/GalleryPage'
 import type { GalleryItem } from '../attachments/api'
-import { Dialog } from '../components/Dialog'
 import { Menu } from '../components/Menu'
-import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { NoteList } from '../notes/NoteList'
 import { hrefIn } from '../notes/workspace'
@@ -30,8 +28,8 @@ import type { ListSource } from '../notes/list/useNoteList'
 import { smartApi, type Broken, type SmartAnswer, type SmartFolder } from './api'
 import { asksAttachments, asksSharedWithMe, describe, smartName } from './conditions'
 import { useFolderName } from './folderName'
-import { SmartIcon } from './SmartSection'
-import { refreshSmartFolders, useSmartFolders } from './store'
+import { SmartDeleteDialog, SmartMark } from './SmartMenu'
+import { useSmartFolders } from './store'
 
 /** The conditions as sentences, joined by "and" or "or" (the empty state, EC-2). */
 export function ConditionList({ folder }: { folder: SmartFolder }) {
@@ -88,45 +86,10 @@ function BrokenNote({ broken, folderId }: { broken: Broken[]; folderId: string }
   )
 }
 
-function DeleteDialog({ folder, onClose }: { folder: SmartFolder; onClose: () => void }) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState('')
-  const name = smartName(folder, t)
-  const remove = async () => {
-    if (busy) return
-    setBusy(true)
-    try {
-      await smartApi.remove(folder.id)
-      await refreshSmartFolders()
-      navigate('/')
-    } catch (error) {
-      setProblem(problemText(error))
-      setBusy(false)
-    }
-  }
-  return (
-    <Dialog title={t('smart.deleteTitle', { name })} onClose={onClose}>
-      <div className="space-y-3" data-testid="smart-delete">
-        <p className="text-[13px] leading-normal text-mist-400">{t('smart.deleteSays')}</p>
-        {problem && <p className="text-sm text-bad-500">{problem}</p>}
-        <div className="flex justify-end gap-2 pt-1">
-          <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
-            {t('common.cancel')}
-          </button>
-          <button type="button" className="nn-btn nn-btn-danger" onClick={() => void remove()} disabled={busy} data-testid="smart-delete-confirm">
-            {t('smart.delete')}
-          </button>
-        </div>
-      </div>
-    </Dialog>
-  )
-}
-
 export function SmartFolderPage() {
   const { t } = useTranslation()
   const { id = '' } = useParams()
+  const navigate = useNavigate()
   const padding = useListPadding()
   const { folders } = useSmartFolders()
   const [answer, setAnswer] = useState<SmartAnswer | null>(null)
@@ -232,7 +195,7 @@ export function SmartFolderPage() {
       {answer && answer.folder.id === id && answer.broken.length > 0 && <BrokenNote broken={answer.broken} folderId={id} />}
       <NoteList
         heading={name || ' '}
-        icon={folder ? <SmartIcon preset={folder.preset} className="h-[18px] w-[18px] shrink-0 text-accent-400" /> : undefined}
+        icon={folder ? <SmartMark folder={folder} size={18} /> : undefined}
         actions={actions}
         source={source}
         empty={empty || undefined}
@@ -240,7 +203,7 @@ export function SmartFolderPage() {
         modes={withGallery ? WITH_GALLERY : undefined}
         gallery={withGallery ? <SmartGallery id={id} read={reads} /> : undefined}
       />
-      {deleting && folder && <DeleteDialog folder={folder} onClose={() => setDeleting(false)} />}
+      {deleting && folder && <SmartDeleteDialog folder={folder} onClose={() => setDeleting(false)} onDeleted={() => navigate('/')} />}
     </div>
   )
 }

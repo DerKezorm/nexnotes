@@ -36,6 +36,8 @@ function answer(path: string): Answer | undefined {
     const address = { public_url: '', seen: 'http://localhost:3000', forwarded_proto: '', forwarded_host: '', proxy_ignored: false }
     return { status: 200, body: { ...address, callback_path: '/api/oidc/authentik/callback', redirect_uri: '', registered_redirect_uri: '', stale: false } }
   }
+  if (path === '/api/about') return { status: 200, body: { version: '0.1.0', license: 'AGPL-3.0', repo_url: 'https://example.com/nexnotes', releases_url: 'https://example.com/nexnotes/releases', project_url: '' } }
+  if (path === '/api/about/updates') return { status: 200, body: { update_check: true, checked: false, latest: null, newer: false, checked_at: null, release_url: null } }
   if (path.startsWith('/api/logs/level')) return { status: 200, body: { mode: 'normal', until: null, fixed_by_env: false, modes: ['quiet', 'normal', 'detailed', 'trace'] } }
   return undefined
 }
@@ -72,7 +74,7 @@ function Where() {
 }
 
 async function open(at: string): Promise<void> {
-  const { SettingsPage } = await import('../SettingsPage')
+  const { FormerAboutAddress, SettingsPage } = await import('../SettingsPage')
   await act(async () =>
     root.render(
       <AuthProvider>
@@ -80,7 +82,7 @@ async function open(at: string): Promise<void> {
           <Routes>
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/settings/:tab" element={<SettingsPage />} />
-            <Route path="/about" element={<p>about</p>} />
+            <Route path="/about" element={<FormerAboutAddress />} />
           </Routes>
           <Where />
         </MemoryRouter>
@@ -141,14 +143,14 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     expect(nav.textContent).toContain(i18n.t('roles.operator'))
     const groups = [...nav.querySelectorAll('ul')].map((list) => box.querySelector(`#${list.getAttribute('aria-labelledby')}`)!.textContent)
     expect(groups).toEqual([i18n.t('settings.groups.account'), i18n.t('settings.groups.server')])
-    expect(nav.querySelector('a[href="/about"]')!.textContent).toBe(i18n.t('about.title'))
+    expect(nav.querySelector('a[href="/settings/about"]')!.textContent).toBe(i18n.t('settings.areas.about.title'))
   })
 
   it('NOTES-2 AC-9 every entry is a link at its own address, reached by Tab; only the current one is marked', async () => {
     await open('/settings/sign-in')
     const links = [...box.querySelectorAll<HTMLAnchorElement>('[data-testid="settings-nav"] a[data-testid^="settings-nav-"]')]
     expect(links.map((link) => link.getAttribute('href'))).toEqual(
-      ['profile', 'security', 'appearance', 'connections', 'general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log'].map((slug) => `/settings/${slug}`),
+      ['profile', 'security', 'appearance', 'connections', 'general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'about'].map((slug) => `/settings/${slug}`),
     )
     for (const link of links) expect(link.tabIndex).toBe(0)
     expect(current()).toEqual(['settings-nav-sign-in'])
@@ -171,7 +173,7 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     const select = $('settings-jump') as HTMLSelectElement
     expect(select.value).toBe('appearance')
     expect([...select.querySelectorAll('optgroup')].map((group) => group.label)).toEqual([i18n.t('settings.groups.account')])
-    expect([...select.options].map((option) => option.value)).toEqual(['profile', 'security', 'appearance', 'connections'])
+    expect([...select.options].map((option) => option.value)).toEqual(['profile', 'security', 'appearance', 'connections', 'about'])
     expect(select.closest('label')!.querySelector('.sr-only')!.textContent).toBe(i18n.t('settings.jump'))
     await act(async () => {
       select.value = 'security'
@@ -180,6 +182,39 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     await settle()
     expect(where()).toBe('/settings/security')
     expect(heading()).toBe(i18n.t('settings.areas.security.title'))
+  })
+})
+
+describe('"About nexnotes" in the settings (fifth review)', () => {
+  it('NOTES-2 AC-9 /settings/about keeps the navigation, marks its entry last and shows heading, line and cards', async () => {
+    await open('/settings/about')
+    expect(where()).toBe('/settings/about')
+    expect($('settings-nav')).not.toBeNull()
+    expect(current()).toEqual(['settings-nav-about'])
+    const entries = [...box.querySelectorAll('[data-testid="settings-nav"] a')]
+    expect(entries.at(-1)!.getAttribute('data-testid')).toBe('settings-nav-about')
+    expect($('settings-nav-about')!.className).toContain('nn-chosen')
+    expect(heading()).toBe(i18n.t('settings.areas.about.title'))
+    expect($('settings-area-about')!.textContent).toContain(i18n.t('settings.areas.about.text'))
+    expect($('about-version')!.textContent).toBe('0.1.0')
+    expect([...box.querySelectorAll('section[id]')].map((card) => card.id)).toEqual(['about-updates'])
+    expect(box.textContent).toContain(i18n.t('about.builtWith'))
+    expect(($('settings-jump') as HTMLSelectElement).value).toBe('about')
+  })
+
+  it('NOTES-2 AC-9 the old address /about leads to the area, with the address replaced', async () => {
+    await open('/about')
+    expect(where()).toBe('/settings/about')
+    expect(current()).toEqual(['settings-nav-about'])
+  })
+
+  it('NOTES-2 AC-9 a member reaches "About nexnotes" in the settings too', async () => {
+    role = 'member'
+    expect(resolveArea('about', 'member', '')).toEqual({ area: 'about' })
+    await open('/settings/about')
+    expect(where()).toBe('/settings/about')
+    expect(current()).toEqual(['settings-nav-about'])
+    expect($('about-version')).not.toBeNull()
   })
 })
 

@@ -39,6 +39,9 @@ export type SmartFolder = {
   id: string
   name: string
   preset: Preset
+  /** As a folder's: a symbol of `lib/symbols.ts` (the filter unless another was picked) and a color (`palette.ts`). */
+  icon: string
+  color: string
   match: Match
   conditions: Condition[]
   position: number
@@ -52,7 +55,7 @@ export type SmartAnswer = ListAnswer & { folder: SmartFolder; broken: Broken[] }
 
 export type Preview = { total: number; items: ListItem[]; broken: Broken[] }
 
-export type SmartFolderIn = { name: string; match: Match; conditions: Condition[] }
+export type SmartFolderIn = { name: string; match: Match; conditions: Condition[]; icon?: string; color?: string }
 
 /** The device's time zone by name: periods count from today there (EC-3). */
 export function deviceZone(): string {
