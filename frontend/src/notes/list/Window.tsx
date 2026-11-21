@@ -99,7 +99,9 @@ export function Window({ entries, height, render }: Props) {
 
   const [start, end] = range
   return (
-    <div ref={box} style={{ position: 'relative', height }} data-testid="note-window">
+    // Never squeezed by a flex column; and without the browser's own scroll anchoring, which would fight the window
+    // (rows come and go above the screen): it keeps its own.
+    <div ref={box} style={{ position: 'relative', height, flexShrink: 0, overflowAnchor: 'none' }} data-testid="note-window">
       {entries.slice(start, Math.min(end, entries.length)).map((entry) => (
         <div key={entry.key} style={{ position: 'absolute', left: 0, right: 0, top: entry.top, height: entry.height }}>
           {render(entry)}

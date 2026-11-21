@@ -1,0 +1,151 @@
+/**
+ * NOTES-6 in real browsers against the real server: the view of a folder and a note changed on another device arrive
+ * without reloading the page (AC-1, EC-6), and 10,000 notes open quickly, scroll smoothly with only a window of rows in
+ * the page, and keep the note at the top of the screen in its place when a new one arrives (EC-2, EC-6).
+ *
+ * The 10,000 notes belong to an account of their own (invited here), so that the other files' lists stay small.
+ */
+import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
+
+const TAB = { 'X-Nexnotes-Client': 'tab-e2e-list0000' }
+
+async function secondWindow(browser: Browser): Promise<Page> {
+  const context = await browser.newContext({ storageState: process.env.NEXNOTES_E2E_STATE })
+  return context.newPage()
+}
+
+/** A member with a session of its own: invited by the operator, signed in by accepting. */
+async function newMember(page: Page, browser: Browser, name: string): Promise<BrowserContext> {
+  const invite = await page.request.post('/api/invites', { data: {}, headers: TAB })
+  expect(invite.status()).toBe(201)
+  const token = String((await invite.json()).link).split('/invite/')[1]
+  const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
+  const accepted = await context.request.post(`/api/invite/${token}`, {
+    data: { display_name: name, email: `${name.toLowerCase()}@example.com`, password: 'a long e2e member password' },
+    headers: TAB,
+  })
+  expect(accepted.ok()).toBe(true)
+  return context
+}
+
+test('NOTES-6 AC-1 EC-6 the view of a folder and a change on another device arrive without reloading', async ({ page, browser }) => {
+  const made = await page.request.post('/api/folders', { data: { name: 'Haushalt E2E' }, headers: TAB })
+  const folderId = (await made.json()).id as string
+  const notes: string[] = []
+  for (const title of ['Handwerker Bad', 'Sofa ausmessen', 'Urlaub Packliste']) {
+    const note = await page.request.post('/api/notes', { data: { title, folder_id: folderId, markdown: '- [x] eins\n- [ ] zwei' }, headers: TAB })
+    notes.push((await note.json()).id)
+  }
+  await page.goto(`/folder/${folderId}`)
+  await expect(page.getByTestId('note-row')).toHaveCount(3)
+  await page.getByRole('radio', { name: 'Tiles' }).click()
+  await expect(page.getByTestId('note-tile')).toHaveCount(3)
+  await expect(page.getByTestId('note-tile').first()).toContainText('1 of 2')
+
+  // The phone opens the same folder: tiles too.
+  const phone = await secondWindow(browser)
+  await phone.goto(`/folder/${folderId}`)
+  await expect(phone.getByTestId('note-tile')).toHaveCount(3)
+
+  // The phone pins a note and renames another; the first window follows on its own.
+  await page.evaluate(() => ((window as { stayed?: boolean }).stayed = true))
+  await phone.request.put(`/api/notes/${notes[0]}/pin`, { data: { pinned: true }, headers: TAB })
+  await phone.request.put(`/api/notes/${notes[1]}/title`, { data: { title: 'Sofa ausgemessen' }, headers: TAB })
+  await expect(page.getByTestId('list-group-heading').first()).toHaveText('Pinned', { timeout: 10_000 })
+  await expect(page.getByTestId('note-tile').first()).toContainText('Handwerker Bad')
+  await expect(page.getByTestId('note-tile').filter({ hasText: 'Sofa ausgemessen' })).toHaveCount(1, { timeout: 10_000 })
+  expect(await page.evaluate(() => (window as { stayed?: boolean }).stayed)).toBe(true)
+  await phone.context().close()
+})
+
+test('NOTES-6 EC-2 EC-6 ten thousand notes open quickly, scroll smoothly and keep their place', async ({ page, browser }) => {
+  test.setTimeout(1_200_000)
+  const context = await newMember(page, browser, 'Many')
+  const many = await context.newPage()
+  // 10,000 notes, 40 at a time.
+  const count = Number(process.env.NEXNOTES_E2E_MANY ?? 10_000)
+  const titles = Array.from({ length: count }, (_, index) => `Notiz ${String(index).padStart(5, '0')}`)
+  for (let start = 0; start < titles.length; start += 40) {
+    await Promise.all(
+      titles.slice(start, start + 40).map((title, offset) =>
+        many.request.post('/api/notes', { data: { title, markdown: `Zeile ${start + offset} mit etwas Text, damit die Vorschau etwas zeigt.` }, headers: TAB }),
+      ),
+    )
+  }
+
+  const listed = many.waitForResponse((response) => response.url().includes('/api/note-list?') || response.url().endsWith('/api/note-list'))
+  const started = Date.now()
+  await many.goto('/')
+  const answer = await listed
+  await expect(many.getByTestId('note-row').first()).toBeVisible()
+  const shown = Date.now() - started
+  const timing = answer.request().timing()
+  const server = timing.responseEnd - timing.requestStart
+  console.log(`${count} notes: list answer ${Math.round(server)} ms, first row ${shown} ms after navigation`)
+  expect(server).toBeLessThan(1000)
+  await expect(many.getByTestId('list-counts')).toHaveText(`${count} notes`)
+
+  // Scrolling through: every frame quick, never more than a window of rows in the page.
+  const frames = await many.evaluate(async () => {
+    const list = document.querySelector('[data-testid="note-window"]')!
+    let scroller = list.parentElement!
+    while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement!
+    const gaps: number[] = []
+    let most = 0
+    let last = performance.now()
+    for (let step = 0; step < 150; step++) {
+      scroller.scrollTop += 900
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+      const now = performance.now()
+      gaps.push(now - last)
+      last = now
+      most = Math.max(most, document.querySelectorAll('[data-testid="note-row"]').length)
+    }
+    gaps.sort((a, b) => a - b)
+    return { p95: gaps[Math.floor(gaps.length * 0.95)], most, top: scroller.scrollTop }
+  })
+  console.log(`scrolling: 95th percentile frame ${frames.p95.toFixed(1)} ms, at most ${frames.most} rows in the page`)
+  expect(frames.top).toBeGreaterThan(Math.min(100_000, count * 64 - 2000))
+  expect(frames.p95).toBeLessThan(50)
+  expect(frames.most).toBeLessThan(120)
+
+  // Sorted by title at once, from the bar.
+  await many.getByTestId('list-sort').click()
+  await many.getByRole('menuitemradio', { name: 'Title A to Z' }).click()
+  await many.evaluate(() => {
+    const list = document.querySelector('[data-testid="note-window"]')!
+    let scroller = list.parentElement!
+    while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement!
+    scroller.scrollTop = 0
+  })
+  await expect(many.getByTestId('note-row').first()).toContainText('Notiz 00000')
+
+  // Down the list, a note made on another device lands on top: the rows on screen stay where they are.
+  await many.getByTestId('list-sort').click()
+  await many.getByRole('menuitemradio', { name: 'Last changed' }).click()
+  await many.evaluate(() => {
+    const list = document.querySelector('[data-testid="note-window"]')!
+    let scroller = list.parentElement!
+    while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement!
+    scroller.scrollTop = 50_000
+  })
+  await many.waitForTimeout(500)
+  const before = await many.evaluate(() => {
+    const list = document.querySelector('[data-testid="note-window"]')!
+    let scroller = list.parentElement!
+    while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement!
+    const box = scroller.getBoundingClientRect()
+    const row = [...document.querySelectorAll<HTMLElement>('[data-note]')].find((element) => element.getBoundingClientRect().top >= box.top + 40)
+    return row ? { id: row.dataset.note!, top: row.getBoundingClientRect().top, scrolled: scroller.scrollTop } : null
+  })
+  expect(before).not.toBeNull()
+  expect(before!.scrolled).toBe(50_000)
+  const reloaded = many.waitForResponse((response) => response.url().includes('/api/note-list') && !response.url().includes('stamp'), { timeout: 20_000 })
+  await context.request.post('/api/notes', { data: { title: 'Ganz neu' }, headers: TAB })
+  await reloaded
+  await many.waitForTimeout(300)
+  const after = await many.evaluate((id) => document.querySelector<HTMLElement>(`[data-note="${id}"]`)?.getBoundingClientRect().top ?? null, before!.id)
+  expect(after).not.toBeNull()
+  expect(Math.abs(after! - before!.top)).toBeLessThan(3)
+  await context.close()
+})
