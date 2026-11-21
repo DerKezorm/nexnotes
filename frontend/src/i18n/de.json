@@ -86,8 +86,11 @@
     "invite": "Person einladen",
     "inviteEmailHint": "Freiwillig. Mit Adresse kann nexnotes den Link auch per Mail schicken.",
     "inviteLink": "Schick diesen Link der Person. Er gilt einmal und wird nur jetzt angezeigt.",
+    "inviteLinkToo": "Den Link kannst du hier auch selbst kopieren. Er gilt einmal und wird nur jetzt angezeigt.",
     "inviteMake": "Einladung anlegen",
     "inviteNoAddress": "ohne Adresse",
+    "inviteSend": "Einladung senden",
+    "inviteSent": "Einladung verschickt an {{email}}.",
     "last": "Zuletzt",
     "lead_one": "{{count}} Konto. Als Betreiber siehst du Speicher und Nutzung, aber keine Notizen.",
     "lead_other": "{{count}} Konten. Als Betreiber siehst du Speicher und Nutzung, aber keine Notizen.",
@@ -376,11 +379,13 @@
     "titleRequired": "Ohne Titel lässt sich die Notiz nicht schließen.",
     "tools": {
       "bold": "Fett",
+      "clear": "Formatierung entfernen",
       "bullet": "Aufzählung",
       "closeKeyboard": "Tastatur schließen",
       "code": "Code",
       "divider": "Trennlinie",
       "highlight": "Textmarker",
+      "highlightColors": "Textmarker-Farben",
       "indent": "Einrücken",
       "italic": "Kursiv",
       "label": "Formatierung",
@@ -389,6 +394,7 @@
       "outdent": "Ausrücken",
       "quote": "Zitat",
       "redo": "Wiederholen",
+      "selection": "Auswahl formatieren",
       "strike": "Durchgestrichen",
       "style": "Textstil",
       "table": "Tabelle",
@@ -396,7 +402,7 @@
       "underline": "Unterstrichen",
       "undo": "Rückgängig",
       "width": "Textbreite",
-      "outline": "Gliederung",
+      "outline": "Gliederung ein- oder ausblenden",
       "more": "Mehr Werkzeuge"
     },
     "style": {
@@ -415,7 +421,7 @@
     "outline": {
       "label": "Gliederung und Infos",
       "headings": "Gliederung",
-      "none": "Noch keine Überschriften.",
+      "none": "Noch keine Überschriften. Mit # oder dem Textstil ‚Überschrift‘ entsteht hier die Gliederung.",
       "empty": "Überschrift ohne Text",
       "tags": "Schlagwörter",
       "info": "Infos",
@@ -431,7 +437,7 @@
       "dots": "Gepunktet"
     },
     "icon": {
-      "add": "Symbol hinzufügen",
+      "add": "Symbol wählen",
       "change": "Symbol ändern",
       "title": "Symbol der Notiz",
       "remove": "Entfernen"
@@ -1445,6 +1451,8 @@
     "left": "links",
     "newTab": "Neue Notiz in neuem Tab",
     "openBeside": "Daneben öffnen",
+    "altClick": "Alt+Klick",
+    "altClickMac": "⌥-Klick",
     "openInNewTab": "In neuem Tab öffnen",
     "openTrash": "Papierkorb öffnen",
     "resize": "Breite ändern",

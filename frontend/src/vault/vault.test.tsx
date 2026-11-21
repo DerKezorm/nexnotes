@@ -300,7 +300,37 @@ describe('the open vault', () => {
 
 // --- Dialogs ---------------------------------------------------------------------------------------------------------
 
+/**
+ * The dialogs' tests check what the page says and does, not the derivation's strength: 600,000 rounds of PBKDF2 take a
+ * quarter of a second alone and several seconds beside a full run, four times in a test. Below the page, at
+ * WebCrypto's own door, the rounds are cut to a few; the page itself still asks for what the server names, and
+ * `checkKdf` still refuses anything under `KDF_ALLOWED` (the cryptography's tests above run the real rounds and the
+ * fixed vectors). Returns the rounds the page asked for.
+ */
+function fewRounds(): number[] {
+  const asked: number[] = []
+  const subtle = globalThis.crypto.subtle
+  const real = subtle.deriveBits.bind(subtle)
+  vi.spyOn(subtle, 'deriveBits').mockImplementation((algorithm, key, length) => {
+    if (typeof algorithm === 'object' && algorithm.name === 'PBKDF2') {
+      const pbkdf2 = algorithm as Pbkdf2Params
+      asked.push(pbkdf2.iterations)
+      return real({ ...pbkdf2, iterations: 1_000 }, key, length)
+    }
+    return real(algorithm, key, length)
+  })
+  return asked
+}
+
 describe('the dialogs', () => {
+  let asked: number[] = []
+  beforeEach(() => {
+    asked = fewRounds()
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('NOTES-16 AC-1 the first lock sets up the vault: twice the password, the warning, the box first, the title hint', async () => {
     let setup: unknown = null
     handler = (method, path, body) => {
@@ -425,18 +455,28 @@ describe('the dialogs', () => {
     handler = vaultRoutes(server)
     await render(<UnlockCard title="WLAN-Gäste und Codes" />)
     expect($('locked-title')!.textContent).toBe('WLAN-Gäste und Codes')
-    for (const attempt of ['eins', 'zwei']) {
-      type($('vault-password') as HTMLInputElement, attempt)
-      await submit('vault-password')
-      await until(() => $('vault-message'))
+    // Each try is waited for until the server answered it and the form is free again: the message of the try before
+    // stays on screen meanwhile and must not count as the answer to this one.
+    const answered = async (tries: number) => {
+      await until(() => sent('POST', '/api/vault/unlock').length === tries && $('vault-unlock')!.getAttribute('aria-busy') === null)
     }
+    type($('vault-password') as HTMLInputElement, 'eins')
+    await submit('vault-password')
+    await answered(1)
+    expect($('vault-message')!.textContent).toBe('Wrong. After three wrong tries: wait 30 seconds.')
+    type($('vault-password') as HTMLInputElement, 'zwei')
+    await submit('vault-password')
+    await answered(2)
     expect($('vault-message')!.textContent).toBe('Wrong. One more try, then you will have to wait.')
     type($('vault-password') as HTMLInputElement, 'drei')
     await submit('vault-password')
-    await until(() => /Unlock in 0:[0-3]\d/.test($('vault-submit')!.textContent ?? ''))
+    await answered(3)
+    expect($('vault-submit')!.textContent).toMatch(/^Unlock in 0:[0-3]\d$/)
     expect(($('vault-submit') as HTMLButtonElement).disabled).toBe(true)
     expect($('vault-message')!.textContent).toBe('Too many wrong tries. Wait until the time is up.')
     expect(isOpen()).toBe(false)
+    // The page asked for the rounds the server named, every time (the test only made them cheaper below it).
+    expect(asked).toEqual([600_000, 600_000, 600_000, 600_000])
   })
 
   it('NOTES-16 AC-5 a new password needs the old one; a wrong old one changes nothing', async () => {

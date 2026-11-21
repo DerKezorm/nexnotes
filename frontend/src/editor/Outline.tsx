@@ -1,20 +1,59 @@
 /**
- * The outline beside the text on a wide screen (NOTES-3 AC-15): the headings of the note, indented by level, a click
- * goes there and the arrow folds or opens the section (the `collapsed` of AC-12, nothing new in the note); below it
- * the note's tags and what the line under the title says. It follows every change, also those of others (the
- * editor's own document, which Yjs keeps up to date).
+ * The outline of a note (NOTES-3 AC-15): the headings of the note, indented by level, a click goes there and the arrow
+ * folds or opens the section (the `collapsed` of AC-12, nothing new in the note); below it the note's tags and what
+ * the line under the title says. It follows every change, also those of others (the editor's own document, which Yjs
+ * keeps up to date).
+ *
+ * Beside the text where the side has room (a column), otherwise a narrow panel over the text's right edge (third
+ * review): it takes the focus, Escape gives it back to the outline button, a click beside it closes it. Both stay in
+ * sight while the note scrolls, below the note's toolbar (`--nn-head-h`).
  */
 import type { Editor } from '@tiptap/core'
 import { useEditorState } from '@tiptap/react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
+import { useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { toggleFold } from './extensions'
 import { headingsOf, type Heading } from './outlineData'
 import { openTag, tagsInDoc } from './tags'
 
-export function Outline({ editor, info }: { editor: Editor; info: { label: string; text: string }[] }) {
+/** The outline button of a side (its toolbar's, or the entry in "More"); null when neither is on the screen. */
+function toggleButton(id: string): HTMLElement | null {
+  return [...document.querySelectorAll<HTMLElement>('[data-outline-toggle]')].find((element) => element.dataset.outlineToggle === id) ?? null
+}
+
+export function Outline({
+  editor,
+  info,
+  panel,
+}: {
+  editor: Editor
+  info: { label: string; text: string }[]
+  /** As a panel over the text: how it closes, and the id of the button that opens it. */
+  panel?: { onClose: () => void; toggleId: string }
+}) {
   const { t } = useTranslation()
+  const box = useRef<HTMLElement>(null)
+  const close = useRef(panel?.onClose)
+  useEffect(() => {
+    close.current = panel?.onClose
+  })
+  const asPanel = Boolean(panel)
+  const toggleId = panel?.toggleId ?? ''
+  // The panel takes the focus when it opens, and closes on a click beside it (its own button toggles it itself).
+  useEffect(() => {
+    if (!asPanel) return
+    box.current?.focus({ preventScroll: true })
+    const outside = (event: PointerEvent) => {
+      const target = event.target as Element | null
+      if (!target || box.current?.contains(target)) return
+      if (target.closest?.<HTMLElement>('[data-outline-toggle]')?.dataset.outlineToggle === toggleId) return
+      close.current?.()
+    }
+    window.addEventListener('pointerdown', outside, true)
+    return () => window.removeEventListener('pointerdown', outside, true)
+  }, [asPanel, toggleId])
   const state = useEditorState({
     editor,
     selector: ({ editor: current }) => {
@@ -26,13 +65,25 @@ export function Outline({ editor, info }: { editor: Editor; info: { label: strin
   if (!state) return null
   const go = (heading: Heading) => {
     editor.chain().focus().setTextSelection(heading.pos + 1 + heading.text.length).scrollIntoView().run()
+    close.current?.()
   }
-  return (
-    <aside aria-label={t('editor.outline.label')} className="sticky top-4 flex max-h-[calc(100dvh-8rem)] w-[260px] shrink-0 flex-col gap-5 overflow-y-auto pt-6 pr-4 text-[13px]" data-testid="outline">
+  const keys = (event: ReactKeyboardEvent) => {
+    if (!asPanel || event.key !== 'Escape') return
+    event.preventDefault()
+    event.stopPropagation()
+    close.current?.()
+    const button = toggleButton(toggleId)
+    if (button) button.focus()
+    else editor.commands.focus()
+  }
+  const content = (
+    <>
       <nav aria-label={t('editor.outline.headings')}>
         <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-mist-500 uppercase">{t('editor.outline.headings')}</p>
         {state.headings.length === 0 ? (
-          <p className="text-mist-500">{t('editor.outline.none')}</p>
+          <p className="leading-relaxed text-mist-500" data-testid="outline-none">
+            {t('editor.outline.none')}
+          </p>
         ) : (
           <ul className="flex flex-col gap-0.5">
             {state.headings.map((heading) => (
@@ -60,7 +111,16 @@ export function Outline({ editor, info }: { editor: Editor; info: { label: strin
           <p className="mb-1.5 text-[11px] font-semibold tracking-wide text-mist-500 uppercase">{t('editor.outline.tags')}</p>
           <div className="flex flex-wrap gap-1.5">
             {state.tags.map((tag) => (
-              <button key={tag} type="button" onClick={() => openTag(tag)} className="nn-tag rounded-md bg-accent-wash px-1.5 py-0.5 text-accent-400 hover:underline" data-testid="outline-tag">
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  close.current?.()
+                  openTag(tag)
+                }}
+                className="nn-tag rounded-md bg-accent-wash px-1.5 py-0.5 text-accent-400 hover:underline"
+                data-testid="outline-tag"
+              >
                 #{tag}
               </button>
             ))}
@@ -78,6 +138,37 @@ export function Outline({ editor, info }: { editor: Editor; info: { label: strin
           ))}
         </dl>
       </div>
-    </aside>
+    </>
+  )
+  // Below the note's toolbar, which stays at the top while the note scrolls.
+  const top = 'calc(var(--nn-head-h, 0px) + 16px)'
+  if (!panel)
+    return (
+      <aside
+        ref={box}
+        aria-label={t('editor.outline.label')}
+        className="nn-scroll sticky flex max-h-[calc(100dvh-var(--nn-head-h,0px)-8rem)] w-[240px] shrink-0 flex-col gap-5 overflow-y-auto pt-6 pr-4 text-[13px]"
+        style={{ top }}
+        data-testid="outline"
+        data-mode="column"
+      >
+        {content}
+      </aside>
+    )
+  return (
+    <div className="pointer-events-none absolute inset-y-0 right-0 z-10 flex w-[min(280px,100%)] items-start md:top-5 md:right-6">
+      <aside
+        ref={box}
+        tabIndex={-1}
+        aria-label={t('editor.outline.label')}
+        onKeyDown={keys}
+        className="nn-scroll pointer-events-auto sticky flex max-h-[calc(100dvh-var(--nn-head-h,0px)-8rem)] w-full flex-col gap-5 overflow-y-auto rounded-[12px] border border-ink-700 bg-ink-900 p-4 text-[13px] shadow-xl shadow-black/25 outline-offset-[-2px]"
+        style={{ top }}
+        data-testid="outline"
+        data-mode="panel"
+      >
+        {content}
+      </aside>
+    </div>
   )
 }

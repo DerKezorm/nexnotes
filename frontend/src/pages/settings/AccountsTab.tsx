@@ -248,14 +248,21 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
   const [role, setRole] = useState<'member' | 'operator'>('member')
   const [days, setDays] = useState('7')
   const [send, setSend] = useState(false)
-  const [link, setLink] = useState<string | null>(null)
+  const [made, setMade] = useState<{ link: string; sent: boolean; email: string } | null>(null)
   const action = useAction()
+  // The switch shows only with a mail server, and counts only with an address: then the button sends (fourth review).
+  const mailing = Boolean(me?.mail) && send && Boolean(email.trim())
   return (
     <Dialog title={t('accounts.invite')} onClose={onClose}>
-      {link ? (
+      {made ? (
         <div className="space-y-3">
-          <p className="text-sm text-mist-300">{t('accounts.inviteLink')}</p>
-          <CopyLink value={link} label={t('accounts.invite')} />
+          {made.sent && (
+            <p role="status" className="text-sm font-medium text-ok-500" data-testid="invite-sent">
+              {t('accounts.inviteSent', { email: made.email })}
+            </p>
+          )}
+          <p className="text-sm text-mist-300">{t(made.sent ? 'accounts.inviteLinkToo' : 'accounts.inviteLink')}</p>
+          <CopyLink value={made.link} label={t('accounts.invite')} />
           <div className="flex justify-end">
             <button type="button" className="nn-btn nn-btn-accent" onClick={onClose}>
               {t('common.done')}
@@ -268,8 +275,8 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
           onSubmit={(event) => {
             event.preventDefault()
             void action.run(async () => {
-              const made = await invitesApi.make({ email: email.trim(), role, days: Number(days), send, language: i18n.language })
-              setLink(made.link)
+              const answer = await invitesApi.make({ email: email.trim(), role, days: Number(days), send: mailing, language: i18n.language })
+              setMade({ link: answer.link, sent: answer.sent, email: email.trim() })
               onMade()
             })
           }}
@@ -285,8 +292,8 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
             <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
               {t('common.cancel')}
             </button>
-            <button type="submit" disabled={action.busy} className="nn-btn nn-btn-accent">
-              {t('accounts.inviteMake')}
+            <button type="submit" disabled={action.busy} className="nn-btn nn-btn-accent" data-testid="invite-submit">
+              {t(mailing ? 'accounts.inviteSend' : 'accounts.inviteMake')}
             </button>
           </div>
         </form>

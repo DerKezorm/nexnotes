@@ -508,6 +508,37 @@ describe('tabs in the page', () => {
     await until(() => expect(tabTitles()).toEqual(['Saturday shopping', 'Bathroom works', 'Packing list']))
   })
 
+  it('NOTES-8 AC-3 Alt-click on a note opens it in a new tab, never the browser\'s download; the menu names the way', async () => {
+    await render('/notes/soup')
+    const link = (id: string) => box.querySelector(`[data-note="${id}"] [data-testid="note-row"]`) as HTMLAnchorElement
+    const alt = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, altKey: true })
+    await act(async () => void link('shop').dispatchEvent(alt))
+    // Chrome and Safari download a link's address on Alt-click: the click never reaches the browser.
+    expect(alt.defaultPrevented).toBe(true)
+    await until(() => expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping']))
+    expect(where).toBe('/notes/shop')
+    // A note that has its tab already: back to that tab, no second one.
+    await act(async () => void link('soup').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, altKey: true })))
+    await until(() => expect(where).toBe('/notes/soup'))
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    // The list's menu says so beside "Open in new tab".
+    const row = box.querySelector('[data-note="bath"]') as HTMLElement
+    await act(async () => void row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: 10, clientY: 10 })))
+    expect($('menu-open-tab-hint')!.textContent).toBe('Alt+click')
+  })
+
+  it('NOTES-8 AC-3 Alt-click while no note is open opens the note as a plain click does', async () => {
+    await render('/')
+    expect($$('tab')).toHaveLength(0)
+    const link = box.querySelector('[data-note="shop"] [data-testid="note-row"]') as HTMLAnchorElement
+    const alt = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, altKey: true })
+    await act(async () => void link.dispatchEvent(alt))
+    expect(alt.defaultPrevented).toBe(true)
+    await until(() => expect(where).toBe('/notes/shop'))
+    await idle()
+    expect(tabTitles()).toEqual(['Saturday shopping'])
+  })
+
   it('NOTES-8 AC-1 AC-4 "Open beside" puts two notes side by side, the side used last has the honey line, the tabs say left and right', async () => {
     await render('/notes/soup')
     await act(async () => openNoteBeside('shop'))
@@ -609,6 +640,8 @@ describe('tabs in the page', () => {
   })
 
   it('NOTES-3 AC-14 AC-15 the text runs as wide as chosen, and the outline stands beside it only where there is room', async () => {
+    // A side of 800 px: no room for the column, nothing stands beside the text until the button asks for it.
+    width = 800
     await render('/notes/soup')
     const page = () => $('note-page')!
     expect(page().style.maxWidth).toBe('760px')
@@ -622,11 +655,142 @@ describe('tabs in the page', () => {
     // A wide screen: the side has room for the outline.
     width = 2560
     await reload('/notes/soup')
-    expect($('outline')).not.toBeNull()
+    expect($('outline')!.dataset.mode).toBe('column')
     expect($('note-page')!.style.maxWidth).toBe('none')
     // Turned off, it stays off.
     await act(async () => $('tool-outline')!.click())
     expect($('outline')).toBeNull()
+  })
+
+  /** The outline button of a side: in the toolbar, or in "More" when the side is narrow. */
+  async function outlineButton(inside: ParentNode = document.body): Promise<HTMLElement> {
+    const button = $('tool-outline', inside)
+    if (button) return button
+    await act(async () => $('tool-more', inside)!.click())
+    return $('more-outline')!
+  }
+
+  it('NOTES-3 AC-15 the reviewed window (a side of 1170 px): the outline stands beside the text, the button pressed', async () => {
+    width = 1170
+    await render('/notes/soup')
+    const button = $('tool-outline')!
+    expect($('outline')!.dataset.mode).toBe('column')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(button.getAttribute('aria-label')).toBe('Show or hide the outline')
+    expect(button.title).toBe('Show or hide the outline')
+    // Off: gone, and the button no longer pressed; on again.
+    await act(async () => button.click())
+    expect($('outline')).toBeNull()
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => button.click())
+    expect($('outline')!.dataset.mode).toBe('column')
+  })
+
+  it('NOTES-3 AC-15 with too little room the button opens the outline as a panel over the text; Escape and a click beside it close it', async () => {
+    width = 800
+    await render('/notes/soup')
+    const button = $('tool-outline')!
+    expect($('outline')).toBeNull()
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    await act(async () => button.click())
+    const panel = $('outline')!
+    expect(panel.dataset.mode).toBe('panel')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    // Over the text's right edge, inside the note's side, with the focus.
+    expect(panel.closest('[data-testid="note-editor"]')).not.toBeNull()
+    expect(document.activeElement).toBe(panel)
+    expect(panel.getAttribute('aria-label')).toBe(i18n.t('editor.outline.label'))
+    // Escape: closed, the focus back on the button.
+    await act(async () => void panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+    expect($('outline')).toBeNull()
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(document.activeElement).toBe(button)
+    // The button toggles it; a click inside it keeps it, a click beside it (in the text) closes it.
+    await act(async () => void button.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    await act(async () => button.click())
+    expect($('outline')!.dataset.mode).toBe('panel')
+    await act(async () => void $('outline')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect($('outline')).not.toBeNull()
+    await act(async () => void $('note-page')!.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    expect($('outline')).toBeNull()
+    // A panel is for the moment: the setting of the column stays as it was.
+    expect(localStorage.getItem(prefKey('outline', 1))).toBeNull()
+  })
+
+  it('NOTES-3 AC-15 the outline stands right beside the sheet, the two centred together; the info goes with it (fourth review)', async () => {
+    width = 2560
+    await render('/notes/soup')
+    const page = $('note-page')!
+    const outline = $('outline')!
+    const pane = $('note-pane')!
+    // The column follows the sheet at the side's gap (24 px), the pair centred in the side: no auto margin on the
+    // sheet, which would push the column to the far edge of a wide window.
+    expect(outline.dataset.mode).toBe('column')
+    expect(outline.previousElementSibling).toBe(page)
+    expect(page.parentElement).toBe(pane)
+    expect(pane.className).toContain('justify-center')
+    expect(pane.className).toContain('md:gap-6')
+    expect(page.className.split(' ')).not.toContain('mx-auto')
+    expect(outline.className.split(' ')).not.toContain('ml-auto')
+    expect(outline.contains($('outline-info'))).toBe(true)
+    // Off and on again: the sheet keeps its width and stays centred, alone.
+    await act(async () => $('tool-outline')!.click())
+    expect($('outline')).toBeNull()
+    expect($('note-page')!.style.maxWidth).toBe('760px')
+    expect($('note-page')!.parentElement).toBe($('note-pane'))
+    await act(async () => $('tool-outline')!.click())
+    expect($('outline')!.previousElementSibling).toBe($('note-page'))
+  })
+
+  it('NOTES-3 AC-15 a note without headings says in the outline how it comes about', async () => {
+    width = 1170
+    await render('/notes/soup')
+    expect($('outline-none')!.textContent).toBe('No headings yet. Type # or choose the text style “Heading”, and the outline builds up here.')
+    expect($('outline-info')).not.toBeNull()
+    await act(async () => void (await i18n.changeLanguage('de')))
+    try {
+      expect($('outline-none')!.textContent).toBe('Noch keine Überschriften. Mit # oder dem Textstil ‚Überschrift‘ entsteht hier die Gliederung.')
+    } finally {
+      await act(async () => void (await i18n.changeLanguage('en')))
+    }
+  })
+
+  it('NOTES-8 NOTES-3 AC-15 side by side in the reviewed window each side opens its own outline as a panel', async () => {
+    width = 1170
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('shop'))
+    await idle()
+    // Each side about 580 px wide: the column does not fit there.
+    width = Math.floor((1170 - 12) / 2)
+    await reload('/notes/soup')
+    expect(pane('right')).not.toBeNull()
+    expect($('outline')).toBeNull()
+    const left = pane('left')!
+    const first = await outlineButton(left)
+    await act(async () => first.click())
+    expect($$('outline').map((outline) => outline.dataset.mode)).toEqual(['panel'])
+    expect(left.contains($('outline'))).toBe(true)
+    // The other side's button opens that side's own; the first closes, as on any click beside it.
+    const right = pane('right')!
+    const second = await outlineButton(right)
+    await act(async () => void second.dispatchEvent(new MouseEvent('pointerdown', { bubbles: true })))
+    await act(async () => second.click())
+    expect($$('outline').length).toBe(1)
+    expect(right.contains($('outline'))).toBe(true)
+  })
+
+  it("NOTES-3 AC-3 the toolbar stays at the top of the side's one scroll area while the text scrolls (third review)", async () => {
+    await render('/notes/soup')
+    const head = $('editor-head')!
+    // Sticky at the top on a desk (on a phone the tools sit above the keyboard), with a background of its own.
+    expect(head.className.split(' ')).toEqual(expect.arrayContaining(['md:sticky', 'md:top-0', 'md:bg-ink-950']))
+    expect(head.contains($('toolbar'))).toBe(true)
+    // One scroll area per note, the side itself: nothing between it and the toolbar or the text scrolls.
+    const side = head.closest<HTMLElement>('[data-testid="tab-pane"]')!
+    expect(side.className).toContain('overflow-y-auto')
+    for (const inner of [head, $('note-page')!]) {
+      for (let at = inner.parentElement; at && at !== side; at = at.parentElement) expect(at.className).not.toMatch(/overflow-(y-)?(auto|scroll)/)
+    }
   })
 
   it('NOTES-3 AC-17 the note menu chooses the paper; the sheet shows it, and another window follows within 5 s', async () => {
@@ -664,7 +828,7 @@ describe('tabs in the page', () => {
     expect(rows.find((row) => row.textContent?.includes('Lentil soup'))!.querySelector('[data-testid="note-icon"]')).toBeNull()
     // Without a symbol: the quiet button in the title row, reachable by keyboard.
     const add = $('title-icon-add')!
-    expect(add.getAttribute('aria-label')).toBe('Add symbol')
+    expect(add.getAttribute('aria-label')).toBe('Choose a symbol')
     expect(add.tabIndex).toBe(0)
     await act(async () => add.click())
     const dialog = $('note-icon-dialog')!
@@ -751,7 +915,7 @@ describe('tabs in the page', () => {
     const tabOfNote = (note: string) => $$('tab').find((one) => one.dataset.note === note)!
     // Not open: a new tab.
     let menu = await menuOf('shop')
-    expect(menu.tab.textContent).toBe('Open in a new tab')
+    expect(menu.tab.textContent).toBe('Open in a new tabAlt+click')
     expect(menu.tab.getAttribute('aria-disabled')).toBeNull()
     await act(async () => menu.tab.click())
     await idle()
@@ -766,7 +930,7 @@ describe('tabs in the page', () => {
     await act(async () => void document.querySelector<HTMLElement>('[data-testid="note-item-menu"]')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     // Open in the background: "Go to tab", and the tab pulses as it comes to the front.
     menu = await menuOf('soup')
-    expect(menu.tab.textContent).toBe('Go to tab')
+    expect(menu.tab.textContent).toBe('Go to tabAlt+click')
     await act(async () => menu.tab.click())
     await idle()
     expect(tabOfNote('soup').getAttribute('aria-current')).toBe('true')
