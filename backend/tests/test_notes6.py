@@ -284,11 +284,12 @@ def test_notes6_ec2_ten_thousand_notes_load_in_under_a_second(client, operator):
 
 
 def test_notes6_ec3_a_locked_note_gives_its_title_and_lock_only(client, operator, monkeypatch):
-    secret = new_note(client, title="WLAN-Gäste und Codes", markdown="- [ ] Passwort: geheim")
+    secret = new_note(client, title="WLAN-Gäste und Codes", markdown="- [ ] Passwort: geheim #wlan")
     open_note = new_note(client, title="Offen", markdown="Sichtbar")
     monkeypatch.setattr(notes_list, "LOCK_CHECKS", [lambda _db, rows: [row.id for row in rows if row.id == secret["id"]]])
     monkeypatch.setattr(notes_list, "ITEM_EXTRAS", [
-        lambda _db, _account, rows: {row.id: {"tags": ["wlan"], "media": {"kind": "image", "count": 2}} for row in rows},
+        notes_list.tags_of,
+        lambda _db, _account, rows: {row.id: {"media": {"kind": "image", "count": 2}} for row in rows},
     ])
     items = {item["id"]: item for item in listed(client)["items"]}
     locked = items[secret["id"]]
@@ -358,3 +359,13 @@ def test_notes6_ac2_a_list_item_carries_what_get_notes_gives(client, operator):
     for key in ("created_at", "updated_at"):
         assert datetime.fromisoformat(item.pop(key)) == datetime.fromisoformat(plain.pop(key))
     assert {key: item[key] for key in plain} == plain
+
+
+def test_notes6_ac2_the_tags_of_a_note_come_with_the_list(client, operator):
+    tagged = new_note(client, title="Handwerker Bad", markdown="Fliesenleger kommt Montag #bad #Haus")
+    plain = new_note(client, title="Ohne", markdown="Nichts")
+    items = {item["id"]: item for item in listed(client)["items"]}
+    assert sorted(items[tagged["id"]]["tags"], key=str.lower) == ["bad", "Haus"]
+    assert items[plain["id"]]["tags"] == []
+    in_inbox = {item["id"]: item for item in listed(client, inbox_id(operator))["items"]}
+    assert in_inbox[tagged["id"]]["tags"] == items[tagged["id"]]["tags"]

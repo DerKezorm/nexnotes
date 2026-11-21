@@ -339,10 +339,21 @@ def set_color(db: Session, account: Account, note_id: str, color: str) -> Note:
 # --- Hooks --------------------------------------------------------------------------------------------------------
 
 
+def tags_of(db: Session, _account: Account, rows: list[Any]) -> dict[str, dict[str, Any]]:
+    """The tags of the notes (NOTES-5), the way ``GET /api/notes`` gives them, for the whole list at once."""
+    from . import tags
+
+    found = tags.with_tags(db, [{"id": row.id} for row in rows])
+    return {item["id"]: {"tags": item["tags"]} for item in found}
+
+
 def register() -> None:
-    """The checklists are counted whenever the notes' text is written anew from the document."""
+    """The checklists are counted whenever the notes' text is written anew from the document; the items carry their
+    tags."""
     if recount not in notes.SUMMARY_HOOKS:
         notes.SUMMARY_HOOKS.append(recount)
+    if tags_of not in ITEM_EXTRAS:
+        ITEM_EXTRAS.append(tags_of)
 
 
 register()
