@@ -31,6 +31,8 @@ import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import delete  # noqa: E402
 
+from app import db as db_module  # noqa: E402
+from app import main as main_module  # noqa: E402
 from app.db import SessionLocal, init_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import MEMBER, OPERATOR, Account, Base, Setting  # noqa: E402
@@ -53,6 +55,37 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
     for item in items:
         if "timing" in item.keywords:
             item.add_marker(skip)
+
+
+def _schema_version() -> int:
+    """SQLite's count of changes to the schema (``PRAGMA schema_version``): any table, column or index made, changed
+    or dropped, and another database file in its place, show as another number."""
+    with db_module.engine.connect() as connection:
+        return int(connection.exec_driver_sql("PRAGMA schema_version").scalar() or 0)
+
+
+def once_per_schema(function):
+    """``function`` checks and makes the schema; it runs again only when the schema changed since it last ran. Every
+    test starts the app anew (its own ``TestClient``), and the start checked every table and column each time: about
+    a second per test, the larger part of a full run. A test that changes the schema, or puts another database in
+    place (a restored backup), still gets the real check. Called with arguments (a session), it always runs."""
+    seen: dict[str, int | None] = {"version": None}
+
+    def wrapper(*args, **kwargs):
+        if args or kwargs:
+            return function(*args, **kwargs)
+        if seen["version"] is not None and seen["version"] == _schema_version():
+            return None
+        result = function()
+        seen["version"] = _schema_version()
+        return result
+
+    wrapper.__wrapped__ = function
+    return wrapper
+
+
+# The checks of the start (``main.lifespan``: tables, columns, indexes; the search index of ``search.register``).
+main_module.init_db = once_per_schema(main_module.init_db)
 
 
 @pytest.fixture(scope="session", autouse=True)

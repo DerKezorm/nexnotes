@@ -918,7 +918,8 @@ def _para(text: str) -> dict:
 def _zip_bytes() -> bytes:
     out = io.BytesIO()
     with zipfile.ZipFile(out, "w") as archive:
-        archive.writestr("plan.txt", "Grundriss")
+        # A fixed time: with the clock's, two calls a second apart gave two different files.
+        archive.writestr(zipfile.ZipInfo("plan.txt", date_time=(2026, 11, 21, 12, 0, 0)), "Grundriss")
     return out.getvalue()
 
 
