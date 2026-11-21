@@ -502,6 +502,55 @@ describe('NOTES-3 AC-1 the placeholder', () => {
   })
 })
 
+describe('NOTES-3 EC-11 a short toolbar', () => {
+  it('NOTES-3 EC-11 keeps one row: what does not fit goes into "More", where each tool still works', async () => {
+    let width = 520
+    const observers: { callback: ResizeObserverCallback; target: Element }[] = []
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {}
+        observe(target: Element) {
+          observers.push({ callback: this.callback, target })
+          this.callback([{ target, contentRect: { width } } as unknown as ResizeObserverEntry], this as unknown as ResizeObserver)
+        }
+        disconnect() {}
+        unobserve() {}
+      },
+    )
+    try {
+      const editor = makeEditor()
+      const box = document.createElement('div')
+      document.body.appendChild(box)
+      const root = createRoot(box)
+      await act(async () => root.render(<Toolbar editor={editor} onLink={() => undefined} />))
+      const shownTools = () => [...box.querySelectorAll('button[data-tool]')].map((tool) => tool.getAttribute('data-testid'))
+      // 520 px: the text style, eight tools and "More" (nine places of 38 px).
+      expect(shownTools()).toHaveLength(8 + 1)
+      expect(shownTools().at(-1)).toBe('tool-more')
+      expect(shownTools()).toContain('tool-bold')
+      expect(shownTools()).not.toContain('tool-outline')
+      expect(box.querySelector('[data-testid="toolbar"]')!.className).toContain('flex-nowrap')
+      await act(async () => box.querySelector<HTMLButtonElement>('[data-testid="tool-more"]')!.click())
+      const more = [...document.querySelectorAll<HTMLButtonElement>('[data-testid^="more-"]')].map((item) => item.dataset.testid)
+      expect(more).toContain('more-table')
+      expect(more).toContain('more-outline')
+      expect(more.length + 8).toBe(19)
+      // A tool from "More" does what it does in the row: the table goes in.
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="more-table"]')!.click())
+      expect(types(editor)).toContain('table')
+      // Wide again: everything in the row, no "More".
+      width = 1400
+      await act(async () => observers.at(-1)!.callback([{ target: observers.at(-1)!.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
+      expect(shownTools()).not.toContain('tool-more')
+      expect(shownTools()).toHaveLength(19)
+      await act(async () => root.unmount())
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+})
+
 describe('NOTES-3 EC-3 pasting', () => {
   const word = `<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>p.MsoNormal { color: red }</style><script>alert('x')</script></head>
     <body><!--[if gte mso 9]>junk<![endif]--><h1 style="color:blue" class="MsoTitle">Plan</h1><p class="MsoNormal" style="font-size: 30pt"><b>bold</b> and <span style="font-family: Comic Sans">plain</span><o:p></o:p></p>

@@ -29,7 +29,9 @@ export function PresenceBar({ presence }: { presence: Presence }) {
           )}
         </span>
       )}
-      {presence.people.length > 0 && <span className="min-w-0 truncate text-[13px] text-mist-300">{presenceSentence(presence, t)}</span>}
+      {/* The sentence where the head of the note has room (a container query on it); the pictures and initials always
+          stay. */}
+      {presence.people.length > 0 && <span className="hidden max-w-[16rem] min-w-0 truncate text-[13px] text-mist-300 @[52rem]:inline" data-testid="presence-sentence">{presenceSentence(presence, t)}</span>}
       {presence.ownWindows > 0 && (
         <span data-testid="presence-own" className="shrink-0 rounded-md border px-2 py-0.5 text-xs text-mist-200" style={{ borderColor: OWN_COLOR }}>
           {t('presence.otherWindow')}

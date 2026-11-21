@@ -9,6 +9,7 @@ import { useEditorState } from '@tiptap/react'
 import {
   Bold,
   ChevronDown,
+  ChevronsRight,
   Code,
   Highlighter,
   IndentDecrease,
@@ -38,6 +39,12 @@ import { HIGHLIGHT_COLORS } from './extensions'
 import { tableActions } from './table'
 import { useOutlineShown } from './outlineData'
 import { TEXT_WIDTHS, useTextWidth } from './textWidth'
+
+/** The width of a tool with its gap, and of the text style with the line after it. */
+const TOOL_WIDTH = 38
+const STYLE_WIDTH = 160
+/** The tools that go into "More" first when the row is short: the ones used least. */
+const HIDE_ORDER = ['outline', 'width', 'divider', 'outdent', 'indent', 'code', 'quote', 'strike', 'underline', 'highlight', 'table', 'link', 'redo', 'undo', 'task', 'ordered', 'bullet', 'italic', 'bold']
 
 const MOD = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
 const ALT = MOD === '⌘' ? '⌥' : 'Alt'
@@ -94,6 +101,16 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   const bar = useRef<HTMLDivElement>(null)
   const [focusAt, setFocusAt] = useState(0)
   const [menu, setMenu] = useState<'highlight' | 'table' | 'width' | null>(null)
+  const [moreOpen, setMoreOpen] = useState(false)
+  const moreButton = useRef<HTMLButtonElement>(null)
+  const [room, setRoom] = useState(0)
+  useEffect(() => {
+    const element = bar.current
+    if (!element || compact || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(([entry]) => setRoom(Math.floor(entry.contentRect.width)))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [compact])
   const [textWidth, setTextWidth] = useTextWidth()
   const [outline, setOutline] = useOutlineShown()
   const chain = () => editor.chain().focus()
@@ -188,6 +205,23 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   }
 
   const size = compact ? 'h-11 w-11' : 'h-[34px] w-[34px]'
+  // One row, no scroll bar (beside another note the side may be narrow): what does not fit goes into "More", the
+  // tools used least first. Unknown width (no layout yet): all.
+  const narrow = !compact && room > 0 && room < STYLE_WIDTH + TOOL_WIDTH
+  const capacity = compact || !room ? buttons.length : Math.max(0, Math.floor((room - (narrow ? 0 : STYLE_WIDTH)) / TOOL_WIDTH))
+  const overflow = capacity >= buttons.length ? 0 : buttons.length - Math.max(0, capacity - 1)
+  const away = new Set(HIDE_ORDER.filter((key) => buttons.some((button) => button.key === key)).slice(0, overflow))
+  const visible = buttons.filter((button) => !away.has(button.key))
+  const hidden = buttons.filter((button) => away.has(button.key))
+  const anchorOf = (key: string) => toolButton(key) ?? moreButton.current
+  // Very narrow (a side of two at a small window): the text style goes into "More" too.
+  const styleAway = narrow
+  const styles = [
+    ['h1', () => chain().setHeading({ level: 1 }).run()],
+    ['h2', () => chain().setHeading({ level: 2 }).run()],
+    ['h3', () => chain().setHeading({ level: 3 }).run()],
+    ['p', () => chain().setParagraph().run()],
+  ] as const
   return (
     <div
       ref={bar}
@@ -195,8 +229,10 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
       aria-label={t('editor.tools.label')}
       onKeyDown={move}
       data-testid="toolbar"
-      className={compact ? 'nn-scroll flex items-center gap-0.5 overflow-x-auto border-t border-ink-700 bg-ink-850 px-2 py-1.5' : 'flex flex-wrap items-center gap-1'}
+      className={compact ? 'nn-scroll flex items-center gap-0.5 overflow-x-auto border-t border-ink-700 bg-ink-850 px-2 py-1.5' : 'flex min-w-0 flex-nowrap items-center gap-1 overflow-hidden'}
     >
+      {!styleAway && (
+      <>
       <label className="sr-only" htmlFor="nn-text-style">
         {t('editor.tools.style')}
       </label>
@@ -227,8 +263,10 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
         </select>
         <ChevronDown aria-hidden className="pointer-events-none absolute top-1/2 right-2 h-3 w-3 -translate-y-1/2 text-mist-500" />
       </span>
-      {!compact && <span aria-hidden className="mx-1.5 h-[22px] w-px bg-ink-700" />}
-      {buttons.map((button, index) => {
+      </>
+      )}
+      {!compact && !styleAway && <span aria-hidden className="mx-1.5 h-[22px] w-px bg-ink-700" />}
+      {visible.map((button, index) => {
         const Icon = button.icon
         const position = index + 1
         const title = button.shortcut ? `${button.label} (${button.shortcut})` : button.label
@@ -252,95 +290,160 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
             >
               <Icon className="h-4 w-4" strokeWidth={button.key === 'bold' ? 2.6 : 2} aria-hidden />
             </button>
-            {button.key === 'highlight' && menu === 'highlight' && (
-              <Popover label={t('editor.tools.highlight')} onClose={() => setMenu(null)} anchor={toolButton('highlight')}>
-                {HIGHLIGHT_COLORS.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    role="menuitem"
-                    className="nn-menu-item"
-                    data-testid={`highlight-${color}`}
-                    onClick={() => {
-                      setMenu(null)
-                      chain().setHighlight({ color }).run()
-                    }}
-                  >
-                    <span aria-hidden className="nn-swatch" data-color={color} />
-                    {t(`editor.colors.${color}`)}
-                  </button>
-                ))}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="nn-menu-item"
-                  onClick={() => {
-                    setMenu(null)
-                    chain().unsetHighlight().run()
-                  }}
-                >
-                  <span aria-hidden className="nn-swatch nn-swatch-none" />
-                  {t('editor.colors.none')}
-                </button>
-              </Popover>
-            )}
-            {button.key === 'width' && menu === 'width' && (
-              <Popover label={t('editor.tools.width')} onClose={() => setMenu(null)} anchor={toolButton('width')} end>
-                {TEXT_WIDTHS.map((width) => (
-                  <button
-                    key={width}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={textWidth === width}
-                    className="nn-menu-item"
-                    data-testid={`width-${width}`}
-                    onClick={() => {
-                      setMenu(null)
-                      setTextWidth(width)
-                    }}
-                  >
-                    <span aria-hidden className="w-4 text-accent-400">{textWidth === width ? '✓' : ''}</span>
-                    {t(`editor.width.${width}`)}
-                  </button>
-                ))}
-              </Popover>
-            )}
-            {button.key === 'table' && menu === 'table' && (
-              <Popover label={t('editor.table.label')} onClose={() => setMenu(null)} anchor={toolButton('table')}>
-                {(
-                  [
-                    ['addRowBefore', 'editor.table.addRowBefore'],
-                    ['addRowAfter', 'editor.table.addRowAfter'],
-                    ['rowUp', 'editor.table.rowUp'],
-                    ['rowDown', 'editor.table.rowDown'],
-                    ['deleteRow', 'editor.table.deleteRow'],
-                    ['addColumnBefore', 'editor.table.addColumnBefore'],
-                    ['addColumnAfter', 'editor.table.addColumnAfter'],
-                    ['columnLeft', 'editor.table.columnLeft'],
-                    ['columnRight', 'editor.table.columnRight'],
-                    ['deleteColumn', 'editor.table.deleteColumn'],
-                    ['deleteTable', 'editor.table.deleteTable'],
-                  ] as const
-                ).map(([action, label]) => (
-                  <button
-                    key={action}
-                    type="button"
-                    role="menuitem"
-                    className="nn-menu-item"
-                    data-testid={`table-${action}`}
-                    onClick={() => {
-                      setMenu(null)
-                      table[action]()
-                    }}
-                  >
-                    {t(label)}
-                  </button>
-                ))}
-              </Popover>
-            )}
           </span>
         )
       })}
+      {(hidden.length > 0 || styleAway) && (
+        <span className="relative flex shrink-0">
+          <button
+            ref={moreButton}
+            type="button"
+            data-tool
+            data-testid="tool-more"
+            tabIndex={focusAt === visible.length + 1 ? 0 : -1}
+            onFocus={() => setFocusAt(visible.length + 1)}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => setMoreOpen(!moreOpen)}
+            aria-label={t('editor.tools.more')}
+            aria-haspopup="menu"
+            aria-expanded={moreOpen}
+            title={t('editor.tools.more')}
+            className={`${size} flex items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 hover:text-mist-100`}
+          >
+            <ChevronsRight className="h-4 w-4" aria-hidden />
+          </button>
+        </span>
+      )}
+      {moreOpen && moreButton.current && (
+        <Menu anchor={moreButton.current} onClose={() => setMoreOpen(false)} label={t('editor.tools.more')} testId="tool-more-menu">
+          {styleAway &&
+            styles.map(([value, run]) => (
+              <button
+                key={value}
+                type="button"
+                role="menuitemradio"
+                aria-checked={state.style === value}
+                className="nn-menu-item"
+                data-testid={`more-style-${value}`}
+                disabled={!state.editable}
+                onClick={() => {
+                  setMoreOpen(false)
+                  run()
+                }}
+              >
+                <span aria-hidden className="w-4 text-accent-400">{state.style === value ? '✓' : ''}</span>
+                {t(`editor.style.${value}`)}
+              </button>
+            ))}
+          {hidden.map((button) => {
+            const Icon = button.icon
+            return (
+              <button
+                key={button.key}
+                type="button"
+                role="menuitem"
+                className="nn-menu-item"
+                data-testid={`more-${button.key}`}
+                disabled={button.disabled || (!state.editable && !['undo', 'redo', 'width', 'outline'].includes(button.key))}
+                onClick={() => {
+                  setMoreOpen(false)
+                  button.run()
+                }}
+              >
+                <Icon className="h-4 w-4" aria-hidden />
+                <span className="flex-1">{button.label}</span>
+                {button.shortcut && <span className="text-[11px] text-mist-500">{button.shortcut}</span>}
+              </button>
+            )
+          })}
+        </Menu>
+      )}
+      {menu === 'highlight' && (
+        <Popover label={t('editor.tools.highlight')} onClose={() => setMenu(null)} anchor={anchorOf('highlight')}>
+          {HIGHLIGHT_COLORS.map((color) => (
+            <button
+              key={color}
+              type="button"
+              role="menuitem"
+              className="nn-menu-item"
+              data-testid={`highlight-${color}`}
+              onClick={() => {
+                setMenu(null)
+                chain().setHighlight({ color }).run()
+              }}
+            >
+              <span aria-hidden className="nn-swatch" data-color={color} />
+              {t(`editor.colors.${color}`)}
+            </button>
+          ))}
+          <button
+            type="button"
+            role="menuitem"
+            className="nn-menu-item"
+            onClick={() => {
+              setMenu(null)
+              chain().unsetHighlight().run()
+            }}
+          >
+            <span aria-hidden className="nn-swatch nn-swatch-none" />
+            {t('editor.colors.none')}
+          </button>
+        </Popover>
+      )}
+      {menu === 'width' && (
+        <Popover label={t('editor.tools.width')} onClose={() => setMenu(null)} anchor={anchorOf('width')} end>
+          {TEXT_WIDTHS.map((width) => (
+            <button
+              key={width}
+              type="button"
+              role="menuitemradio"
+              aria-checked={textWidth === width}
+              className="nn-menu-item"
+              data-testid={`width-${width}`}
+              onClick={() => {
+                setMenu(null)
+                setTextWidth(width)
+              }}
+            >
+              <span aria-hidden className="w-4 text-accent-400">{textWidth === width ? '✓' : ''}</span>
+              {t(`editor.width.${width}`)}
+            </button>
+          ))}
+        </Popover>
+      )}
+      {menu === 'table' && (
+        <Popover label={t('editor.table.label')} onClose={() => setMenu(null)} anchor={anchorOf('table')}>
+          {(
+            [
+              ['addRowBefore', 'editor.table.addRowBefore'],
+              ['addRowAfter', 'editor.table.addRowAfter'],
+              ['rowUp', 'editor.table.rowUp'],
+              ['rowDown', 'editor.table.rowDown'],
+              ['deleteRow', 'editor.table.deleteRow'],
+              ['addColumnBefore', 'editor.table.addColumnBefore'],
+              ['addColumnAfter', 'editor.table.addColumnAfter'],
+              ['columnLeft', 'editor.table.columnLeft'],
+              ['columnRight', 'editor.table.columnRight'],
+              ['deleteColumn', 'editor.table.deleteColumn'],
+              ['deleteTable', 'editor.table.deleteTable'],
+            ] as const
+          ).map(([action, label]) => (
+            <button
+              key={action}
+              type="button"
+              role="menuitem"
+              className="nn-menu-item"
+              data-testid={`table-${action}`}
+              onClick={() => {
+                setMenu(null)
+                table[action]()
+              }}
+            >
+              {t(label)}
+            </button>
+          ))}
+        </Popover>
+      )}
     </div>
   )
 }

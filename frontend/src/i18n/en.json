@@ -293,7 +293,8 @@
       "underline": "Underline",
       "undo": "Undo",
       "width": "Text width",
-      "outline": "Outline"
+      "outline": "Outline",
+      "more": "More tools"
     },
     "style": {
       "h1": "Heading",
