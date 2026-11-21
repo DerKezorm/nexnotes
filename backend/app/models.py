@@ -303,6 +303,9 @@ class Folder(Base):
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, onupdate=utcnow)
     #: In the trash since (NOTES-15); ``None`` while alive.
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
+    #: The mark of the deletion that took it (NOTES-4 AC-5): a folder goes with its subfolders and notes under one
+    #: mark, and bringing it back brings back exactly what carries the mark.
+    deleted_batch: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
 
 class Note(Base):
@@ -330,6 +333,8 @@ class Note(Base):
     )
     #: In the trash since (NOTES-15); ``None`` while alive.
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
+    #: Went to the trash with its folder (NOTES-4 AC-5): the mark of that deletion, ``None`` for a note deleted alone.
+    deleted_batch: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
 
 
 class NoteUpdate(Base):
