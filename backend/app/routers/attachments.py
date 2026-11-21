@@ -90,16 +90,19 @@ async def upload(
     role: Annotated[str | None, Query(alias="as", max_length=20)] = None,
     text: Annotated[str | None, Query(pattern="^device$")] = None,
 ) -> dict[str, Any]:
-    """From the iOS app (NOTES-11 AC-5): ``as=scan`` makes a picture a scan, ``text=device`` says the recognised text
-    comes afterwards (``PUT /api/attachments/{id}/text``). Both are read by the recognition when the row is written."""
-    if role not in (None, "scan"):
-        raise error("invalid_input", "The input is not valid.", 422, fields=["as"])
-    hints = ocr.HINTS.set(ocr.Hints(device=text == "device", scan=role == "scan"))
+    """``as`` from the iOS app: ``drawing``, ``drawing-data``, ``recording`` or ``transcript`` (NOTES-18), the content
+    must be what it says (``attachment_wrong_kind``); ``scan`` (NOTES-11 AC-5) makes a picture a scan. Without it the
+    content alone decides. ``text=device`` says the recognised text comes afterwards (``PUT
+    /api/attachments/{id}/text``). Scan and text are read by the recognition when the row is written."""
+    scan = role == "scan"
+    if scan:
+        role = None
+    hints = ocr.HINTS.set(ocr.Hints(device=text == "device", scan=scan))
     declared_text = request.headers.get("content-length")
     declared = int(declared_text) if declared_text and declared_text.isdigit() else None
     try:
         with SessionLocal() as db:
-            started = attachments.begin(db, account, note_id, attachment_id, name, declared)
+            started = attachments.begin(db, account, note_id, attachment_id, name, declared, role)
         if isinstance(started, Attachment):
             response.status_code = 200
             return attachments.out(started)

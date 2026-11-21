@@ -21,10 +21,11 @@ export function ViewerHost() {
   useEffect(() => {
     if (opening?.go) {
       navigate(opening.go)
-      arrived()
+      if (opening.id) arrived()
+      else closeViewer()
     }
   }, [opening, navigate])
-  if (!opening) return null
+  if (!opening?.id) return null
   return <Viewer key={`${opening.id}:${opening.page}:${opening.mark?.text ?? ''}`} opening={opening} onClose={close} />
 }
 
@@ -36,6 +37,11 @@ registerLargeView((info, noteId) => {
 registerAttachmentOpener((hit) => {
   const found = hit.attachment
   if (!found) return
+  // Words of a recording (NOTES-18) and other kinds without a picture: only the note opens.
+  if (!TEXT_KINDS.includes(found.kind)) {
+    openViewer({ id: '', noteId: hit.id, go: noteHref(hit.id) })
+    return
+  }
   openViewer({ id: found.ref, noteId: hit.id, page: found.page ?? 1, mark: hit.jump, showText: true, go: noteHref(hit.id) })
 })
 

@@ -12,10 +12,11 @@ import i18n from '../i18n'
 import { bodyIsEmpty, cleanPastedHtml, collapseKey, editorExtensions, editorProps, foldedRanges, openLink, safeHref, taskCount, toggleDoneToBottom, toggleFold } from './extensions'
 import { presenceUser } from './presence'
 import { NoteProvider } from './provider'
-import { tableActions } from './table'
+import { COLUMN_MIN, TABLE_MENU, WIDTH_STEP, columnWidths, setColumnWidths, tableActions } from './table'
 import { TableControls } from './TableControls'
 import { TitleField } from './TitleField'
 import { Toolbar } from './Toolbar'
+import { GROUP_LINE, groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './toolbarRows'
 import { forgetPrefs, prefKey } from '../lib/devicePref'
 import { Outline } from './Outline'
 import { headingsOf, OUTLINE_FROM } from './outlineData'
@@ -430,6 +431,61 @@ describe('NOTES-3 AC-5 NOTES-12 a table changed by two at once', () => {
   })
 })
 
+describe('NOTES-3 AC-19 column widths', () => {
+  it('NOTES-3 AC-19 the layout is fixed: typing never changes a column, text wraps in its cell, the edge has a grip', () => {
+    // The browser test (e2e/table-width.spec.ts) measures; here the rules that make it so.
+    const table = css.match(/\.nn-editor table \{([^}]*)\}/)![1]
+    expect(table).toMatch(/table-layout:\s*fixed;/)
+    expect(table).toMatch(/width:\s*100%;/)
+    const cell = css.match(/\.nn-editor td \{([^}]*)\}/)![1]
+    expect(cell).toMatch(/overflow-wrap:\s*anywhere;/)
+    expect(cell).not.toMatch(/min-width/)
+    expect(css).toContain('.nn-editor .column-resize-handle {')
+    expect(css).toContain('.nn-editor .ProseMirror.resize-cursor { cursor: col-resize; }')
+  })
+
+  it('NOTES-3 AC-19 a width set in one window arrives in the other; wider and narrower from the menu, never under 60 px', () => {
+    const mine = new Y.Doc()
+    const theirs = new Y.Doc()
+    mine.on('update', (update: Uint8Array, origin: unknown) => origin !== 'wire' && Y.applyUpdate(theirs, update, 'wire'))
+    theirs.on('update', (update: Uint8Array, origin: unknown) => origin !== 'wire' && Y.applyUpdate(mine, update, 'wire'))
+    const anna = makeEditor(mine, 1)
+    const lena = makeEditor(theirs, 2)
+    anna.commands.setContent('<table><tr><th><p>Name</p></th><th><p>Qty</p></th></tr><tr><td><p>Apples</p></td><td><p>3</p></td></tr></table>')
+    const widths = (editor: Editor) => {
+      let found: number[] = []
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'table') found = columnWidths(node)
+        return node.type.name !== 'table'
+      })
+      return found
+    }
+    // A new table: no widths, the columns share the text's width.
+    expect(widths(anna)).toEqual([0, 0])
+    expect(TABLE_MENU).toEqual(expect.arrayContaining(['columnWider', 'columnNarrower', 'columnFit']))
+    let tablePos = -1
+    anna.state.doc.descendants((node, pos) => {
+      if (node.type.name === 'table') tablePos = pos
+    })
+    expect(setColumnWidths(anna.view, tablePos, { 0: 240 })).toBe(true)
+    expect(widths(anna)).toEqual([240, 0])
+    expect(widths(lena)).toEqual([240, 0])
+    expect(lena.view.dom.querySelector('col')?.style.width).toBe('240px')
+    // From the menu, with the cursor in the first column.
+    let apples = -1
+    lena.state.doc.descendants((node, pos) => {
+      if (node.isText && node.text === 'Apples') apples = pos
+    })
+    lena.commands.setTextSelection(apples + 1)
+    expect(tableActions(lena).columnWider()).toBe(true)
+    expect(widths(anna)).toEqual([240 + WIDTH_STEP, 0])
+    for (let i = 0; i < 10; i++) tableActions(lena).columnNarrower()
+    expect(widths(anna)).toEqual([COLUMN_MIN, 0])
+    expect(setColumnWidths(anna.view, tablePos, { 1: 12 })).toBe(true)
+    expect(widths(lena)).toEqual([COLUMN_MIN, COLUMN_MIN])
+  })
+})
+
 describe('NOTES-3 AC-11 highlighter', () => {
   it('NOTES-3 AC-11 a marked text gets one of five fixed colours, nothing else', () => {
     const editor = makeEditor()
@@ -443,6 +499,48 @@ describe('NOTES-3 AC-11 highlighter', () => {
     expect(editor.view.dom.querySelector('mark')?.getAttribute('data-color')).toBeNull()
     expect(editor.view.dom.querySelector('mark')?.getAttribute('style')).toBeNull()
     for (const color of ['green', 'blue', 'rose', 'violet']) expect(css).toContain(`mark[data-color='${color}'] { background: var(--nn-mark-${color}); }`)
+  })
+
+  it('NOTES-3 AC-11 a marker sits in the line without padding or margin, the selection is never honey', () => {
+    // The browser test (e2e/highlight.spec.ts) measures the letters; here the rules themselves.
+    const rule = css.match(/\.nn-editor mark \{([^}]*)\}/)![1]
+    expect(rule).toMatch(/padding:\s*0;/)
+    expect(rule).toMatch(/margin:\s*0;/)
+    expect(rule).not.toMatch(/padding:\s*0\s+\S/)
+    expect(css).toMatch(/\.nn-editor \.ProseMirror ::selection \{ background: var\(--nn-select\); \}/)
+    expect(css.match(/--nn-select: rgb\(([^)]*)\)/g)).not.toContain('--nn-select: rgb(242 193 78')
+    for (const color of ['honey', 'green', 'blue', 'rose', 'violet']) expect(css).toMatch(new RegExp(`\\.ProseMirror mark${color === 'honey' ? '' : `\\[data-color='${color}'\\]`}::selection`))
+  })
+
+  it('NOTES-3 AC-11 AC-13 one undo takes back exactly the marker, however soon after typing; redo sets it again', () => {
+    const editor = makeEditor()
+    editor.commands.setContent('<p>fafasdfasdfaf</p>')
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+    // Typed a moment ago (well inside the undo manager's 500 ms), then marked: two steps, not one.
+    typeText(editor, 'x')
+    editor.commands.setTextSelection({ from: 4, to: 11 })
+    expect(editor.state.doc.textBetween(4, 11)).toBe('asdfasd')
+    editor.chain().focus().setHighlight({ color: 'honey' }).run()
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.view.dom.querySelector('mark')).toBeNull()
+    expect(editor.getText()).toBe('fafasdfasdfafx')
+    expect(editor.commands.redo()).toBe(true)
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    expect(editor.view.dom.querySelector('mark')?.getAttribute('data-color')).toBe('honey')
+    // Typing right after marking is a step of its own too: its undo leaves the marker.
+    editor.commands.setTextSelection(editor.state.doc.content.size - 1)
+    typeText(editor, 'y')
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.getText()).toBe('fafasdfasdfafx')
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    // Taking the marker away is one step as well.
+    editor.commands.setTextSelection({ from: 4, to: 11 })
+    editor.chain().focus().unsetHighlight().run()
+    expect(editor.view.dom.querySelector('mark')).toBeNull()
+    expect(editor.commands.undo()).toBe(true)
+    expect(editor.view.dom.querySelector('mark')?.textContent).toBe('asdfasd')
+    expect(editor.getText()).toBe('fafasdfasdfafx')
   })
 })
 
@@ -596,7 +694,31 @@ describe('NOTES-3 AC-1 the placeholder', () => {
 })
 
 describe('NOTES-3 EC-11 a short toolbar', () => {
-  it('NOTES-3 EC-11 keeps one row: what does not fit goes into "More", where each tool still works', async () => {
+  it('NOTES-3 EC-11 the groups break into a second row only between groups; two rows that do not fit leave the rest to "More"', () => {
+    const widths = TOOL_GROUPS.map(groupWidth)
+    expect(TOOL_GROUPS.flat()).toEqual(['style', 'bold', 'italic', 'underline', 'strike', 'highlight', 'bullet', 'ordered', 'task', 'table', 'link', 'quote', 'code', 'indent', 'outdent', 'divider', 'undo', 'redo', 'width', 'outline'])
+    expect(toolRows(widths, 1400)).toEqual({ rows: [[0, 1, 2, 3, 4, 5, 6, 7]], rest: [], extra: 0 })
+    expect(toolRows(widths, 0)).toEqual({ rows: [[0, 1, 2, 3, 4, 5, 6, 7]], rest: [], extra: 0 })
+    expect(toolRows(widths, 520)).toEqual({ rows: [[0, 1, 2], [3, 4, 5, 6, 7]], rest: [], extra: 0 })
+    // Two rows too few: the second keeps room for "More", which takes whole groups from the end; what still fits of
+    // them stands before "More".
+    expect(toolRows(widths, 400)).toEqual({ rows: [[0, 1], [2, 3, 4]], rest: [5, 6, 7], extra: 1 })
+    // Not even the first group: no rows.
+    expect(toolRows(widths, 120)).toEqual({ rows: [], rest: [0, 1, 2, 3, 4, 5, 6, 7], extra: 0 })
+    // Every width: whole groups only, in order, rows as full as they get, never more than two rows.
+    const need = (row: number[]) => row.reduce((sum, index, at) => sum + widths[index] + (at > 0 ? GROUP_LINE : 0), 0)
+    // Beside the text style nothing: the second row holds the first tools and "More".
+    expect(toolRows(widths, 198)).toEqual({ rows: [[0], []], rest: [1, 2, 3, 4, 5, 6, 7], extra: 4 })
+    for (let room = 150; room <= 1100; room += 7) {
+      const { rows, rest, extra } = toolRows(widths, room)
+      expect([...rows.flat(), ...rest]).toEqual([0, 1, 2, 3, 4, 5, 6, 7])
+      expect(rows.length).toBeLessThanOrEqual(2)
+      rows.forEach((row, index) => expect(need(row) + (rest.length && index === rows.length - 1 ? (extra + 1) * TOOL_WIDTH + (row.length ? GROUP_LINE : 0) : 0)).toBeLessThanOrEqual(room))
+      if (rows.length === 2 && rows[1].length > 0) expect(need([...rows[0], rows[1][0]])).toBeGreaterThan(room)
+    }
+  })
+
+  it('NOTES-3 EC-11 two rows show every tool, the arrows run across both; only when two rows are too few comes "More"', async () => {
     let width = 520
     const observers: { callback: ResizeObserverCallback; target: Element }[] = []
     vi.stubGlobal(
@@ -611,6 +733,10 @@ describe('NOTES-3 EC-11 a short toolbar', () => {
         unobserve() {}
       },
     )
+    const resize = async (next: number) => {
+      width = next
+      await act(async () => observers.at(-1)!.callback([{ target: observers.at(-1)!.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
+    }
     try {
       const editor = makeEditor()
       const box = document.createElement('div')
@@ -618,25 +744,43 @@ describe('NOTES-3 EC-11 a short toolbar', () => {
       const root = createRoot(box)
       await act(async () => root.render(<Toolbar editor={editor} onLink={() => undefined} />))
       const shownTools = () => [...box.querySelectorAll('button[data-tool]')].map((tool) => tool.getAttribute('data-testid'))
-      // 520 px: the text style, eight tools and "More" (nine places of 38 px).
-      expect(shownTools()).toHaveLength(8 + 1)
-      expect(shownTools().at(-1)).toBe('tool-more')
-      expect(shownTools()).toContain('tool-bold')
-      expect(shownTools()).not.toContain('tool-outline')
-      expect(box.querySelector('[data-testid="toolbar"]')!.className).toContain('flex-nowrap')
+      const rowsShown = () => [...box.querySelectorAll('[data-testid="toolbar-row"]')].map((row) => [...row.querySelectorAll('[data-tool]')].map((tool) => tool.getAttribute('data-testid') ?? 'style'))
+      // 520 px: two rows, every tool on show, no "More"; the second row starts with a whole group.
+      expect(rowsShown()).toEqual([
+        ['style', 'tool-bold', 'tool-italic', 'tool-underline', 'tool-strike', 'tool-highlight', 'tool-bullet', 'tool-ordered', 'tool-task'],
+        ['tool-table', 'tool-link', 'tool-quote', 'tool-code', 'tool-indent', 'tool-outdent', 'tool-divider', 'tool-undo', 'tool-redo', 'tool-width', 'tool-outline'],
+      ])
+      expect(shownTools()).not.toContain('tool-more')
+      expect(box.querySelector('[data-testid="toolbar"]')!.getAttribute('data-rows')).toBe('2')
+      // The arrows go from the end of the first row to the start of the second, and back.
+      const task = box.querySelector<HTMLButtonElement>('[data-testid="tool-task"]')!
+      await act(async () => task.focus())
+      await act(async () => task.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })))
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('tool-table')
+      await act(async () => document.activeElement!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true })))
+      expect(document.activeElement?.getAttribute('data-testid')).toBe('tool-task')
+      // Wide: one row.
+      await resize(1400)
+      expect(rowsShown()).toHaveLength(1)
+      expect(shownTools()).toHaveLength(19)
+      // Two rows too few: both rows full of whole groups, "More" at the end of the second with the rest, where each
+      // tool still works.
+      await resize(400)
+      expect(rowsShown()).toEqual([
+        ['style', 'tool-bold', 'tool-italic', 'tool-underline', 'tool-strike', 'tool-highlight'],
+        ['tool-bullet', 'tool-ordered', 'tool-task', 'tool-table', 'tool-link', 'tool-quote', 'tool-code', 'tool-indent', 'tool-more'],
+      ])
       await act(async () => box.querySelector<HTMLButtonElement>('[data-testid="tool-more"]')!.click())
       const more = [...document.querySelectorAll<HTMLButtonElement>('[data-testid^="more-"]')].map((item) => item.dataset.testid)
-      expect(more).toContain('more-table')
-      expect(more).toContain('more-outline')
-      expect(more.length + 8).toBe(19)
-      // A tool from "More" does what it does in the row: the table goes in.
-      await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="more-table"]')!.click())
-      expect(types(editor)).toContain('table')
-      // Wide again: everything in the row, no "More".
-      width = 1400
-      await act(async () => observers.at(-1)!.callback([{ target: observers.at(-1)!.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
-      expect(shownTools()).not.toContain('tool-more')
-      expect(shownTools()).toHaveLength(19)
+      expect(more).toEqual(['more-outdent', 'more-divider', 'more-undo', 'more-redo', 'more-width', 'more-outline'])
+      await act(async () => document.querySelector<HTMLButtonElement>('[data-testid="more-divider"]')!.click())
+      expect(types(editor)).toContain('horizontalRule')
+      // Not even one group fits: one row, the text style in "More" too.
+      await resize(120)
+      expect(rowsShown()).toHaveLength(0)
+      expect(shownTools().at(-1)).toBe('tool-more')
+      expect(box.querySelector('[data-testid="toolbar"]')!.className).toContain('flex-nowrap')
+      expect(box.querySelector('#nn-text-style')).toBeNull()
       await act(async () => root.unmount())
     } finally {
       vi.unstubAllGlobals()

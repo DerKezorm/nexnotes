@@ -97,6 +97,7 @@ def listing(db: Session, account: Account) -> dict[str, Any]:
             gone = root.parent_id is not None and (parent is None or parent.deleted_at is not None)
             items.append({
                 "kind": "folder", "id": root.id, "title": root.name, **timing(root.deleted_at),
+                "icon": root.icon or "", "color": root.color or "",
                 "origin": _origin(parent), "origin_gone": gone, "lands": "top" if gone or parent is None else "origin",
                 "notes": notes_in.get(batch, 0) if batch is not None else 0,
                 "folders": len(group) - 1 if batch is not None else 0,
@@ -109,6 +110,8 @@ def listing(db: Session, account: Account) -> dict[str, Any]:
         gone = folder is None or folder.deleted_at is not None
         items.append({
             "kind": "note", "id": note.id, "title": note.title, **timing(note.deleted_at),
+            # The symbol before the title, in the note's colour (NOTES-3 AC-18).
+            "icon": note.icon or "", "color": note.color or "",
             "origin": _origin(folder), "origin_gone": gone,
             "lands": "inbox" if gone or folder is None or folder.kind == FOLDER_INBOX else "origin",
             "notes": 1, "folders": 0, "deleted_by": None,

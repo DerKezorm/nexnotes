@@ -4,4 +4,4 @@ import { TagSection } from './TagSection'
 import { AllTagsPage, TagPage } from './TagPage'
 
 SIDEBAR_SECTIONS.push({ key: 'tags', render: () => <TagSection /> })
-FEATURE_ROUTES.push({ path: 'tags', element: <AllTagsPage /> }, { path: 'tags/:tag', element: <TagPage /> })
+FEATURE_ROUTES.push({ path: 'tags', element: <AllTagsPage />, list: true }, { path: 'tags/:tag', element: <TagPage />, list: true })

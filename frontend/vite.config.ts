@@ -38,6 +38,11 @@ export default defineConfig({
     css: false,
     // e2e/ is Playwright's (`npm run e2e`), not vitest's.
     exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
+    // Four files at a time. The run takes as long as its longest file (tabs.test.tsx, about 30 s) however many run
+    // beside it; on a machine with ten threads the default of nine workers made every jsdom start slower, ran into the
+    // 5 s limit of single tests (9 to 33 of them failed) and took longer (61 s instead of 53 s). Four keep the run
+    // short, green and light on memory.
+    maxWorkers: 4,
   },
   server: {
     // Fixed port: if it is taken, Vite aborts instead of silently falling back to another one.

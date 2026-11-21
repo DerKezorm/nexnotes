@@ -310,6 +310,7 @@ def test_notes6_ac3_notes_from_before_are_counted_once(client, operator):
 # --- EC-2: 10,000 notes ---------------------------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 def test_notes6_ec2_ten_thousand_notes_load_in_under_a_second(client, operator):
     with SessionLocal() as db:
         inbox = inbox_for(db, operator.id).id

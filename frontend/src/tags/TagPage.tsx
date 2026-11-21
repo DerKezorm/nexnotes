@@ -12,8 +12,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { NoteIcon } from '../components/NoteIcon'
 import { problemText } from '../lib/errors'
-import { useTitle } from '../lib/title'
+import { useListPadding, useListTitle } from '../notes/listPlace'
 import { NOTES_CHANGED_EVENT } from '../notes/api'
 import { tryLeave } from '../notes/context'
 import { listDate } from '../notes/listDate'
@@ -65,7 +66,8 @@ export function TagPage() {
   const [saving, setSaving] = useState(false)
   const [saveProblem, setSaveProblem] = useState('')
   const label = page?.label ?? tag
-  useTitle(`#${label}`)
+  const padding = useListPadding()
+  useListTitle(`#${label}`)
   const saver = smartFolderSaver()
 
   const others = page?.others ?? []
@@ -85,7 +87,7 @@ export function TagPage() {
   }
 
   return (
-    <div className="nn-scroll flex h-full min-h-0 flex-col gap-4 overflow-y-auto px-4 py-6 md:px-8" data-testid="tag-page">
+    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="tag-page">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="m-0 min-w-0 truncate text-2xl font-bold text-accent-400">#{label}</h1>
         {page && (
@@ -121,13 +123,17 @@ export function TagPage() {
               onClick={(event) => {
                 if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return
                 event.preventDefault()
-                tryLeave(() => navigate(noteHref(note.id)))
+                const to = noteHref(note.id)
+                tryLeave(() => navigate(to), to)
               }}
               data-testid="tag-note"
               className="flex justify-between gap-3.5 border-b border-ink-800 px-2.5 py-3 hover:bg-ink-850"
             >
               <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="truncate text-[14.5px] font-semibold text-mist-100">{note.title || t('notes.untitled')}</span>
+                <span className="flex min-w-0 items-center gap-1.5 text-[14.5px] font-semibold text-mist-100">
+                  <NoteIcon icon={note.icon} color={note.color} />
+                  <span className="truncate">{note.title || t('notes.untitled')}</span>
+                </span>
                 {note.preview && <span className="truncate text-[12.5px] text-mist-500">{note.preview}</span>}
               </span>
               <span className="shrink-0 text-[12.5px] whitespace-nowrap text-mist-500" data-testid="tag-note-where">
@@ -170,9 +176,10 @@ export function TagPage() {
 export function AllTagsPage() {
   const { t } = useTranslation()
   const { tags, status } = useTags()
-  useTitle(t('tags.allTitle'))
+  const padding = useListPadding()
+  useListTitle(t('tags.allTitle'))
   return (
-    <div className="nn-scroll flex h-full min-h-0 flex-col gap-4 overflow-y-auto px-4 py-6 md:px-8" data-testid="all-tags">
+    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="all-tags">
       <h1 className="m-0 text-2xl font-bold text-mist-100">{t('tags.allTitle')}</h1>
       {status === 'failed' && <p className="text-sm text-bad-500">{t('tags.failed')}</p>}
       {status === 'ready' && tags.length === 0 && <p className="text-sm text-mist-500">{t('tags.none')}</p>}

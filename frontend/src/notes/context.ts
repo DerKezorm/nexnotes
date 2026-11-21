@@ -4,6 +4,8 @@
  * anywhere on the page too, and the browser's back and forward buttons (`setPopGuard`).
  */
 
+import { keepsNotesOpen } from './workspace'
+
 /** Answers whether leaving must wait; if it must, it calls `proceed` itself once the member decided. */
 export type LeaveGuard = (proceed: () => void) => boolean
 
@@ -50,8 +52,10 @@ export function blankOpenNoteIn(folderId: string | null | undefined): OpenNote |
   return openNote.isBlank() ? openNote : null
 }
 
-/** Leaves at once, or after the open note had its say. */
-export function tryLeave(proceed: () => void): void {
+/** Leaves at once, or after the open note had its say. Going `to` another list on a wider screen leaves no note
+ * (the tabs stay, NOTES-8 AC-9), so nothing is asked then. */
+export function tryLeave(proceed: () => void, to?: string): void {
+  if (to !== undefined && keepsNotesOpen(to)) return proceed()
   if (guard && guard(proceed)) return
   proceed()
 }

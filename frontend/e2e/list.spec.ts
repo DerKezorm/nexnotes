@@ -1,14 +1,18 @@
 /**
  * NOTES-6 in real browsers against the real server: the view of a folder and a note changed on another device arrive
- * without reloading the page (AC-1, EC-6), and 10,000 notes open with the first row on screen in under a second (the
+ * without reloading the page (AC-1, EC-6), and many notes open with the first row on screen in under a second (the
  * spec's loading time, measured in the page from the start of the navigation), scroll smoothly with only a window of rows in
  * the page, and keep the note at the top of the screen in its place when a new one arrives (EC-2, EC-6).
  *
- * The 10,000 notes belong to an account of their own (invited here), so that the other files' lists stay small.
+ * The many notes belong to an account of their own (invited here), so that the other files' lists stay small. An
+ * everyday run makes `MANY` of them (500: the window of rows, the loading time and the place on screen are all there,
+ * in a minute); the spec's 10,000 come with `NEXNOTES_E2E_MANY=10000` (`npm run e2e:full`), at the end of a stage.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-list0000' }
+/** How many notes the long list gets in an everyday run; `NEXNOTES_E2E_MANY` sets another number (10,000 in full). */
+const MANY = 500
 
 /** Notes in the page, from the start of the navigation, the moment the first row of a list is drawn (the frame after
  * it entered the page). */
@@ -80,12 +84,12 @@ test('NOTES-6 AC-1 EC-6 the view of a folder and a change on another device arri
   await phone.context().close()
 })
 
-test('NOTES-6 EC-2 EC-6 ten thousand notes open quickly, scroll smoothly and keep their place', async ({ page, browser }) => {
+test('NOTES-6 EC-2 EC-6 many notes (10,000 in the full run) open quickly, scroll smoothly and keep their place', async ({ page, browser }) => {
   test.setTimeout(1_200_000)
   const context = await newMember(page, browser, 'Many')
   const many = await context.newPage()
-  // 10,000 notes, 40 at a time.
-  const count = Number(process.env.NEXNOTES_E2E_MANY ?? 10_000)
+  // MANY notes (10,000 in the full run), 40 at a time.
+  const count = Number(process.env.NEXNOTES_E2E_MANY ?? MANY)
   const titles = Array.from({ length: count }, (_, index) => `Notiz ${String(index).padStart(5, '0')}`)
   for (let start = 0; start < titles.length; start += 40) {
     await Promise.all(
@@ -97,7 +101,7 @@ test('NOTES-6 EC-2 EC-6 ten thousand notes open quickly, scroll smoothly and kee
 
   // Loading: the time until the first row is on screen, not only the server's answer. Once with an empty cache (the
   // program comes along), then opened again as on every day after. Measured on a server that has settled after the
-  // 10,000 writes of the last minutes: one untimed read first (right after the import its answer took twice as long,
+  // many writes of the last minutes: one untimed read first (right after the import its answer took twice as long,
   // 0.7 s instead of 0.3 s, which is the import and not the opening of the app).
   expect((await many.request.get('/api/note-list')).ok()).toBe(true)
   await watchFirstRow(many)
@@ -152,12 +156,16 @@ test('NOTES-6 EC-2 EC-6 ten thousand notes open quickly, scroll smoothly and kee
   // Down the list, a note made on another device lands on top: the rows on screen stay where they are.
   await many.getByTestId('list-sort').click()
   await many.getByRole('menuitemradio', { name: 'Last changed' }).click()
-  await many.evaluate(() => {
+  // Far down the list: 50,000 px with 10,000 notes, the middle of a shorter list.
+  const down = await many.evaluate(() => {
     const list = document.querySelector('[data-testid="note-window"]')!
     let scroller = list.parentElement!
     while (scroller && !['auto', 'scroll'].includes(getComputedStyle(scroller).overflowY)) scroller = scroller.parentElement!
-    scroller.scrollTop = 50_000
+    const target = Math.min(50_000, Math.floor((scroller.scrollHeight - scroller.clientHeight) / 2))
+    scroller.scrollTop = target
+    return target
   })
+  expect(down).toBeGreaterThan(5_000)
   await many.waitForTimeout(500)
   const before = await many.evaluate(() => {
     const list = document.querySelector('[data-testid="note-window"]')!
@@ -168,7 +176,7 @@ test('NOTES-6 EC-2 EC-6 ten thousand notes open quickly, scroll smoothly and kee
     return row ? { id: row.dataset.note!, top: row.getBoundingClientRect().top, scrolled: scroller.scrollTop } : null
   })
   expect(before).not.toBeNull()
-  expect(before!.scrolled).toBe(50_000)
+  expect(before!.scrolled).toBe(down)
   const reloaded = many.waitForResponse((response) => response.url().includes('/api/note-list') && !response.url().includes('stamp'), { timeout: 20_000 })
   await context.request.post('/api/notes', { data: { title: 'Ganz neu' }, headers: TAB })
   await reloaded

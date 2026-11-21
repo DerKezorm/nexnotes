@@ -26,8 +26,8 @@ import { BlockView } from './NodeView'
 import { enqueue } from './uploads'
 
 export const MB = 1024 * 1024
-/** The schema's nodes that name an attachment. */
-export const ATTACHMENT_NODES = ['image', 'attachment', 'linkPreview']
+/** The schema's nodes that name an attachment; sketches and recordings (NOTES-18) come from the iOS app. */
+export const ATTACHMENT_NODES = ['image', 'attachment', 'linkPreview', 'drawing', 'recording']
 /** Endings of pictures a browser may not call `image/*` (HEIC from an iPhone on Windows). */
 const PICTURE_ENDINGS = /\.(jpe?g|png|gif|webp|bmp|heic|heif|avif)$/i
 

@@ -338,4 +338,17 @@ describe('NOTES-11 AC-8 from a hit of the search to its place in the attachment'
     // The second "Wasser" of the page, as the server counted.
     expect(document.querySelector('[data-testid="ocr-text"]')!.innerHTML.indexOf('<mark')).toBeGreaterThan('Wasser 2025 und '.length - 1)
   })
+
+  it('NOTES-11 AC-8 a hit in the words of a recording opens only its note, no view', async () => {
+    await noteWith([], [{ type: 'paragraph' }])
+    const hit = {
+      id: 'note-8', title: 'Besprechung', title_parts: [], excerpt: [], where: 'attachment', jump: { text: 'Budget', nth: 0 },
+      attachment: { kind: 'recording', name: 'Besprechung.m4a', page: null, ref: 'Rec1aaaaaaaaaaaaaaaaaa' }, folder: null, owner_id: 1, created_at: null, updated_at: null,
+    } as Hit
+    await act(async () => attachmentOpenerFor()!(hit))
+    await settle()
+    expect(path).toBe('/notes/note-8')
+    expect(viewer()).toBeNull()
+    expect(asked.some((url) => url.includes('Rec1aaaaaaaaaaaaaaaaaa'))).toBe(false)
+  })
 })

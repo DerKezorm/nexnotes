@@ -2,10 +2,9 @@
  * A link to a note clicked with the middle button, or with Ctrl or ⌘, opens a tab of nexnotes instead of one of the
  * browser (NOTES-8 AC-3), in every list of notes. Links inside a note's text keep the browser's way (NOTES-3).
  */
+import { folderOfList, listOf, noteOf } from '../notes/workspace'
 import { isDesktop } from './desktop'
 import { openNoteInNewTab } from './open'
-
-const NOTE_PATH = /^\/notes\/([^/]+)$/
 
 function noteLink(event: MouseEvent): { note: string; folder?: string } | null {
   const target = event.target as Element | null
@@ -13,9 +12,11 @@ function noteLink(event: MouseEvent): { note: string; folder?: string } | null {
   if (!anchor || anchor.closest('[contenteditable="true"], .ProseMirror')) return null
   const url = new URL(anchor.href, window.location.href)
   if (url.origin !== window.location.origin) return null
-  const match = NOTE_PATH.exec(url.pathname)
-  if (!match) return null
-  return { note: decodeURIComponent(match[1]), folder: url.searchParams.get('folder') ?? undefined }
+  // `/notes/<id>`, or a list with `?note=<id>` (NOTES-8 AC-9).
+  const note = noteOf(url.pathname, url.search)
+  if (!note) return null
+  const folder = folderOfList(listOf(url.pathname, url.search))
+  return { note, folder: folder && folder !== 'inbox' ? folder : undefined }
 }
 
 function onClick(event: MouseEvent): void {

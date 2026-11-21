@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '../components/Dialog'
+import { NoteIcon } from '../components/NoteIcon'
 import { SymbolPicker } from '../components/SymbolPicker'
 import { problemText } from '../lib/errors'
 import { foldersApi, type Folder, type Impact } from './api'
@@ -183,7 +184,7 @@ export function StyleDialog({ folder, onClose }: { folder: Folder; onClose: () =
 
 // ---- Move … (AC-3, AC-14, EC-1) --------------------------------------------------------------------------------------
 
-export type MoveWhat = { folderId?: string; noteIds?: string[]; noteTitle?: string; from?: string | null; sortIn?: boolean }
+export type MoveWhat = { folderId?: string; noteIds?: string[]; noteTitle?: string; noteIcon?: string; noteColor?: string; from?: string | null; sortIn?: boolean }
 
 type Target = { id: string | null; name: string; depth: number; folder?: Folder; off?: string; hint?: string; inbox?: boolean }
 
@@ -269,7 +270,7 @@ export function MoveDialog({ what, onClose, onMoved }: { what: MoveWhat; onClose
       : t('folders.move.notes', { count: notes.length, name: what.noteTitle ?? '' })
 
   return (
-    <Dialog title={title} onClose={onClose} medium>
+    <Dialog title={title} onClose={onClose} medium lead={!folder && what.noteIcon ? <NoteIcon icon={what.noteIcon} color={what.noteColor} size={16} /> : undefined}>
       <div className="space-y-3">
         {folder && impact && (
           <p className="text-sm text-mist-400">

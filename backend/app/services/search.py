@@ -40,8 +40,21 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import (ColumnElement, bindparam, column, func, literal, literal_column, or_, select, table, text,
-                        union, union_all)
+from sqlalchemy import (
+    ColumnElement,
+    bindparam,
+    column,
+    func,
+    inspect,
+    literal,
+    literal_column,
+    or_,
+    select,
+    table,
+    text,
+    union,
+    union_all,
+)
 from sqlalchemy.orm import Session, defer
 
 from ..db import SessionLocal, engine
@@ -373,6 +386,11 @@ def reindex_all() -> int:
 
 
 def _cleanup() -> None:
+    # The cleaning round starts with the server, beside the search's own start (``register``), which makes the tables
+    # and drops the rows of gone notes itself. On a fresh data folder the round can come first: then there is no index
+    # to clean yet.
+    if not _ready and not inspect(engine).has_table(ROWS):
+        return
     with SessionLocal() as db:
         gone = _forget_gone(db)
         db.commit()

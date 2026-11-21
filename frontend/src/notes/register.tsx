@@ -7,10 +7,10 @@ import { Plus } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
-import { FEATURE_ROUTES, SIDEBAR_SECTIONS } from '../extensions'
+import { FEATURE_ROUTES, LIST_LAYOUT, SIDEBAR_SECTIONS } from '../extensions'
 import { registerNoteActions } from '../folders/actions'
 import { noteHref, startNewNote, useNewNote } from './newNote'
-import { NotesPage } from './NotesPage'
+import { AllNotesList, NotesPage } from './NotesPage'
 
 export function NewNoteButton() {
   const { t } = useTranslation()
@@ -33,5 +33,7 @@ export function NewNoteButton() {
 }
 
 SIDEBAR_SECTIONS.push({ key: 'new-note', render: () => <NewNoteButton /> })
-FEATURE_ROUTES.push({ path: '', element: <NotesPage /> }, { path: 'notes/:noteId', element: <NotesPage /> })
+// The workspace: the lists in the middle, the notes with their tabs beside (NOTES-8 AC-9).
+LIST_LAYOUT.element = <NotesPage />
+FEATURE_ROUTES.push({ path: '', element: <AllNotesList />, list: true }, { path: 'notes/:noteId', element: <AllNotesList />, list: true })
 registerNoteActions({ newNote: (folderId) => startNewNote(folderId), noteHref: (id) => noteHref(id) })

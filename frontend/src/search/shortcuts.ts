@@ -21,7 +21,7 @@ export function openSearch(): void {
     window.dispatchEvent(new Event(FOCUS_SEARCH_EVENT))
     return
   }
-  tryLeave(() => goTo(SEARCH_PATH))
+  tryLeave(() => goTo(SEARCH_PATH), SEARCH_PATH)
 }
 
 export function onShortcut(event: KeyboardEvent): void {

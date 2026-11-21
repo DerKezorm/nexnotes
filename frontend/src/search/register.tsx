@@ -39,5 +39,5 @@ export function SearchEntry() {
 
 const after = SIDEBAR_SECTIONS.findIndex((section) => section.key === 'new-note')
 SIDEBAR_SECTIONS.splice(after + 1, 0, { key: 'search', render: () => <SearchEntry /> })
-FEATURE_ROUTES.push({ path: 'search', element: <SearchPage /> })
+FEATURE_ROUTES.push({ path: 'search', element: <SearchPage />, list: true })
 installShortcuts()

@@ -11,6 +11,10 @@ Markdown (export, MCP) is CommonMark with the GitHub additions:
   on a line of its own; a link card as the link ``[title](href)``. Whoever writes the files next to the Markdown (the
   export) gives ``attachment_href`` and the address of each file goes there instead. Read back, such a line is the
   picture or file again.
+* sketches and recordings (NOTES-18) the same way, with what else they name in the link's title:
+  ``![name](attachment:<id> "drawing data=<id>")`` and ``[name](attachment:<id> "recording duration=<ms>
+  transcript=<id>")``. For the export (``attachment_href``) a sketch is a picture, a recording the link to its sound
+  and, beside it, the link to its transcript.
 * Underline and highlight have no Markdown of their own; they are written as the HTML most renderers show:
   ``<u>text</u>`` and ``<mark>text</mark>`` (``<mark data-color="green">`` for a colour other than the default). Reading
   Markdown, ``==text==`` (as Obsidian writes it) is a highlight too.
@@ -19,7 +23,7 @@ Reading Markdown (``from_markdown``), a single line break inside a paragraph is 
 a snippet from MCP or nexdeck means its lines.
 
 Plain text (search, preview) has the words only: one block per line, table cells separated by a tab, no markers; an
-attachment by its name, a link card by its title, description and address.
+attachment, a sketch, a recording by its name, a link card by its title, description and address.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ import re
 from collections.abc import Callable
 from contextvars import ContextVar
 from typing import Any
+from urllib.parse import unquote
 
 from pycrdt import Doc
 
@@ -97,17 +102,48 @@ def _block_md(block: dict[str, Any]) -> list[str]:
     if kind == s.TABLE:
         return _table_md(content)
     if kind in (s.IMAGE, s.ATTACHMENT):
-        name = attrs.get("name") or ""
-        made = _href_of.get()
-        href = made(attrs["id"], attrs.get("name")) if made else ATTACHMENT_SCHEME + attrs["id"]
-        if href is None:
-            # The writer has no file for it (an attachment that is gone): its name, as words.
-            return [_escape(name, line_start=True)] if name else []
-        return [("!" if kind == s.IMAGE else "") + "[" + _escape(name) + "](" + _destination(href) + ")"]
+        return _attached_md(kind == s.IMAGE, attrs)
+    if kind == s.DRAWING:
+        return _attached_md(True, attrs, "drawing", {"data": attrs.get("data")})
+    if kind == s.RECORDING:
+        return _recording_md(attrs)
     if kind == s.LINK_PREVIEW:
         href = attrs.get("href") or ""
         return ["[" + _escape(attrs.get("title") or href) + "](" + _destination(href) + ")"]
     return []
+
+
+def _attached_md(picture: bool, attrs: dict[str, Any], role: str = "",
+                 extra: dict[str, Any] | None = None) -> list[str]:
+    """A picture or file on a line of its own; a sketch or recording says what it is and what else it names in the
+    link's title (only with ``attachment:`` addresses, which are read back)."""
+    name = attrs.get("name") or ""
+    made = _href_of.get()
+    href = made(attrs["id"], attrs.get("name")) if made else ATTACHMENT_SCHEME + attrs["id"]
+    if href is None:
+        # The writer has no file for it (an attachment that is gone): its name, as words.
+        return [_escape(name, line_start=True)] if name else []
+    title = ""
+    if role and not made:
+        title = ' "' + " ".join([role, *(f"{key}={value}" for key, value in (extra or {}).items()
+                                         if value is not None)]) + '"'
+    return [("!" if picture else "") + "[" + _escape(name) + "](" + _destination(href) + title + ")"]
+
+
+def _recording_md(attrs: dict[str, Any]) -> list[str]:
+    """A recording (NOTES-18): the link to its sound; written for the export, the link to its transcript beside it."""
+    made = _href_of.get()
+    line = _attached_md(False, attrs, "recording", {"duration": attrs.get("duration"),
+                                                     "transcript": attrs.get("transcript")})
+    transcript = attrs.get("transcript")
+    if not made or not transcript:
+        return line
+    href = made(transcript, None)
+    if href is None:
+        return line
+    label = unquote(href.rsplit("/", 1)[-1]) or transcript
+    link = "[" + _escape(label) + "](" + _destination(href) + ")"
+    return [line[0] + " · " + link] if line else [link]
 
 
 def _destination(href: str) -> str:
@@ -323,7 +359,7 @@ def _blocks_plain(blocks: list[dict[str, Any]]) -> list[str]:
                 cells = [" ".join(line for line in _blocks_plain(cell.get("content") or []) if line.strip())
                          for cell in row.get("content") or []]
                 out.append("\t".join(cells))
-        elif kind in (s.IMAGE, s.ATTACHMENT):
+        elif kind in (s.IMAGE, s.ATTACHMENT, s.DRAWING, s.RECORDING):
             name = (block.get("attrs") or {}).get("name")
             if name:
                 out.append(name)
@@ -342,8 +378,23 @@ _QUOTE = re.compile(r"^ {0,3}> ?(.*)$")
 _ITEM = re.compile(r"^( *)([-*+]|\d{1,9}[.)])(?:( +)(.*))?$")
 _TASK = re.compile(r"^\[([ xX])\](?: +|$)(.*)$", re.S)
 _TABLE_RULE = re.compile(r"^ *\|? *:?-{1,}:? *(\| *:?-{1,}:? *)*\|? *$")
-#: A picture or file of the note on a line of its own (what ``to_markdown`` writes without ``attachment_href``).
-_ATTACHMENT_LINE = re.compile(r"^ {0,3}(!?)\[((?:[^\]\\]|\\.)*)\]\(attachment:([A-Za-z0-9_-]{16,32})\)[ \t]*$")
+#: A picture or file of the note on a line of its own (what ``to_markdown`` writes without ``attachment_href``); a
+#: sketch or a recording (NOTES-18) says so in the link's title.
+_ATTACHMENT_LINE = re.compile(r"^ {0,3}(!?)\[((?:[^\]\\]|\\.)*)\]\(attachment:([A-Za-z0-9_-]{16,32})"
+                              r"(?: \"((?:drawing|recording)(?: [a-z]+=[A-Za-z0-9_-]{1,40})*)\")?\)[ \t]*$")
+
+
+def _attached_block(picture: bool, found: str, name: str | None, title: str | None) -> dict[str, Any]:
+    """The block of an attachment's line: a sketch is a picture that says "drawing", a recording a file that says
+    "recording"; anything else a picture or a file."""
+    role, *pairs = (title or "").split(" ")
+    values = dict(pair.split("=", 1) for pair in pairs if "=" in pair)
+    if picture and role == "drawing":
+        return {"type": s.DRAWING, "attrs": {"id": found, "name": name, "data": values.get("data")}}
+    if not picture and role == "recording":
+        return {"type": s.RECORDING, "attrs": {"id": found, "name": name, "duration": values.get("duration"),
+                                               "transcript": values.get("transcript")}}
+    return {"type": s.IMAGE if picture else s.ATTACHMENT, "attrs": {"id": found, "name": name}}
 
 
 def from_markdown(text: str) -> dict[str, Any]:
@@ -384,8 +435,7 @@ def _parse_blocks(lines: list[str], depth: int) -> list[dict[str, Any]]:
         attached = _ATTACHMENT_LINE.match(line)
         if attached:
             name = re.sub(r"\\(.)", r"\1", attached.group(2)) or None
-            blocks.append({"type": s.IMAGE if attached.group(1) else s.ATTACHMENT,
-                           "attrs": {"id": attached.group(3), "name": name}})
+            blocks.append(_attached_block(bool(attached.group(1)), attached.group(3), name, attached.group(4)))
             i += 1
             continue
         if _RULE.match(line):

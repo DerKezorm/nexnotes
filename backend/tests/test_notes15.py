@@ -191,6 +191,7 @@ def test_notes15_ac1_the_server_s_own_changes_name_nobody(client, operator):
     assert versions(note["id"]) == []
 
 
+@pytest.mark.timing
 def test_notes15_ac2_ec5_a_year_of_daily_work_thins_to_days_then_weeks_and_loads_a_page_at_a_time(
         client, operator):
     note = new_note(client, title="Diary")

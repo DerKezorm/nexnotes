@@ -333,6 +333,9 @@ def tag_page(db: Session, account: Account, name: str) -> dict[str, Any]:
         out.append({
             "id": note.id,
             "title": note.title,
+            # The symbol before the title, in the note's colour, as in every list (NOTES-3 AC-18).
+            "icon": note.icon or "",
+            "color": note.color or "",
             "preview": notes.preview(note.text),
             "updated_at": note.updated_at.isoformat() if note.updated_at else None,
             "mine": mine,

@@ -350,6 +350,9 @@ def listing(db: Session, account: Account, note_id: str, before: int | None = No
         "updated_by": notes.person(db, note.updated_by_id),
         "can_restore": can_restore(db, account, note),
         "history_days": settings_service.history_days(db),
+        # The note's symbol and colour for the head of its history (NOTES-3 AC-18); not part of a version.
+        "icon": note.icon or "",
+        "color": note.color or "",
     }
 
 

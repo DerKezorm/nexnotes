@@ -8,21 +8,24 @@
  * A stand-in for the server answers the routes, one for the live room answers the y-websocket sync with a Yjs
  * document per note; `matchMedia` says "wide screen".
  */
-import { act, Fragment, useEffect, type ReactNode } from 'react'
+import { Editor } from '@tiptap/core'
+import { act as reactAct, Fragment, useEffect, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { it as vitestIt } from 'vitest'
 import * as decoding from 'lib0/decoding'
 import * as encoding from 'lib0/encoding'
 import * as syncProtocol from 'y-protocols/sync'
 import * as Y from 'yjs'
 
+import { schemaExtensions } from '../editor/extensions'
 import { hideNotice } from '../folders/notice'
 import { forgetPrefs, prefKey } from '../lib/devicePref'
 import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
 import type { NoteHead } from '../notes/api'
 import { tryLeave } from '../notes/context'
-import { NotesPage } from '../notes/NotesPage'
+import { AllNotesList, NotesPage } from '../notes/NotesPage'
 import { SIGNED_OUT_EVENT } from '../api/client'
 import { SessionDialog } from '../components/SessionDialog'
 import { AuthProvider, useAuth } from '../state/auth'
@@ -30,11 +33,11 @@ import { tabCommand } from './keys'
 import { acquireProvider, BRIDGE, forgetParked, parkedProviders, releaseProvider } from './live'
 import { accountChanged, followAccount, waitingChanges } from '../state/account'
 import { forgetMeta, metaOf, refreshMeta } from './meta'
-import { openNoteBeside, openNoteInNewTab } from './open'
+import { openNoteBeside, openNoteInNewTab, showTab } from './open'
 import { startNewNote } from '../notes/newNote'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabs, tabsNow } from './store'
-import { forgetRestored, rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
+import { rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
@@ -196,6 +199,52 @@ const titleWrites = () => requests.filter((line) => /\/title\/suggestion$|\/disc
 
 let root: Root | null = null
 let box: HTMLDivElement
+/** Every page drawn in the running test, so that none of them outlives it. */
+const roots = new Set<Root>()
+
+/**
+ * A test that runs out of time under a busy machine goes on in the background while the next one starts: it would draw
+ * into the next test's page and keep its editors connecting, and every test after it would wait in vain. So every test
+ * knows its number (`it` below), and each helper stops a test whose number is no longer the running one.
+ */
+type Store<T> = { run: <R>(store: T, body: () => R) => R; getStore: () => T | undefined }
+const hooksName = 'node:async_hooks'
+const { AsyncLocalStorage } = (await import(/* @vite-ignore */ hooksName)) as { AsyncLocalStorage: new <T>() => Store<T> }
+const running = new AsyncLocalStorage<number>()
+let generation = 0
+
+function stillRunning(): void {
+  const mine = running.getStore()
+  if (mine !== undefined && mine !== generation) throw new Error('this test is over')
+}
+
+/** The page goes (a reload, another account's turn). */
+function unmountPage(): void {
+  if (!root) return
+  root.unmount()
+  roots.delete(root)
+}
+
+/** React's `act` scopes still open: one left open by a test that ran out of time would muddle every later `act`. */
+const openActs = new Set<Promise<unknown>>()
+
+/** React's `act`, for the running test only. */
+async function act(body: () => unknown): Promise<void> {
+  stillRunning()
+  const scope = reactAct(async () => {
+    await body()
+  })
+  openActs.add(scope)
+  try {
+    await scope
+  } finally {
+    openActs.delete(scope)
+  }
+}
+
+function it(name: string, body: () => Promise<void> | void): void {
+  vitestIt(name, () => running.run(generation, body))
+}
 let where = ''
 let width = 1400
 
@@ -208,6 +257,7 @@ function Where() {
 }
 
 async function settle(ms = 30): Promise<void> {
+  stillRunning()
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, ms))
   })
@@ -220,6 +270,7 @@ async function settle(ms = 30): Promise<void> {
 async function until(check: () => unknown, ms = 4000): Promise<void> {
   const end = Date.now() + ms
   for (;;) {
+    stillRunning()
     try {
       if (check() !== false) return
       if (Date.now() > end) throw new Error('the page never got there')
@@ -252,8 +303,10 @@ function PerAccount({ children }: { children: ReactNode }) {
 
 async function render(path: string): Promise<void> {
   box = document.createElement('div')
+  stillRunning()
   document.body.appendChild(box)
   root = createRoot(box)
+  roots.add(root)
   await act(async () => {
     root!.render(
       <AuthProvider>
@@ -262,8 +315,13 @@ async function render(path: string): Promise<void> {
           <SessionDialog />
           <PerAccount>
             <Routes>
-              <Route path="/" element={<NotesPage />} />
-              <Route path="/notes/:noteId" element={<NotesPage />} />
+              {/* As `App.tsx`: the lists inside the workspace, the trash a page of its own. */}
+              <Route element={<NotesPage />}>
+                <Route path="/" element={<AllNotesList />} />
+                <Route path="/notes/:noteId" element={<AllNotesList />} />
+                <Route path="/folder/:id" element={<div data-testid="folder-list" />} />
+                <Route path="/inbox" element={<div data-testid="inbox-list" />} />
+              </Route>
               <Route path="/trash" element={<div data-testid="trash-page" />} />
             </Routes>
           </PerAccount>
@@ -276,12 +334,11 @@ async function render(path: string): Promise<void> {
 
 /** A reload: the page goes, everything in memory with it, only `localStorage` stays. */
 async function reload(path: string): Promise<void> {
-  await act(async () => root?.unmount())
+  await act(async () => unmountPage())
   root = null
   box.remove()
   forgetTabs()
   forgetMeta()
-  forgetRestored()
   await render(path)
 }
 
@@ -297,6 +354,7 @@ function typeTitle(input: HTMLInputElement, value: string) {
 }
 
 function key(code: string, extra: Partial<KeyboardEventInit> = {}) {
+  stillRunning()
   window.dispatchEvent(new KeyboardEvent('keydown', { code, key: code, altKey: true, shiftKey: true, bubbles: true, cancelable: true, ...extra }))
 }
 
@@ -307,9 +365,14 @@ beforeAll(async () => {
   Range.prototype.getClientRects = noRects
   Range.prototype.getBoundingClientRect = () => new DOMRect()
   Element.prototype.getClientRects = noRects
+  // The editor warmed once outside the tests' time: on a busy machine the first test would otherwise pay for it alone.
+  const warm = new Editor({ element: document.createElement('div'), extensions: schemaExtensions(), content: '<p>warm</p><table><tr><td><p>x</p></td></tr></table>' })
+  warm.destroy()
 })
 
 beforeEach(() => {
+  // Nothing of a test before stays on the page (the notices' own host stays, as in the app).
+  for (const element of [...document.body.children]) if (!element.hasAttribute('data-folder-notices')) element.remove()
   notes = new Map(
     [
       note('soup', 'Lentil soup', 'kitchen'),
@@ -338,7 +401,6 @@ beforeEach(() => {
   forgetFolders()
   forgetTabs()
   forgetMeta()
-  forgetRestored()
   vi.stubGlobal('WebSocket', RoomSocket)
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: true, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
   vi.stubGlobal(
@@ -366,7 +428,13 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  await act(async () => root?.unmount())
+  // The test is over: a part of it still running stops at its next step, once its open `act` has closed.
+  generation += 1
+  await Promise.allSettled([...openActs])
+  await act(async () => {
+    for (const one of roots) one.unmount()
+  })
+  roots.clear()
   root = null
   hideNotice()
   box?.remove()
@@ -378,6 +446,31 @@ afterEach(async () => {
 // ---- The tests -----------------------------------------------------------------------------------------------------
 
 describe('tabs in the page', () => {
+  it('NOTES-8 AC-9 another list changes only the middle: the tabs and the editor stay, the address names both', async () => {
+    await render('/notes/soup')
+    await act(async () => openNoteInNewTab('shop'))
+    await idle()
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    const editor = pane('left')!.querySelector('.ProseMirror')
+    expect(editor).not.toBeNull()
+    // The path over the note chooses its folder's list.
+    const path = pane('left')!.querySelector('[data-testid="note-path"]') as HTMLAnchorElement
+    expect(path.tagName).toBe('A')
+    await act(async () => path.click())
+    await idle()
+    expect(where).toBe('/folder/garden?note=shop')
+    expect($('folder-list')).not.toBeNull()
+    expect(tabTitles()).toEqual(['Lentil soup', 'Saturday shopping'])
+    // The very same editor: not drawn anew, its connection kept.
+    expect(pane('left')!.querySelector('.ProseMirror')).toBe(editor)
+    // A tab chosen now keeps the list and names its note.
+    const soup = tabsNow().tabs.find((one) => one.note === 'soup')
+    await act(async () => showTab(soup?.key ?? ''))
+    await idle()
+    expect(where).toBe('/folder/garden?note=soup')
+    expect($('folder-list')).not.toBeNull()
+  })
+
   it('NOTES-8 AC-3 a note opened in a new tab keeps the first one open; each tab shows its folder color, title and a cross', async () => {
     await render('/notes/soup')
     expect(tabTitles()).toEqual(['Lentil soup'])
@@ -626,7 +719,7 @@ describe('tabs in the page', () => {
   it('NOTES-3 AC-1 EC-4 EC-9 "New note" while an empty note is open there takes that one; with text a second one comes', async () => {
     notes.set('blank', note('blank', ''))
     rooms.set('blank', new Y.Doc())
-    await render('/notes/blank?folder=garden')
+    await render('/folder/garden?note=blank')
     const made = () => requests.filter((request) => request === 'POST /api/notes').length
     const title = () => $('note-title') as HTMLInputElement
     expect(title().value).toBe('')
@@ -636,7 +729,7 @@ describe('tabs in the page', () => {
     await idle()
     expect(made()).toBe(0)
     expect(document.activeElement).toBe(title())
-    expect(where).toBe('/notes/blank?folder=garden')
+    expect(where).toBe('/folder/garden?note=blank')
     // Another folder is another place: a new note there.
     await act(async () => startNewNote('kitchen'))
     await idle()
@@ -849,7 +942,7 @@ describe('tabs in the page', () => {
     await act(async () => openNoteBeside('shop'))
     await settle(40)
     expect($('side-switch')).toBeNull()
-    await act(async () => root!.unmount())
+    await act(async () => unmountPage())
     width = 600
     box.remove()
     await render('/notes/shop')
@@ -861,7 +954,7 @@ describe('tabs in the page', () => {
     await settle(20)
     expect(pane('left')!.className).not.toContain('hidden')
     expect(pane('right')!.className).toContain('hidden')
-    await act(async () => root!.unmount())
+    await act(async () => unmountPage())
     width = 1400
     box.remove()
     await render('/notes/soup')

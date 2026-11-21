@@ -1,0 +1,35 @@
+{
+  "title": "Case recording",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "recording",
+        "attrs": {
+          "id": "R3c0rd1ngS0und_000000a",
+          "name": "Besprechung Montag.m4a",
+          "duration": 3130000,
+          "transcript": "R3c0rd1ngT3xt_0000000a"
+        }
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "danach"
+          }
+        ]
+      },
+      {
+        "type": "recording",
+        "attrs": {
+          "id": "R3c0rd1ngS0und_000000b",
+          "name": null,
+          "duration": null,
+          "transcript": null
+        }
+      }
+    ]
+  }
+}

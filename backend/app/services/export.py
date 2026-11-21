@@ -4,9 +4,11 @@
 the attachments; the PDF comes from ``export_pdf``. **A folder or everything** runs in the background as a job
 (``models_export.ExportJob``): a worker thread writes the ZIP note by note into a file under ``<data>/exports``, never
 the whole of it into memory; attachments go in as a stream. At most ``MAX_PARALLEL`` jobs run at a time in the whole
-server and one per account, a second job of the same account waits (EC-2). A ready ZIP can be fetched for ``KEEP``
-(24 hours), as often as one likes; then the cleaning round removes it (AC-8). It counts towards no account's storage
-and is in no backup.
+server and one per account, a second job of the same account waits (EC-2); a third is refused while that one waits.
+A new ZIP of a folder (or of everything) takes the place of the account's older ready one of the same. A ready ZIP can
+be fetched for ``KEEP`` (24 hours), as often as one likes; then the hourly cleaning round removes it, or the first
+attempt to fetch it after its time (AC-8). It counts towards no account's storage and is in no backup. The folder and
+the files in it are the owner's alone (``private``): a ZIP holds every note in plain text.
 
 What a note is comes from the database: the folded document and every update after it. Every update is stored before
 it goes anywhere else, so that is the note as it is, also while somebody writes in it.
@@ -49,6 +51,7 @@ from urllib.parse import quote
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
+from .. import private
 from ..config import get_settings
 from ..db import SessionLocal, sort_key
 from ..errors import error
@@ -66,8 +69,14 @@ logger = logging.getLogger("nexnotes.export")
 KEEP = timedelta(hours=24)
 #: Jobs that run at the same time in the whole server; one per account (EC-2).
 MAX_PARALLEL = 2
-#: What must stay free on the disk while a ZIP is written (EC-7): the server never fills its disk for an export.
+#: What must stay free on the disk while a ZIP is written (EC-7): the server never fills its disk for an export. At
+#: least this much, and at least ``RESERVE_SHARE`` of the disk (``reserve``).
 RESERVE = 256 * 1024 * 1024
+RESERVE_SHARE = 0.05
+#: Files of a single note's download (``single_markdown``) older than this are left over from a download that broke off.
+STRAY_SECONDS = 3600
+#: How often the cleaning round looks for ZIPs past their time.
+PURGE_EVERY_SECONDS = 3600
 #: A file name takes at most this many characters and UTF-8 bytes, before " (2)" and the extension.
 MAX_NAME_CHARS = 100
 MAX_NAME_BYTES = 180
@@ -346,12 +355,23 @@ class DiskFull(Exception):
 def export_dir() -> Path:
     folder = get_settings().data_dir / "exports"
     folder.mkdir(parents=True, exist_ok=True)
+    private.tighten(folder)
     return folder
 
 
 def free_bytes() -> int:
     """Free space where the ZIPs are written (tests replace it)."""
     return shutil.disk_usage(export_dir()).free
+
+
+def total_bytes() -> int:
+    """The size of the disk where the ZIPs are written (tests replace it)."""
+    return shutil.disk_usage(export_dir()).total
+
+
+def reserve() -> int:
+    """What stays free for everything else: ``RESERVE``, on a large disk ``RESERVE_SHARE`` of it."""
+    return max(RESERVE, int(total_bytes() * RESERVE_SHARE))
 
 
 def _zip_time(value: datetime | None) -> tuple[int, int, int, int, int, int]:
@@ -368,9 +388,10 @@ class ZipWriter:
         self.archive = archive
         self.watch = watch
         self.count = 0
+        self.reserve = reserve() if watch else 0
 
     def _check(self) -> None:
-        if self.watch and free_bytes() < RESERVE:
+        if self.watch and free_bytes() < self.reserve:
             raise DiskFull
 
     def folder(self, path: str) -> None:
@@ -397,7 +418,7 @@ class ZipWriter:
                 if not piece:
                     break
                 target.write(piece)
-                if self.watch and free_bytes() < RESERVE:
+                if self.watch and free_bytes() < self.reserve:
                     raise DiskFull
         self.count += 1
 
@@ -608,8 +629,24 @@ def job_out(job: ExportJob) -> dict[str, Any]:
     }
 
 
+def _pending_bytes(db: Session, *, besides: str | None = None) -> int:
+    """What the waiting and running exports of the server will still write, by their estimates."""
+    query = select(func.coalesce(func.sum(ExportJob.estimate), 0)).where(ExportJob.status.in_((QUEUED, RUNNING)))
+    if besides is not None:
+        query = query.where(ExportJob.id != besides)
+    return int(db.scalar(query) or 0)
+
+
 def start(db: Session, account: Account, folder_id: str | None) -> ExportJob:
-    """A new export of a folder or of everything. It waits while another of the account runs (EC-2)."""
+    """A new export of a folder or of everything. It waits while another of the account runs (EC-2). An account has
+    at most one export waiting: the same once more gets that one back, another is refused. Refused too when the disk
+    cannot take the ZIP beside the reserve and what the other exports will write (EC-7)."""
+    waiting = db.scalars(select(ExportJob).where(ExportJob.account_id == account.id, ExportJob.status == QUEUED)
+                         .order_by(ExportJob.created_at).limit(1)).first()
+    if waiting is not None:
+        if waiting.folder_id == folder_id:
+            return waiting
+        raise error("export_waiting", "Another export of yours is waiting already.", 409)
     words = words_for(account)
     label = ""
     if folder_id is not None:
@@ -622,6 +659,9 @@ def start(db: Session, account: Account, folder_id: str | None) -> ExportJob:
         today = datetime.now().astimezone().strftime(words["day"])
         filename = safe_name(words["everything"].format(date=today), "nexnotes") + ".zip"
     size = estimate(db, account, folder_id)
+    if free_bytes() < size["bytes"] + reserve() + _pending_bytes(db):
+        logger.warning("Export refused, the disk is too full account=%s", account.id)
+        raise error("export_no_room", "The server has not enough room for this export.", 507)
     job = ExportJob(account_id=account.id, folder_id=folder_id, label=label, filename=filename,
                     estimate=size["bytes"], notes=size["notes"])
     db.add(job)
@@ -637,9 +677,11 @@ def restart(db: Session, account: Account, job_id: str) -> ExportJob:
     old = own_job(db, account, job_id)
     if old.status != FAILED:
         raise error("export_not_failed", "Only a failed export can be started again.", 409)
+    # Started first: a refused start leaves the notice of the failed one where it is.
+    job = start(db, account, old.folder_id)
     old.seen = True
     db.commit()
-    return start(db, account, old.folder_id)
+    return job
 
 
 def own_job(db: Session, account: Account, job_id: str) -> ExportJob:
@@ -664,6 +706,9 @@ def download_path(db: Session, account: Account, job_id: str) -> tuple[Path, str
         raise error("export_not_ready", "The export is not ready.", 409)
     path = _job_file(job.id)
     if job.expires_at is None or utcnow() >= job.expires_at or not path.is_file():
+        # Past its time: it goes now, not with the next cleaning round.
+        path.unlink(missing_ok=True)
+        purge_expired()
         raise error("export_expired", "The export was there for 24 hours and is gone.", 410)
     return path, job.filename
 
@@ -693,12 +738,23 @@ def _finish(job_id: str, status: str, problem: str = "", size: int = 0, notes_wr
         job.status = status
         job.problem = problem
         job.finished_at = utcnow()
+        replaced: list[str] = []
         if status == READY:
             job.size = size
             job.expires_at = job.finished_at + KEEP
             if notes_written is not None:
                 job.notes = notes_written
+            # The account's older ZIP of the same folder (or of everything) gives way to this one.
+            same = ExportJob.folder_id.is_(None) if job.folder_id is None else ExportJob.folder_id == job.folder_id
+            older = db.scalars(select(ExportJob).where(
+                ExportJob.account_id == job.account_id, ExportJob.status == READY, ExportJob.id != job.id, same))
+            for old in older:
+                replaced.append(old.id)
+                db.delete(old)
         db.commit()
+    for old_id in replaced:
+        _job_file(old_id).unlink(missing_ok=True)
+        logger.info("Export replaced by a newer one job=%s", old_id)
 
 
 def run_job(job_id: str) -> None:
@@ -720,12 +776,15 @@ def run_job(job_id: str) -> None:
             _finish(job_id, FAILED, "not_found")
             return
         guess = plan_size(db, plan)
-    if free_bytes() < guess + RESERVE:
+        others = _pending_bytes(db, besides=job_id)
+    if free_bytes() < guess + reserve() + others:
         logger.warning("Export refused, the disk is too full job=%s", job_id)
         _finish(job_id, FAILED, "disk_full")
         return
     part = _job_file(job_id, part=True)
     try:
+        # Only the owner may read it, before a single note is in it.
+        private.new_file(part)
         with open(part, "wb") as raw, zipfile.ZipFile(raw, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
             written = write_plan(account, plan, ZipWriter(archive), words)
         os.replace(part, _job_file(job_id))
@@ -806,8 +865,8 @@ def recover() -> None:
 
 
 def purge_expired() -> int:
-    """The cleaning round (AC-8): ZIPs past their 24 hours go, rows of jobs older than that too, and files nobody
-    owns any more (an account that went)."""
+    """The cleaning round (AC-8): ZIPs past their 24 hours go, rows of jobs older than that too, files nobody owns any
+    more (an account that went), and files of single notes whose download broke off an hour ago or more."""
     now = utcnow()
     removed = 0
     with SessionLocal() as db:
@@ -825,6 +884,12 @@ def purge_expired() -> int:
         if path.stem not in known:
             path.unlink(missing_ok=True)
             removed += 1
+    stale = utcnow().timestamp() - STRAY_SECONDS
+    for path in export_dir().glob("note-*.tmp"):
+        with contextlib.suppress(OSError):
+            if path.stat().st_mtime < stale:
+                path.unlink()
+                removed += 1
     if removed:
         logger.info("Exports removed count=%s", removed)
     return removed
@@ -851,6 +916,7 @@ def single_markdown(account: Account, note_id: str) -> tuple[str, bytes | Path, 
         return stem + ".md", note_markdown(data, words).encode("utf-8"), "text/markdown; charset=utf-8"
     handle = tempfile.NamedTemporaryFile(prefix="note-", suffix=".tmp", dir=export_dir(), delete=False)  # noqa: SIM115
     path = Path(handle.name)
+    private.tighten(path)
     try:
         with handle, zipfile.ZipFile(handle, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
             write_note(ZipWriter(archive, watch=False), data, words, (), Namer())
@@ -876,4 +942,4 @@ def register() -> None:
     from . import cleanup
 
     if not any(name == "exports" for name, _job in cleanup._jobs):
-        cleanup.register("exports", purge_expired)
+        cleanup.register("exports", purge_expired, every=PURGE_EVERY_SECONDS)

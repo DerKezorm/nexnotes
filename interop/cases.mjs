@@ -109,6 +109,17 @@ export const CASES = {
     },
     { type: 'linkPreview', attrs: { href: 'https://example.org/' } },
   ),
+  // Sketches and recordings (NOTES-18): blocks without content that name their attachments.
+  drawing: doc(
+    p(t('Ablauf:')),
+    { type: 'drawing', attrs: { id: 'Sk3tchP1ctur3_0000000a', data: 'Sk3tchD4t4_00000000000a', name: 'Skizze.png' } },
+    { type: 'drawing', attrs: { id: 'Sk3tchP1ctur3_0000000b' } },
+  ),
+  recording: doc(
+    { type: 'recording', attrs: { id: 'R3c0rd1ngS0und_000000a', name: 'Besprechung Montag.m4a', duration: 3130000, transcript: 'R3c0rd1ngT3xt_0000000a' } },
+    p(t('danach')),
+    { type: 'recording', attrs: { id: 'R3c0rd1ngS0und_000000b' } },
+  ),
 }
 
 export const TITLES = {

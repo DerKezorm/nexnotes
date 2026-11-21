@@ -532,6 +532,7 @@ def test_notes11_the_language_of_a_page_is_told_from_its_common_words():
 # --- EC-1: in the background, one after the other -------------------------------------------------------------------
 
 
+@pytest.mark.timing
 def test_notes11_ec1_many_attachments_are_read_in_the_background_one_after_the_other(client, operator, engine,
                                                                                     monkeypatch):
     engine.pause = 0.05
