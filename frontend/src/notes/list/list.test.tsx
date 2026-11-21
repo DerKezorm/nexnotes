@@ -622,6 +622,35 @@ describe('NOTES-6 list and tiles', () => {
     expect(anchorOf(first.entries, 0)).toBeNull()
   })
 
+  it('NOTES-6 EC-2 the window draws one screen of a long list at first, not hundreds of entries on the way', async () => {
+    // A measured page: the list at the top of a 600 px column.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const height = this.dataset.testid === 'note-window' ? 640_000 : 600
+      return { top: 0, bottom: height, left: 0, right: 1024, width: 1024, height, x: 0, y: 0, toJSON: () => ({}) }
+    })
+    const many = Array.from({ length: 10_000 }, (_, index) => item(`n${index}`, { updated_at: new Date(NOW.getTime() - index * 60_000).toISOString() }))
+    const placed = layout(arrange(many, DEFAULT_VIEW, NOW), 'list', 1024)
+    let drawn = 0
+    await act(async () =>
+      root.render(
+        <div style={{ overflowY: 'auto', height: 600 }}>
+          <Window
+            entries={placed.entries}
+            height={placed.height}
+            render={(entry) => {
+              drawn++
+              return entry.key
+            }}
+          />
+        </div>,
+      ),
+    )
+    // The first drawing and the measured one together: a few dozen entries.
+    expect(drawn).toBeGreaterThan(5)
+    expect(drawn).toBeLessThan(100)
+    expect(box.querySelectorAll('[data-testid="note-window"] > div').length).toBeLessThan(40)
+  })
+
   it('NOTES-6 EC-6 the window scrolls by what arrived above, so the note at the top of the screen does not jump', async () => {
     // A scrolling column of 600 px, scrolled down 1000 px; the window measures itself against it.
     let scrolled = 0
