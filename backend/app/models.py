@@ -268,3 +268,77 @@ class ApiToken(Base):
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     last_used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+
+#: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.
+FOLDER_INBOX = "inbox"
+FOLDER_NORMAL = "normal"
+
+
+def new_uuid() -> str:
+    """Ids of notes and folders are UUIDs, so that the iOS app can make them offline."""
+    import uuid
+
+    return str(uuid.uuid4())
+
+
+class Folder(Base):
+    """A folder of one account; folders nest without a limit (``parent_id``). The inbox is a folder of its own kind."""
+
+    __tablename__ = "folders"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    parent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("folders.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    kind: Mapped[str] = mapped_column(String(16), default=FOLDER_NORMAL)
+    #: At most 60 characters, blanks at the edges gone; unique per parent ignoring case.
+    name: Mapped[str] = mapped_column(String(60), default="")
+    icon: Mapped[str] = mapped_column(String(32), default="")
+    color: Mapped[str] = mapped_column(String(16), default="")
+    #: Order among its siblings once the member has dragged them; ``None`` means alphabetical.
+    position: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, onupdate=utcnow)
+    #: In the trash since (NOTES-15); ``None`` while alive.
+    deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
+
+
+class Note(Base):
+    """A note. Its text is a Yjs document in the format nexnotes-doc 1 (``app/notedoc``): ``ydoc`` holds it folded,
+    ``note_updates`` what came since. ``title`` and ``text`` are copies for lists, search and preview."""
+
+    __tablename__ = "notes"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    folder_id: Mapped[str] = mapped_column(ForeignKey("folders.id", ondelete="CASCADE"), index=True)
+    #: At most 120 characters; empty only while the note is being written.
+    title: Mapped[str] = mapped_column(String(120), default="")
+    #: The title was suggested, not typed ("Titel prüfen", NOTES-3 AC-10) until changed once or confirmed.
+    title_check: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    #: Where a quickly captured note came from (NOTES-4 AC-7), e.g. "share:Safari", "dictation", "mcp:<client>".
+    origin: Mapped[str] = mapped_column(String(100), default="")
+    ydoc: Mapped[bytes] = mapped_column(LargeBinary, default=b"")
+    #: Plain text of the body, for search and preview.
+    text: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, index=True)
+    updated_by_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True
+    )
+    #: In the trash since (NOTES-15); ``None`` while alive.
+    deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
+
+
+class NoteUpdate(Base):
+    """A Yjs update not yet folded into ``Note.ydoc``. Stored before it is passed on to anybody else."""
+
+    __tablename__ = "note_updates"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), index=True)
+    update: Mapped[bytes] = mapped_column(LargeBinary)
+    account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
