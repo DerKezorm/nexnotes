@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
+import { ExportDialog } from '../export'
 import { foldersApi, type Folder } from './api'
 import { MoveDialog, NameDialog, NewFolderDialog, StyleDialog, TrashDialog, type MoveWhat } from './dialogs'
 import type { MenuAction } from './FolderMenu'
@@ -17,6 +18,7 @@ type Open =
   | { kind: 'style'; folder: Folder }
   | { kind: 'move'; what: MoveWhat; onMoved?: (target: string | null) => void }
   | { kind: 'trash'; folder: Folder }
+  | { kind: 'export'; folder: Folder }
   | null
 
 export function useFolderActions() {
@@ -31,6 +33,7 @@ export function useFolderActions() {
     else if (action === 'rename') setOpen({ kind: 'rename', folder })
     else if (action === 'style') setOpen({ kind: 'style', folder })
     else if (action === 'move') setOpen({ kind: 'move', what: { folderId: folder.id } })
+    else if (action === 'export') setOpen({ kind: 'export', folder })
     else setOpen({ kind: 'trash', folder })
   }
 
@@ -69,6 +72,8 @@ export function useFolderActions() {
   else if (open?.kind === 'style') node = <StyleDialog folder={open.folder} onClose={close} />
   else if (open?.kind === 'move') node = <MoveDialog what={open.what} onClose={close} onMoved={open.onMoved} />
   else if (open?.kind === 'trash') node = <TrashDialog folder={open.folder} onClose={close} onTrashed={trashed} />
+  else if (open?.kind === 'export')
+    node = <ExportDialog folder={{ id: open.folder.id, name: open.folder.name }} onClose={close} />
 
   return {
     node,

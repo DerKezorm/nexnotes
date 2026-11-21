@@ -269,7 +269,7 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     expect(indent(14)).toBeLessThan(125)
   })
 
-  it('NOTES-4 AC-12 the menu offers all seven entries; share and export wait for their features', async () => {
+  it('NOTES-4 AC-12 the menu offers all seven entries; share waits for its feature, export is there (NOTES-17)', async () => {
     await render()
     act(() => void row('Haushalt').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
     const menu = document.querySelector('[role="menu"]')!
@@ -277,9 +277,23 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     expect(entries.map((entry) => entry.firstElementChild!.textContent)).toEqual([
       'New subfolder', 'Rename', 'Symbol and color …', 'Move …', 'Share …', 'Export', 'Move to trash',
     ])
-    expect(entries.filter((entry) => entry.getAttribute('aria-disabled') === 'true').map((entry) => entry.firstElementChild!.textContent)).toEqual(['Share …', 'Export'])
+    expect(entries.filter((entry) => entry.getAttribute('aria-disabled') === 'true').map((entry) => entry.firstElementChild!.textContent)).toEqual(['Share …'])
     click(entries[4])
     expect(document.querySelector('[role="menu"]')).not.toBeNull()
+  })
+
+  it('NOTES-17 AC-4 "Export" in the menu of a folder opens the export with this folder chosen', async () => {
+    await render()
+    click(row('Haushalt').querySelector('button[aria-label="Menu of Haushalt"]')!)
+    click(button('Export'))
+    await settle()
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"][aria-label="Export"]')!
+    expect(dialog).not.toBeNull()
+    const chosen = dialog.querySelector<HTMLInputElement>('input[type="radio"]:checked')!
+    expect(chosen.closest('label')!.textContent).toContain('Folder “Haushalt” as ZIP')
+    // From a folder there is no note to export: the folder and everything.
+    expect(dialog.querySelectorAll('input[type="radio"]').length).toBe(2)
+    expect(calls.some((call) => call.method === 'GET' && call.path === '/api/export/estimate?folder_id=h')).toBe(true)
   })
 
   it('NOTES-4 AC-1 AC-4 EC-2 a new subfolder and a rename go through a name; a name already there is said', async () => {

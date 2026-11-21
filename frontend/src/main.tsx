@@ -10,6 +10,7 @@ import './folders'
 import './search'
 import './tags'
 import './history'
+import './export'
 // The trash closes the sidebar's places (drawing "Seitenleiste"): imported after every feature with an entry there.
 import './trash'
 import './i18n'

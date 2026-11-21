@@ -34,6 +34,9 @@ const PARTS = [
   { name: 'Lucide', url: 'https://lucide.dev', licence: 'ISC' },
   { name: 'i18next', url: 'https://www.i18next.com', licence: 'MIT' },
   { name: 'Inter', url: 'https://rsms.me/inter/', licence: 'OFL-1.1' },
+  { name: 'Typst', url: 'https://typst.app', licence: 'Apache-2.0' },
+  { name: 'JetBrains Mono', url: 'https://www.jetbrains.com/lp/mono/', licence: 'OFL-1.1' },
+  { name: 'Noto Emoji', url: 'https://fonts.google.com/noto/specimen/Noto+Emoji', licence: 'OFL-1.1' },
 ]
 
 function Out({ href, children }: { href: string; children: ReactNode }) {

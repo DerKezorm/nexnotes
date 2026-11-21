@@ -428,7 +428,11 @@
     "paper_unknown": "Wähl leer, liniert, kariert oder gepunktet.",
     "note_icon_unknown": "Wähl ein Symbol aus der Liste.",
     "avatar_too_large": "Das Bild ist zu groß (höchstens {{max_mb}} MB).",
-    "avatar_not_a_picture": "Das ist kein Bild, das nexnotes annimmt (JPEG, PNG, WebP, GIF, HEIC oder AVIF)."
+    "avatar_not_a_picture": "Das ist kein Bild, das nexnotes annimmt (JPEG, PNG, WebP, GIF, HEIC oder AVIF).",
+    "export_expired": "Der Export lag 24 Stunden bereit und ist jetzt gelöscht. Starte ihn neu.",
+    "export_not_ready": "Der Export ist noch nicht fertig.",
+    "export_not_failed": "Nur ein abgebrochener Export lässt sich neu starten.",
+    "typeset_failed": "Das PDF ließ sich nicht erstellen."
   },
   "folders": {
     "section": "Ordner",
@@ -1379,5 +1383,38 @@
     "scan": "Scanne diesen Code mit der App oder tippe den Schlüssel darunter ein. Dann gib den Code ein, den die App zeigt, und dein Passwort.",
     "secret": "Schlüssel zum Eintippen:",
     "title": "Zweiter Faktor"
+  },
+  "export": {
+    "menu": "Exportieren …",
+    "title": "Exportieren",
+    "what": "Was exportieren",
+    "markdown": "Diese Notiz als Markdown",
+    "markdownDesc": "Eine .md-Datei; mit Anhängen als ZIP, die Anhänge verlinkt.",
+    "pdf": "Diese Notiz als PDF",
+    "pdfDesc": "Sieht aus wie die Notiz, mit Bildern und Skizzen.",
+    "folder": "Ordner „{{name}}“ als ZIP",
+    "folderDesc": "Mit allen Unterordnern, Notizen als Markdown samt Anhängen.",
+    "all": "Alles exportieren",
+    "allDesc": "Alle eigenen Notizen in ihrer Ordnerstruktur; mit dir geteilte im Ordner „Mit mir geteilt“.",
+    "estimating": "Größe wird berechnet …",
+    "estimate": "Rund {{size}}, {{notes}}.",
+    "notes_one": "{{count}} Notiz",
+    "notes_other": "{{count}} Notizen",
+    "background": "Der Export läuft im Hintergrund; du bekommst Bescheid, wenn das ZIP bereitliegt. Gesperrte Notizen sind nur mit Titel und Hinweis dabei.",
+    "start": "Export starten",
+    "inbox": "Eingang",
+    "everything": "Alles",
+    "waiting": "Export „{{name}}“ wartet, bis dein anderer Export fertig ist …",
+    "running": "Export „{{name}}“ läuft im Hintergrund …",
+    "ready": "Dein Export „{{name}}“ liegt bereit ({{size}}). Du kannst ihn 24 Stunden lang herunterladen.",
+    "download": "Herunterladen",
+    "restart": "Neu starten",
+    "readyList": "Bereit zum Herunterladen",
+    "failed": {
+      "interrupted": "Der Export „{{name}}“ wurde abgebrochen, weil der Server neu gestartet ist.",
+      "disk_full": "Der Export „{{name}}“ wurde abgebrochen: Auf dem Server ist nicht genug Platz für das ZIP.",
+      "not_found": "Der Export „{{name}}“ ging nicht: Den Ordner gibt es nicht mehr.",
+      "failed": "Der Export „{{name}}“ ist fehlgeschlagen."
+    }
   }
 }

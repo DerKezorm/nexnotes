@@ -428,7 +428,11 @@
     "paper_unknown": "Choose blank, lined, grid or dotted.",
     "note_icon_unknown": "Choose a symbol from the list.",
     "avatar_too_large": "The picture is too large (at most {{max_mb}} MB).",
-    "avatar_not_a_picture": "That is not a picture nexnotes accepts (JPEG, PNG, WebP, GIF, HEIC or AVIF)."
+    "avatar_not_a_picture": "That is not a picture nexnotes accepts (JPEG, PNG, WebP, GIF, HEIC or AVIF).",
+    "export_expired": "The export was ready for 24 hours and is gone now. Start it again.",
+    "export_not_ready": "The export is not ready yet.",
+    "export_not_failed": "Only an export that broke off can be started again.",
+    "typeset_failed": "The PDF could not be made."
   },
   "folders": {
     "section": "Folders",
@@ -1379,5 +1383,38 @@
     "scan": "Scan this code with the app, or type the key below into it. Then enter the code the app shows, and your password.",
     "secret": "Key to type in:",
     "title": "Second factor"
+  },
+  "export": {
+    "menu": "Export …",
+    "title": "Export",
+    "what": "What to export",
+    "markdown": "This note as Markdown",
+    "markdownDesc": "One .md file; with attachments a ZIP, the attachments linked.",
+    "pdf": "This note as PDF",
+    "pdfDesc": "Looks like the note, with pictures and sketches.",
+    "folder": "Folder “{{name}}” as ZIP",
+    "folderDesc": "With all subfolders, notes as Markdown with their attachments.",
+    "all": "Export everything",
+    "allDesc": "All your own notes in their folders; notes shared with you in the folder “Shared with me”.",
+    "estimating": "Working out the size …",
+    "estimate": "About {{size}}, {{notes}}.",
+    "notes_one": "{{count}} note",
+    "notes_other": "{{count}} notes",
+    "background": "The export runs in the background; you will hear when the ZIP is ready. Locked notes come with their title and a note only.",
+    "start": "Start export",
+    "inbox": "Inbox",
+    "everything": "Everything",
+    "waiting": "Export “{{name}}” waits until your other export is done …",
+    "running": "Export “{{name}}” runs in the background …",
+    "ready": "Your export “{{name}}” is ready ({{size}}). You can download it for 24 hours.",
+    "download": "Download",
+    "restart": "Start again",
+    "readyList": "Ready to download",
+    "failed": {
+      "interrupted": "The export “{{name}}” broke off because the server started anew.",
+      "disk_full": "The export “{{name}}” broke off: the server has not enough room for the ZIP.",
+      "not_found": "The export “{{name}}” could not run: the folder is gone.",
+      "failed": "The export “{{name}}” failed."
+    }
   }
 }
