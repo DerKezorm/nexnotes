@@ -761,7 +761,8 @@
     "page": "Seite {{page}}",
     "placeholder": "In allen Notizen suchen",
     "saveSmart": "Als intelligenten Ordner sichern",
-    "title": "Suche"
+    "title": "Suche",
+    "key": "Strg K"
   },
   "server": {
     "allLevels": "Alle Stufen",

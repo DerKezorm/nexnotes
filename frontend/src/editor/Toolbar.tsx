@@ -153,7 +153,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
       menu: state.table,
       run: () => (state.table ? setMenu(menu === 'table' ? null : 'table') : chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()),
     },
-    { key: 'link', label: t('editor.tools.link'), shortcut: `${MOD}+K`, icon: LinkIcon, active: state.link, run: onLink },
+    { key: 'link', label: t('editor.tools.link'), shortcut: `${MOD}+${ALT}+K`, icon: LinkIcon, active: state.link, run: onLink },
     { key: 'quote', label: t('editor.tools.quote'), shortcut: `${MOD}+Shift+B`, icon: TextQuote, active: state.quote, run: () => chain().toggleBlockquote().run() },
     {
       key: 'code',

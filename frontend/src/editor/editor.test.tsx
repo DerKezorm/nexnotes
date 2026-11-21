@@ -644,6 +644,26 @@ describe('NOTES-3 EC-11 a short toolbar', () => {
   })
 })
 
+describe('NOTES-3 AC-3 the link key', () => {
+  it('NOTES-3 AC-3 the link is on Ctrl/Cmd+Alt+K; Ctrl/Cmd+K is left for the search', () => {
+    const element = document.createElement('div')
+    document.body.appendChild(element)
+    const doc = new Y.Doc()
+    const provider = new NoteProvider('note', doc, { socket: () => { throw new Error('offline in tests') } })
+    const asked: string[] = []
+    const editor = new Editor({
+      element,
+      extensions: editorExtensions({ doc, provider, me: presenceUser(1, 'person 1'), t, placeholder: 'Start writing', hooks: { onLink: () => asked.push('link') } }),
+      editorProps,
+    })
+    made.push(editor)
+    expect(press(editor, 'k', { ctrl: true })).toBe(false)
+    expect(asked).toEqual([])
+    expect(press(editor, 'k', { ctrl: true, alt: true })).toBe(true)
+    expect(asked).toEqual(['link'])
+  })
+})
+
 describe('NOTES-3 EC-3 pasting', () => {
   const word = `<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><style>p.MsoNormal { color: red }</style><script>alert('x')</script></head>
     <body><!--[if gte mso 9]>junk<![endif]--><h1 style="color:blue" class="MsoTitle">Plan</h1><p class="MsoNormal" style="font-size: 30pt"><b>bold</b> and <span style="font-family: Comic Sans">plain</span><o:p></o:p></p>

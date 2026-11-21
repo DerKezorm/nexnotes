@@ -340,7 +340,8 @@ function noteEditing(t: T, hooks: EditorHooks): AnyExtension {
     name: 'noteEditing',
     addKeyboardShortcuts() {
       return {
-        'Mod-k': () => {
+        // Ctrl/⌘+K is the search everywhere, as in the other nex apps; the link sits beside the table and code keys.
+        'Mod-Alt-k': () => {
           hooks.onLink?.()
           return true
         },

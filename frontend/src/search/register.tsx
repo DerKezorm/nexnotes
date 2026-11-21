@@ -22,7 +22,7 @@ export function SearchEntry() {
     <NavLink
       to={SEARCH_PATH}
       data-testid="sidebar-search"
-      aria-keyshortcuts={isMac() ? 'Meta+Shift+F' : 'Control+Shift+F'}
+      aria-keyshortcuts={isMac() ? 'Meta+K Meta+Shift+F' : 'Control+K Control+Shift+F'}
       className={({ isActive }) =>
         'mb-2 flex h-9 items-center gap-2 rounded-[9px] border px-2.5 text-[13.5px] ' +
         (isActive ? 'border-accent-500 text-accent-400' : 'border-ink-700 text-mist-500 hover:bg-ink-800 hover:text-mist-100')
@@ -30,7 +30,9 @@ export function SearchEntry() {
     >
       <Search className="h-[15px] w-[15px]" strokeWidth={2} aria-hidden />
       <span className="flex-1">{t('search.field')}</span>
-      <kbd className="hidden md:inline">{isMac() ? '⇧⌘F' : 'Ctrl ⇧ F'}</kbd>
+      <kbd className="hidden md:inline" data-testid="search-key">
+        {isMac() ? '⌘ K' : t('search.key')}
+      </kbd>
     </NavLink>
   )
 }

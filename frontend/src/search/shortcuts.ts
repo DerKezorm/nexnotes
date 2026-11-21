@@ -1,6 +1,7 @@
 /**
- * The search's keys, everywhere in the app: Ctrl/⌘ + Shift + F, and `/` while no text is being written. On the search
- * page they put the cursor back into the field.
+ * The search's keys, everywhere in the app, in the text too: Ctrl/⌘ + K as in the other nex apps; Ctrl/⌘ + Shift + F,
+ * and `/` while no text is being written. Ctrl/⌘ + F stays the browser's. On the search page they put the cursor back
+ * into the field.
  */
 import { goTo, tryLeave } from '../notes/context'
 
@@ -27,8 +28,9 @@ export function onShortcut(event: KeyboardEvent): void {
   if (event.defaultPrevented || event.altKey) return
   const command = event.ctrlKey || event.metaKey
   const findAll = command && event.shiftKey && event.key.toLowerCase() === 'f'
+  const family = command && !event.shiftKey && event.key.toLowerCase() === 'k'
   const slash = event.key === '/' && !command && !writing(event.target)
-  if (!findAll && !slash) return
+  if (!findAll && !family && !slash) return
   event.preventDefault()
   openSearch()
 }

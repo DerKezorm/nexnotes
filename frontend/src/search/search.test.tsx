@@ -8,7 +8,7 @@
  */
 import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { BrowserRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { BrowserRouter, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
@@ -539,6 +539,56 @@ describe('NOTES-9 search page', () => {
   })
 
   // ---- Keys and phone ------------------------------------------------------------------------------------------
+
+  it('NOTES-9 AC-1 Ctrl+K and Cmd+K open the search from the list and from inside the text; Ctrl+F stays the browser\'s', async () => {
+    await render('/')
+    await press(window, 'k', { ctrlKey: true })
+    await answered()
+    expect(where).toBe('/search')
+    await act(async () => window.history.back())
+    await settle()
+    expect(where).toBe('/')
+    // From inside a text being written (the editor), with Cmd on a Mac.
+    const text = document.createElement('div')
+    text.setAttribute('contenteditable', 'true')
+    document.body.appendChild(text)
+    await press(text, 'k', { metaKey: true })
+    await answered()
+    expect(where).toBe('/search')
+    text.remove()
+    await act(async () => window.history.back())
+    await settle()
+    // Ctrl+F is left to the browser.
+    const find = new KeyboardEvent('keydown', { key: 'f', ctrlKey: true, bubbles: true, cancelable: true })
+    await act(async () => void window.dispatchEvent(find))
+    expect(find.defaultPrevented).toBe(false)
+    expect(where).toBe('/')
+  })
+
+  it('NOTES-9 AC-1 the search field of the sidebar shows the key: Strg K in German, Ctrl K in English, ⌘ K on a Mac', async () => {
+    const { SearchEntry } = await import('./register')
+    const holder = document.createElement('div')
+    document.body.appendChild(holder)
+    const own = createRoot(holder)
+    const key = async () => {
+      await act(async () => own.render(<MemoryRouter><SearchEntry /></MemoryRouter>))
+      return holder.querySelector('[data-testid="search-key"]')!.textContent
+    }
+    await i18n.changeLanguage('de')
+    expect(await key()).toBe('Strg K')
+    await i18n.changeLanguage('en')
+    expect(await key()).toBe('Ctrl K')
+    const platform = Object.getOwnPropertyDescriptor(Navigator.prototype, 'platform')
+    Object.defineProperty(navigator, 'platform', { value: 'MacIntel', configurable: true })
+    try {
+      expect(await key()).toBe('⌘ K')
+    } finally {
+      delete (navigator as unknown as Record<string, unknown>).platform
+      if (platform) Object.defineProperty(Navigator.prototype, 'platform', platform)
+      await act(async () => own.unmount())
+      holder.remove()
+    }
+  })
 
   it('NOTES-9 keys: Ctrl+Shift+F and / open the search, arrows walk the hits, Enter opens, Escape empties and leaves', async () => {
     await render('/')

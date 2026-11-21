@@ -761,7 +761,8 @@
     "page": "page {{page}}",
     "placeholder": "Search all notes",
     "saveSmart": "Save as smart folder",
-    "title": "Search"
+    "title": "Search",
+    "key": "Ctrl K"
   },
   "server": {
     "allLevels": "All levels",
