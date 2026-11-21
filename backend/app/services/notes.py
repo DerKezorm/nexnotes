@@ -88,6 +88,24 @@ def note_for(db: Session, account: Account, note_id: str, *, write: bool = False
     return note
 
 
+# --- Hooks on the text --------------------------------------------------------------------------------------------
+
+#: Called wherever the title or the text of a note is written, with the session and the note, before the commit of the
+#: same transaction (the search index, NOTES-9). A hook must not raise; it logs its own failures.
+TEXT_WRITTEN: list[Callable[[Session, Note], None]] = []
+
+
+def on_text_written(hook: Callable[[Session, Note], None]) -> None:
+    """Adds ``hook`` once; asked again (every start) it stays once."""
+    if hook not in TEXT_WRITTEN:
+        TEXT_WRITTEN.append(hook)
+
+
+def _written(db: Session, note: Note) -> None:
+    for hook in TEXT_WRITTEN:
+        hook(db, note)
+
+
 # --- Titles -------------------------------------------------------------------------------------------------------
 
 _SENTENCE_END = re.compile(r"[.!?;,]\s|[.!?;,]$|\s[-–—]\s")
@@ -188,6 +206,7 @@ class SqlNoteStore:
             note.ydoc = folded.state
             note.text = folded.text
             _take_title(note, folded.title)
+            _written(db, note)
             if last is not None:
                 db.execute(delete(NoteUpdate).where(NoteUpdate.note_id == note_id, NoteUpdate.id <= last))
             db.commit()
@@ -202,6 +221,7 @@ class SqlNoteStore:
                 return
             note.text = text
             _take_title(note, title)
+            _written(db, note)
             db.commit()
 
 
@@ -325,6 +345,7 @@ def create(db: Session, account: Account, *, note_id: str | None = None, folder_
                 origin=(origin or "")[:100], ydoc=document.get_update(), text=to_plain(document), created_at=now,
                 updated_at=now, updated_by_id=account.id)
     db.add(note)
+    _written(db, note)
     try:
         db.commit()
     except IntegrityError:
@@ -374,6 +395,7 @@ async def duplicate(account: Account, note_id: str) -> Note:
                     ydoc=document.get_update(), text=to_plain(document), created_at=now, updated_at=now,
                     updated_by_id=account.id)
         db.add(note)
+        _written(db, note)
         db.commit()
         logger.info("Note duplicated note=%s copy=%s", note_id, note.id)
         return note
@@ -391,6 +413,7 @@ async def set_title(account: Account, note_id: str, title: str) -> Note:
         note.title = clean
         if clean:
             note.title_check = False
+        _written(db, note)
         db.commit()
     await change(note_id, lambda doc: notedoc.set_title(doc, clean), account_id=account.id)
     return _fresh(note_id)
@@ -412,6 +435,7 @@ async def suggest(note_id: str, title: str | None = None) -> str:
         note.title = clean
         note.title_check = True
         note.updated_at = utcnow()
+        _written(db, note)
         db.commit()
     await change(note_id, lambda doc: notedoc.set_title(doc, clean))
     logger.info("Title suggested note=%s", note_id)

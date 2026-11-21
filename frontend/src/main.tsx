@@ -7,6 +7,7 @@ import App from './App'
 // The note features dock onto the frame before the first render (extensions.ts).
 import './notes/register'
 import './folders'
+import './search'
 import './tags'
 import './history'
 // The trash closes the sidebar's places (drawing "Seitenleiste"): imported after every feature with an entry there.

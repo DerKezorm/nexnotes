@@ -752,3 +752,14 @@ def test_notes15_the_trash_is_its_owner_s_alone(client, operator):
             assert answer.status_code == 404
         theirs.post("/api/trash/empty", json={"until": datetime.now(UTC).isoformat()})
     assert exists(mine["id"]) and len(trash_of(client)["items"]) == 2
+
+
+def test_notes15_ac5_a_copy_of_a_version_is_found_by_the_search(client, operator):
+    """The copy from an old version is a note like any other: the search finds it (NOTES-9 AC-1)."""
+    note = new_note(client, title="Recipe", markdown="Kohlrabi")
+    session(note["id"], operator.id, ["parsley"], datetime(2026, 11, 3, 18, 40, tzinfo=UTC))
+    version = history_of(client, note["id"])["versions"][0]
+    copy = client.post(f"/api/notes/{note['id']}/history/{version['id']}/copy", json={}).json()
+    found = client.get("/api/search", params={"q": "Kohlrabi"}).json()
+    ids = {hit["id"] for hit in found.get("notes", found.get("results", found.get("items", [])))}
+    assert copy["id"] in ids, found

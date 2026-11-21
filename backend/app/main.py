@@ -27,6 +27,7 @@ from .routers import backups as backups_router
 from .routers import locales as locales_router
 from .routers import logs as logs_router
 from .routers import notes as notes_router
+from .routers import search as search_router
 from .routers import settings as settings_router
 from .routers import tags as tags_router
 from .routers import totp as totp_router
@@ -42,7 +43,7 @@ ROUTERS = [
     backups_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.
-FEATURE_ROUTERS: list = [folders, notes_router, tags_router, history, trash]
+FEATURE_ROUTERS: list = [folders, notes_router, tags_router, search_router, history, trash]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:
