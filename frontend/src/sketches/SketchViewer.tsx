@@ -4,6 +4,7 @@
  */
 import { Download, Maximize2, Minus, Plus, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type PointerEvent, type WheelEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 
 import { fileUrl, viewUrl, type AttachmentInfo } from '../attachments/api'
@@ -72,7 +73,8 @@ export function SketchViewer({ info, onClose }: { info: AttachmentInfo; onClose:
   // The original, as sharp as the app drew it; a format no browser shows through its view.
   const source = info.inline ? fileUrl(info.id) : viewUrl(info.id)
   const tool = 'nn-btn nn-btn-ghost h-9 w-9 px-0'
-  return (
+  // Over the page, outside the editor: the editor would take a drag inside its blocks for moving the block.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-black/90" role="dialog" aria-modal="true" aria-label={t('sketches.drawing.viewer', { name: info.name })} data-testid="sketch-viewer" contentEditable={false}>
       <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-mist-200">
         <span className="min-w-0 flex-1 truncate">{info.name}</span>
@@ -116,6 +118,7 @@ export function SketchViewer({ info, onClose }: { info: AttachmentInfo; onClose:
           />
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
