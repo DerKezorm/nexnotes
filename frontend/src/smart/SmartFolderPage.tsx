@@ -6,21 +6,28 @@
  * the conditions (EC-2).
  *
  * "Neue Notiz" on this page goes into the inbox: a smart folder is no place (NOTES-4 AC-9, `folderOfList`).
+ *
+ * A smart folder with the condition "Anhang" offers a third view beside list and tiles: "Anhänge", the gallery of
+ * its notes' attachments (`attachments/GalleryPage.tsx`); the preset "Anhänge" opens in it. One with "Geteilt: mit
+ * mir geteilt" leads to the page "Mit mir geteilt" (`/shared`: owners, rights, leaving, what went).
  */
-import { Filter, Pencil, Trash2 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { Filter, Pencil, Trash2, Users } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { ApiError } from '../api/client'
+import { Gallery, type GalleryLoad } from '../attachments/GalleryPage'
+import type { GalleryItem } from '../attachments/api'
 import { Dialog } from '../components/Dialog'
 import { problemText } from '../lib/errors'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { NoteList } from '../notes/NoteList'
 import { hrefIn } from '../notes/workspace'
+import type { ListMode } from '../notes/list/api'
 import type { ListSource } from '../notes/list/useNoteList'
 import { smartApi, type Broken, type SmartAnswer, type SmartFolder } from './api'
-import { describe, smartName } from './conditions'
+import { asksAttachments, asksSharedWithMe, describe, smartName } from './conditions'
 import { useFolderName } from './folderName'
 import { refreshSmartFolders, useSmartFolders } from './store'
 
@@ -40,6 +47,24 @@ export function ConditionList({ folder }: { folder: SmartFolder }) {
       </ul>
     </div>
   )
+}
+
+const WITH_GALLERY: readonly ListMode[] = ['list', 'tiles', 'gallery']
+
+/** The attachments of the smart folder's notes; an entry opens its note beside the list, at the attachment. */
+function SmartGallery({ id }: { id: string }) {
+  const [params] = useSearchParams()
+  const load = useCallback<GalleryLoad>((query) => smartApi.gallery(id, query), [id])
+  const hrefFor = useCallback(
+    (item: GalleryItem) => {
+      const query = new URLSearchParams(params)
+      query.delete('note')
+      query.set('attachment', item.id)
+      return hrefIn(`/smart/${encodeURIComponent(id)}?${query.toString()}`, item.note.id)
+    },
+    [id, params],
+  )
+  return <Gallery load={load} sourceKey={id} embedded hrefFor={hrefFor} />
 }
 
 function BrokenNote({ broken, folderId }: { broken: Broken[]; folderId: string }) {
@@ -107,6 +132,7 @@ export function SmartFolderPage() {
   const known = folders.find((folder) => folder.id === id) ?? null
   const folder = answer?.folder.id === id ? answer.folder : known
   const name = folder ? smartName(folder, t) : ''
+  const withGallery = folder ? asksAttachments(folder) : false
   useListTitle(name || t('smart.heading'))
 
   const source = useMemo<ListSource>(
@@ -152,6 +178,12 @@ export function SmartFolderPage() {
   return (
     <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="smart-page">
       <div className="flex flex-wrap items-center justify-end gap-2">
+        {folder && asksSharedWithMe(folder) && (
+          <Link to="/shared" className="nn-btn nn-btn-ghost h-8 gap-1.5 px-2.5 text-[13px] font-normal" data-testid="smart-shared-page">
+            <Users aria-hidden className="h-3.5 w-3.5" />
+            {t('smart.sharedPage')}
+          </Link>
+        )}
         <Link to={`/smart/${encodeURIComponent(id)}/edit`} className="nn-btn nn-btn-ghost h-8 gap-1.5 px-2.5 text-[13px] font-normal" data-testid="smart-edit">
           <Pencil aria-hidden className="h-3.5 w-3.5" />
           {t('smart.edit')}
@@ -168,7 +200,14 @@ export function SmartFolderPage() {
         </button>
       </div>
       {answer && answer.folder.id === id && answer.broken.length > 0 && <BrokenNote broken={answer.broken} folderId={id} />}
-      <NoteList heading={name || ' '} source={source} empty={empty || undefined} hrefFor={(noteId) => hrefIn(`/smart/${encodeURIComponent(id)}`, noteId)} />
+      <NoteList
+        heading={name || ' '}
+        source={source}
+        empty={empty || undefined}
+        hrefFor={(noteId) => hrefIn(`/smart/${encodeURIComponent(id)}`, noteId)}
+        modes={withGallery ? WITH_GALLERY : undefined}
+        gallery={withGallery ? <SmartGallery id={id} /> : undefined}
+      />
       {deleting && folder && <DeleteDialog folder={folder} onClose={() => setDeleting(false)} />}
     </div>
   )

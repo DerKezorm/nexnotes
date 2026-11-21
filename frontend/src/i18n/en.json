@@ -221,7 +221,8 @@
       "emptyText": "Drag photos, PDFs, videos or other files into a note, paste them or choose “Attach” there. You will find them all here.",
       "noneOfKind": "No attachments of this kind.",
       "more": "Load more",
-      "failed": "The attachments cannot be loaded right now."
+      "failed": "The attachments cannot be loaded right now.",
+      "emptyHere": "The notes here have no attachments."
     },
     "storage": {
       "full": "Your storage is full: {{used}} of {{limit}}. Writing goes on; new attachments only once there is room.",
@@ -850,7 +851,8 @@
     "view": {
       "label": "View",
       "list": "List",
-      "tiles": "Tiles"
+      "tiles": "Tiles",
+      "gallery": "Attachments"
     }
   },
   "notes": {
@@ -1877,7 +1879,9 @@
     "missingText": "It was deleted, perhaps on another device.",
     "preset": {
       "open_tasks": "Open checklists",
-      "recent": "Recently edited"
+      "recent": "Recently edited",
+      "shared_with_me": "Shared with me",
+      "attachments": "Attachments"
     },
     "kind": {
       "tag": "Tag",
@@ -1939,7 +1943,8 @@
       "tag": "The tag {{tag}} of a condition is in no note any more.",
       "unnamed": "without a name",
       "gone": "Deleted: {{name}}"
-    }
+    },
+    "sharedPage": "Manage shares"
   },
   "pwa": {
     "update": "A new version of nexnotes is here.",

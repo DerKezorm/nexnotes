@@ -3,6 +3,7 @@
  * preview while making one, and the list one shows. The conditions are the search's (`services/search.py`).
  */
 import { api } from '../api/client'
+import type { Gallery, GalleryKind, GallerySort } from '../attachments/api'
 import type { ListAnswer, ListItem, ListView } from '../notes/list/api'
 
 export type Match = 'all' | 'any'
@@ -30,8 +31,9 @@ export type Condition =
   | PinnedCondition
   | ColorCondition
 
-/** The two every account gets (AC-7); without a name of their own they are named in the language of the page. */
-export type Preset = '' | 'open_tasks' | 'recent'
+/** The ones every account gets (AC-7); without a name of their own they are named in the language of the page.
+ * `shared_with_me` and `attachments` took the place of the sidebar's fixed entries "Mit mir geteilt" and "Anhänge". */
+export type Preset = '' | 'open_tasks' | 'recent' | 'shared_with_me' | 'attachments'
 
 export type SmartFolder = {
   id: string
@@ -75,4 +77,7 @@ export const smartApi = {
   notes: (id: string) => api<SmartAnswer>(`${one(id)}/notes`, { query: { tz: deviceZone() } }),
   stamp: (id: string) => api<{ stamp: string }>(`${one(id)}/stamp`, { query: { tz: deviceZone() } }),
   saveView: (id: string, view: Partial<ListView>) => api<ListView>(`${one(id)}/view`, { method: 'PUT', body: view }),
+  /** The attachments of the notes that fit now, in the shape of the gallery (the view "Anhänge"). */
+  gallery: (id: string, query: { kind?: GalleryKind; sort?: GallerySort; offset: number; limit: number }) =>
+    api<Gallery>(`${one(id)}/attachments`, { query: { ...query, tz: deviceZone() } }),
 }

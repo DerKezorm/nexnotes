@@ -3,6 +3,9 @@
  * name, note and size; chips by kind with their numbers, newest or largest first, and a click leads into the note at
  * the attachment. An empty account says how to attach (EC-9). The order and kind stand in the address
  * (`?kind=pdf&sort=largest`), so "Große Anhänge ansehen" of a full storage (AC-11) leads straight to the largest.
+ *
+ * `Gallery` is the same without the page around it, for another set of attachments: a smart folder shows the
+ * attachments of its notes this way (NOTES-7, view "Anhänge"), its entries opening the note beside the list.
  */
 import { File as FileIcon, FileText, Image as ImageIcon, Mic, Paperclip, PenLine, ScanText, Video, type LucideIcon } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
@@ -12,34 +15,57 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { bytes } from '../lib/format'
 import { pageTitle } from '../lib/title'
 import { altClickOpens } from '../tabs/links'
-import { attachmentsApi, GALLERY_KINDS, thumbUrl, type Gallery, type GalleryItem, type GalleryKind, type GallerySort } from './api'
+import { attachmentsApi, GALLERY_KINDS, thumbUrl, type Gallery as GalleryAnswer, type GalleryItem, type GalleryKind, type GallerySort } from './api'
 
 /** Entries read at a time; the next ones when the end of the list comes into view. */
 export const PAGE = 120
 
 const ICONS: Record<GalleryKind, LucideIcon> = { image: ImageIcon, scan: ScanText, pdf: FileText, recording: Mic, drawing: PenLine, video: Video, file: FileIcon }
 
+/** Where a gallery takes its attachments from, page by page; by default every attachment of the account's notes. */
+export type GalleryLoad = (query: { kind?: GalleryKind; sort?: GallerySort; offset: number; limit: number }) => Promise<GalleryAnswer>
+
+type GalleryProps = {
+  /** Another set of attachments than the account's (a smart folder's); another `sourceKey` loads anew. */
+  load?: GalleryLoad
+  sourceKey?: string
+  /** Without its own heading and page title, inside another page. */
+  embedded?: boolean
+  /** The address an entry opens; by default the note page at the attachment. */
+  hrefFor?: (item: GalleryItem) => string
+}
+
+const allOfAccount: GalleryLoad = (query) => attachmentsApi.gallery(query)
+const noteAt = (item: GalleryItem) => `/notes/${encodeURIComponent(item.note.id)}?attachment=${encodeURIComponent(item.id)}`
+
 export function GalleryPage() {
+  const { t } = useTranslation()
+  useEffect(() => {
+    document.title = pageTitle(t('attachments.gallery.title'))
+  }, [t])
+  return <Gallery />
+}
+
+export function Gallery({ load = allOfAccount, sourceKey = '', embedded = false, hrefFor = noteAt }: GalleryProps) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const kind = (GALLERY_KINDS as string[]).includes(params.get('kind') ?? '') ? (params.get('kind') as GalleryKind) : undefined
   const sort: GallerySort = params.get('sort') === 'largest' ? 'largest' : 'newest'
-  const [found, setFound] = useState<Gallery | null>(null)
+  const [found, setFound] = useState<GalleryAnswer | null>(null)
   const [failed, setFailed] = useState(false)
   const [busy, setBusy] = useState(false)
   const end = useRef<HTMLDivElement>(null)
   const asked = useRef(0)
-
-  useEffect(() => {
-    document.title = pageTitle(t('attachments.gallery.title'))
-  }, [t])
+  // The way to load as it is now; another `sourceKey` is another set.
+  const from = useRef(load)
+  from.current = load
 
   useEffect(() => {
     const ask = ++asked.current
     setBusy(true)
-    attachmentsApi
-      .gallery({ kind, sort, offset: 0, limit: PAGE })
+    from
+      .current({ kind, sort, offset: 0, limit: PAGE })
       .then((answer) => {
         if (ask !== asked.current) return
         setFound(answer)
@@ -47,14 +73,14 @@ export function GalleryPage() {
       })
       .catch(() => ask === asked.current && setFailed(true))
       .finally(() => ask === asked.current && setBusy(false))
-  }, [kind, sort])
+  }, [kind, sort, sourceKey])
 
   const more = useCallback(() => {
     if (!found || busy || found.items.length >= found.total) return
     const ask = asked.current
     setBusy(true)
-    attachmentsApi
-      .gallery({ kind, sort, offset: found.items.length, limit: PAGE })
+    from
+      .current({ kind, sort, offset: found.items.length, limit: PAGE })
       .then((answer) => {
         if (ask !== asked.current) return
         setFound({ ...answer, items: [...found.items, ...answer.items] })
@@ -90,9 +116,9 @@ export function GalleryPage() {
     ...GALLERY_KINDS.map((each) => ({ key: each, label: t(`attachments.gallery.filter.${each}`), count: found?.counts[each] ?? 0 })),
   ]
   return (
-    <div className="flex flex-col gap-4 px-4 py-5 md:px-8 md:py-6" data-testid="gallery">
+    <div className={'flex flex-col gap-4 ' + (embedded ? 'px-1' : 'px-4 py-5 md:px-8 md:py-6')} data-testid="gallery">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold text-mist-100">{t('attachments.gallery.title')}</h1>
+        {!embedded && <h1 className="text-2xl font-bold text-mist-100">{t('attachments.gallery.title')}</h1>}
         {found && (
           <span className="text-[13px] text-mist-500" data-testid="gallery-summary">
             {t('attachments.gallery.summary', { count: found.all, size: bytes(found.bytes, lang) })}
@@ -134,7 +160,7 @@ export function GalleryPage() {
             <Paperclip className="h-6 w-6" aria-hidden />
           </span>
           <h2 className="text-lg font-semibold text-mist-100">{t('attachments.gallery.emptyTitle')}</h2>
-          <p className="text-sm leading-relaxed text-mist-400">{t('attachments.gallery.emptyText')}</p>
+          <p className="text-sm leading-relaxed text-mist-400">{t(embedded ? 'attachments.gallery.emptyHere' : 'attachments.gallery.emptyText')}</p>
         </div>
       )}
       {found && found.all > 0 && found.total === 0 && <p className="text-sm text-mist-500">{t('attachments.gallery.noneOfKind')}</p>}
@@ -145,7 +171,7 @@ export function GalleryPage() {
               <Tile
                 item={item}
                 onOpen={(event) => {
-                  const path = `/notes/${encodeURIComponent(item.note.id)}?attachment=${encodeURIComponent(item.id)}`
+                  const path = hrefFor(item)
                   // Alt-click (⌥-click): the note in a new tab while one is open (NOTES-8 AC-3).
                   if (!altClickOpens(event, item.note.id, path)) navigate(path)
                 }}

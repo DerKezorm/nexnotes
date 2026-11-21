@@ -1,21 +1,25 @@
 /**
  * The smart folders in the sidebar (drawing "Seitenleiste", NOTES-7 AC-8): the section "Intelligent" between the
- * folders and the tags, each with the filter symbol, in the member's own order. The order changes by dragging one onto
+ * folders and the tags, each with the filter symbol ("Mit mir geteilt" and "Anhänge" with the symbols of the sidebar
+ * entries they replaced), in the member's own order. The order changes by dragging one onto
  * the place of another, or with Alt + arrow up/down on the focused one; "+" makes a new one.
  */
-import { Filter, Plus } from 'lucide-react'
+import { Filter, Paperclip, Plus, Users, type LucideIcon } from 'lucide-react'
 import { useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink } from 'react-router-dom'
 
 import { showNotice } from '../folders/notice'
 import { problemText } from '../lib/errors'
-import { smartApi } from './api'
+import { smartApi, type Preset } from './api'
 import { smartName } from './conditions'
 import { moved } from './order'
 import { refreshSmartFolders, showOrder, useSmartFolders } from './store'
 
 const DRAG_TYPE = 'application/x-nexnotes-smart'
+
+/** The presets that keep the symbol of the fixed entry they replaced. */
+const PRESET_ICONS: Partial<Record<Preset, LucideIcon>> = { shared_with_me: Users, attachments: Paperclip }
 
 function keep(ids: string[]): void {
   showOrder(ids)
@@ -74,6 +78,7 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
       <ul className="flex flex-col">
         {folders.map((folder) => {
           const name = smartName(folder, t)
+          const Icon = PRESET_ICONS[folder.preset]
           return (
             <li key={folder.id}>
               <NavLink
@@ -104,7 +109,11 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
                   (dragging === folder.id ? ' opacity-60' : '')
                 }
               >
-                <Filter className="h-3.5 w-3.5 shrink-0 text-mist-500" strokeWidth={2} aria-hidden data-testid="smart-filter-icon" />
+                {Icon ? (
+                  <Icon className="h-3.5 w-3.5 shrink-0 text-mist-500" strokeWidth={2} aria-hidden data-testid={`smart-icon-${folder.preset}`} />
+                ) : (
+                  <Filter className="h-3.5 w-3.5 shrink-0 text-mist-500" strokeWidth={2} aria-hidden data-testid="smart-filter-icon" />
+                )}
                 <span className="min-w-0 truncate">{name}</span>
               </NavLink>
             </li>

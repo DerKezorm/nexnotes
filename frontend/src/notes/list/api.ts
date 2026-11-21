@@ -5,7 +5,8 @@
 import { api } from '../../api/client'
 import type { NoteItem } from '../api'
 
-export type ListMode = 'list' | 'tiles'
+/** `gallery`: the attachments of the list's notes instead of the notes (a smart folder with "Anhang", NOTES-7). */
+export type ListMode = 'list' | 'tiles' | 'gallery'
 export type ListSort = 'updated' | 'created' | 'title'
 export type ListDirection = 'asc' | 'desc'
 

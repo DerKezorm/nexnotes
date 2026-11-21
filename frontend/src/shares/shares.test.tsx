@@ -14,7 +14,6 @@ import { dayFrom, endOfDay, type Sharing, type WithMe } from './api'
 import { askMoveOut } from './moveAsk'
 import { MoveQuestion } from './MoveQuestion'
 import { ReadLinksCard } from './ReadLinksCard'
-import { SharedEntry } from './register'
 import { ShareDialog } from './ShareDialog'
 import { SharedPage } from './SharedPage'
 
@@ -218,13 +217,7 @@ describe('the share dialog', () => {
 
 describe('"Shared with me"', () => {
   it('NOTES-13 AC-3 AC-5 AC-6 by owner with the right, what went and why, and leaving', async () => {
-    await render(
-      <>
-        <SharedEntry />
-        <SharedPage />
-      </>,
-    )
-    expect($('shared-count')!.textContent).toBe('3')
+    await render(<SharedPage />)
     const groups = $$('shared-group')
     expect(groups.map((group) => group.querySelector('h2')!.textContent)).toEqual(['Afrom Anna', 'Lfrom Lena'])
     const items = $$('shared-item')

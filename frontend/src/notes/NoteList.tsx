@@ -20,7 +20,7 @@ import { tryLeave } from './context'
 import { listDate } from './listDate'
 import { noteHref } from './newNote'
 import { noteOf } from './workspace'
-import type { ListItem } from './list/api'
+import type { ListItem, ListMode } from './list/api'
 import { ItemMenu } from './list/ItemMenu'
 import { layout, SIZES, type Entry } from './list/layout'
 import { ListBar } from './list/ListBar'
@@ -47,6 +47,9 @@ export type NoteListProps = {
   source?: ListSource
   /** What an empty list says instead of the folder's empty state (a smart folder names its conditions, EC-2). */
   empty?: ReactNode
+  /** The views the list offers besides list and tiles: `gallery` shows `gallery` in the place of the notes. */
+  modes?: readonly ListMode[]
+  gallery?: ReactNode
 }
 
 /** The width of the list, followed as it changes; unknown (a test without layout) counts as a wide screen. */
@@ -65,7 +68,7 @@ function useWidth(box: React.RefObject<HTMLElement | null>): number {
   return width
 }
 
-export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, source, empty }: NoteListProps) {
+export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, source, empty, modes, gallery }: NoteListProps) {
   const href = hrefFor ?? ((id: string) => noteHref(id, folderId))
   const location = useLocation()
   const selectedId = chosenId ?? noteOf(location.pathname, location.search) ?? undefined
@@ -74,7 +77,10 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
   const navigate = useNavigate()
   const tree = useFolders()
   const { newNote } = useNoteActions()
-  const { answer, failed, view, setView, pin, color } = useNoteList(folderId, source)
+  const { answer, failed, view: kept, setView, pin, color } = useNoteList(folderId, source)
+  // A gallery kept for a list that offers none (its conditions changed) shows as a list.
+  const showsGallery = kept.mode === 'gallery' && Boolean(gallery) && Boolean(modes?.includes('gallery'))
+  const view = useMemo(() => (kept.mode === 'gallery' && !showsGallery ? { ...kept, mode: 'list' as const } : kept), [kept, showsGallery])
   const now = useNow()
   const box = useRef<HTMLElement>(null)
   const width = useWidth(box)
@@ -187,12 +193,13 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
         )}
         {heading && countText && <span className="shrink-0 text-[13px] text-mist-500" data-testid="list-counts">{countText}</span>}
         <span className="ml-auto">
-          <ListBar view={view} onChange={setView} narrow={narrow} />
+          <ListBar view={view} onChange={setView} narrow={narrow} modes={modes} />
         </span>
       </div>
       {failed && <p className="px-2 text-sm text-bad-500">{t('notes.list.failed')}</p>}
-      {answer && answer.items.length === 0 && empty}
-      {answer && answer.items.length === 0 && !empty && (
+      {showsGallery && gallery}
+      {!showsGallery && answer && answer.items.length === 0 && empty}
+      {!showsGallery && answer && answer.items.length === 0 && !empty && (
         <div
           data-testid="list-empty"
           onDragOver={takeNotes}
@@ -222,7 +229,7 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
           )}
         </div>
       )}
-      {answer && answer.items.length > 0 && <Window entries={entries} height={height} render={render} />}
+      {!showsGallery && answer && answer.items.length > 0 && <Window entries={entries} height={height} render={render} />}
       {menu && (
         <ItemMenu
           item={answer?.items.find((item) => item.id === menu.item.id) ?? menu.item}

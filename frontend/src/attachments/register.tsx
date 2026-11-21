@@ -1,31 +1,17 @@
 /**
- * The attachments dock onto the frame (`extensions.ts`, NOTES-10): "Anhänge" among the places at the top of the
- * sidebar (after the inbox, drawing "Seitenleiste"), the gallery `/attachments`, and the orange bar "Speicher voll"
- * over every page once the account's storage is full (AC-11). Imported in `main.tsx` after the folders.
+ * The attachments dock onto the frame (`extensions.ts`, NOTES-10): the gallery `/attachments`, and the orange bar
+ * "Speicher voll" over every page once the account's storage is full (AC-11), which leads to it. "Anhänge" is no fixed
+ * entry of the sidebar any more but a smart folder every account gets (NOTES-7, preset `attachments`), opening as the
+ * gallery of its notes' attachments. Imported in `main.tsx` after the folders.
  */
-import { Paperclip } from 'lucide-react'
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 
-import { FEATURE_ROUTES, SHELL_BANNERS, SIDEBAR_SECTIONS } from '../extensions'
+import { FEATURE_ROUTES, SHELL_BANNERS } from '../extensions'
 import { bytes } from '../lib/format'
 import { GalleryPage } from './GalleryPage'
 import { loadLimits, useLimits } from './info'
-
-export function AttachmentsEntry() {
-  const { t } = useTranslation()
-  return (
-    <NavLink
-      to="/attachments"
-      data-testid="sidebar-attachments"
-      className={({ isActive }) => 'mt-1 flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors ' + (isActive ? 'nn-chosen font-semibold' : 'text-mist-100 hover:bg-ink-800')}
-    >
-      <Paperclip className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-      {t('attachments.gallery.title')}
-    </NavLink>
-  )
-}
 
 /** How often the bar asks whether the storage is still full (or became full on another device). */
 export const STORAGE_EVERY_MS = 60_000
@@ -51,7 +37,5 @@ export function StorageBar() {
   )
 }
 
-const inbox = SIDEBAR_SECTIONS.findIndex((section) => section.key === 'inbox')
-SIDEBAR_SECTIONS.splice(inbox >= 0 ? inbox + 1 : SIDEBAR_SECTIONS.length, 0, { key: 'attachments', render: () => <AttachmentsEntry /> })
 FEATURE_ROUTES.push({ path: 'attachments', element: <GalleryPage /> })
 SHELL_BANNERS.push({ key: 'storage', render: () => <StorageBar /> })
