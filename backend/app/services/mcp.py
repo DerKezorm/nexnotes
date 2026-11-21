@@ -435,7 +435,8 @@ async def list_smart_folders(caller: Caller, _args: dict[str, Any]) -> Any:
                 # The two every account gets have no name of their own until renamed: their English name here.
                 name = folder.name or smart_folders.PRESET_NAMES.get(folder.preset or "", ("", ""))[1]
                 out.append({"id": folder.id, "name": name, "preset": folder.preset, "match": folder.match,
-                            "conditions": folder.conditions or [], "notes": count})
+                            "icon": folder.icon, "color": folder.color, "conditions": folder.conditions or [],
+                            "notes": count})
             return {"smart_folders": out}
 
     return await asyncio.to_thread(run)

@@ -36,7 +36,7 @@ import { moved } from './order'
 import './register'
 import { SmartEditor } from './SmartEditor'
 import { SmartFolderPage } from './SmartFolderPage'
-import { SmartSection } from './SmartSection'
+import { PhoneSmartSection, SmartSection } from './SmartSection'
 import { forgetSmartFolders } from './store'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
@@ -92,7 +92,7 @@ function answer(call: Call): Response {
     const name = String(body?.name ?? '')
     const there = taken(name)
     if (there) return reply(409, { detail: { code: 'smart_folder_exists', message: 'x', name: there.name || 'Offene Checklisten' } })
-    const folder: SmartFolder = { id: `s${++made}`, name: name.trim(), preset: '', match: (body?.match as 'all' | 'any') ?? 'all', conditions: body?.conditions as Condition[], position: smart.length }
+    const folder: SmartFolder = { id: `s${++made}`, name: name.trim(), preset: '', icon: String(body?.icon ?? 'filter'), color: String(body?.color ?? ''), match: (body?.match as 'all' | 'any') ?? 'all', conditions: body?.conditions as Condition[], position: smart.length }
     smart = [...smart, folder]
     return reply(201, folder)
   }
@@ -237,8 +237,10 @@ const PRESET_CONDITIONS: Record<Exclude<Preset, ''>, Condition[]> = {
   attachments: [{ kind: 'attachment', type: 'any' }],
 }
 
+const PRESET_ICONS: Record<Exclude<Preset, ''>, string> = { open_tasks: 'filter', recent: 'filter', shared_with_me: 'people', attachments: 'paperclip' }
+
 function preset(id: string, kind: Exclude<Preset, ''>, position: number): SmartFolder {
-  return { id, name: '', preset: kind, match: 'all', conditions: PRESET_CONDITIONS[kind], position }
+  return { id, name: '', preset: kind, icon: PRESET_ICONS[kind], color: '', match: 'all', conditions: PRESET_CONDITIONS[kind], position }
 }
 
 function attachment(id: string, kind: GalleryItem['kind'], note: string): GalleryItem {
@@ -398,6 +400,8 @@ describe('NOTES-7 smart folders', () => {
         { kind: 'tag', op: 'has', key: 'bad', label: 'bad' },
         { kind: 'date', field: 'updated', period: 'week' },
       ],
+      icon: 'filter',
+      color: '',
     })
     expect(where).toBe('/smart/s1')
     expect($$('sidebar-smart-folder').map((link) => link.textContent)).toContain('rechn')
@@ -427,7 +431,7 @@ describe('NOTES-7 smart folders', () => {
   })
 
   it('NOTES-7 EC-6 the same name twice: the tag page and the editor say so', async () => {
-    smart = [...smart, { id: 'x', name: '#einkauf', preset: '', match: 'all', conditions: [], position: 2 }]
+    smart = [...smart, { id: 'x', name: '#einkauf', preset: '', icon: 'filter', color: '', match: 'all', conditions: [], position: 2 }]
     await render('/tags/einkauf')
     await settle(100)
     // In the head's "…" of the tag.
@@ -447,14 +451,14 @@ describe('NOTES-7 smart folders', () => {
   })
 
   it('NOTES-7 AC-6 editing keeps the folder, deleting asks once and goes without the trash', async () => {
-    smart = [...smart, { id: 's7', name: 'Rezepte', preset: '', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }], position: 2 }]
+    smart = [...smart, { id: 's7', name: 'Rezepte', preset: '', icon: 'filter', color: '', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }], position: 2 }]
     await render('/smart/s7/edit')
     await settle(60)
     expect(($('smart-name') as HTMLInputElement).value).toBe('Rezepte')
     expect(($('smart-tag') as HTMLInputElement).value).toBe('#rezept')
     await typeInto($('smart-name'), 'Rezepte zum Ausprobieren')
     await click($('smart-save'))
-    expect(posted('/api/smart-folders/s7', 'PUT')[0].body).toEqual({ name: 'Rezepte zum Ausprobieren', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }] })
+    expect(posted('/api/smart-folders/s7', 'PUT')[0].body).toEqual({ name: 'Rezepte zum Ausprobieren', match: 'all', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }], icon: 'filter', color: '' })
     expect(where).toBe('/smart/s7')
     await settle(60)
     await click($('smart-more'))
@@ -477,7 +481,7 @@ describe('NOTES-7 smart folders', () => {
     await choose($('smart-period'), 'month')
     await click($('smart-save'))
     // Unchanged, the name stays the preset's: the next language shows its own.
-    expect(posted('/api/smart-folders/p2', 'PUT')[0].body).toEqual({ name: '', match: 'all', conditions: [{ kind: 'date', field: 'updated', period: 'month' }] })
+    expect(posted('/api/smart-folders/p2', 'PUT')[0].body).toEqual({ name: '', match: 'all', conditions: [{ kind: 'date', field: 'updated', period: 'month' }], icon: 'filter', color: '' })
     act(() => root?.unmount())
     box.remove()
     await i18n.changeLanguage('en')
@@ -494,9 +498,7 @@ describe('NOTES-7 smart folders', () => {
     expect(keys).not.toContain('attachments')
     const links = $$('sidebar-smart-folder')
     expect(links.map((link) => link.textContent)).toEqual(['Offene Checklisten', 'Zuletzt bearbeitet', 'Mit mir geteilt', 'Anhänge'])
-    expect(links[2].querySelector('[data-testid="smart-icon-shared_with_me"]')).not.toBeNull()
-    expect(links[3].querySelector('[data-testid="smart-icon-attachments"]')).not.toBeNull()
-    expect(links[3].querySelector('[data-testid="smart-filter-icon"]')).toBeNull()
+    expect(links.map((link) => link.querySelector('[data-symbol]')!.getAttribute('data-symbol'))).toEqual(['filter', 'filter', 'people', 'paperclip'])
     // Deleted, it is gone like any other smart folder.
     act(() => root?.unmount())
     box.remove()
@@ -521,7 +523,7 @@ describe('NOTES-7 smart folders', () => {
     await previewed()
     expect(posted('/api/smart-folders/preview').at(-1)!.body!.conditions).toEqual([{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }])
     await click($('smart-save'))
-    expect(posted('/api/smart-folders')[0].body).toEqual({ name: 'Mit mir geteilt', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }] })
+    expect(posted('/api/smart-folders')[0].body).toEqual({ name: 'Mit mir geteilt', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }], icon: 'filter', color: '' })
   })
 
   it('NOTES-7 AC-4 "Anhänge" opens as the gallery of its notes\' attachments, beside list and tiles, and an entry opens its note', async () => {
@@ -589,13 +591,13 @@ describe('NOTES-7 smart folders', () => {
   })
 
   it('NOTES-7 AC-8 the section "Intelligent" stands after the folders, with the filter symbol, in the order dragged', async () => {
-    smart = [...smart, { id: 's3', name: 'Drei', preset: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 2 }]
+    smart = [...smart, { id: 's3', name: 'Drei', preset: '', icon: 'filter', color: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 2 }]
     await render('/')
     const keys = SIDEBAR_SECTIONS.map((section) => section.key)
     expect(keys.indexOf('smart')).toBe(keys.indexOf('folders') + 1)
     expect($('sidebar-smart')!.querySelector('h2')!.textContent).toBe('Intelligent')
     const links = $$('sidebar-smart-folder')
-    expect(links.map((link) => link.querySelector('[data-testid="smart-filter-icon"]'))).not.toContain(null)
+    expect(links.map((link) => link.querySelector('[data-symbol]')!.getAttribute('data-symbol'))).toEqual(['filter', 'filter', 'filter'])
     // Alt + arrow down moves the first one down.
     await press(links[0], 'ArrowDown', { altKey: true })
     expect(posted('/api/smart-folders/order', 'PUT')[0].body).toEqual({ ids: ['p2', 'p1', 's3'] })
@@ -621,7 +623,7 @@ describe('NOTES-7 smart folders', () => {
   })
 
   it('NOTES-7 EC-2 when nothing fits it says so and shows the conditions', async () => {
-    smart = [...smart, { id: 's4', name: 'Leer', preset: '', match: 'any', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }, { kind: 'folder', op: 'tree', id: 'f1' }, { kind: 'date', field: 'updated', period: 'week' }], position: 2 }]
+    smart = [...smart, { id: 's4', name: 'Leer', preset: '', icon: 'filter', color: '', match: 'any', conditions: [{ kind: 'tag', op: 'has', key: 'rezept', label: 'rezept' }, { kind: 'folder', op: 'tree', id: 'f1' }, { kind: 'date', field: 'updated', period: 'week' }], position: 2 }]
     await render('/smart/s4')
     const empty = $('smart-empty')!
     expect(empty.textContent).toContain('Gerade passt keine Notiz')
@@ -657,5 +659,177 @@ describe('NOTES-7 smart folders', () => {
     await render('/')
     expect(listNameOf('/smart/p1')).toBe('Offene Checklisten')
     expect(listNameOf('/folder/f1')).toBeNull()
+  })
+})
+
+// ---- Fifth review: the menu of a smart folder, and its symbol and color -------------------------------------------
+
+async function renderPhone(path: string): Promise<void> {
+  window.history.replaceState({ idx: 0 }, '', path)
+  box = document.createElement('div')
+  document.body.appendChild(box)
+  root = createRoot(box)
+  await act(async () => {
+    root!.render(
+      <BrowserRouter>
+        <Where />
+        <PhoneSmartSection />
+        <Routes>
+          <Route path="*" element={<div data-testid="elsewhere" />} />
+        </Routes>
+      </BrowserRouter>,
+    )
+  })
+  await settle(60)
+}
+
+async function rightClick(element: Element): Promise<void> {
+  await act(async () => {
+    element.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: 40, clientY: 40 }))
+  })
+  await settle()
+}
+
+const menuEntries = () => [...document.querySelectorAll<HTMLElement>('[data-testid="smart-folder-menu"] [role="menuitem"]')]
+const entry = (key: string) => anywhere(`smart-folder-menu-${key}`)
+
+describe('the menu of a smart folder (fifth review)', () => {
+  it('NOTES-7 AC-6 AC-8 "…" on a smart folder of the sidebar opens the menu as a folder has it: edit, up, down, delete', async () => {
+    await render('/')
+    const rows = $$('sidebar-smart-folder')
+    const more = $$('sidebar-smart-more')
+    expect(more).toHaveLength(2)
+    // Shown on hover or focus, as the folders' "…".
+    expect(more[0].className).toContain('group-hover:block')
+    expect(more[0].className).toContain('group-focus-within:block')
+    expect(more[0].getAttribute('aria-label')).toBe('Aktionen für „Offene Checklisten“')
+    expect(rows[0].getAttribute('aria-keyshortcuts')).toContain('Shift+F10')
+    await click(more[0])
+    expect(anywhere('smart-folder-menu')!.getAttribute('role')).toBe('menu')
+    expect(menuEntries().map((item) => item.textContent)).toEqual(['Bearbeiten', 'Nach oben', 'Nach unten', 'Löschen'])
+    // The first cannot go further up.
+    expect(entry('up')!.getAttribute('aria-disabled')).toBe('true')
+    expect(entry('down')!.getAttribute('aria-disabled')).toBeNull()
+    await click(entry('edit'))
+    expect(where).toBe('/smart/p1/edit')
+    expect(anywhere('smart-folder-menu')).toBeNull()
+  })
+
+  it('NOTES-7 AC-8 a right click opens the same menu; up and down change the order as dragging does', async () => {
+    await render('/')
+    await rightClick($$('sidebar-smart-folder')[1])
+    expect(menuEntries().map((item) => item.textContent)).toEqual(['Bearbeiten', 'Nach oben', 'Nach unten', 'Löschen'])
+    expect(entry('down')!.getAttribute('aria-disabled')).toBe('true')
+    await click(entry('down'))
+    expect(posted('/api/smart-folders/order', 'PUT')).toHaveLength(0)
+    await rightClick($$('sidebar-smart-folder')[1])
+    await click(entry('up'))
+    expect(posted('/api/smart-folders/order', 'PUT')[0].body).toEqual({ ids: ['p2', 'p1'] })
+    expect($$('sidebar-smart-folder').map((link) => link.textContent)).toEqual(['Zuletzt bearbeitet', 'Offene Checklisten'])
+    await rightClick($$('sidebar-smart-folder')[0])
+    await click(entry('down'))
+    expect(posted('/api/smart-folders/order', 'PUT')[1].body).toEqual({ ids: ['p1', 'p2'] })
+  })
+
+  it('NOTES-7 AC-8 the keyboard: Shift+F10 and the menu key open it, Escape gives the focus back to the row', async () => {
+    await render('/')
+    const row = $$('sidebar-smart-folder')[1]
+    await act(async () => row.focus())
+    await press(row, 'F10', { shiftKey: true })
+    expect(anywhere('smart-folder-menu')).not.toBeNull()
+    expect(document.activeElement).toBe(entry('edit'))
+    await press(document.activeElement!, 'Escape')
+    expect(anywhere('smart-folder-menu')).toBeNull()
+    expect(document.activeElement).toBe(row)
+    // F10 alone is not the menu.
+    await press(row, 'F10')
+    expect(anywhere('smart-folder-menu')).toBeNull()
+    await press(row, 'ContextMenu')
+    expect(anywhere('smart-folder-menu')).not.toBeNull()
+  })
+
+  it('NOTES-7 AC-6 deleting from the sidebar asks as the list head does; the open one leaves its page, another does not', async () => {
+    await render('/smart/p2')
+    await rightClick($$('sidebar-smart-folder')[0])
+    await click(entry('delete'))
+    const dialog = anywhere('smart-delete')!
+    expect(dialog.textContent).toContain('Nur der intelligente Ordner geht, ohne Papierkorb. Die Notizen darin bleiben, wo sie sind.')
+    expect(posted('/api/smart-folders/p1', 'DELETE')).toHaveLength(0)
+    await click(anywhere('smart-delete-confirm'))
+    await settle(60)
+    expect(posted('/api/smart-folders/p1', 'DELETE')).toHaveLength(1)
+    // p1 was not the one shown: the page stays.
+    expect(where).toBe('/smart/p2')
+    expect($$('sidebar-smart-folder').map((link) => link.textContent)).toEqual(['Zuletzt bearbeitet'])
+    await rightClick($$('sidebar-smart-folder')[0])
+    await click(entry('delete'))
+    await click(anywhere('smart-delete-confirm'))
+    await settle(60)
+    expect(posted('/api/smart-folders/p2', 'DELETE')).toHaveLength(1)
+    expect(where).toBe('/')
+  })
+
+  it('NOTES-23 AC-1 NOTES-7 AC-6 on the phone\'s page "Ordner" every smart folder has "…" with the same menu', async () => {
+    await renderPhone('/folders')
+    const more = $$('folders-smart-more')
+    expect(more).toHaveLength(2)
+    await click(more[1])
+    expect(menuEntries().map((item) => item.textContent)).toEqual(['Bearbeiten', 'Nach oben', 'Nach unten', 'Löschen'])
+    expect(more[1].getAttribute('aria-expanded')).toBe('true')
+    // The button closes it again.
+    await click(more[1])
+    expect(anywhere('smart-folder-menu')).toBeNull()
+    await click(more[1])
+    await click(entry('delete'))
+    await click(anywhere('smart-delete-confirm'))
+    await settle(60)
+    expect(posted('/api/smart-folders/p2', 'DELETE')).toHaveLength(1)
+    expect($$('folders-smart-folder')).toHaveLength(1)
+    expect(where).toBe('/folders')
+  })
+})
+
+describe('the symbol and color of a smart folder (fifth review)', () => {
+  it('NOTES-7 AC-1 a new smart folder takes symbol and color from the same choice as a folder; the filter by default', async () => {
+    items = [item('n1', { tasks: { done: 0, total: 1 } })]
+    await render('/smart/new')
+    const preview = () => $('smart-look-preview')!.querySelector('svg')!
+    expect(preview().getAttribute('data-symbol')).toBe('filter')
+    const look = $('smart-look')!
+    // The same parts as the folder's dialog: the symbol grid and the color swatches.
+    expect(look.querySelector('[data-testid="symbol-grid"]')).not.toBeNull()
+    await click(look.querySelector('[role="radio"][data-symbol="star"]'))
+    await click(look.querySelector('button[data-color="#4ade80"]'))
+    expect(preview().getAttribute('data-symbol')).toBe('star')
+    expect(preview().style.color).toBe('rgb(74, 222, 128)')
+    await typeInto($('smart-name'), 'Sterne')
+    await choose($('smart-kind'), 'tasks')
+    await previewed()
+    await click($('smart-save'))
+    expect(posted('/api/smart-folders')[0].body).toMatchObject({ name: 'Sterne', icon: 'star', color: 'green' })
+    // The sidebar and the list head show it.
+    await settle(60)
+    const shown = $$('sidebar-smart-folder').at(-1)!.querySelector('svg')!
+    expect(shown.getAttribute('data-symbol')).toBe('star')
+    expect(shown.style.color).toBe('rgb(74, 222, 128)')
+    expect($('smart-page')!.querySelector('svg[data-symbol="star"]')).not.toBeNull()
+  })
+
+  it('NOTES-7 AC-6 editing shows its symbol and color and changes them; the phone shows them too', async () => {
+    smart = [...smart, { id: 's7', name: 'Herzen', preset: '', icon: 'heart', color: 'teal', match: 'all', conditions: [{ kind: 'pinned' }], position: 2 }]
+    await render('/smart/s7/edit')
+    await settle(60)
+    expect($('smart-look-preview')!.querySelector('svg')!.getAttribute('data-symbol')).toBe('heart')
+    expect($('smart-look')!.querySelector('[role="radio"][data-symbol="heart"]')!.getAttribute('aria-checked')).toBe('true')
+    await click($('smart-look')!.querySelector('[role="radio"][data-symbol="flag"]'))
+    await click($('smart-save'))
+    expect(posted('/api/smart-folders/s7', 'PUT')[0].body).toMatchObject({ icon: 'flag', color: 'teal' })
+    act(() => root?.unmount())
+    root = null
+    document.body.replaceChildren()
+    await renderPhone('/folders')
+    const mark = $$('folders-smart-folder').at(-1)!.querySelector('svg')!
+    expect(mark.getAttribute('data-symbol')).toBe('flag')
+    expect(mark.style.color).toBe('rgb(45, 212, 191)')
   })
 })

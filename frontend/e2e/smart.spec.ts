@@ -43,9 +43,9 @@ test('NOTES-7 AC-7 AC-8 a new account has "Open checklists", "Recently edited", 
   await expect(section.getByRole('heading', { name: 'Smart' })).toBeVisible()
   await expect(section.getByTestId('sidebar-smart-folder')).toHaveText(['Open checklists', 'Recently edited', 'Shared with me', 'Attachments'])
   // The last two took the place of the sidebar's fixed entries and keep their symbols.
-  await expect(section.getByTestId('smart-filter-icon')).toHaveCount(2)
-  await expect(section.getByTestId('smart-icon-shared_with_me')).toHaveCount(1)
-  await expect(section.getByTestId('smart-icon-attachments')).toHaveCount(1)
+  await expect(section.locator('[data-testid="sidebar-smart-folder"] svg[data-symbol="filter"]')).toHaveCount(2)
+  await expect(section.locator('[data-testid="sidebar-smart-folder"] svg[data-symbol="people"]')).toHaveCount(1)
+  await expect(section.locator('[data-testid="sidebar-smart-folder"] svg[data-symbol="paperclip"]')).toHaveCount(1)
   // In the sidebar's order: after the folders, before the tags.
   const order = await member.getByTestId('sidebar-places').evaluate((places) =>
     Array.from(places.querySelectorAll('[data-testid="sidebar-smart"], [data-testid="sidebar-tags"], [role="tree"]')).map(

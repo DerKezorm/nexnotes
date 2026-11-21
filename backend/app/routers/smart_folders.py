@@ -34,12 +34,17 @@ class FolderIn(BaseModel):
     name: str = Field(max_length=200)
     match: Literal["all", "any"] = "all"
     conditions: Conditions
+    #: As a folder's (``routers/folders.py``); without one the filter and no colour.
+    icon: str | None = Field(default=None, max_length=32)
+    color: str | None = Field(default=None, max_length=16)
 
 
 class FolderChange(BaseModel):
     name: str | None = Field(default=None, max_length=200)
     match: Literal["all", "any"] | None = None
     conditions: Conditions | None = None
+    icon: str | None = Field(default=None, max_length=32)
+    color: str | None = Field(default=None, max_length=16)
 
 
 class OrderIn(BaseModel):
@@ -68,7 +73,8 @@ def list_folders(db: DbSession, account: Account) -> dict[str, Any]:
 
 @router.post("", status_code=201)
 def make(body: FolderIn, db: DbSession, account: Account) -> dict[str, Any]:
-    return smart_folders.out(smart_folders.create(db, account, body.name, body.match, body.conditions))
+    return smart_folders.out(smart_folders.create(db, account, body.name, body.match, body.conditions,
+                                                  icon=body.icon, color=body.color))
 
 
 @router.put("/order")
@@ -89,7 +95,7 @@ def read_folder(folder_id: str, db: DbSession, account: Account) -> dict[str, An
 @router.put("/{folder_id}")
 def change(folder_id: str, body: FolderChange, db: DbSession, account: Account) -> dict[str, Any]:
     folder = smart_folders.update(db, account, folder_id, name=body.name, match=body.match,
-                                  conditions=body.conditions)
+                                  conditions=body.conditions, icon=body.icon, color=body.color)
     return smart_folders.out(folder)
 
 

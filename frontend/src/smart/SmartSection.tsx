@@ -1,50 +1,31 @@
 /**
  * The smart folders in the sidebar (drawing "Seitenleiste", NOTES-7 AC-8): the section "Intelligent" between the
- * folders and the tags, each with the filter symbol ("Mit mir geteilt" and "Anhänge" with the symbols of the sidebar
- * entries they replaced), in the member's own order. The order changes by dragging one onto
- * the place of another, or with Alt + arrow up/down on the focused one; "+" makes a new one.
+ * folders and the tags, each with its symbol in its color (as a folder, `SmartMark`), in the member's own order. The
+ * order changes by dragging one onto the place of another, or with Alt + arrow up/down on the focused one; "+" makes a
+ * new one.
+ *
+ * Like a folder's row (fifth review): "…" on hover or focus and a right click open the menu (edit, up, down, delete,
+ * `SmartMenu.tsx`); Shift+F10 or the menu key open it from the keyboard.
  */
-import { Filter, Paperclip, Plus, Users, type LucideIcon } from 'lucide-react'
+import { MoreHorizontal, Plus } from 'lucide-react'
 import { useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink } from 'react-router-dom'
 
-import { showNotice } from '../folders/notice'
-import { problemText } from '../lib/errors'
-import { smartApi, type Preset } from './api'
 import { smartName } from './conditions'
-import { moved } from './order'
-import { refreshSmartFolders, showOrder, useSmartFolders } from './store'
+import { keepOrder, moved, stepped } from './order'
+import { SmartMark } from './SmartMenu'
+import { useSmartFolders } from './store'
+import { useSmartActions } from './useSmartActions'
 
 const DRAG_TYPE = 'application/x-nexnotes-smart'
 
-/** The presets that keep the symbol of the fixed entry they replaced. */
-const PRESET_ICONS: Partial<Record<Preset, LucideIcon>> = { shared_with_me: Users, attachments: Paperclip }
-
-function keep(ids: string[]): void {
-  showOrder(ids)
-  smartApi
-    .order(ids)
-    .catch((error) => {
-      showNotice({ text: problemText(error) })
-    })
-    .finally(() => void refreshSmartFolders())
-}
-
-export function SmartIcon({ preset, className }: { preset: Preset; className: string }) {
-  const Icon = PRESET_ICONS[preset]
-  return Icon ? (
-    <Icon className={className} strokeWidth={2} aria-hidden data-testid={`smart-icon-${preset}`} />
-  ) : (
-    <Filter className={className} strokeWidth={2} aria-hidden data-testid="smart-filter-icon" />
-  )
-}
-
 /** The same section on the phone's page "Ordner" (NOTES-23 AC-1): the same smart folders in the same order with the
- * same symbols, rows large enough for a finger, "+" to make one. The order is changed at the computer. */
+ * same symbols, rows large enough for a finger, "+" to make one, and "…" on every row as the folders have it there. */
 export function PhoneSmartSection() {
   const { t } = useTranslation()
   const { folders } = useSmartFolders()
+  const actions = useSmartActions(folders)
   return (
     <section aria-label={t('smart.heading')} className="space-y-3.5" data-testid="folders-smart">
       <div className="flex items-center justify-between">
@@ -58,24 +39,37 @@ export function PhoneSmartSection() {
           {folders.map((folder) => {
             const name = smartName(folder, t)
             return (
-              <Link
-                key={folder.id}
-                to={`/smart/${encodeURIComponent(folder.id)}`}
-                className="flex min-h-[50px] items-center justify-between gap-2 border-b border-ink-800 px-3.5 text-base last:border-b-0 hover:bg-ink-800"
-                data-testid="folders-smart-folder"
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <SmartIcon preset={folder.preset} className="h-4 w-4 shrink-0 text-mist-500" />
-                  <span className="truncate" title={name}>
-                    {name}
+              <div key={folder.id} className="flex min-h-[50px] items-center border-b border-ink-800 last:border-b-0" data-testid="folders-smart-row">
+                <Link
+                  to={`/smart/${encodeURIComponent(folder.id)}`}
+                  className="flex min-h-[50px] min-w-0 flex-1 items-center justify-between gap-2 pr-1 pl-3.5 text-base hover:bg-ink-800"
+                  data-testid="folders-smart-folder"
+                >
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <SmartMark folder={folder} size={16} />
+                    <span className="truncate" title={name}>
+                      {name}
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-[15px] text-mist-500">›</span>
-              </Link>
+                  <span className="shrink-0 text-[15px] text-mist-500">›</span>
+                </Link>
+                <button
+                  type="button"
+                  aria-label={t('smart.menu', { name })}
+                  aria-haspopup="menu"
+                  aria-expanded={actions.openId === folder.id}
+                  onClick={(event) => actions.toggle(folder, event.currentTarget)}
+                  className="flex h-11 w-10 shrink-0 items-center justify-center text-mist-500"
+                  data-testid="folders-smart-more"
+                >
+                  <MoreHorizontal aria-hidden className="h-4 w-4" />
+                </button>
+              </div>
             )
           })}
         </div>
       )}
+      {actions.node}
     </section>
   )
 }
@@ -83,6 +77,7 @@ export function PhoneSmartSection() {
 export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
   const { t } = useTranslation()
   const { folders } = useSmartFolders()
+  const actions = useSmartActions(folders, onNavigate)
   const [dragging, setDragging] = useState<string | null>(null)
   const [over, setOver] = useState<string | null>(null)
   const ids = folders.map((folder) => folder.id)
@@ -98,15 +93,19 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
     const id = event.dataTransfer.getData(DRAG_TYPE) || dragging
     setDragging(null)
     setOver(null)
-    if (id && id !== target) keep(moved(ids, id, target))
+    if (id && id !== target) keepOrder(moved(ids, id, target))
   }
-  const onKey = (id: string) => (event: KeyboardEvent) => {
+  const onKey = (id: string) => (event: KeyboardEvent<HTMLAnchorElement>) => {
+    const folder = folders.find((each) => each.id === id)
+    if (folder && (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) {
+      event.preventDefault()
+      actions.open(folder, event.currentTarget)
+      return
+    }
     if (!event.altKey || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return
     event.preventDefault()
-    const index = ids.indexOf(id)
-    const next = event.key === 'ArrowUp' ? index - 1 : index + 1
-    if (next < 0 || next >= ids.length) return
-    keep(moved(ids, id, ids[next]))
+    const next = stepped(ids, id, event.key === 'ArrowUp' ? -1 : 1)
+    if (next !== ids) keepOrder(next)
   }
 
   return (
@@ -124,11 +123,12 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
           <Plus className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
         </Link>
       </div>
-      <ul className="flex flex-col">
+      <ul className="flex flex-col" aria-describedby="smart-section-keys">
         {folders.map((folder) => {
           const name = smartName(folder, t)
+          const open = actions.openId === folder.id
           return (
-            <li key={folder.id}>
+            <li key={folder.id} className="group relative">
               <NavLink
                 to={`/smart/${encodeURIComponent(folder.id)}`}
                 onClick={onNavigate}
@@ -147,23 +147,47 @@ export function SmartSection({ onNavigate }: { onNavigate?: () => void }) {
                 onDragLeave={() => setOver((now) => (now === folder.id ? null : now))}
                 onDrop={land(folder.id)}
                 onKeyDown={onKey(folder.id)}
-                aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  actions.open(folder, event.currentTarget)
+                }}
+                aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown Shift+F10"
                 title={name}
                 data-testid="sidebar-smart-folder"
                 className={({ isActive }) =>
-                  'flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13.5px] ' +
+                  'flex h-8 items-center gap-2 rounded-lg px-2.5 text-[13.5px] group-focus-within:pr-8 group-hover:pr-8 pointer-coarse:h-11 pointer-coarse:pr-8 ' +
+                  (open ? 'pr-8 ' : '') +
                   (isActive ? 'nn-chosen font-semibold' : 'text-mist-100 hover:bg-ink-800') +
                   (over === folder.id && dragging !== folder.id ? ' ring-2 ring-accent-500' : '') +
                   (dragging === folder.id ? ' opacity-60' : '')
                 }
               >
-                <SmartIcon preset={folder.preset} className="h-3.5 w-3.5 shrink-0 text-mist-500" />
+                <SmartMark folder={folder} />
                 <span className="min-w-0 truncate">{name}</span>
               </NavLink>
+              <button
+                type="button"
+                tabIndex={-1}
+                aria-label={t('smart.menu', { name })}
+                aria-haspopup="menu"
+                aria-expanded={open}
+                onClick={(event) => actions.toggle(folder, event.currentTarget)}
+                className={
+                  'absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-mist-400 hover:bg-ink-700 hover:text-mist-100 ' +
+                  (open ? 'block' : 'hidden group-focus-within:block group-hover:block pointer-coarse:block')
+                }
+                data-testid="sidebar-smart-more"
+              >
+                <MoreHorizontal aria-hidden className="h-4 w-4" />
+              </button>
             </li>
           )
         })}
       </ul>
+      <p id="smart-section-keys" className="sr-only">
+        {t('smart.keys')}
+      </p>
+      {actions.node}
     </section>
   )
 }

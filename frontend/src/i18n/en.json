@@ -2053,7 +2053,10 @@
       "gone": "Deleted: {{name}}"
     },
     "sharedPage": "Manage shares",
-    "menu": "Actions for “{{name}}”"
+    "menu": "Actions for “{{name}}”",
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "keys": "Alt with arrow up or down moves a smart folder, Shift+F10 or the menu key opens its menu."
   },
   "pwa": {
     "update": "A new version of nexnotes is here.",

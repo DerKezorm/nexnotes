@@ -34,6 +34,11 @@ class SmartFolder(Base):
     match: Mapped[str] = mapped_column(String(8), default="all")
     #: The conditions, as ``services/search.py`` reads them.
     conditions: Mapped[Any] = mapped_column(JSON, default=list)
+    #: Its symbol, from the folders' row (``services/symbols.py``): the filter unless its owner picks another; the
+    #: presets carry the symbol of the entry they stand for. Empty is allowed and shows the filter.
+    icon: Mapped[str] = mapped_column(String(32), default="filter", server_default="filter")
+    #: Its colour as a folder's: a key of ``FOLDER_COLORS``, ``#rrggbb`` or empty for none.
+    color: Mapped[str] = mapped_column(String(16), default="", server_default="")
     #: Its place in the sidebar (AC-8), from 0.
     position: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)

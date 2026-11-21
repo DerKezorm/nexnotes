@@ -817,3 +817,67 @@ def test_notes7_ec4_ten_thousand_notes_several_conditions_under_a_second(client,
     assert took_stamp < 0.5, took_stamp
     print(f"EC-4: four conditions {took:.3f} s, wide (any, {len(listing['items'])} notes) {took_wide:.3f} s, "
           f"stamp {took_stamp:.3f} s")
+
+
+# --- Symbol and colour, as a folder's (fifth review) ------------------------------------------------------------------
+
+
+def test_notes7_look_a_new_smart_folder_has_the_filter_and_no_colour(client, operator):
+    made = make(client, "Ohne Wahl", TASKS)
+    assert (made["icon"], made["color"]) == ("filter", "")
+    chosen = client.post("/api/smart-folders", json={"name": "Mit Wahl", "match": "all", "conditions": [TASKS],
+                                                     "icon": "star", "color": "#A1B2C3"})
+    assert chosen.status_code == 201, chosen.text
+    assert (chosen.json()["icon"], chosen.json()["color"]) == ("star", "#a1b2c3")
+    listed = {item["name"]: item for item in client.get("/api/smart-folders").json()["items"]}
+    assert (listed["Mit Wahl"]["icon"], listed["Mit Wahl"]["color"]) == ("star", "#a1b2c3")
+
+
+def test_notes7_look_symbol_and_colour_change_alone(client, operator):
+    made = make(client, "Farbig", TASKS)
+    one = f"/api/smart-folders/{made['id']}"
+    answer = client.put(one, json={"icon": "heart"})
+    assert answer.status_code == 200 and (answer.json()["icon"], answer.json()["color"]) == ("heart", "")
+    answer = client.put(one, json={"color": "teal"})
+    assert (answer.json()["icon"], answer.json()["color"], answer.json()["name"]) == ("heart", "teal", "Farbig")
+    # Empty is allowed, as with folders: no colour, or no symbol (the colour as a small square).
+    answer = client.put(one, json={"icon": "", "color": ""})
+    assert (answer.json()["icon"], answer.json()["color"]) == ("", "")
+    assert client.get(one).json()["conditions"] == [TASKS]
+
+
+@pytest.mark.parametrize("look", [{"icon": "unicorn"}, {"color": "red-ish"}, {"color": "#fff"}, {"icon": "x" * 40}])
+def test_notes7_look_an_unknown_symbol_or_colour_is_refused(client, operator, look):
+    made = make(client, "Streng", TASKS)
+    answer = client.put(f"/api/smart-folders/{made['id']}", json=look)
+    assert answer.status_code == 422, answer.text
+    created = client.post("/api/smart-folders", json={"name": "Neu streng", "match": "all", "conditions": [TASKS],
+                                                      **look})
+    assert created.status_code == 422
+    assert client.get(f"/api/smart-folders/{made['id']}").json()["icon"] == "filter"
+    assert "Neu streng" not in {item["name"] for item in client.get("/api/smart-folders").json()["items"]}
+
+
+def test_notes7_look_presets_come_with_the_symbol_of_their_entry(client, operator):
+    lena = make_account("lena-look")
+    assert [(row.preset, row.icon, row.color) for row in smart_rows(lena)] == [
+        ("open_tasks", "filter", ""), ("recent", "filter", ""), ("shared_with_me", "people", ""),
+        ("attachments", "paperclip", ""),
+    ]
+
+
+def test_notes7_look_presets_from_before_get_their_symbol_once(client, operator):
+    rows = {row.preset: row for row in smart_rows(operator)}
+    with SessionLocal() as db:
+        # A database from before symbols: the new column gave every row the filter, and the mark is not there.
+        db.execute(SmartFolder.__table__.update().values(icon="filter"))
+        db.execute(Setting.__table__.delete().where(Setting.key == smart_folders.SEEDED_ICONS))
+        db.commit()
+        smart_folders.seed_existing(db)
+    after = {row.preset: row.icon for row in smart_rows(operator)}
+    assert after == {"open_tasks": "filter", "recent": "filter", "shared_with_me": "people", "attachments": "paperclip"}
+    # Once: a symbol the member picks later stays, also after the next start.
+    assert client.put(f"/api/smart-folders/{rows['attachments'].id}", json={"icon": "filter"}).status_code == 200
+    with SessionLocal() as db:
+        smart_folders.seed_existing(db)
+    assert {row.preset: row.icon for row in smart_rows(operator)}["attachments"] == "filter"
