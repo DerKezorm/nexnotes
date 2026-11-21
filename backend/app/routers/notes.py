@@ -87,13 +87,18 @@ def item_out(note: Note) -> dict[str, Any]:
 
 def note_out(db: Any, note: Note, account: Any) -> dict[str, Any]:
     access = notes.access_to(db, account, note)
+    extras: dict[str, Any] = {}
+    for extra in notes.HEAD_EXTRAS:
+        extras.update(extra(db, account, note))
     return {
         **item_out(note),
+        **extras,
         "path": [notes.folder_out(folder) for folder in notes.folder_path(db, note.folder_id)],
         "updated_by": notes.person(db, note.updated_by_id),
         "owner": notes.person(db, note.owner_id),
         "deleted_at": _iso(note.deleted_at),
-        "can_write": access == Access.WRITE or (access == Access.GONE and note.owner_id == account.id),
+        "can_write": access == Access.WRITE or (access == Access.GONE
+                                                and notes.right_to(db, account, note) == Access.WRITE),
         # NOTES-3 AC-17: the paper, on every device; the lists do not need it.
         "paper": note.paper or notes.PAPERS[0],
     }

@@ -21,6 +21,12 @@ with limits of memory and time (``media.prepare``); a file past them stays a fil
 or named it (a copied note, a block pasted into another note, a version in its history). Everyone else gets the same
 "not found" as for one that is not there (``readable``). The headers are the router's (``routers/attachments.py``).
 
+A note shared to write (NOTES-13) must not become a door to the owner's other attachments: a member who knows the id of
+one (from a note shared with it before) could write it into the shared note and load it from there. So the second way
+counts for somebody else than the owner only when the owner (or the server) put the attachment into that note
+(``AttachmentMention.vouched``, decided when ``sync_refs`` first sees it: an update of the owner carries the id, or no
+other member wrote since the last fold). An attachment uploaded into the note itself is the note's own and needs none.
+
 **Going away.** Removing a block from a note takes nothing away at once: the history keeps what its versions name
 (NOTES-15 AC-3, AC-4). An attachment goes
 
@@ -418,7 +424,9 @@ def readable(db: Session, account: Account, attachment: Attachment) -> bool:
         return True
     others = db.scalars(select(Note).where(Note.id.in_(_naming(attachment.id)), Note.owner_id == attachment.owner_id,
                                            Note.id != attachment.note_id))
-    return any(_can_read(db, account, note) for note in others)
+    # Through another note only what its owner put there counts for a member it is shared with (NOTES-13).
+    return any(_can_read(db, account, note) and (note.owner_id == account.id or _vouched(db, note.id, attachment.id))
+               for note in others)
 
 
 def _naming(attachment_id: str) -> Any:
@@ -459,8 +467,13 @@ def of_note(db: Session, account: Account, note_id: str) -> list[dict[str, Any]]
     """Every attachment the note names today, named in its history or was attached to it: what the blocks of an open
     note and of its versions draw. Ids the note names that belong to another owner are left out."""
     note = notes.note_for(db, account, note_id)
-    named = (select(AttachmentRef.attachment_id).where(AttachmentRef.note_id == note.id)
-             .union(select(AttachmentMention.attachment_id).where(AttachmentMention.note_id == note.id)))
+    if note.owner_id == account.id:
+        named = (select(AttachmentRef.attachment_id).where(AttachmentRef.note_id == note.id)
+                 .union(select(AttachmentMention.attachment_id).where(AttachmentMention.note_id == note.id)))
+    else:
+        # A member the note is shared with: what its owner put there (NOTES-13, ``readable``).
+        named = select(AttachmentMention.attachment_id).where(AttachmentMention.note_id == note.id,
+                                                              AttachmentMention.vouched.is_(True))
     rows = db.scalars(select(Attachment).where((Attachment.note_id == note.id)
                                                | (Attachment.id.in_(named) & (Attachment.owner_id == note.owner_id)))
                       .order_by(Attachment.created_at, Attachment.id))
@@ -503,6 +516,25 @@ def _mark_referenced(db: Session, ids: Iterable[str]) -> None:
             row.unref_at = utcnow()
 
 
+def vouched_ids(db: Session, note: Note, ids: Iterable[str]) -> set[str]:
+    """Which of ``ids``, newly named by the note, its owner put there (NOTES-13): every one while nobody else wrote
+    since the last fold; otherwise only those an update of the owner carries. The server's own changes in such a
+    time vouch for nothing (a shape it mends copies what a member wrote)."""
+    wanted = set(ids)
+    if not wanted or note.id is None:
+        return wanted
+    rows = list(db.execute(select(NoteUpdate.update, NoteUpdate.account_id).where(NoteUpdate.note_id == note.id)))
+    if not any(account_id is not None and account_id != note.owner_id for _update, account_id in rows):
+        return wanted
+    return {found for found in wanted
+            if any(account_id == note.owner_id and found.encode() in update for update, account_id in rows)}
+
+
+def _vouched(db: Session, note_id: str, attachment_id: str) -> bool:
+    return bool(db.scalar(select(AttachmentMention.vouched).where(AttachmentMention.note_id == note_id,
+                                                                  AttachmentMention.attachment_id == attachment_id)))
+
+
 def sync_refs(db: Session, note: Note) -> None:
     """``attachment_refs`` follows the note's document: a hook on the text (``notes.on_text_written``), in the same
     transaction. Never raises."""
@@ -531,11 +563,15 @@ def sync_refs(db: Session, note: Note) -> None:
         new = set(ids) - set(old)
         if new:
             # Its versions may name them from now on (NOTES-15 AC-3): remembered for as long as the note lives.
-            known = set(db.scalars(select(AttachmentMention.attachment_id)
-                                   .where(AttachmentMention.note_id == note.id,
-                                          AttachmentMention.attachment_id.in_(new))))
-            for found in new - known:
-                db.add(AttachmentMention(note_id=note.id, attachment_id=found))
+            known = {row.attachment_id: row for row in db.scalars(
+                select(AttachmentMention).where(AttachmentMention.note_id == note.id,
+                                                AttachmentMention.attachment_id.in_(new)))}
+            vouched = vouched_ids(db, note, new)
+            for found in new - set(known):
+                db.add(AttachmentMention(note_id=note.id, attachment_id=found, vouched=found in vouched))
+            for found, row in known.items():
+                if not row.vouched and found in vouched:
+                    row.vouched = True
         db.flush()
         _mark_referenced(db, set(old) ^ set(ids))
     except Exception:
@@ -771,24 +807,34 @@ def gallery(db: Session, account: Account, kind: str | None = None, sort: str = 
 # --- Lists and tiles (NOTES-6) ------------------------------------------------------------------------------------
 
 
-def media_of(db: Session, _account: Account, rows: list[Any]) -> dict[str, dict[str, Any]]:
+def media_of(db: Session, account: Account, rows: list[Any]) -> dict[str, dict[str, Any]]:
     """The note's first picture, scan, sketch or video and how many of its kind there are, for a whole list at
-    once (``notes_list.ITEM_EXTRAS``)."""
+    once (``notes_list.ITEM_EXTRAS``). In a note of somebody else, what the owner did not put there is left out
+    (NOTES-13, ``readable``)."""
     owners = {row.id: row.owner_id for row in rows}
     if not owners:
         return {}
+    theirs = [note_id for note_id, owner_id in owners.items() if owner_id != account.id]
+    unvouched: set[tuple[str, str]] = set()
+    for start in range(0, len(theirs), 500):
+        unvouched.update((row.note_id, row.attachment_id) for row in db.execute(
+            select(AttachmentMention.note_id, AttachmentMention.attachment_id)
+            .where(AttachmentMention.note_id.in_(theirs[start:start + 500]), AttachmentMention.vouched.is_(False))))
     found: dict[str, dict[str, Any]] = {}
     counted: dict[str, dict[str, int]] = {}
     ids = list(owners)
     for start in range(0, len(ids), 500):
         chunk = ids[start: start + 500]
-        for note_id, attachment_id, kind, owner_id, thumb in db.execute(
-            select(AttachmentRef.note_id, Attachment.id, Attachment.kind, Attachment.owner_id, Attachment.has_thumb)
+        for note_id, attachment_id, kind, owner_id, thumb, home in db.execute(
+            select(AttachmentRef.note_id, Attachment.id, Attachment.kind, Attachment.owner_id, Attachment.has_thumb,
+                   Attachment.note_id)
             .join(Attachment, Attachment.id == AttachmentRef.attachment_id)
             .where(AttachmentRef.note_id.in_(chunk), Attachment.kind.in_(PICTURE_KINDS))
             .order_by(AttachmentRef.note_id, AttachmentRef.position)
         ):
             if owner_id != owners.get(note_id):
+                continue
+            if home != note_id and (note_id, attachment_id) in unvouched:
                 continue
             counted.setdefault(note_id, {}).setdefault(kind, 0)
             counted[note_id][kind] += 1
@@ -825,8 +871,12 @@ def files_of(db: Session, note_id: str) -> list[AttachmentFile]:
     ids = notedoc.attachment_refs(document) if document is not None else []
     if not ids:
         return []
+    unvouched = set(db.scalars(select(AttachmentMention.attachment_id).where(
+        AttachmentMention.note_id == note.id, AttachmentMention.vouched.is_(False))))
+    # One a member it is shared with put there from another note of the owner goes nowhere from here (NOTES-13).
     rows = {row.id: row for row in db.scalars(select(Attachment).where(Attachment.id.in_(ids),
-                                                                       Attachment.owner_id == note.owner_id))}
+                                                                       Attachment.owner_id == note.owner_id))
+            if row.note_id == note.id or row.id not in unvouched}
     files: list[AttachmentFile] = []
     for found in ids:
         row = rows.get(found)
