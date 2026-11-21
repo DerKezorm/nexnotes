@@ -762,6 +762,15 @@ describe('the rules of the tabs', () => {
     expect(odd.ratio).toBe(rules.MAX_RATIO)
   })
 
+  it('NOTES-8 AC-5 AC-7 more than six tabs kept on the device come back as the first six', () => {
+    const tabs = Array.from({ length: 8 }, (_, index) => ({ key: `k${index}`, note: `n${index}`, used: index + 1 }))
+    const read = rules.parse(JSON.stringify({ v: 1, tabs, left: 'k7', right: 'k1', focus: 'right', ratio: 0.5, seq: 8 }))
+    expect(read.tabs.map((tab) => tab.note)).toEqual(['n0', 'n1', 'n2', 'n3', 'n4', 'n5'])
+    // The left one went with the seventh and eighth: the right one takes its place, alone.
+    expect(read.left).toBe('k1')
+    expect(read.right).toBeNull()
+  })
+
   it('NOTES-8 EC-1 the same note may stand on both sides', () => {
     let state = rules.openInNewTab(rules.EMPTY, 'a').state
     state = rules.openBeside(state, 'a').state
