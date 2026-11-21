@@ -78,9 +78,7 @@ def _send(db: Session, message: EmailMessage) -> None:
 INVITE_MAIL = {
     "de": {
         "subject": "{by} lädt dich zu nexnotes ein",
-        "where": "in den Bereich „{space}“ in nexnotes",
-        "app": "zu nexnotes",
-        "body": "{by} lädt dich {where} ein. Mit nexnotes hältst du Notizen schnell fest, auf jedem Gerät.\n\n"
+        "body": "{by} lädt dich zu nexnotes ein. Mit nexnotes hältst du Notizen schnell fest, auf jedem Gerät.\n\n"
                 "Öffne diesen Link, um die Einladung anzunehmen:\n{link}\n\n"
                 "Der Link gilt einmal, {runs}. Wenn du diese Mail nicht erwartet hast, ignoriere sie.\n",
         "until": "bis {day}",
@@ -89,9 +87,7 @@ INVITE_MAIL = {
     },
     "en": {
         "subject": "{by} invites you to nexnotes",
-        "where": 'to the space "{space}" in nexnotes',
-        "app": "to nexnotes",
-        "body": "{by} invites you {where}, to jot down notes quickly on every device.\n\n"
+        "body": "{by} invites you to nexnotes, to jot down notes quickly on every device.\n\n"
                 "Open this link to accept:\n{link}\n\n"
                 "The link works once, {runs}. If you did not expect this mail, ignore it.\n",
         "until": "until {day}",
@@ -151,12 +147,10 @@ def _one_line(text: str) -> str:
     return " ".join("".join(" " if unicodedata.category(char) in {"Cc", "Zl", "Zp"} else char for char in text).split())
 
 
-def send_invite(db: Session, to: str, link: str, *, by: str, space: str | None, until: date | None = None,
-                language: str = "en") -> None:
+def send_invite(db: Session, to: str, link: str, *, by: str, until: date | None = None, language: str = "en") -> None:
     words = INVITE_MAIL.get(language, INVITE_MAIL["en"])
     runs = words["until"].format(day=until.strftime(words["date"])) if until else words["days"]
     values = {"by": _one_line(by), "link": link, "runs": runs}
-    values["where"] = words["where"].format(space=_one_line(space)) if space else words["app"]
     message = EmailMessage()
     message["To"] = to
     message["Subject"] = words["subject"].format(**values)

@@ -139,7 +139,7 @@ describe('the invitation page', () => {
   it('offers "Continue with …" per provider below "or", taking the invitation along', async () => {
     const { InvitePage } = await import('./AuthPages')
     handler = (_m, path) => {
-      if (path.startsWith('/api/invite/')) return { status: 200, body: { space: null, role: null, by: 'Robin', min_password: 12, signed_in_as: null } }
+      if (path.startsWith('/api/invite/')) return { status: 200, body: { role: null, by: 'Robin', min_password: 12, signed_in_as: null } }
       if (path === '/api/auth/methods') return { status: 200, body: { password: true, providers } }
       return undefined
     }

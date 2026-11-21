@@ -279,8 +279,8 @@ def device_of(db: Session, token: str | None) -> int | None:
 
 
 def _aad(context: str) -> bytes:
-    # A context of its own per kind of secret: an AI key sealed for one account cannot be passed off as another's,
-    # nor as a request of the AI list. Without one, the old secrets (OIDC, mail) read as before.
+    # A context of its own per kind of secret: a secret sealed for one purpose cannot be passed off as one of another.
+    # Without one, the secrets of the frame (OIDC client secret, mail password) read as before.
     return _AAD + b":" + context.encode("utf-8") if context else _AAD
 
 

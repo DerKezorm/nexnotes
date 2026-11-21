@@ -130,3 +130,20 @@ def test_notes2_ac3_every_refusal_with_a_placeholder_sends_its_value(client: Tes
     assert short.status_code == 422 and short.json()["detail"]["minimum"] == 12
     big = client.put("/api/locales/fr", content=b" " * (locales.MAX_BYTES + 1))
     assert big.status_code == 413 and big.json()["detail"]["max_mb"] == 0.5
+
+
+def test_notes2_ac2_no_word_of_another_app_is_left_in_the_frame() -> None:
+    # Spaces, vaults, boards, teams and AI keys belong to nexlore and nexcanvas; nexnotes has none of them.
+    import re
+
+    from app.services import mailer
+
+    app_dir = Path(__file__).resolve().parents[1] / "app"
+    foreign = re.compile(r"\bvaults?\b|\bAI (key|list)\b|\bboards?\b|\bteams?\b|Bereich|\{space\}|\bspace=|to the space \"", re.I)
+    found = [
+        f"{path.relative_to(app_dir)}:{number}: {line.strip()}"
+        for path in sorted(app_dir.rglob("*.py")) if "vendor" not in path.parts
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if foreign.search(line)
+    ]
+    assert found == []
+    assert all("space" not in text for words in mailer.INVITE_MAIL.values() for text in words.values())

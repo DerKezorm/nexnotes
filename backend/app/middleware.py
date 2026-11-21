@@ -33,7 +33,7 @@ def _database_busy(exc: BaseException) -> bool:
 #: Paths whose calls explain nothing but fill the log.
 QUIET_PATHS = ("/api/health", "/api/logs")
 SLOW_MS = 3000
-#: What takes long by nature: backups grow with the vault.
+#: What takes long by nature: backups grow with the notes and attachments.
 SLOW_EXPECTED = ("/api/backups",)
 
 #: The editor and the graph set inline styles, hence 'unsafe-inline' for styles only. Scripts stay strict.
