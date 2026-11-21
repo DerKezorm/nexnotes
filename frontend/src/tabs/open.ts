@@ -71,6 +71,11 @@ function change(compute: (state: TabsState) => Step | TabsState, apply: () => vo
   })
 }
 
+/** A note's address opened as a plain click opens it (Alt-click while no note is open). */
+export function openPath(path: string): void {
+  go(path)
+}
+
 /** `navState` goes with the step in the history (`{ fresh: true }`: the cursor into the title of a new note). */
 export function openNoteInNewTab(note: string, folder?: string, navState?: unknown): void {
   change((state) => rules.openInNewTab(state, note, folder), () => tabs.openInNewTab(note, folder), false, navState)

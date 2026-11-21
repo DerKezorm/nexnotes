@@ -21,7 +21,7 @@
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { Copy, Ellipsis, History, Share2, Trash2, Upload, WifiOff } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useFileDrag, useJumpToAttachment } from '../attachments/hooks'
@@ -55,11 +55,12 @@ import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
 import { Outline } from './Outline'
+import { SelectionBar } from './SelectionBar'
 import { TableControls } from './TableControls'
 import { TitleIcon } from './TitleIcon'
 import { paperOf } from './paper'
 import { PaperPicker } from './PaperPicker'
-import { OUTLINE_FROM, useOutlineShown } from './outlineData'
+import { OutlineToggleContext, outlineFits, useOutlineShown, type OutlineToggle } from './outlineData'
 import { TEXT_MAX, useTextWidth } from './textWidth'
 import { Toolbar } from './Toolbar'
 
@@ -170,7 +171,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const [shareOpen, setShareOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   const [textWidth] = useTextWidth()
-  const [outlineShown] = useOutlineShown()
+  const [outlineShown, setOutlineShown] = useOutlineShown()
   // The free width of this note's side: the outline stands beside the text only where there is room (AC-15).
   const [paneWidth, setPaneWidth] = useState(0)
   const paneObserver = useRef<ResizeObserver | null>(null)
@@ -181,6 +182,28 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
     const observer = new ResizeObserver(([entry]) => setPaneWidth(Math.floor(entry.contentRect.width)))
     observer.observe(element)
     paneObserver.current = observer
+  }, [])
+  // The outline as a column where the side has room for it beside the text at its narrowest, otherwise a panel over
+  // the text that the button opens for the moment (third review). Pressed means: on the screen.
+  const outlineColumn = outlineFits(paneWidth)
+  const [outlinePanel, setOutlinePanel] = useState(false)
+  if (outlineColumn && outlinePanel) setOutlinePanel(false)
+  const outlineId = useId()
+  const outlineToggle: OutlineToggle = {
+    id: outlineId,
+    shown: outlineColumn ? outlineShown : outlinePanel,
+    toggle: () => (outlineColumn ? setOutlineShown(!outlineShown) : setOutlinePanel(!outlinePanel)),
+  }
+  // The height of the note's head, which stays at the top while the note scrolls: the outline stands below it.
+  const [headHeight, setHeadHeight] = useState(0)
+  const headObserver = useRef<ResizeObserver | null>(null)
+  const measureHead = useCallback((element: HTMLDivElement | null) => {
+    headObserver.current?.disconnect()
+    headObserver.current = null
+    if (!element || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => setHeadHeight(element.offsetHeight))
+    observer.observe(element)
+    headObserver.current = observer
   }, [])
   const titleField = useRef<TitleFieldHandle>(null)
   const sheet = useRef<HTMLElement>(null)
@@ -537,7 +560,8 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const suggestion = suggestTitle(editor?.state.doc.textBetween(0, editor.state.doc.content.size, '\n', '\n') ?? '') || t('editor.leave.fallback', { date: new Date().toLocaleDateString(lang) })
 
   return (
-    <div className="flex min-h-full flex-col" data-testid="note-editor" data-status={status}>
+    <OutlineToggleContext.Provider value={outlineToggle}>
+    <div className="flex min-h-full flex-col" data-testid="note-editor" data-status={status} style={{ '--nn-head-h': `${headHeight}px` } as CSSProperties}>
       {!sealed && <RestoreWatch noteId={noteId} doc={provider.doc} origin={provider} />}
       {status === 'offline' && (
         <div role="status" data-testid="offline-bar" className="flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] font-medium text-warn-500" style={{ background: 'rgb(251 146 60 / 0.14)' }}>
@@ -558,8 +582,13 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       )}
       {/* The toolbar takes what is left, in one row or two (only beyond two rows "More"); the others and the note's
           buttons are never cut off (NOTES-12 AC-5). Not even "More" beside them (a narrow side with someone else in
-          the note): they go below the tools. */}
-      <div className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
+          the note): they go below the tools. It stays at the top of the side's one scroll area while the text scrolls
+          (third review); title, path and info scroll away. On a phone the tools sit above the keyboard instead. */}
+      <div
+        ref={measureHead}
+        className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:sticky md:top-0 md:z-20 md:bg-ink-950 md:px-5"
+        data-testid="editor-head"
+      >
         <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
@@ -656,7 +685,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
 
       {/* The sheet: the note's own surface on the page (white on nex gray in light, a step lighter in dark), as wide as
           the text width says; a paper pattern is its background. */}
-      <div ref={measurePane} className="flex min-h-0 w-full flex-1 items-start md:gap-6 md:px-6 md:pt-5 md:pb-8">
+      <div ref={measurePane} className="relative flex min-h-0 w-full flex-1 items-start md:gap-6 md:px-6 md:pt-5 md:pb-8">
       <article
         ref={sheet}
         className="nn-sheet relative mx-auto flex w-full min-w-0 flex-1 flex-col gap-3 self-stretch bg-ink-850 px-5 pt-6 pb-28 md:rounded-[14px] md:border md:border-ink-700 md:px-10 md:pb-10 md:shadow-[0_1px_3px_rgb(0_0_0/0.08),0_8px_24px_-12px_rgb(0_0_0/0.18)]"
@@ -745,13 +774,15 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
         <div className="nn-paper mt-1 flex flex-1 flex-col" data-paper={paperOf(head?.paper)} data-testid="note-paper">
           <EditorContent editor={editor} className="nn-editor flex-1" />
         </div>
+        {editor && writable && <SelectionBar editor={editor} onLink={() => setLinkOpen(true)} headHeight={headHeight} />}
         {editor && dragging && <DropHint editor={editor} noteId={noteId} />}
         <RefusalList noteId={noteId} />
         {editor && <TableControls editor={editor} frame={sheet} />}
       </article>
-      {editor && outlineShown && paneWidth >= OUTLINE_FROM && (
+      {editor && (outlineColumn ? outlineShown : outlinePanel) && (
         <Outline
           editor={editor}
+          panel={outlineColumn ? undefined : { onClose: () => setOutlinePanel(false), toggleId: outlineId }}
           info={[
             ...(path ? [{ label: t('editor.outline.folder'), text: path }] : []),
             ...(head
@@ -815,6 +846,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
         />
       )}
     </div>
+    </OutlineToggleContext.Provider>
   )
 }
 

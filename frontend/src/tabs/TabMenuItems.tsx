@@ -10,7 +10,7 @@ import { useLocation } from 'react-router-dom'
 
 import { useCurrentFolder } from '../folders/store'
 import { noteOf } from '../notes/workspace'
-import { useDesktop } from './desktop'
+import { isMac, useDesktop } from './desktop'
 import { openNoteBeside, openNoteInNewTab } from './open'
 import { pulseTab } from './pulse'
 import { focusedKey, tabOf } from './state'
@@ -29,7 +29,7 @@ export function TabMenuItems({ noteId, onDone }: { noteId: string; onDone: () =>
   const tab = state.tabs.find((one) => one.note === noteId)
   const front = showing && tabOf(state, focusedKey(state))?.note === noteId
   const beside = showing && Boolean(state.right) && tabOf(state, state.right)?.note === noteId
-  const entry = (props: { testId: string; icon: typeof SquarePlus; label: string; done: boolean; run: () => void }) => {
+  const entry = (props: { testId: string; icon: typeof SquarePlus; label: string; done: boolean; hint?: string; run: () => void }) => {
     const Icon = props.icon
     return (
       <button
@@ -46,7 +46,15 @@ export function TabMenuItems({ noteId, onDone }: { noteId: string; onDone: () =>
       >
         <Icon aria-hidden className="h-4 w-4" />
         <span className="flex-1">{props.label}</span>
-        {props.done && <span className="text-[11px] text-mist-500">{t('tabs.alreadyOpen')}</span>}
+        {props.done ? (
+          <span className="text-[11px] text-mist-500">{t('tabs.alreadyOpen')}</span>
+        ) : (
+          props.hint && (
+            <span className="text-[11px] text-mist-500" data-testid={`${props.testId}-hint`}>
+              {props.hint}
+            </span>
+          )
+        )}
       </button>
     )
   }
@@ -57,6 +65,8 @@ export function TabMenuItems({ noteId, onDone }: { noteId: string; onDone: () =>
         icon: SquarePlus,
         label: tab ? t('tabs.goToTab') : t('tabs.openInNewTab'),
         done: front,
+        // The way without the menu: Alt-click (⌥-click), besides the middle button and Ctrl or ⌘ (third review).
+        hint: isMac() ? t('tabs.altClickMac') : t('tabs.altClick'),
         run: () => {
           openNoteInNewTab(noteId, folder)
           if (tab) pulseTab(tab.key)

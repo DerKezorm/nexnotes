@@ -5,12 +5,13 @@
  * (`?kind=pdf&sort=largest`), so "Große Anhänge ansehen" of a full storage (AC-11) leads straight to the largest.
  */
 import { File as FileIcon, FileText, Image as ImageIcon, Mic, Paperclip, PenLine, ScanText, Video, type LucideIcon } from 'lucide-react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 
 import { bytes } from '../lib/format'
 import { pageTitle } from '../lib/title'
+import { altClickOpens } from '../tabs/links'
 import { attachmentsApi, GALLERY_KINDS, thumbUrl, type Gallery, type GalleryItem, type GalleryKind, type GallerySort } from './api'
 
 /** Entries read at a time; the next ones when the end of the list comes into view. */
@@ -141,7 +142,14 @@ export function GalleryPage() {
         <ul className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3 md:grid-cols-[repeat(auto-fill,minmax(190px,1fr))]" data-testid="gallery-items">
           {found.items.map((item) => (
             <li key={item.id}>
-              <Tile item={item} onOpen={() => navigate(`/notes/${encodeURIComponent(item.note.id)}?attachment=${encodeURIComponent(item.id)}`)} />
+              <Tile
+                item={item}
+                onOpen={(event) => {
+                  const path = `/notes/${encodeURIComponent(item.note.id)}?attachment=${encodeURIComponent(item.id)}`
+                  // Alt-click (⌥-click): the note in a new tab while one is open (NOTES-8 AC-3).
+                  if (!altClickOpens(event, item.note.id, path)) navigate(path)
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -157,7 +165,7 @@ export function GalleryPage() {
   )
 }
 
-function Tile({ item, onOpen }: { item: GalleryItem; onOpen: () => void }) {
+function Tile({ item, onOpen }: { item: GalleryItem; onOpen: (event: ReactMouseEvent<HTMLButtonElement>) => void }) {
   const { t, i18n } = useTranslation()
   const kind = (GALLERY_KINDS as string[]).includes(item.kind) ? (item.kind as GalleryKind) : 'file'
   const Icon = ICONS[kind]

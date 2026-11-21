@@ -31,13 +31,13 @@ import {
   Undo2,
   type LucideIcon,
 } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Menu } from '../components/Menu'
 import { HIGHLIGHT_COLORS } from './extensions'
 import { TableMenuItems } from './TableControls'
-import { useOutlineShown } from './outlineData'
+import { OutlineToggleContext, useOutlineShown } from './outlineData'
 import { groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './toolbarRows'
 import { TEXT_WIDTHS, useTextWidth } from './textWidth'
 
@@ -110,7 +110,11 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
     return () => observer.disconnect()
   }, [compact])
   const [textWidth, setTextWidth] = useTextWidth()
-  const [outline, setOutline] = useOutlineShown()
+  // The note's side says what the outline button does (a column or a panel); alone (no note around it) the setting.
+  const outlineToggle = useContext(OutlineToggleContext)
+  const [outlineSetting, setOutlineSetting] = useOutlineShown()
+  const outlineShown = outlineToggle ? outlineToggle.shown : outlineSetting
+  const flipOutline = outlineToggle ? outlineToggle.toggle : () => setOutlineSetting(!outlineSetting)
   const chain = () => editor.chain().focus()
   const toolButton = (key: string) => bar.current?.querySelector<HTMLElement>(`[data-testid="tool-${key}"]`) ?? null
 
@@ -177,8 +181,9 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
   else
     buttons.push(
       { key: 'width', label: t('editor.tools.width'), icon: MoveHorizontal, menu: true, active: textWidth !== 'narrow', run: () => setMenu(menu === 'width' ? null : 'width') },
-      // The outline beside the text (AC-15): it shows only where there is room, the button says whether it may.
-      { key: 'outline', label: t('editor.tools.outline'), icon: PanelRight, active: outline, run: () => setOutline(!outline) },
+      // The outline (AC-15): beside the text where there is room, otherwise a panel over its right edge. Pressed means
+      // it is on the screen (third review: pressed with nothing to see read as a dead button).
+      { key: 'outline', label: t('editor.tools.outline'), icon: PanelRight, active: outlineShown, run: flipOutline },
     )
 
   const move = (event: ReactKeyboardEvent<HTMLDivElement>) => {
@@ -273,6 +278,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
           type="button"
           data-tool
           data-testid={`tool-${button.key}`}
+          data-outline-toggle={button.key === 'outline' ? outlineToggle?.id : undefined}
           tabIndex={focusAt === position ? 0 : -1}
           onFocus={() => setFocusAt(position)}
           onMouseDown={(event) => event.preventDefault()}
@@ -380,6 +386,7 @@ export function Toolbar({ editor, onLink, compact = false }: { editor: Editor; o
                 role="menuitem"
                 className="nn-menu-item"
                 data-testid={`more-${button.key}`}
+                data-outline-toggle={button.key === 'outline' ? outlineToggle?.id : undefined}
                 disabled={button.disabled || (!state.editable && !['undo', 'redo', 'width', 'outline'].includes(button.key))}
                 onClick={() => {
                   setMoreOpen(false)

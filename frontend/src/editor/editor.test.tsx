@@ -19,7 +19,8 @@ import { Toolbar } from './Toolbar'
 import { GROUP_LINE, groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './toolbarRows'
 import { forgetPrefs, prefKey } from '../lib/devicePref'
 import { Outline } from './Outline'
-import { headingsOf, OUTLINE_FROM } from './outlineData'
+import { SelectionBar } from './SelectionBar'
+import { headingsOf, OUTLINE_COLUMN_FROM, outlineFits } from './outlineData'
 import { parseTextWidth, TEXT_MAX } from './textWidth'
 
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
@@ -101,7 +102,7 @@ describe('NOTES-3 AC-3 the toolbar, shortcuts and Markdown typing', () => {
       root.render(<Toolbar editor={editor} onLink={() => undefined} />)
     })
     const labels = Array.from(box.querySelectorAll('[data-tool]')).map((tool) => tool.getAttribute('aria-label') ?? tool.id)
-    expect(labels).toEqual(['', 'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Bulleted list', 'Numbered list', 'Checklist', 'Table', 'Link', 'Quote', 'Code', 'Indent', 'Outdent', 'Divider', 'Undo', 'Redo', 'Text width', 'Outline'].map((label, index) => (index === 0 ? 'nn-text-style' : label)))
+    expect(labels).toEqual(['', 'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Bulleted list', 'Numbered list', 'Checklist', 'Table', 'Link', 'Quote', 'Code', 'Indent', 'Outdent', 'Divider', 'Undo', 'Redo', 'Text width', 'Show or hide the outline'].map((label, index) => (index === 0 ? 'nn-text-style' : label)))
     const options = Array.from(box.querySelectorAll('option')).map((option) => option.textContent)
     expect(options).toEqual(['Heading', 'Subheading', 'Minor heading', 'Body text'])
     // Every formatting tool names its shortcut; the two of the screen (width, outline) have none.
@@ -671,7 +672,154 @@ describe('NOTES-3 AC-14 AC-15 room on a wide screen', () => {
     await act(async () => button.click())
     expect(button.getAttribute('aria-pressed')).toBe('false')
     expect(localStorage.getItem(prefKey('outline', 0))).toBe('off')
-    expect(OUTLINE_FROM).toBe(1800)
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-15 the outline stands beside the text as soon as the sheet at 560 px and the column fit (third review)', () => {
+    // The sheet at its narrowest (560), the column (240), the gap (24) and the side's padding (2 × 24).
+    expect(OUTLINE_COLUMN_FROM).toBe(872)
+    // The reviewed window: about 2000 px, the sidebar 390 and the list 445 leave a side of about 1170 px.
+    expect(outlineFits(1170)).toBe(true)
+    expect(outlineFits(872)).toBe(true)
+    // Two notes side by side in that window (1170 less the separator, halved): a panel instead.
+    expect(outlineFits(Math.floor((1170 - 12) / 2))).toBe(false)
+    expect(outlineFits(871)).toBe(false)
+  })
+})
+
+describe('NOTES-3 AC-20 the bar at selected text', () => {
+  /** The bar is on the page only while it shows (the menu's own element is taken out when it hides). */
+  const bar = () => document.querySelector<HTMLElement>('[data-testid="selection-bar"]')
+  const tool = (key: string) => bar()!.querySelector<HTMLButtonElement>(`[data-testid="selection-tool-${key}"]`)!
+  /** Past the bar's short wait after a change of the selection. */
+  const later = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 200))))
+
+  async function withBar(content = '<p>word and more</p>'): Promise<{ editor: Editor; root: Root }> {
+    const editor = makeEditor()
+    editor.commands.setContent(content)
+    const box = document.createElement('div')
+    document.body.appendChild(box)
+    const root = createRoot(box)
+    await act(async () => root.render(<SelectionBar editor={editor} onLink={() => undefined} />))
+    return { editor, root }
+  }
+
+  async function select(editor: Editor, from: number, to: number): Promise<void> {
+    await act(async () => void editor.chain().focus().setTextSelection({ from, to }).run())
+    await later()
+  }
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('NOTES-3 AC-20 the bar shows at selected text with the formats of the toolbar, never at an empty selection', async () => {
+    const { editor, root } = await withBar()
+    await select(editor, 1, 5)
+    expect(bar()).not.toBeNull()
+    expect(bar()!.getAttribute('role')).toBe('toolbar')
+    expect([...bar()!.querySelectorAll('[data-tool]')].map((one) => one.getAttribute('aria-label'))).toEqual([
+      'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Highlighter colours', 'Link', 'Code', 'Text style', 'Clear formatting',
+    ])
+    // Next to the text, inside the editor's own box (one selection, one bar: the own one).
+    expect(editor.view.dom.parentElement!.contains(bar())).toBe(true)
+    await select(editor, 3, 3)
+    expect(bar()).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-20 no bar for someone who only reads, in a code block, or on a touch screen', async () => {
+    const { editor, root } = await withBar('<p>word and more</p><pre><code>let x = 1</code></pre>')
+    // A reader's text takes no focus in the browser; here it says it has it, so only the reading itself keeps the bar
+    // away.
+    const hasFocus = editor.view.hasFocus.bind(editor.view)
+    editor.view.hasFocus = () => true
+    await act(async () => void editor.setEditable(false))
+    await select(editor, 1, 5)
+    expect(bar()).toBeNull()
+    editor.view.hasFocus = hasFocus
+    await act(async () => void editor.setEditable(true))
+    const code = editor.state.doc.child(0).nodeSize + 1
+    await select(editor, code, code + 3)
+    expect(bar()).toBeNull()
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(any-hover: none)', media: query, addEventListener: () => undefined, removeEventListener: () => undefined }))
+    await select(editor, 1, 5)
+    expect(bar()).toBeNull()
+    vi.unstubAllGlobals()
+    await select(editor, 1, 6)
+    expect(bar()).not.toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-20 a click makes the selection bold and keeps it; each format is a step of its own', async () => {
+    const { editor, root } = await withBar()
+    await select(editor, 1, 5)
+    const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+    tool('bold').dispatchEvent(press)
+    // The click does not take the focus (nor the selection) from the text.
+    expect(press.defaultPrevented).toBe(true)
+    await act(async () => tool('bold').click())
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(5)
+    expect(editor.getHTML()).toContain('<strong>word</strong>')
+    expect(tool('bold').getAttribute('aria-pressed')).toBe('true')
+    expect(bar()).not.toBeNull()
+    // The highlighter gives honey at once; its arrow offers the colours.
+    await act(async () => tool('highlight').click())
+    expect(editor.getHTML()).toContain('data-color="honey"')
+    await act(async () => tool('highlight-colors').click())
+    await act(async () => bar()!.querySelector<HTMLButtonElement>('[data-testid="selection-highlight-green"]')!.click())
+    expect(editor.getHTML()).toContain('data-color="green"')
+    // The text style as a small menu; clearing takes every format off again.
+    await act(async () => tool('style').click())
+    await act(async () => bar()!.querySelector<HTMLButtonElement>('[data-testid="selection-style-h2"]')!.click())
+    expect(editor.isActive('heading', { level: 2 })).toBe(true)
+    await act(async () => tool('clear').click())
+    expect(editor.getHTML()).not.toContain('<strong>')
+    expect(editor.getHTML()).not.toContain('<mark')
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-20 Escape sends the bar away until the next selection; typing too', async () => {
+    const { editor, root } = await withBar()
+    await select(editor, 1, 5)
+    expect(bar()).not.toBeNull()
+    await act(async () => void editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+    await later()
+    expect(bar()).toBeNull()
+    // The same selection, the focus away and back in the text: still away.
+    await act(async () => void editor.commands.blur())
+    await later()
+    await act(async () => void editor.commands.focus())
+    await later()
+    expect(bar()).toBeNull()
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(5)
+    // A new selection brings it back; typing over the selection sends it away.
+    await select(editor, 1, 4)
+    expect(bar()).not.toBeNull()
+    await act(async () => void editor.commands.insertContent('W'))
+    await later()
+    expect(bar()).toBeNull()
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-20 Alt+F10 goes into the bar, the arrows move inside, Escape goes back to the text with the selection', async () => {
+    const { editor, root } = await withBar()
+    await select(editor, 1, 5)
+    await act(async () => void editor.view.dom.dispatchEvent(new KeyboardEvent('keydown', { key: 'F10', altKey: true, bubbles: true, cancelable: true })))
+    expect(document.activeElement).toBe(tool('bold'))
+    await act(async () => void tool('bold').dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true })))
+    expect(document.activeElement).toBe(tool('italic'))
+    // Still there while the focus is in it.
+    await later()
+    expect(bar()).not.toBeNull()
+    await act(async () => void tool('italic').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
+    await later()
+    expect(bar()).toBeNull()
+    expect(editor.view.hasFocus()).toBe(true)
+    expect(editor.state.selection.from).toBe(1)
+    expect(editor.state.selection.to).toBe(5)
     await act(async () => root.unmount())
   })
 })

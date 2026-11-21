@@ -376,11 +376,13 @@
     "titleRequired": "The note cannot be closed without a title.",
     "tools": {
       "bold": "Bold",
+      "clear": "Clear formatting",
       "bullet": "Bulleted list",
       "closeKeyboard": "Close keyboard",
       "code": "Code",
       "divider": "Divider",
       "highlight": "Highlighter",
+      "highlightColors": "Highlighter colours",
       "indent": "Indent",
       "italic": "Italic",
       "label": "Formatting",
@@ -389,6 +391,7 @@
       "outdent": "Outdent",
       "quote": "Quote",
       "redo": "Redo",
+      "selection": "Format the selection",
       "strike": "Strikethrough",
       "style": "Text style",
       "table": "Table",
@@ -396,7 +399,7 @@
       "underline": "Underline",
       "undo": "Undo",
       "width": "Text width",
-      "outline": "Outline",
+      "outline": "Show or hide the outline",
       "more": "More tools"
     },
     "style": {
@@ -415,7 +418,7 @@
     "outline": {
       "label": "Outline and info",
       "headings": "Outline",
-      "none": "No headings yet.",
+      "none": "No headings yet. Type # or choose the text style “Heading”, and the outline builds up here.",
       "empty": "Heading without text",
       "tags": "Tags",
       "info": "Info",
@@ -1420,6 +1423,8 @@
     "left": "left",
     "newTab": "New note in a new tab",
     "openBeside": "Open beside",
+    "altClick": "Alt+click",
+    "altClickMac": "⌥-click",
     "openInNewTab": "Open in a new tab",
     "openTrash": "Open the trash",
     "resize": "Change the width",
