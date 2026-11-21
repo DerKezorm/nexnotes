@@ -559,7 +559,11 @@
     "note_busy": "The note is being locked or unlocked right now.",
     "lock_incomplete": "Not everything arrived. The note is unchanged; try again.",
     "lock_not_started": "Locking was interrupted. Try again.",
-    "attachment_id_taken": "This attachment exists already."
+    "attachment_id_taken": "This attachment exists already.",
+    "notify_not_shared": "Notifications are only for shared notes and folders.",
+    "browser_only": "This only works in a browser.",
+    "webpush_endpoint": "The browser sent no valid address for notifications.",
+    "webpush_keys": "The browser sent no valid keys for notifications."
   },
   "folders": {
     "section": "Folders",
@@ -586,6 +590,7 @@
       "style": "Symbol and color …",
       "move": "Move …",
       "share": "Share …",
+      "notify": "Notifications …",
       "export": "Export",
       "exportLater": "comes with export",
       "trash": "Move to trash"
@@ -1731,5 +1736,32 @@
       "locked": "Encrypted attachment",
       "failed": "Could not be decrypted"
     }
+  },
+  "notify": {
+    "bell": "Notifications",
+    "switch": "Notifications",
+    "titleNote": "Notifications for this note",
+    "titleFolder": "Notifications for this folder",
+    "dialogFolder": "Notifications for “{{name}}”",
+    "folderButton": "Notifications",
+    "when": "when others change something",
+    "folderBelow": "Applies to every note and subfolder in it.",
+    "viaOn": "On through the folder “{{name}}”",
+    "viaOff": "Off through the folder “{{name}}”",
+    "bundled": "Bundled: a notification comes once nobody has written for two minutes. Your own changes are not reported.",
+    "devices": "On your devices",
+    "thisBrowser": "This browser",
+    "browserOn": "{{browser}} on {{system}}",
+    "otherBrowser": "Other browser",
+    "on": "on",
+    "allow": "Allow",
+    "stop": "Turn off",
+    "denied": "not allowed",
+    "deniedHelp": "Your browser blocks notifications from nexnotes. Allow them in the site settings (usually through the icon left of the address, under “Notifications”), then choose “Allow” here.",
+    "unsupported": "not possible here",
+    "unsupportedHelp": "This browser cannot show notifications from websites. On an iPhone they work in the iOS app or with nexnotes added to the Home Screen as a web app.",
+    "preview": "How it arrives",
+    "notSharedNote": "Notifications are for shared notes: they tell you when others change something.",
+    "notSharedFolder": "Notifications are for shared folders: share the folder first, then they tell you when others change something in it."
   }
 }

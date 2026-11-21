@@ -1,0 +1,4 @@
+/* The bell pressed (drawing "N14-Mitteilungen"): a wash of the accent behind it. */
+.nn-bell-on { background: color-mix(in srgb, var(--color-accent-500) 14%, transparent); }
+/* The line a notification opened the note at (AC-5), marked for a moment. */
+.nn-change-found { outline: 3px solid var(--color-accent-500); outline-offset: 2px; border-radius: 4px; transition: outline-color 400ms; }

@@ -16,6 +16,7 @@ import { notesChanged } from '../notes/api'
 import { useListPadding, useListTitle } from '../notes/listPlace'
 import { noteHref } from '../notes/newNote'
 import { NoteList } from '../notes/NoteList'
+import { FolderBell } from '../notify/NotifyBell'
 import { sharesApi, sharesChanged, type SharedFolder, type ShareNotice, type WithMeItem } from './api'
 import { noticeText, useWithMe } from './withMe'
 
@@ -151,6 +152,9 @@ export function SharedFolderPage() {
         <h1 className="min-w-0 truncate text-2xl font-bold">{folder.name}</h1>
         <span className="text-[13px] text-mist-500">
           {t('shares.page.from', { name: folder.owner.name })} · {t(`shares.level.${folder.level}`)}
+        </span>
+        <span className="ml-auto">
+          <FolderBell id={folder.id} name={folder.name} />
         </span>
       </div>
       {folder.folders.length > 0 && (

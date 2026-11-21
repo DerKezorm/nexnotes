@@ -103,6 +103,9 @@ class Settings(BaseSettings):
     #: Addresses or networks the operator's settings may be changed from, comma separated (e.g. 192.168.0.0/16).
     #: Empty: from anywhere. Behind a reverse proxy only with ``trusted_proxies`` set.
     operator_networks: str = ""
+    #: The push relay the iOS app's notifications go through (NOTES-14 AC-6): it sees only what is encrypted for the
+    #: device. Empty: nothing goes to iPhones and iPads.
+    push_relay: str = "https://push.nexapps.dev"
 
     @field_validator("data_dir", "frontend_dist", "locales_dir")
     @classmethod
@@ -157,6 +160,13 @@ class Settings(BaseSettings):
     def _update_url(cls, value: str) -> str:
         if value.strip() and not _web_address(value.strip(), path=True):
             raise _not_allowed("empty, or an address with http:// or https://")
+        return value
+
+    @field_validator("push_relay")
+    @classmethod
+    def _push_relay(cls, value: str) -> str:
+        if value.strip() and not _web_address(value.strip(), path=True):
+            raise _not_allowed("empty, or an address with https:// such as https://push.nexapps.dev")
         return value
 
     @field_validator("cookie_suffix")

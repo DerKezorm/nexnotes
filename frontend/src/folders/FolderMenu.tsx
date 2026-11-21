@@ -1,17 +1,18 @@
 /**
- * The menu of a folder (NOTES-4 AC-12): new subfolder, rename, symbol and color, move, share, export, trash. Sharing
- * opens the dialog of NOTES-13, export the one of NOTES-17 with this folder.
+ * The menu of a folder (NOTES-4 AC-12): new subfolder, rename, symbol and color, move, share, notifications, export,
+ * trash. Sharing opens the dialog of NOTES-13, notifications the switch of NOTES-14, export the one of NOTES-17 with
+ * this folder.
  *
  * Over everything (a portal on `body`, the sidebar would cut it off), next to the button or row that opened it. Arrow
  * keys go through the entries, Escape and a click outside close it, focus returns where it came from (EC-11).
  */
-import { FolderInput, FolderPlus, Palette, Pencil, Share2, Trash2, Upload, type LucideIcon } from 'lucide-react'
+import { Bell, FolderInput, FolderPlus, Palette, Pencil, Share2, Trash2, Upload, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Menu } from '../components/Menu'
 import type { Folder } from './api'
 
-export type MenuAction = 'newSubfolder' | 'rename' | 'style' | 'move' | 'share' | 'export' | 'trash'
+export type MenuAction = 'newSubfolder' | 'rename' | 'style' | 'move' | 'share' | 'notify' | 'export' | 'trash'
 
 type Entry = { key: MenuAction; icon: LucideIcon; later?: string; danger?: boolean }
 
@@ -21,6 +22,7 @@ const ENTRIES: Entry[] = [
   { key: 'style', icon: Palette },
   { key: 'move', icon: FolderInput },
   { key: 'share', icon: Share2 },
+  { key: 'notify', icon: Bell },
   { key: 'export', icon: Upload },
   { key: 'trash', icon: Trash2, danger: true },
 ]

@@ -19,6 +19,8 @@ import './history'
 import './export'
 // Locked notes: their view in the editor's place, the menu entries, the part of Settings, Connections.
 import './vault'
+// Notifications (NOTES-14): the bell of a shared note, the service worker, Web Push.
+import './notify'
 // The trash closes the sidebar's places (drawing "Seitenleiste"): imported after every feature with an entry there.
 import './trash'
 import './i18n'

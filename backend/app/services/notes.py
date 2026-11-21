@@ -571,6 +571,10 @@ def title_ok(db: Session, account: Account, note_id: str) -> Note:
 
 # --- Deleting -----------------------------------------------------------------------------------------------------
 
+#: Called once a note went to the trash, with its id and the account that put it there (the notifications, NOTES-14
+#: EC-7). A hook that fails is logged and never costs the deleting.
+TRASHED_HOOKS: list[Callable[[str, int], None]] = []
+
 
 async def delete_note(account: Account, note_id: str) -> None:
     """Into the trash of its owner (NOTES-15 brings the trash page): gone from every list, everyone who has it open is
@@ -583,6 +587,11 @@ async def delete_note(account: Account, note_id: str) -> None:
         note.deleted_batch = str(uuid.uuid4())
         note.deleted_by_id = None if note.owner_id == account.id else account.id
         db.commit()
+    for hook in TRASHED_HOOKS:
+        try:
+            await asyncio.to_thread(hook, note_id, account.id)
+        except Exception:
+            logger.exception("A hook after deleting a note failed note=%s", note_id)
     await rooms().close_note(note_id)
     logger.info("Note deleted note=%s", note_id)
 

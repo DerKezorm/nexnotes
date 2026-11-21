@@ -559,7 +559,11 @@
     "note_busy": "Die Notiz wird gerade gesperrt oder entsperrt.",
     "lock_incomplete": "Es kam nicht alles an. Die Notiz ist unverändert; versuch es noch einmal.",
     "lock_not_started": "Das Sperren wurde unterbrochen. Versuch es noch einmal.",
-    "attachment_id_taken": "Diesen Anhang gibt es schon."
+    "attachment_id_taken": "Diesen Anhang gibt es schon.",
+    "notify_not_shared": "Mitteilungen gibt es nur für geteilte Notizen und Ordner.",
+    "browser_only": "Das geht nur im Browser.",
+    "webpush_endpoint": "Der Browser hat keine gültige Adresse für Mitteilungen geliefert.",
+    "webpush_keys": "Der Browser hat keine gültigen Schlüssel für Mitteilungen geliefert."
   },
   "folders": {
     "section": "Ordner",
@@ -586,6 +590,7 @@
       "style": "Symbol und Farbe …",
       "move": "Verschieben …",
       "share": "Teilen …",
+      "notify": "Mitteilungen …",
       "export": "Exportieren",
       "exportLater": "kommt mit dem Export",
       "trash": "In den Papierkorb"
@@ -1731,5 +1736,32 @@
       "locked": "Verschlüsselter Anhang",
       "failed": "Ließ sich nicht entschlüsseln"
     }
+  },
+  "notify": {
+    "bell": "Mitteilungen",
+    "switch": "Mitteilungen",
+    "titleNote": "Mitteilungen für diese Notiz",
+    "titleFolder": "Mitteilungen für diesen Ordner",
+    "dialogFolder": "Mitteilungen für „{{name}}“",
+    "folderButton": "Mitteilungen",
+    "when": "wenn andere etwas ändern",
+    "folderBelow": "Gilt für alle Notizen und Unterordner darin.",
+    "viaOn": "An über den Ordner „{{name}}“",
+    "viaOff": "Aus über den Ordner „{{name}}“",
+    "bundled": "Gebündelt: Eine Mitteilung kommt, wenn zwei Minuten lang niemand mehr schreibt. Deine eigenen Änderungen melden sich nicht.",
+    "devices": "Auf deinen Geräten",
+    "thisBrowser": "Dieser Browser",
+    "browserOn": "{{browser}} auf {{system}}",
+    "otherBrowser": "Anderer Browser",
+    "on": "an",
+    "allow": "Erlauben",
+    "stop": "Ausschalten",
+    "denied": "nicht erlaubt",
+    "deniedHelp": "Dein Browser blockiert Mitteilungen von nexnotes. Gib sie in den Einstellungen der Website frei (meist über das Symbol links neben der Adresse, unter „Benachrichtigungen“) und wähle danach hier „Erlauben“.",
+    "unsupported": "geht hier nicht",
+    "unsupportedHelp": "Dieser Browser kann keine Mitteilungen von Websites zeigen. Auf dem iPhone geht es in der iOS-App oder in nexnotes als Web-App auf dem Home-Bildschirm.",
+    "preview": "So kommt sie an",
+    "notSharedNote": "Mitteilungen gibt es für geteilte Notizen: Sie melden, wenn andere etwas ändern.",
+    "notSharedFolder": "Mitteilungen gibt es für geteilte Ordner: Teile den Ordner zuerst, dann melden sie, wenn andere darin etwas ändern."
   }
 }

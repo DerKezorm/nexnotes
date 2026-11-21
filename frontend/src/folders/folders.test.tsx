@@ -269,13 +269,13 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     expect(indent(14)).toBeLessThan(125)
   })
 
-  it('NOTES-4 AC-12 NOTES-13 AC-1 the menu offers all seven entries; share opens the share dialog, export is there (NOTES-17)', async () => {
+  it('NOTES-4 AC-12 NOTES-13 AC-1 NOTES-14 AC-1 the menu offers all eight entries; share opens the share dialog, notifications and export are there (NOTES-17)', async () => {
     await render()
     act(() => void row('Haushalt').dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })))
     const menu = document.querySelector('[role="menu"]')!
     const entries = [...menu.querySelectorAll('[role="menuitem"]')]
     expect(entries.map((entry) => entry.firstElementChild!.textContent)).toEqual([
-      'New subfolder', 'Rename', 'Symbol and color …', 'Move …', 'Share …', 'Export', 'Move to trash',
+      'New subfolder', 'Rename', 'Symbol and color …', 'Move …', 'Share …', 'Notifications …', 'Export', 'Move to trash',
     ])
     expect(entries.filter((entry) => entry.getAttribute('aria-disabled') === 'true')).toEqual([])
     click(entries[4])
