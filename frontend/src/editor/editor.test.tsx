@@ -228,6 +228,24 @@ describe('NOTES-3 AC-3 the toolbar, shortcuts and Markdown typing', () => {
 })
 
 describe('NOTES-3 AC-4 checklists', () => {
+  it('NOTES-3 EC-11 a checkbox is read out in the language of the page, with its words', async () => {
+    const html = '<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Milk</p></li><li data-type="taskItem" data-checked="true"><p></p></li></ul>'
+    try {
+      await i18n.changeLanguage('de')
+      const german = makeEditor()
+      german.commands.setContent(html)
+      const labels = Array.from(german.view.dom.querySelectorAll('li input[type="checkbox"]')).map((box) => box.getAttribute('aria-label'))
+      expect(labels).toEqual(['Punkt abhaken: Milk', 'Punkt abhaken: leerer Punkt'])
+      await i18n.changeLanguage('en')
+      const english = makeEditor()
+      english.commands.setContent(html)
+      expect(english.view.dom.querySelector('li input[type="checkbox"]')?.getAttribute('aria-label')).toBe('Tick off: Milk')
+      expect(english.view.dom.innerHTML).not.toContain('Task item checkbox')
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
   it('NOTES-3 AC-4 a ticked item is ticked and struck through, "x of y" is counted, done items can go to the bottom', () => {
     const editor = makeEditor()
     editor.commands.setContent('<ul data-type="taskList"><li data-type="taskItem" data-checked="false"><p>Milk</p></li><li data-type="taskItem" data-checked="false"><p>Bread</p></li><li data-type="taskItem" data-checked="false"><p>Eggs</p></li></ul>')
