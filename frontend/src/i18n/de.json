@@ -340,6 +340,7 @@
     "network": "Der Server ist nicht erreichbar.",
     "no_offer": "Es gibt keine Adresse zum Übernehmen.",
     "not_found": "Nicht gefunden, oder für dich nicht offen.",
+    "note_color_unknown": "Diese Farbe gibt es nicht.",
     "note_id_taken": "Diese Notiz gibt es schon unter einem anderen Konto.",
     "oidc_account": "Dieses Konto meldet sich über den Anbieter an.",
     "operator_network": "Die Einstellungen des Betreibers sind nur aus dem Heimnetz erreichbar.",

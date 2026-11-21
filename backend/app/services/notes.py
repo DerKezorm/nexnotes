@@ -119,6 +119,15 @@ def _take_title(note: Note, title: str) -> None:
 
 # --- The store of the live room -----------------------------------------------------------------------------------
 
+#: Called with the session and the note whenever its title and text were written anew from the document (``summary``,
+#: ``fold``), before the commit: what the lists show beside them follows (NOTES-6 counts the checklists here).
+SUMMARY_HOOKS: list[Callable[[Session, Note], None]] = []
+
+
+def _summarized(db: Session, note: Note) -> None:
+    for hook in SUMMARY_HOOKS:
+        hook(db, note)
+
 
 @dataclass(frozen=True)
 class LiveSession:
@@ -173,6 +182,7 @@ class SqlNoteStore:
             _take_title(note, folded.title)
             if last is not None:
                 db.execute(delete(NoteUpdate).where(NoteUpdate.note_id == note_id, NoteUpdate.id <= last))
+            _summarized(db, note)
             db.commit()
 
     async def summary(self, note_id: str, title: str, text: str) -> None:
@@ -185,6 +195,7 @@ class SqlNoteStore:
                 return
             note.text = text
             _take_title(note, title)
+            _summarized(db, note)
             db.commit()
 
 

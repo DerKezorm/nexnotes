@@ -340,6 +340,7 @@
     "network": "The server cannot be reached.",
     "no_offer": "There is no address to take.",
     "not_found": "Not found, or not open to you.",
+    "note_color_unknown": "This color does not exist.",
     "note_id_taken": "A note with this id belongs to another account.",
     "oidc_account": "This account signs in through the provider.",
     "operator_network": "The operator's settings are open only from the home network.",

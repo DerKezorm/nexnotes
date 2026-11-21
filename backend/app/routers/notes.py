@@ -73,6 +73,10 @@ def item_out(note: Note) -> dict[str, Any]:
         "preview": notes.preview(note.text),
         "created_at": _iso(note.created_at),
         "updated_at": _iso(note.updated_at),
+        # NOTES-6: pinned, its color, the progress of its checklists.
+        "pinned": note.pinned_at is not None,
+        "color": note.color or "",
+        "tasks": {"done": note.tasks_done or 0, "total": note.tasks_total} if note.tasks_total else None,
     }
 
 
