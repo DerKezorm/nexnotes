@@ -35,6 +35,7 @@ from .routers import ocr as ocr_router
 from .routers import search as search_router
 from .routers import settings as settings_router
 from .routers import shares as shares_router
+from .routers import smart_folders as smart_folders_router
 from .routers import tags as tags_router
 from .routers import totp as totp_router
 from .routers import vault as vault_router
@@ -52,7 +53,8 @@ ROUTERS = [
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.
 #: The vault comes early: its start puts the locked notes into the hooks the others read at their own start.
 FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, search_router, history, trash,
-                         notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router]
+                         notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
+                         smart_folders_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:
