@@ -2036,9 +2036,9 @@
   },
   "deck": {
     "section": {
-      "title": "Schlüssel für nexdeck",
-      "text": "Mit einem Schlüssel zeigt eine Karte in nexdeck deine angehefteten Notizen oder eine Checkliste und hakt auf Wunsch Punkte ab. Gesperrte Notizen sieht sie nie.",
-      "address": "Adresse für nexdeck",
+      "title": "API-Token",
+      "text": "Ein API-Token gibt einem Programm Lesezugriff auf deine angehefteten Notizen und einzelne Checklisten, auf Wunsch auch zum Abhaken. Zum Beispiel für die nexdeck-Karte. Gesperrte Notizen sieht es nie.",
+      "address": "Adresse für Programme",
       "none": "Noch kein Schlüssel.",
       "new": "Neuer Schlüssel",
       "made": "„{{name}}“ angelegt · nur jetzt sichtbar",
@@ -2054,7 +2054,7 @@
       "write": "zeigen und abhaken"
     },
     "dialog": {
-      "title": "Neuer Schlüssel für nexdeck",
+      "title": "Neuer API-Token",
       "name": "Name",
       "namePlaceholder": "z. B. Tablet in der Küche",
       "right": "Recht",

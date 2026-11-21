@@ -2036,9 +2036,9 @@
   },
   "deck": {
     "section": {
-      "title": "Keys for nexdeck",
-      "text": "With a key, a card in nexdeck shows your pinned notes or a checklist and, if you want, ticks items off. It never sees locked notes.",
-      "address": "Address for nexdeck",
+      "title": "API tokens",
+      "text": "An API token lets a program read your pinned notes and single checklists and, if you want, tick items off. For example the nexdeck card. It never sees locked notes.",
+      "address": "Address for programs",
       "none": "No key yet.",
       "new": "New key",
       "made": "“{{name}}” made · visible only now",
@@ -2054,7 +2054,7 @@
       "write": "show and tick off"
     },
     "dialog": {
-      "title": "New key for nexdeck",
+      "title": "New API token",
       "name": "Name",
       "namePlaceholder": "e.g. tablet in the kitchen",
       "right": "Right",

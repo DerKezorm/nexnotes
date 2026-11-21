@@ -1,5 +1,5 @@
 /**
- * Settings, Connections: "Schlüssel für nexdeck" (NOTES-21 AC-1). A key gets a name and "show" or "show and tick off",
+ * Settings, Connections: "API-Token" (for programs such as the nexdeck card) (NOTES-21 AC-1). A key gets a name and "show" or "show and tick off",
  * is shown exactly once with "Copy", and the list names right and last use; revoking stops it at once (EC-3).
  */
 import { LayoutDashboard } from 'lucide-react'
