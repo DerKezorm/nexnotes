@@ -163,6 +163,9 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which i
   await page.keyboard.press('Enter')
   await page.keyboard.type('Dentist Tuesday 15:30 confirm, bring the booklet')
   await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  // Typed at once after Enter: every key in the text, none in the title.
+  await expect(page.getByTestId('note-title')).toHaveValue('')
+  await expect(body(page)).toHaveText('Dentist Tuesday 15:30 confirm, bring the booklet')
   const id = page.url().split('/notes/')[1].split('?')[0]
   await page.getByRole('link', { name: 'All notes' }).click()
   const dialog = page.getByTestId('leave-dialog')
@@ -171,13 +174,49 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion, which i
   await page.getByTestId('leave-take').click()
   await expect(page).not.toHaveURL(/\/notes\//)
   await expect.poll(async () => (await head(page, id)).title_check).toBe(true)
-  const row = page.getByTestId('note-row').filter({ hasText: 'Dentist Tuesday 15:30 confirm' })
+  // This very note's row (a repeated run leaves notes of the same words behind).
+  const row = page.locator(`[data-testid="note-row"][href="/notes/${id}"]`)
+  await expect(row).toContainText('Dentist Tuesday 15:30 confirm')
   await expect(row).toContainText('Check title')
   // "Title OK" takes the mark away (AC-10).
   await row.click()
   await page.getByTestId('title-ok').click()
   await expect(page.getByTestId('title-check')).toHaveCount(0)
   expect((await head(page, id)).title_check).toBe(false)
+})
+
+test("NOTES-3 AC-9 the browser's back button asks too and goes back only with the suggestion", async ({ page }) => {
+  await page.goto('/')
+  await page.getByTestId('new-note').click()
+  await expect(page.getByTestId('note-title')).toBeFocused()
+  await page.keyboard.press('Enter')
+  await page.keyboard.type('Pick up the parcel at the post office')
+  await expect(page.getByTestId('note-saved')).toHaveText('saved')
+  const here = page.url()
+  const id = here.split('/notes/')[1].split('?')[0]
+  const dialog = page.getByTestId('leave-dialog')
+  await page.goBack()
+  await expect(dialog).toBeVisible()
+  await expect(page).toHaveURL(here)
+  // "Enter a title": the note stays, the cursor in the title.
+  await page.getByTestId('leave-type').click()
+  await expect(dialog).toHaveCount(0)
+  await expect(page).toHaveURL(here)
+  await expect(page.getByTestId('note-title')).toBeFocused()
+  // Back once more: the suggestion, and the step back is made.
+  await page.goBack()
+  await expect(dialog).toBeVisible()
+  await expect(page.getByTestId('leave-suggestion')).toHaveText('Pick up the parcel at the post office')
+  await page.getByTestId('leave-take').click()
+  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect.poll(async () => (await head(page, id)).title).toBe('Pick up the parcel at the post office')
+  // Forward again: the note has its title now, nothing asks.
+  await page.goForward()
+  await expect(page).toHaveURL(here)
+  await expect(page.getByTestId('note-title')).toHaveValue('Pick up the parcel at the post office')
+  await page.goBack()
+  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect(dialog).toHaveCount(0)
 })
 
 test('NOTES-3 EC-4 a new note left without title and text leaves nothing behind', async ({ page }) => {

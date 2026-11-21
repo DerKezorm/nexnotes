@@ -4,11 +4,13 @@
  *
  * - Everything is saved as it is typed; "gespeichert" once the room confirmed it, the number of waiting changes while
  *   the connection is away, and an orange bar (NOTES-12 AC-8). Closing the tab with changes waiting asks first (EC-4).
- * - The title is required: leaving inside nexnotes without one asks, with a suggestion from the first words (AC-9).
- *   A note left with neither title nor text goes (EC-4); one left otherwise without a title (the back button, a
- *   closed tab) gets the suggestion with "Titel prüfen" (AC-10).
+ * - The title is required: leaving inside nexnotes without one asks, with a suggestion from the first words (AC-9),
+ *   by a link, an action of the app or the browser's back and forward buttons. A note left with neither title nor
+ *   text goes (EC-4); one left otherwise without a title (a closed tab) gets the suggestion with "Titel prüfen"
+ *   (AC-10).
  * - Deleting moves the note to the trash and offers "Rückgängig" for ten seconds (AC-6).
  */
+import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { Copy, Ellipsis, Trash2, WifiOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -22,7 +24,7 @@ import { refreshFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
 import { useTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
-import { setLeaveGuard } from '../notes/context'
+import { setLeaveGuard, setPopGuard } from '../notes/context'
 import { noteHref } from '../notes/newNote'
 import { useAuth } from '../state/auth'
 import './editor.css'
@@ -213,9 +215,29 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
       setAskLeave(() => () => navigate(url.pathname + url.search + url.hash))
     }
     document.addEventListener('click', onClick, true)
+    // The browser's back and forward buttons ask too (`setPopGuard`): the step is taken back before the router sees
+    // it, and only "Vorschlag übernehmen" makes the step the browser was asked for.
+    const entry = window.history.state as { idx?: number } | null
+    let returning = false
+    setPopGuard((event) => {
+      if (!event.isTrusted) return false // goTo() of the app's own actions, which asked before
+      if (returning) {
+        returning = false
+        return true
+      }
+      if (!needsTitle()) return false
+      const target = (event.state as { idx?: number } | null)?.idx
+      const delta = typeof target === 'number' && typeof entry?.idx === 'number' ? target - entry.idx : -1
+      if (delta === 0) return false
+      returning = true
+      window.history.go(-delta)
+      setAskLeave(() => () => window.history.go(delta))
+      return true
+    })
     return () => {
       setLeaveGuard(null)
       document.removeEventListener('click', onClick, true)
+      setPopGuard(null)
       const emptyTitle = !cleanTitle(titleRef.current)
       const emptyBody = bodyIsEmpty(editor)
       if (deleted.current || !emptyTitle || !provider.synced) return
@@ -393,7 +415,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
           onValue={onTitle}
           invalid={askLeave !== null}
           describedBy={askLeave ? 'nn-title-required' : undefined}
-          onEnter={() => editor?.commands.focus('start')}
+          onEnter={() => focusTextStart(editor)}
         />
         {askLeave && (
           <span id="nn-title-required" className="-mt-1 text-[13px] font-medium text-bad-500">
@@ -469,6 +491,15 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
       )}
     </div>
   )
+}
+
+/** Enter in the title: the cursor at the start of the text, focus and selection in the same tick (AC-1). Tiptap's
+ * `focus()` waits for the next frame, and a key typed at once would still land in the title. */
+function focusTextStart(editor: Editor | null): void {
+  if (!editor || editor.isDestroyed) return
+  const { view } = editor
+  view.dispatch(view.state.tr.setSelection(Selection.atStart(view.state.doc)).scrollIntoView())
+  view.focus()
 }
 
 function LeaveDialog({ suggestion, onTake, onType }: { suggestion: string; onTake: () => void; onType: () => void }) {
