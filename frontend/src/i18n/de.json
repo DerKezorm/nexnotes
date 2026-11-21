@@ -356,6 +356,9 @@
       "rowDown": "Zeile nach unten",
       "rowUp": "Zeile nach oben",
       "toggleHeaderRow": "Kopfzeile",
+      "columnWider": "Spalte breiter",
+      "columnNarrower": "Spalte schmaler",
+      "columnFit": "Spalte an Inhalt anpassen",
       "appendColumn": "Spalte anhängen",
       "appendRow": "Zeile anhängen"
     },
@@ -640,6 +643,8 @@
         "dictation": "Diktat",
         "mcp": "Über MCP von „{{source}}“",
         "mcpAny": "Über MCP",
+        "shortcut": "Über einen Kurzbefehl",
+        "nexdeck": "Aus nexdeck",
         "here": "Hier angelegt",
         "other": "Schnell festgehalten"
       }

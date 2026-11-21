@@ -22,7 +22,7 @@ import { AuthProvider } from '../state/auth'
 import { forgetParked } from '../tabs/live'
 import type { NoteHead } from './api'
 import { tryLeave } from './context'
-import { NotesPage } from './NotesPage'
+import { AllNotesList, NotesPage } from './NotesPage'
 import { NewNoteButton } from './register'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
@@ -188,9 +188,11 @@ async function render(path: string, state?: unknown): Promise<void> {
           <Where />
           <NewNoteButton />
           <Routes>
-            <Route path="/" element={<NotesPage />} />
-            <Route path="/notes/:noteId" element={<NotesPage />} />
-            <Route path="/folder/:id" element={<div data-testid="folder-page" />} />
+            <Route element={<NotesPage />}>
+              <Route path="/" element={<AllNotesList />} />
+              <Route path="/notes/:noteId" element={<AllNotesList />} />
+              <Route path="/folder/:id" element={<div data-testid="folder-page" />} />
+            </Route>
           </Routes>
         </MemoryRouter>
       </AuthProvider>,
@@ -407,14 +409,18 @@ describe('a note on the page', () => {
 
   it('NOTES-3 EC-7 the title field takes at most 120 characters, a longer suggestion is cut', async () => {
     notes.set('n1', note('n1'))
+    // In the list a long title is cut with "…" (the row truncates); on a phone the list is a view of its own.
+    await render('/')
+    await settle(60)
+    expect(box.querySelector('[data-testid="note-row"] .truncate')).not.toBeNull()
+    await act(async () => root.unmount())
+    box.remove()
     await render('/notes/n1')
     expect(($('note-title') as HTMLInputElement).maxLength).toBe(MAX_TITLE)
     expect(MAX_TITLE).toBe(120)
     expect(cleanTitle('x'.repeat(300))).toHaveLength(120)
     expect(suggestTitle('y'.repeat(300))).toHaveLength(120)
     expect(cleanTitle('  \t ')).toBe('')
-    // In the list a long title is cut with "…" (the row truncates).
-    expect(box.querySelector('[data-testid="note-row"] .truncate')).not.toBeNull()
   })
 
   it('NOTES-3 EC-10 the title keeps umlauts, emoji and right-to-left script in the shared document', async () => {

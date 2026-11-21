@@ -167,7 +167,8 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion; taken o
   await expect(page.getByTestId('note-title')).toHaveValue('')
   await expect(body(page)).toHaveText('Dentist Tuesday 15:30 confirm, bring the booklet')
   const id = page.url().split('/notes/')[1].split('?')[0]
-  await page.getByRole('link', { name: 'All notes' }).click()
+  // Closing its tab leaves it (another list would keep it open beside, NOTES-8 AC-9).
+  await page.getByTestId('tab-close').click()
   const dialog = page.getByTestId('leave-dialog')
   await expect(dialog).toBeVisible()
   await expect(page.getByTestId('leave-suggestion')).toHaveText('Dentist Tuesday 15:30 confirm')
@@ -194,7 +195,10 @@ test('NOTES-3 AC-9 AC-10 leaving without a title asks with a suggestion; taken o
 })
 
 test("NOTES-3 AC-9 the browser's back button asks too and goes back only with the suggestion", async ({ page }) => {
-  await page.goto('/')
+  // Back to the note this one took the place of in its tab (back to another list would keep it open, NOTES-8 AC-9).
+  const target = (await (await page.request.post('/api/notes', { data: { title: 'Back target', markdown: 'before' }, headers: { 'X-Nexnotes-Client': 'tab-e2e-notes0000' } })).json()).id as string
+  await page.goto(`/notes/${target}`)
+  await expect(page.getByTestId('note-title')).toHaveValue('Back target')
   await page.getByTestId('new-note').click()
   await expect(page.getByTestId('note-title')).toBeFocused()
   await page.keyboard.press('Enter')
@@ -216,14 +220,14 @@ test("NOTES-3 AC-9 the browser's back button asks too and goes back only with th
   await expect(dialog).toBeVisible()
   await expect(page.getByTestId('leave-suggestion')).toHaveText('Pick up the parcel at the post office')
   await page.getByTestId('leave-take').click()
-  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect(page).toHaveURL(new RegExp(`/notes/${target}$`))
   await expect.poll(async () => (await head(page, id)).title).toBe('Pick up the parcel at the post office')
   // Forward again: the note has its title now, nothing asks.
   await page.goForward()
   await expect(page).toHaveURL(here)
   await expect(page.getByTestId('note-title')).toHaveValue('Pick up the parcel at the post office')
   await page.goBack()
-  await expect(page).not.toHaveURL(/\/notes\//)
+  await expect(page).toHaveURL(new RegExp(`/notes/${target}$`))
   await expect(dialog).toHaveCount(0)
 })
 
@@ -232,7 +236,7 @@ test('NOTES-3 EC-4 a new note left without title and text leaves nothing behind'
   const before = ((await (await page.request.get('/api/notes')).json()) as Head[]).length
   await page.getByTestId('new-note').click()
   await expect(page.getByTestId('note-saved')).toHaveText('saved')
-  await page.getByRole('link', { name: 'All notes' }).click()
+  await page.getByTestId('tab-close').click()
   await expect(page.getByTestId('leave-dialog')).toHaveCount(0)
   await expect.poll(async () => ((await (await page.request.get('/api/notes')).json()) as Head[]).length).toBe(before)
 })

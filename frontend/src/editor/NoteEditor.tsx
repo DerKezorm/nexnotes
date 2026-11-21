@@ -34,6 +34,7 @@ import { problemText } from '../lib/errors'
 import { pageTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
 import { setLeaveGuard, setOpenNote, setPopGuard, type LeaveGuard } from '../notes/context'
+import { isListPath, keepsNotesOpen, noteOf } from '../notes/workspace'
 import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
 import { noteHref } from '../notes/newNote'
 import { useAuth } from '../state/auth'
@@ -322,7 +323,13 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
       const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
       if (!anchor || anchor.target === '_blank' || editor?.view.dom.contains(anchor)) return
       const url = new URL(anchor.href, window.location.href)
-      if (url.origin !== window.location.origin || url.pathname === here) return
+      if (url.origin !== window.location.origin || url.pathname === here) {
+        // The same address, or another note beside the same list: only the latter leaves this note.
+        if (url.pathname !== here || !isListPath(url.pathname)) return
+      }
+      if (noteOf(url.pathname, url.search) === noteId) return
+      // Another list on a wider screen: the note stays open in its tab, nothing to ask (NOTES-8 AC-9).
+      if (keepsNotesOpen(url.pathname + url.search)) return
       if (!needsTitle()) return
       event.preventDefault()
       event.stopPropagation()
@@ -339,6 +346,8 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
         returning = false
         return true
       }
+      // Back to another list: the tabs stay, and with them this note.
+      if (keepsNotesOpen(window.location.pathname + window.location.search)) return false
       if (!needsTitle()) return false
       const target = (event.state as { idx?: number } | null)?.idx
       const delta = typeof target === 'number' && typeof entry?.idx === 'number' ? target - entry.idx : -1
@@ -353,7 +362,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
       document.removeEventListener('click', onClick, true)
       setPopGuard(null)
     }
-  }, [guarded, guard, editor, needsTitle, navigate, here])
+  }, [guarded, guard, editor, needsTitle, navigate, here, noteId])
 
   // Closing the tab while changes wait: the browser asks (NOTES-12 EC-4).
   useEffect(() => {
@@ -438,6 +447,11 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   const lang = i18n.language
   const titleCheck = Boolean(head?.title_check) && (titleAtSync.current === null || cleanTitle(title) === cleanTitle(titleAtSync.current))
   const path = head?.path.map((step) => (step.inbox ? t('notes.inbox') : step.name)).join(' › ') ?? ''
+  // The path leads to its folder's list; beside the notes only the list changes (NOTES-8 AC-9). Not for a note shared
+  // by someone else: their folders are not this account's.
+  const shared = Boolean(head?.owner && head.owner.id !== myId)
+  const lastStep = head && !shared ? head.path[head.path.length - 1] : undefined
+  const pathTarget = lastStep ? (lastStep.inbox ? '/inbox' : `/folder/${encodeURIComponent(lastStep.id)}`) : null
   const changedBy = head?.updated_by && head.updated_by.id !== myId ? head.updated_by.name : ''
   let saved: { text: string; tone: string }
   if (stopped) saved = { text: '', tone: '' }
@@ -468,10 +482,11 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           )}
         </div>
       )}
-      {/* One row: the toolbar takes what is left and puts the rest into "More"; the others and the note's buttons are
-          never cut off (NOTES-12 AC-5). */}
-      <div className="@container flex items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
-        <div className="hidden min-w-0 flex-1 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
+      {/* The toolbar takes what is left, in one row or two (only beyond two rows "More"); the others and the note's
+          buttons are never cut off (NOTES-12 AC-5). Not even "More" beside them (a narrow side with someone else in
+          the note): they go below the tools. */}
+      <div className="@container flex flex-wrap items-center gap-3 border-b border-ink-700 px-4 py-2 md:px-5" data-testid="editor-head">
+        <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex shrink-0 items-center gap-3">
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
@@ -582,7 +597,13 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           </span>
         )}
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-mist-500" data-testid="note-meta">
-          {path && <span>{path}</span>}
+          {path && (pathTarget ? (
+            <Link to={pathTarget} className="hover:text-accent-400 hover:underline" data-testid="note-path">
+              {path}
+            </Link>
+          ) : (
+            <span data-testid="note-path">{path}</span>
+          ))}
           {head && (
             <>
               {path && <span aria-hidden>·</span>}

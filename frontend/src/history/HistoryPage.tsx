@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
+import { NoteIcon } from '../components/NoteIcon'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
@@ -157,8 +158,9 @@ export function HistoryPage() {
         {problem && <p className="px-6 pt-4 text-sm text-bad-500">{problem}</p>}
         {version ? (
           <article className="flex w-full max-w-[760px] flex-col gap-3 px-6 py-7 opacity-95 md:px-10">
-            <h1 className="text-[28px] font-bold tracking-tight text-mist-100" data-testid="version-title">
-              {version.title || t('notes.untitled')}
+            <h1 className="flex min-w-0 items-center gap-2.5 text-[28px] font-bold tracking-tight text-mist-100" data-testid="version-title">
+              <NoteIcon icon={page?.icon} color={page?.color} size={24} />
+              <span className="min-w-0">{version.title || t('notes.untitled')}</span>
             </h1>
             {version.restored_from && <p className="text-[12.5px] text-mist-500">{t('history.restoredFrom', { when: moment(version.restored_from, lang) })}</p>}
             <VersionView doc={version.content} noteId={version.note_id} />

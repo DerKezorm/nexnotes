@@ -297,6 +297,10 @@ def inbox_view(db: Session, account_id: int) -> dict[str, Any]:
                 "title_check": note.title_check,
                 "created_at": note.created_at.isoformat(),
                 "updated_at": note.updated_at.isoformat(),
+                # As in the lists (NOTES-3 AC-18, NOTES-6 AC-8): the note's symbol and colour, and its paper.
+                "icon": note.icon or "",
+                "color": note.color or "",
+                "paper": note.paper or "blank",
             }
             for note in notes
         ],

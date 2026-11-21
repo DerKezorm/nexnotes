@@ -66,9 +66,9 @@ test('NOTES-8 AC-3 AC-5 AC-7 EC-7 seven tabs: the oldest goes with a notice, the
   await expect(page.getByTestId('tab-count')).toHaveText('6 of 6')
   // Keys: the first tab, then the next.
   await page.keyboard.press('Alt+Shift+Digit1')
-  await expect(page).toHaveURL(new RegExp(`/notes/${notes[0]}`))
+  await expect(page).toHaveURL(new RegExp(`(/notes/|note=)${notes[0]}`))
   await page.keyboard.press('Alt+Shift+ArrowRight')
-  await expect(page).toHaveURL(new RegExp(`/notes/${notes[1]}`))
+  await expect(page).toHaveURL(new RegExp(`(/notes/|note=)${notes[1]}`))
   // The seventh: "Tab three" was not used for the longest ("one" and "two" were just now).
   await row(page, 'Tab seven').click({ modifiers: ['ControlOrMeta'] })
   await expect(page.getByTestId('folder-notice')).toContainText('“Tab three” was closed because 6 tabs were open already.')
@@ -162,7 +162,7 @@ test('NOTES-8 AC-8 EC-4 six tabs with long titles grow narrower, then stand in t
     [me.id, notes, folder] as const,
   )
   await page.goto('/')
-  await expect(page).toHaveURL(new RegExp(`/notes/${notes[5]}`))
+  await expect(page).toHaveURL(new RegExp(`(/notes/|note=)${notes[5]}`))
   await expect(page.getByTestId('tab-side')).toHaveCount(2)
   for (const [width, height] of [
     [1280, 800],

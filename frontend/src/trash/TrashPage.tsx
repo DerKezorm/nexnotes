@@ -9,7 +9,9 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Dialog } from '../components/Dialog'
+import { NoteIcon } from '../components/NoteIcon'
 import { whenText } from '../editor/when'
+import { FolderMark } from '../folders/FolderMark'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
@@ -115,7 +117,13 @@ export function TrashPage() {
           return (
             <li key={`${item.kind}-${item.id}`} className="flex flex-wrap items-center gap-3.5 border-b border-ink-800 px-2.5 py-3" data-testid="trash-row" data-id={item.id}>
               <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-ink-800 text-mist-300" aria-hidden>
-                {item.kind === 'folder' ? <Folder className="h-4 w-4" /> : <FileText className="h-4 w-4" />}
+                {item.kind === 'folder' ? (
+                  item.icon ? <FolderMark folder={{ icon: item.icon, color: item.color ?? '' }} size={16} /> : <Folder className="h-4 w-4" />
+                ) : item.icon ? (
+                  <NoteIcon icon={item.icon} color={item.color} size={16} />
+                ) : (
+                  <FileText className="h-4 w-4" />
+                )}
               </span>
               <span className="flex min-w-0 flex-[1_1_300px] flex-col gap-0.5">
                 <span className="truncate text-[14.5px] font-semibold text-mist-100" title={title}>

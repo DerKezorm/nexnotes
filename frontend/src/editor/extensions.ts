@@ -4,8 +4,9 @@
  * document:
  *
  * - writing together (`Collaboration` on the `body` of the Yjs document, `CollaborationCaret` for the others' carets);
- *   undo and redo come from the collaboration and touch only one's own changes (NOTES-3 AC-13);
- * - tables inside a box that scrolls sideways (AC-5);
+ *   undo and redo come from the collaboration and touch only one's own changes (NOTES-3 AC-13); setting or taking away
+ *   a format (highlighter, bold, a link …) is always one step of its own, however soon after typing;
+ * - tables inside a box that scrolls sideways (AC-5), with columns as wide as one sets them (AC-19);
  * - headings that fold (AC-12), checklists with "x von y" and "Erledigtes nach unten" (AC-4);
  * - pasted HTML without scripts, forms and styles (EC-3); links open with Ctrl or ⌘ in a new tab without access to
  *   nexnotes (EC-8);
@@ -19,8 +20,10 @@ import Collaboration from '@tiptap/extension-collaboration'
 import CollaborationCaret from '@tiptap/extension-collaboration-caret'
 import { Placeholder } from '@tiptap/extensions'
 import type { Node as PMNode } from '@tiptap/pm/model'
-import { Plugin, PluginKey, type EditorState } from '@tiptap/pm/state'
+import { Plugin, PluginKey, type EditorState, type Transaction } from '@tiptap/pm/state'
+import { AddMarkStep, RemoveMarkStep } from '@tiptap/pm/transform'
 import { Decoration, DecorationSet, type EditorView } from '@tiptap/pm/view'
+import { ySyncPluginKey, yUndoPluginKey } from '@tiptap/y-tiptap'
 import type * as Y from 'yjs'
 // The commands of the schema's extensions (toggleBold, insertTable, setHighlight …) for the type checker.
 import type {} from '@tiptap/extension-heading'
@@ -33,6 +36,7 @@ import { ATTACHMENT_NODES, attachmentEditing, withAttachmentView } from '../atta
 import { caretLook, presentAccounts, type PresenceUser } from './presence'
 import type { NoteProvider } from './provider'
 import { HIGHLIGHT_COLORS, LINK_PROTOCOLS, noteExtensions } from './schema.mjs'
+import { COLUMN_MIN, columnWidthPlugin } from './table'
 import { noteTags } from './tags'
 
 export { HIGHLIGHT_COLORS }
@@ -334,6 +338,38 @@ function taskPlugin(t: T): Plugin<DecorationSet> {
   })
 }
 
+// --- Undo steps -------------------------------------------------------------------------------------------------------
+
+/** Whether a transaction only sets or takes away formatting (no text, no blocks). */
+function onlyFormats(tr: Transaction): boolean {
+  return tr.steps.length > 0 && tr.steps.every((step) => step instanceof AddMarkStep || step instanceof RemoveMarkStep)
+}
+
+/**
+ * The undo manager joins what happens within half a second into one step. A format set right after typing would go
+ * with the typing, and typing right after it with the format: one undo would take back more than the marker
+ * (NOTES-3 AC-11, AC-13). So a change of formats starts a step of its own, and so does the next change after it.
+ */
+const formatStepsKey = new PluginKey<boolean>('noteFormatSteps')
+
+function formatStepsPlugin(): Plugin<boolean> {
+  return new Plugin<boolean>({
+    key: formatStepsKey,
+    state: {
+      init: () => false,
+      // Whether the last own change of the text only changed formats.
+      apply: (tr, last) => (tr.docChanged && !tr.getMeta(ySyncPluginKey) ? onlyFormats(tr) : last),
+    },
+    appendTransaction: (transactions, before) => {
+      const own = transactions.filter((tr) => tr.docChanged && !tr.getMeta(ySyncPluginKey))
+      if (own.length === 0) return null
+      const lastWasFormat = formatStepsKey.getState(before) ?? false
+      if (lastWasFormat || own.some(onlyFormats)) yUndoPluginKey.getState(before)?.undoManager?.stopCapturing()
+      return null
+    },
+  })
+}
+
 // --- The editor's own extension ----------------------------------------------------------------------------------------
 
 export type EditorHooks = {
@@ -361,15 +397,20 @@ function noteEditing(t: T, hooks: EditorHooks): AnyExtension {
       }
     },
     addProseMirrorPlugins() {
-      return [foldingPlugin(t), taskPlugin(t)]
+      return [foldingPlugin(t), taskPlugin(t), formatStepsPlugin(), columnWidthPlugin()]
     },
   })
 }
 
-/** The schema's extensions, with the table drawn inside a box that scrolls (the schema itself unchanged). */
+/**
+ * The schema's extensions, with the table drawn inside a box that scrolls and columns that one drags wider or
+ * narrower (NOTES-3 AC-19; `colwidth` of the cells, already part of the schema). The schema itself is unchanged.
+ */
 export function schemaExtensions(): AnyExtension[] {
   return noteExtensions().map((extension) =>
-    extension.name === 'table' ? (extension.configure({ ...extension.options, renderWrapper: true }) as AnyExtension) : extension,
+    extension.name === 'table'
+      ? (extension.configure({ ...extension.options, renderWrapper: true, resizable: true, cellMinWidth: COLUMN_MIN, handleWidth: 6, lastColumnResizable: true }) as AnyExtension)
+      : extension,
   )
 }
 

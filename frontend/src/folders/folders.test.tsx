@@ -10,14 +10,14 @@ import { readableColor } from '../lib/color'
 import { forgetPrefs } from '../lib/devicePref'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-dom'
 
 import i18n from '../i18n'
 import { registerNoteActions, startNoteDrag } from './actions'
 import type { Folder, InboxNote } from './api'
 import { FolderTree, InboxEntry } from './FolderTree'
 import { FolderPage, InboxPage } from './pages'
-import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder } from './store'
+import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder, useShownFolder } from './store'
 import { hideNotice } from './notice'
 
 // ---- The stand-in server ---------------------------------------------------------------------------------------------
@@ -90,6 +90,13 @@ async function settle(): Promise<void> {
   for (let i = 0; i < 15; i++) await act(async () => await Promise.resolve())
 }
 
+function ShownFolder() {
+  const { pathname } = useLocation()
+  const folder = /^\/folder\/([^/]+)$/.exec(pathname)?.[1] ?? (pathname === '/inbox' ? 'inbox' : null)
+  useShownFolder(folder)
+  return <Outlet />
+}
+
 async function render(at = '/'): Promise<void> {
   await act(async () =>
     root.render(
@@ -97,8 +104,11 @@ async function render(at = '/'): Promise<void> {
         <InboxEntry />
         <FolderTree />
         <Routes>
-          <Route path="/folder/:id" element={<FolderPage />} />
-          <Route path="/inbox" element={<InboxPage />} />
+          {/* As the notes' workspace: the folder of the list on show is the open one. */}
+          <Route element={<ShownFolder />}>
+            <Route path="/folder/:id" element={<FolderPage />} />
+            <Route path="/inbox" element={<InboxPage />} />
+          </Route>
           <Route path="*" element={null} />
         </Routes>
         <Where />
@@ -603,6 +613,42 @@ describe('the pages (NOTES-4 AC-7, AC-9, AC-13, AC-14, EC-5, EC-6)', () => {
     await settle()
     expect(changes()).toEqual([{ method: 'POST', path: '/api/folders/move', body: { target_id: 'r', folder_ids: [], note_ids: ['n1'] } }])
     expect(box.querySelectorAll('[data-note]')).toHaveLength(2)
+  })
+
+  it('NOTES-4 AC-7 NOTES-3 AC-18 an inbox card shows the note\'s symbol in its colour; without one, where it came from', async () => {
+    const now = new Date().toISOString()
+    const card = (id: string, origin: string, look: { icon?: string; color?: string } = {}): InboxNote => ({ id, title: id, preview: '', origin, title_check: false, created_at: now, updated_at: now, icon: '', color: '', ...look })
+    inboxNotes = [
+      card('Trip', 'share:Safari', { icon: 'plane', color: 'teal' }),
+      card('Shared', 'share:Safari'),
+      card('Spoken', 'dictation'),
+      card('Asked', 'mcp:Desktop'),
+      card('Quick', 'shortcut'),
+      card('Deck', 'nexdeck'),
+      card('Typed', '', { color: 'rose' }),
+    ]
+    await render('/inbox')
+    const marks = [...box.querySelectorAll<HTMLElement>('[data-testid="inbox-card"]')].map((element) => element.querySelector<HTMLElement>('[data-testid="inbox-mark"]')!)
+    expect(marks).toHaveLength(7)
+    // With a symbol: the symbol in the note's colour on a tint of it, no sign of the origin.
+    const symbol = marks[0].querySelector<HTMLElement>('[data-testid="note-icon"]')!
+    expect(symbol.dataset.icon).toBe('plane')
+    expect((symbol.firstElementChild as HTMLElement).style.color).not.toBe('currentcolor')
+    expect(marks[0].style.background).toContain('color-mix')
+    expect(marks[0].querySelector('[data-testid="inbox-origin-icon"]')).toBeNull()
+    // Without: a quiet sign of the origin, never the inbox's tray again.
+    expect(marks.slice(1).map((mark) => mark.querySelector<HTMLElement>('[data-testid="inbox-origin-icon"]')?.dataset.origin)).toEqual(['share', 'dictation', 'mcp', 'shortcut', 'nexdeck', 'here'])
+    expect(box.querySelector('[data-testid="inbox-card"] .lucide-inbox')).toBeNull()
+    expect(marks[6].style.background).toContain('color-mix')
+    const texts = [...box.querySelectorAll('[data-testid="inbox-card"]')].map((element) => element.textContent)
+    expect(texts[4]).toContain('Via a shortcut')
+    expect(texts[5]).toContain('From nexdeck')
+    expect(texts[6]).toContain('Created here')
+    // "File" names the note with its symbol too.
+    click(button('File', box.querySelector('[data-testid="inbox-card"]')!))
+    await settle()
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.querySelector('h2 [data-testid="note-icon"]')?.getAttribute('data-icon')).toBe('plane')
   })
 
   it('NOTES-4 EC-6 an empty inbox explains what it is for', async () => {

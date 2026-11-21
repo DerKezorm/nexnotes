@@ -3,17 +3,18 @@
  * or the empty state of NOTES-6 EC-1 (EC-5); the inbox with where each note came from (AC-7), "File" (AC-14) and its
  * own empty state (EC-6); and on the phone the list of all folders (drawing "Handy-Ordner").
  */
-import { ChevronDown, ChevronRight, FileText, Inbox, Link2, Mic, MoreHorizontal, Plug, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, FileText, Inbox, LayoutGrid, Mic, MoreHorizontal, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
 
 import { LogoMark } from '../components/Logo'
+import { NoteIcon } from '../components/NoteIcon'
 import { notesApi } from '../notes/api'
 import { NoteList } from '../notes/NoteList'
 import { ago } from '../lib/time'
 import { problemText } from '../lib/errors'
-import { useTitle } from '../lib/title'
+import { useListPadding, useListTitle } from '../notes/listPlace'
 import { foldersApi, type Folder, type InboxNote } from './api'
 import { draggedNow, droppedFrom, endDrag, NOTES_MOVED_EVENT, startNoteDrag, useNoteActions } from './actions'
 import { useFolderActions } from './useFolderActions'
@@ -22,15 +23,10 @@ import { FolderMark } from './FolderMark'
 import { FolderMenu } from './FolderMenu'
 import { colorOf } from './palette'
 import { originText } from './origin'
-import { flatten, pathOf, revealFolder, setCurrentFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { flatten, pathOf, revealFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
 
-/** The open folder for "New note" (AC-9) while the page is shown. */
-function useOpenHere(id: string | null) {
-  useEffect(() => {
-    setCurrentFolder(id)
-    return () => setCurrentFolder(null)
-  }, [id])
-}
+// The open folder for "New note" (AC-9) follows the list on show: the notes' workspace sets it (`NotesPage`), whether
+// the list has room beside the notes or not.
 
 // ---- A folder --------------------------------------------------------------------------------------------------------
 
@@ -43,13 +39,14 @@ export function FolderPage() {
   const [menu, setMenu] = useState<HTMLElement | null>(null)
   const [over, setOver] = useState(false)
   const folder = tree.byId.get(id)
-  useOpenHere(folder ? id : null)
-  useTitle(folder?.name ?? t('folders.section'))
+  const location = useLocation()
+  const padding = useListPadding()
+  useListTitle(folder?.name ?? t('folders.section'))
   useEffect(() => {
     if (tree.status === 'ready' && tree.byId.has(id)) revealFolder(id)
   }, [id, tree.status, tree.byId])
 
-  if (tree.inbox?.id === id) return <Navigate to="/inbox" replace />
+  if (tree.inbox?.id === id) return <Navigate to={`/inbox${location.search}`} replace state={location.state} />
   if (tree.status !== 'ready' && !folder) return null
   if (!folder)
     return (
@@ -67,7 +64,7 @@ export function FolderPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-col gap-4 px-4 py-5 md:px-8 md:py-6" data-testid="folder-page">
+    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="folder-page">
       <nav aria-label={t('folders.page.path')} className="flex min-w-0 flex-wrap items-center gap-1.5 text-[13px] text-mist-500">
         {path.map((step, index) =>
           index < path.length - 1 ? (
@@ -131,10 +128,35 @@ export function FolderPage() {
 
 // ---- The inbox -------------------------------------------------------------------------------------------------------
 
-function OriginIcon({ origin }: { origin: string }) {
+/** A quiet sign of where a note came from (AC-7): shared, dictated, via MCP, a shortcut, nexdeck, made here. Never the
+ * inbox's tray, which would only repeat the page. */
+export function OriginIcon({ origin }: { origin: string }) {
   const kind = origin.split(':')[0]
-  const Icon = kind === 'share' ? Link2 : kind === 'dictation' ? Mic : kind === 'mcp' ? Plug : Inbox
-  return <Icon aria-hidden className="h-[18px] w-[18px] text-mist-300" strokeWidth={2} />
+  const Icon = !origin
+    ? PenLine
+    : kind === 'share'
+      ? Share2
+      : kind === 'dictation'
+        ? Mic
+        : kind === 'mcp'
+          ? Plug
+          : kind === 'shortcut'
+            ? Zap
+            : kind === 'nexdeck'
+              ? LayoutGrid
+              : StickyNote
+  return <Icon aria-hidden className="h-4 w-4 text-mist-500" strokeWidth={2} data-testid="inbox-origin-icon" data-origin={origin ? kind : 'here'} />
+}
+
+/** The sign before a card's title: the note's symbol in its colour (NOTES-3 AC-18), as in the lists; without one,
+ * where it came from. */
+export function InboxMark({ note }: { note: Pick<InboxNote, 'icon' | 'color' | 'origin'> }) {
+  const tint = note.color ? `color-mix(in srgb, ${colorOf(note.color)} 16%, transparent)` : undefined
+  return (
+    <span className={'flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ' + (tint ? '' : 'bg-ink-800')} style={tint ? { background: tint } : undefined} data-testid="inbox-mark">
+      {note.icon ? <NoteIcon icon={note.icon} color={note.color} size={18} /> : <OriginIcon origin={note.origin} />}
+    </span>
+  )
 }
 
 export function InboxPage() {
@@ -145,8 +167,8 @@ export function InboxPage() {
   const [notes, setNotes] = useState<InboxNote[] | null>(null)
   const [problem, setProblem] = useState('')
   const asked = useRef(0)
-  useTitle(t('folders.inbox.name'))
-  useOpenHere(tree.inbox?.id ?? null)
+  const padding = useListPadding()
+  useListTitle(t('folders.inbox.name'))
 
   const load = useCallback(async () => {
     const mine = ++asked.current
@@ -173,7 +195,7 @@ export function InboxPage() {
   }, [load])
 
   return (
-    <div className="flex min-h-full flex-col gap-4 px-4 py-5 md:px-8 md:py-6" data-testid="inbox-page">
+    <div className={'flex min-h-full flex-col gap-4 ' + padding} data-testid="inbox-page">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold">{t('folders.inbox.name')}</h1>
         <p className="text-[13.5px] text-mist-400">{t('folders.inbox.text')}</p>
@@ -200,10 +222,9 @@ export function InboxPage() {
                   onDragEnd={endDrag}
                   data-note={note.id}
                   className="nn-card flex flex-wrap items-center gap-3.5 px-4 py-3.5"
+                  data-testid="inbox-card"
                 >
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-ink-800">
-                    <OriginIcon origin={note.origin} />
-                  </span>
+                  <InboxMark note={note} />
                   <span className="flex min-w-0 flex-[1_1_320px] flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-2">
                       {href ? (
@@ -238,7 +259,7 @@ export function InboxPage() {
                   <button
                     type="button"
                     className="nn-btn nn-btn-ghost h-9 px-3 text-[13px]"
-                    onClick={() => actions.moveNotes([note.id], tree.inbox?.id ?? null, { title, sortIn: true, onMoved: () => void load() })}
+                    onClick={() => actions.moveNotes([note.id], tree.inbox?.id ?? null, { title, icon: note.icon, color: note.color, sortIn: true, onMoved: () => void load() })}
                   >
                     {t('folders.inbox.sortIn')}
                     <ChevronDown aria-hidden className="h-3 w-3 text-mist-500" strokeWidth={2.6} />
@@ -264,7 +285,7 @@ export function FoldersPage() {
   const actions = useFolderActions()
   const { newNote } = useNoteActions()
   const [menu, setMenu] = useState<{ folder: Folder; anchor: HTMLElement } | null>(null)
-  useTitle(t('folders.section'))
+  useListTitle(t('folders.section'))
   const rows = flatten(tree, open)
   return (
     <div className="flex min-h-full flex-col" data-testid="folders-page">

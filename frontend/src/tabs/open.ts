@@ -5,7 +5,7 @@
  */
 import type { LeaveGuard } from '../notes/context'
 import { goTo } from '../notes/context'
-import { noteHref } from '../notes/newNote'
+import { currentList, hrefIn } from '../notes/workspace'
 import * as rules from './state'
 import { focusedKey, tabOf, visibleKeys, type Side, type Step, type TabsState } from './state'
 import { tabs, tabsNow } from './store'
@@ -14,11 +14,9 @@ type Go = (path: string, options?: { replace?: boolean; state?: unknown }) => vo
 
 // Outside the notes page the app's own history step; on it the router's `navigate` (set by the page).
 let go: Go = (path, options) => goTo(path, options?.state)
-let fallback = '/'
 
-export function setNavigation(next: Go | null, back = '/'): void {
+export function setNavigation(next: Go | null): void {
   go = next ?? ((path, options) => goTo(path, options?.state))
-  fallback = back
 }
 
 // ---- Guards of the open sides -------------------------------------------------------------------------------------
@@ -43,17 +41,19 @@ function askAll(keys: string[], proceed: () => void): void {
 
 // ---- Changing -----------------------------------------------------------------------------------------------------
 
+/** The address of the list on show with the note of the side used last (NOTES-8 AC-9): the tabs never change the
+ * list. */
 export function hrefOf(state: TabsState): string | null {
   const tab = tabOf(state, focusedKey(state))
-  return tab ? noteHref(tab.note, tab.folder) : null
+  return tab ? hrefIn(currentList(), tab.note) : null
 }
 
-/** The address follows the side used last; without any tab, back to the list. */
+/** The address follows the side used last; without any tab, the list alone. */
 export function follow(replace: boolean, state?: unknown): void {
   const href = hrefOf(tabsNow())
   const here = window.location.pathname + window.location.search
   if (!href) {
-    if (here !== fallback) go(fallback, { replace: true })
+    if (here !== currentList()) go(currentList(), { replace: true })
     return
   }
   if (href !== here || state) go(href, { replace, state })

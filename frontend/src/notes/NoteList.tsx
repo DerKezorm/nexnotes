@@ -10,7 +10,7 @@
 import { FileText, Plus } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 import { draggedNow, droppedFrom, endDrag, startNoteDrag, useNoteActions } from '../folders/actions'
 import { drop } from '../folders/drop'
@@ -19,6 +19,7 @@ import { useFolders } from '../folders/store'
 import { tryLeave } from './context'
 import { listDate } from './listDate'
 import { noteHref } from './newNote'
+import { noteOf } from './workspace'
 import type { ListItem } from './list/api'
 import { ItemMenu } from './list/ItemMenu'
 import { layout, SIZES, type Entry } from './list/layout'
@@ -34,7 +35,7 @@ import { Window } from './list/Window'
 export type NoteListProps = {
   /** Only the notes of this folder; all notes (own and shared) when left out. */
   folderId?: string
-  /** The open note, marked in the list. */
+  /** The open note, marked in the list; by default the one the address names. */
   selectedId?: string
   /** Opens a note; by default the note page `/notes/<id>`. */
   onOpen?: (id: string) => void
@@ -60,8 +61,10 @@ function useWidth(box: React.RefObject<HTMLElement | null>): number {
   return width
 }
 
-export function NoteList({ folderId, selectedId, onOpen, hrefFor, heading }: NoteListProps) {
+export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading }: NoteListProps) {
   const href = hrefFor ?? ((id: string) => noteHref(id, folderId))
+  const location = useLocation()
+  const selectedId = chosenId ?? noteOf(location.pathname, location.search) ?? undefined
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const navigate = useNavigate()
@@ -93,7 +96,9 @@ export function NoteList({ folderId, selectedId, onOpen, hrefFor, heading }: Not
   const opener = (id: string) => (event: MouseEvent<HTMLAnchorElement>) => {
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.button !== 0) return
     event.preventDefault()
-    tryLeave(() => (onOpen ? onOpen(id) : navigate(href(id))))
+    if (onOpen) return tryLeave(() => onOpen(id))
+    const to = href(id)
+    tryLeave(() => navigate(to), to)
   }
   const openMenu = useCallback((item: ListItem, point: { x: number; y: number }) => setMenu({ item, point }), [])
   const closeMenu = useCallback(() => setMenu(null), [])

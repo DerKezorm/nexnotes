@@ -8,7 +8,7 @@
  * The open folder (`useCurrentFolder`) says where a new note lands (AC-9): in the open folder, otherwise in the inbox.
  * The note editor reads it; pages that are not a folder leave it empty.
  */
-import { useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 
 import { onAccountChange } from '../state/account'
 import { foldersApi, type Folder, type FolderTree } from './api'
@@ -203,11 +203,25 @@ export function reloadOpenFolders(): void {
 let current: string | null = null
 const currentListeners = new Set<() => void>()
 
-/** The folder page sets it while it is shown; anything else (all notes, search, a smart folder) leaves it `null`. */
+/** The list on show sets it (`useShownFolder`); anything else (all notes, search, a smart folder) leaves it `null`. */
 export function setCurrentFolder(id: string | null): void {
   if (current === id) return
   current = id
   for (const listener of currentListeners) listener()
+}
+
+/**
+ * The folder whose list is on show (a folder's id, `inbox`, or none) is the open folder while the list is on show,
+ * whether it has room beside the notes or not (NOTES-8 AC-9): the notes' workspace calls it with the folder of its
+ * list.
+ */
+export function useShownFolder(shown: string | 'inbox' | null): void {
+  const tree = useFolders()
+  const id = shown === 'inbox' ? (tree.inbox?.id ?? null) : shown
+  useEffect(() => {
+    setCurrentFolder(id)
+    return () => setCurrentFolder(null)
+  }, [id])
 }
 
 /**
