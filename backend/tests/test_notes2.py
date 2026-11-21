@@ -406,7 +406,7 @@ def test_notes2_ec8_the_others_of_a_shared_note_learn_of_a_deleted_account(clien
 ALLOWED_KEYS = {
     "id", "name", "display_name", "email", "role", "sign_in", "language", "version", "whats_new_seen", "provider_email",
     "two_factor", "password_changed_at", "created_at", "last_seen_at", "locked", "blocked", "blocked_at", "deleted_at",
-    "purge_at", "has_password", "providers", "storage_used", "storage_limit",
+    "purge_at", "has_password", "providers", "storage_used", "storage_limit", "avatar",
 }
 
 

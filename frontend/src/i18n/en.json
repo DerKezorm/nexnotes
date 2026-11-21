@@ -419,7 +419,9 @@
     "search_too_many_terms": "A search takes at most {{maximum}} words, phrases and tags. Leave some out.",
     "search_term_too_long": "A word or a phrase in quotes may have at most {{maximum}} characters. Shorten it.",
     "paper_unknown": "Choose blank, lined, grid or dotted.",
-    "note_icon_unknown": "Choose a symbol from the list."
+    "note_icon_unknown": "Choose a symbol from the list.",
+    "avatar_too_large": "The picture is too large (at most {{max_mb}} MB).",
+    "avatar_not_a_picture": "That is not a picture nexnotes accepts (JPEG, PNG, WebP, GIF, HEIC or AVIF)."
   },
   "folders": {
     "section": "Folders",
@@ -606,7 +608,14 @@
       "text": "Signs you out everywhere except here, for example after losing a phone."
     },
     "setupFirst": "The operator requires a second factor. Set it up here, then you can go on.",
-    "unlinked": "No longer linked to {{name}}."
+    "unlinked": "No longer linked to {{name}}.",
+    "picture": {
+      "add": "Upload a profile picture",
+      "change": "Another picture",
+      "remove": "Remove picture",
+      "saved": "Profile picture saved.",
+      "removed": "Profile picture removed."
+    }
   },
   "nav": {
     "settings": "Settings"

@@ -61,13 +61,13 @@ export function initialOf(name: string): string {
 }
 
 /** What a window tells the others about itself. */
-export type PresenceUser = { name: string; accountId: number; color: string }
+export type PresenceUser = { name: string; accountId: number; color: string; avatar?: string | null }
 
-export function presenceUser(accountId: number, name: string): PresenceUser {
-  return { name, accountId, color: colorFor(accountId) }
+export function presenceUser(accountId: number, name: string, avatar: string | null = null): PresenceUser {
+  return { name, accountId, color: colorFor(accountId), avatar }
 }
 
-export type Person = { accountId: number; name: string; color: string; initial: string }
+export type Person = { accountId: number; name: string; color: string; initial: string; avatar?: string | null }
 export type Presence = {
   /** Other people, each once however many windows they have open, in the order they came. */
   people: Person[]
@@ -90,7 +90,8 @@ export function presenceOf(states: Map<number, Record<string, unknown>>, ownClie
     }
     if (!people.has(user.accountId)) {
       const name = String(user.name ?? '').trim() || '?'
-      people.set(user.accountId, { accountId: user.accountId, name, color: colors.get(user.accountId) ?? colorFor(user.accountId), initial: initialOf(name) })
+      const avatar = typeof user.avatar === 'string' ? user.avatar : null
+      people.set(user.accountId, { accountId: user.accountId, name, color: colors.get(user.accountId) ?? colorFor(user.accountId), initial: initialOf(name), avatar })
     }
   }
   return { people: [...people.values()], ownWindows }

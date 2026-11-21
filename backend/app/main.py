@@ -23,6 +23,7 @@ from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
 from .routers import about, auth, folders, health, history, invites, oidc, trash
 from .routers import accounts as accounts_router
+from .routers import avatars as avatars_router
 from .routers import backups as backups_router
 from .routers import locales as locales_router
 from .routers import logs as logs_router
@@ -41,7 +42,7 @@ logger = logging.getLogger("nexnotes")
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
     health, about, locales_router, logs_router, auth, totp_router, oidc, accounts_router, invites, settings_router,
-    backups_router,
+    backups_router, avatars_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.
 FEATURE_ROUTERS: list = [folders, notes_router, tags_router, search_router, history, trash, notes_list_router]

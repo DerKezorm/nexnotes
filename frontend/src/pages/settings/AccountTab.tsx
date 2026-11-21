@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
+import { Avatar } from '../../components/Avatar'
 import { Field, Problem } from '../../components/Field'
 import { PasswordConfirmField } from '../../components/PasswordConfirm'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
@@ -82,6 +83,30 @@ export function AccountTab() {
       </div>
 
       <Card id="profile" icon={UserRound} title={t('me.profile.title')}>
+        <div className="flex items-center gap-3" data-testid="profile-picture">
+          <Avatar accountId={me.id} name={me.display_name || me.name} stamp={me.avatar} size={56} />
+          <div className="flex flex-wrap gap-2">
+            <label className={PLAIN + ' cursor-pointer'}>
+              {me.avatar ? t('me.picture.change') : t('me.picture.add')}
+              <input
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                data-testid="picture-file"
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  if (file) void run(async () => setMe(await authApi.avatar(file)), t('me.picture.saved'))
+                }}
+              />
+            </label>
+            {me.avatar && (
+              <button type="button" disabled={busy} className={QUIET} onClick={() => void run(async () => setMe(await authApi.removeAvatar()), t('me.picture.removed'))}>
+                {t('me.picture.remove')}
+              </button>
+            )}
+          </div>
+        </div>
         <form
           className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
           onSubmit={(event) => {

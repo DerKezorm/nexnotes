@@ -142,6 +142,8 @@ export type Me = {
   language: string
   /** The paper new notes start on (NOTES-3 AC-17). */
   paper?: string
+  /** When the profile picture was set (NOTES-2 AC-11); none without one. */
+  avatar?: string | null
   two_factor: boolean
   two_factor_recovery_left: number
   password_changed_at?: string | null
@@ -184,6 +186,8 @@ export type LinkedProvider = { id: number; slug: string; label: string; managed:
 /** An account in the operator's list: name, address, way of signing in, role, storage and last use; never content. */
 export type AccountRow = {
   id: number
+  /** When the profile picture was set (NOTES-2 AC-11). */
+  avatar?: string | null
   name: string
   display_name: string
   email: string
@@ -351,6 +355,8 @@ export const authApi = {
   me: () => api<Me>('/api/auth/me'),
   language: (language: string) => api<Me>('/api/me/language', { method: 'PUT', body: { language } }),
   paper: (paper: string) => api<Me>('/api/me/paper', { method: 'PUT', body: { paper } }),
+  avatar: (picture: Blob) => api<Me>('/api/auth/avatar', { method: 'PUT', raw: picture }),
+  removeAvatar: () => api<Me>('/api/auth/avatar', { method: 'DELETE' }),
   profile: (change: { display_name?: string; email?: string }) => api<Me>('/api/me/profile', { method: 'PUT', body: change }),
   password: (current: string, next: string, confirm: string) =>
     api<void>('/api/auth/password', { method: 'PUT', body: { current, new: next, password_confirm: confirm } }),

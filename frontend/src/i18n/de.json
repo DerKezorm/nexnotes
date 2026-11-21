@@ -419,7 +419,9 @@
     "search_too_many_terms": "Eine Suche nimmt höchstens {{maximum}} Wörter, Wortfolgen und Schlagwörter. Lass ein paar weg.",
     "search_term_too_long": "Ein Wort oder eine Wortfolge in Anführungszeichen darf höchstens {{maximum}} Zeichen haben. Kürze sie.",
     "paper_unknown": "Wähl leer, liniert, kariert oder gepunktet.",
-    "note_icon_unknown": "Wähl ein Symbol aus der Liste."
+    "note_icon_unknown": "Wähl ein Symbol aus der Liste.",
+    "avatar_too_large": "Das Bild ist zu groß (höchstens {{max_mb}} MB).",
+    "avatar_not_a_picture": "Das ist kein Bild, das nexnotes annimmt (JPEG, PNG, WebP, GIF, HEIC oder AVIF)."
   },
   "folders": {
     "section": "Ordner",
@@ -606,7 +608,14 @@
       "text": "Meldet dich überall ab außer hier, etwa nach einem verlorenen Handy."
     },
     "setupFirst": "Der Betreiber verlangt einen zweiten Faktor. Richte ihn hier ein, dann geht es weiter.",
-    "unlinked": "Nicht mehr mit {{name}} verknüpft."
+    "unlinked": "Nicht mehr mit {{name}} verknüpft.",
+    "picture": {
+      "add": "Profilbild hochladen",
+      "change": "Anderes Bild",
+      "remove": "Bild entfernen",
+      "saved": "Profilbild gespeichert.",
+      "removed": "Profilbild entfernt."
+    }
   },
   "nav": {
     "settings": "Einstellungen"

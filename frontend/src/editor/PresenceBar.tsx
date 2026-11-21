@@ -4,6 +4,7 @@
  */
 import { useTranslation } from 'react-i18next'
 
+import { Avatar } from '../components/Avatar'
 import { OWN_COLOR, presenceSentence, SHOWN_PEOPLE, type Presence } from './presence'
 
 export function PresenceBar({ presence }: { presence: Presence }) {
@@ -16,14 +17,9 @@ export function PresenceBar({ presence }: { presence: Presence }) {
       {(shown.length > 0 || more > 0) && (
         <span className="flex shrink-0">
           {shown.map((person, index) => (
-            <span
-              key={person.accountId}
-              title={person.name}
-              data-testid="presence-person"
-              className={'flex h-[30px] w-[30px] items-center justify-center rounded-full border-2 bg-ink-800 text-xs font-semibold text-mist-100 ' + (index ? '-ml-2' : '')}
-              style={{ borderColor: person.color }}
-            >
-              {person.initial}
+            <span key={person.accountId} title={person.name} data-testid="presence-person" className={'flex rounded-full ' + (index ? '-ml-2' : '')}>
+              {/* The picture where the server shows it, with a border in the person's color; else the initial. */}
+              <Avatar accountId={person.accountId} name={person.name} stamp={person.avatar} size={30} ring={person.color} className="bg-ink-800 text-mist-100" />
             </span>
           ))}
           {more > 0 && (

@@ -4,6 +4,7 @@
  * (30 days to bring it back), give a role, set a limit, a reset link (the person sets the new password, NOTES-2 AC-7),
  * sign out everywhere, take a provider's link.
  */
+import { Avatar } from '../../components/Avatar'
 import { MoreHorizontal, UserPlus } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -83,9 +84,7 @@ export function AccountsTab() {
                   <tr key={row.id} data-testid={`account-${row.name}`} className={out ? 'text-mist-500' : ''}>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center gap-2.5">
-                        <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-ink-700 text-xs font-bold text-mist-200">
-                          {(Array.from(shown)[0] ?? '?').toUpperCase()}
-                        </span>
+                        <Avatar accountId={row.id} name={shown} stamp={row.avatar} className="bg-ink-700 text-mist-200" />
                         <span className="min-w-0">
                           <span className="block truncate font-medium text-mist-100">
                             {shown}

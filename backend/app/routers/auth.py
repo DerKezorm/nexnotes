@@ -140,6 +140,8 @@ def check_language(language: str) -> str:
 def account_view(account: AccountRow, db: Session | None = None) -> dict[str, Any]:
     return {
         "id": account.id,
+        # When the profile picture was set (``routers/avatars.py``), the version in its address; none without one.
+        "avatar": account.avatar_at.isoformat() if account.avatar_at else None,
         "name": account.name,
         "display_name": account.display_name,
         # "What's new": the running version and the one the account has read.

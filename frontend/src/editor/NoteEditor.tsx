@@ -204,7 +204,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
       editorExtensions({
         doc: provider.doc,
         provider,
-        me: presenceUser(myId, myName),
+        me: presenceUser(myId, myName, me?.avatar ?? null),
         t,
         placeholder: t('editor.placeholder'),
         hooks: { onLink: () => setLinkOpen(true) },

@@ -10,11 +10,8 @@ import { NavLink } from 'react-router-dom'
 
 import { SIDEBAR_SECTIONS } from '../extensions'
 import { useAuth } from '../state/auth'
+import { Avatar } from './Avatar'
 import { Logo } from './Logo'
-
-function initial(name: string): string {
-  return (Array.from(name.trim())[0] ?? '?').toUpperCase()
-}
 
 /** `width`: the one set on this device (`lib/columns.ts`); the drawer on a phone keeps the drawing's 260 px. */
 export function Sidebar({ onNavigate, width = 260 }: { onNavigate?: () => void; width?: number }) {
@@ -41,9 +38,7 @@ export function Sidebar({ onNavigate, width = 260 }: { onNavigate?: () => void; 
             'flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-sm transition-colors ' + (isActive ? 'nn-chosen' : 'text-mist-300 hover:bg-ink-800 hover:text-mist-100')
           }
         >
-          <span aria-hidden className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-500 text-xs font-bold text-on-accent">
-            {initial(shown)}
-          </span>
+          <Avatar accountId={me?.id ?? 0} name={shown} stamp={me?.avatar} />
           <span className="min-w-0 flex-1 truncate" title={`${shown} · ${t('nav.settings')}`}>
             {shown} · {t('nav.settings')}
           </span>
