@@ -535,9 +535,11 @@ def _remove_for_good(note_id: str) -> None:
 
 
 async def discard_if_empty(note_id: str) -> bool:
-    """A note without title and text goes without a trace (NOTES-3 EC-4); True when it went."""
-    title, text = await read_live(note_id)
-    if title or text.strip():
+    """A note without title and text goes without a trace (NOTES-3 EC-4); True when it went. A note that holds only
+    an attachment (NOTES-10) is not empty."""
+    title, text, attached = await change(
+        note_id, lambda doc: (notedoc.title_of(doc), to_plain(doc), notedoc.attachment_refs(doc)))
+    if title or text.strip() or attached:
         return False
     await rooms().close_note(note_id)
     await asyncio.to_thread(_remove_for_good, note_id)

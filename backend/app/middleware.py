@@ -33,8 +33,8 @@ def _database_busy(exc: BaseException) -> bool:
 #: Paths whose calls explain nothing but fill the log.
 QUIET_PATHS = ("/api/health", "/api/logs")
 SLOW_MS = 3000
-#: What takes long by nature: backups grow with the notes and attachments.
-SLOW_EXPECTED = ("/api/backups",)
+#: What takes long by nature: backups grow with the notes and attachments, an upload with its file.
+SLOW_EXPECTED = ("/api/backups", "/api/attachments")
 
 #: The editor and the graph set inline styles, hence 'unsafe-inline' for styles only. Scripts stay strict.
 #: ``blob:`` for images: a pasted picture is shown before it is uploaded.
@@ -165,7 +165,11 @@ MAX_BODY = 16 * 1024 * 1024
 #: Where a larger body is expected, with its own limit checked while streaming. An upload's limit is the operator's
 #: setting, checked by the route while the file arrives; this is only the ceiling above every setting.
 #: Features with uploads add their paths here.
-LARGE_BODIES: dict[str, int] = {"/api/backups/upload": 64 * 1024**3}
+LARGE_BODIES: dict[str, int] = {
+    "/api/backups/upload": 64 * 1024**3,
+    # Attachments (NOTES-10): the operator may allow up to 100,000 MB per file.
+    "/api/attachments": 100_000 * 1024**2 + 1024**2,
+}
 
 
 class BodyTooLarge(Exception):
