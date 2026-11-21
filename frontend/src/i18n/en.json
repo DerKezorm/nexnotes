@@ -609,6 +609,7 @@
     "groupOffByTitle": "Sorted by title, there are no groups.",
     "groups": {
       "month": "Last 30 days",
+      "notes": "Notes",
       "pinned": "Pinned",
       "today": "Today",
       "week": "Last 7 days",

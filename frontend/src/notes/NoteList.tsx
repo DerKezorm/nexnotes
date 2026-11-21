@@ -26,7 +26,7 @@ import { ListBar } from './list/ListBar'
 import './list/list.css'
 import { NoteRow, type RowFolder } from './list/NoteRow'
 import { NoteTile } from './list/NoteTile'
-import { arrange, dateOf, sectionLabel } from './list/order'
+import { arrange, sectionLabel } from './list/order'
 import { useNoteList } from './list/useNoteList'
 import { useNow } from './list/useNow'
 import { Window } from './list/Window'
@@ -99,6 +99,7 @@ export function NoteList({ folderId, selectedId, onOpen, hrefFor, heading }: Not
   const closeMenu = useCallback(() => setMenu(null), [])
   const dragOf = (item: ListItem) => (item.owner ? undefined : (event: DragEvent) => startNoteDrag(event, [item.id]))
 
+  // Rows and tiles show when a note last changed (AC-2), whatever the list is sorted by.
   const render = (entry: Entry) => {
     if (entry.kind === 'header')
       return (
@@ -113,7 +114,7 @@ export function NoteList({ folderId, selectedId, onOpen, hrefFor, heading }: Not
           item={item}
           href={href(item.id)}
           chosen={item.id === selectedId}
-          date={listDate(dateOf(item, view), lang, now)}
+          date={listDate(item.updated_at, lang, now)}
           folder={folderOf(item)}
           wide={all && width >= 760}
           onOpen={opener(item.id)}
@@ -132,7 +133,7 @@ export function NoteList({ folderId, selectedId, onOpen, hrefFor, heading }: Not
             item={item}
             href={href(item.id)}
             chosen={item.id === selectedId}
-            date={listDate(dateOf(item, view), lang, now)}
+            date={listDate(item.updated_at, lang, now)}
             onOpen={opener(item.id)}
             onMenu={item.owner ? undefined : openMenu}
             onDragStart={dragOf(item)}

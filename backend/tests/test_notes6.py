@@ -13,6 +13,7 @@ from sqlalchemy import insert
 from app.db import SessionLocal
 from app.models import Account, Note, utcnow
 from app.notedoc import edit
+from app.notedoc.room import Access
 from app.services import notes, notes_list
 from app.services.inbox import inbox_for
 
@@ -152,6 +153,31 @@ def test_notes6_ac8_a_color_from_the_fixed_row(client, operator):
         assert theirs.put(f"/api/notes/{note['id']}/color", json={"color": "red"}).status_code == 404
 
 
+def test_notes6_ac6_ac8_who_only_reads_a_shared_note_neither_pins_nor_colors_it(client, operator, monkeypatch):
+    note = new_note(client, title="Elternabend")
+    reader = make_account("reader")
+    writer = make_account("writer")
+
+    def shared(_db, account: Account, shared_note: Note):
+        # Sharing (NOTES-13) answers through this docking point: one reads the note, the other writes in it.
+        if shared_note.id != note["id"]:
+            return None
+        return {reader.id: Access.READ, writer.id: Access.WRITE}.get(account.id)
+
+    monkeypatch.setattr(notes, "ACCESS_RULES", [shared])
+    with new_client(reader) as theirs:
+        # The note is there for them to read ...
+        assert theirs.get(f"/api/notes/{note['id']}").status_code == 200
+        # ... but neither pinned nor colored by them.
+        assert theirs.put(f"/api/notes/{note['id']}/pin", json={"pinned": True}).status_code == 404
+        assert theirs.put(f"/api/notes/{note['id']}/color", json={"color": "red"}).status_code == 404
+    assert stored(note["id"]).pinned_at is None and stored(note["id"]).color in ("", None)
+    # Who may write passes the same check (where pin and color live with sharing is NOTES-13's call).
+    with new_client(writer) as theirs:
+        assert theirs.put(f"/api/notes/{note['id']}/pin", json={"pinned": True}).status_code == 200
+        assert theirs.put(f"/api/notes/{note['id']}/color", json={"color": "red"}).status_code == 200
+
+
 def test_notes6_ec8_a_pinned_note_comes_back_pinned_from_the_trash(client, operator):
     alone = new_note(client, title="Allein")
     house = make_folder(client, "Haushalt")
@@ -167,6 +193,35 @@ def test_notes6_ec8_a_pinned_note_comes_back_pinned_from_the_trash(client, opera
     items = {item["id"]: item for item in listed(client)["items"]}
     assert items[alone["id"]]["pinned"] is True and items[alone["id"]]["color"] == "sky"
     assert items[inside["id"]]["pinned"] is True and items[inside["id"]]["color"] == "sky"
+
+
+def test_notes6_ec8_a_pinned_note_comes_back_pinned_through_the_trash_page(client, operator):
+    house = make_folder(client, "Haushalt")
+    first = new_note(client, title="Müllabfuhr", folder_id=house)
+    loose = new_note(client, title="Einkauf", folder_id=house)
+    cellar = make_folder(client, "Keller")
+    deep = new_note(client, title="Vorräte", folder_id=cellar)
+    for note in (first, deep):
+        assert client.put(f"/api/notes/{note['id']}/pin", json={"pinned": True}).status_code == 200
+    client.put(f"/api/notes/{first['id']}/color", json={"color": "red"})
+    moments = {note["id"]: stored(note["id"]).pinned_at for note in (first, deep)}
+    # Deleted alone, and deleted with its folder.
+    assert client.delete(f"/api/notes/{first['id']}").status_code == 204
+    assert client.delete(f"/api/folders/{cellar}").status_code in (200, 204)
+    assert [item["id"] for item in listed(client, house)["items"]] == [loose["id"]]
+    before = stamp(client, house)
+    trashed = {item["id"] for item in client.get("/api/trash").json()["items"]}
+    assert first["id"] in trashed and cellar in trashed
+    # Back the way the trash page brings them.
+    assert client.post(f"/api/trash/notes/{first['id']}/restore").status_code == 200
+    assert client.post(f"/api/trash/folders/{cellar}/restore").status_code == 200
+    # An open list sees it come back, pinned as before, with its color and the same moment of pinning.
+    assert stamp(client, house) != before
+    items = {item["id"]: item for item in listed(client, house)["items"]}
+    assert items[first["id"]]["pinned"] is True and items[first["id"]]["color"] == "red"
+    assert items[loose["id"]]["pinned"] is False
+    assert listed(client, cellar)["items"][0]["pinned"] is True
+    assert {note_id: stored(note_id).pinned_at for note_id in moments} == moments
 
 
 # --- AC-7: all notes, own and shared ------------------------------------------------------------------------------

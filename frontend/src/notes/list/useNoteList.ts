@@ -1,9 +1,10 @@
 /**
  * One list's notes and view, kept fresh (NOTES-6).
  *
- * - Loaded once, then the server's stamp is asked every few seconds while the page is in sight; only a changed stamp
- *   loads the list again (EC-6: a note changed on another device shows up without reloading the page). Notes made,
- *   renamed, moved or deleted here load it at once.
+ * - Loaded once (the first time perhaps already asked for while the program started, `preload.ts`), then the server's
+ *   stamp is asked every few seconds while the page is in sight; only a changed stamp loads the list again (EC-6: a
+ *   note changed on another device shows up without reloading the page). Notes made, renamed, moved or deleted here
+ *   load it at once.
  * - The view (rows or tiles, sorting, grouping) is the account's per folder on the server (AC-1, AC-4, AC-5); a change
  *   shows at once and is saved behind it.
  * - Pinning and colors (AC-6, AC-8) show at once too, and go back with a notice when the server says no.
@@ -15,6 +16,7 @@ import { showNotice } from '../../folders/notice'
 import { problemText } from '../../lib/errors'
 import { NOTES_CHANGED_EVENT, notesChanged } from '../api'
 import { DEFAULT_VIEW, listApi, type ListAnswer, type ListItem, type ListView } from './api'
+import { takeEarly } from './preload'
 
 /** How often an open list asks whether anything changed. */
 export const STAMP_EVERY_MS = 5000
@@ -45,7 +47,10 @@ export function useNoteList(folderId?: string): NoteListState {
 
   const load = useCallback(() => {
     const mine = ++asked.current
-    Promise.all([listApi.read(folderId), listApi.stamp(folderId).catch(() => ({ stamp: '' }))])
+    const ask = () => Promise.all([listApi.read(folderId), listApi.stamp(folderId).catch(() => ({ stamp: '' }))])
+    // The first load takes the answer asked for while the program started (`preload.ts`), when there is one.
+    const early = takeEarly(folderId)
+    ;(early ? early.then((answer) => answer ?? ask()) : ask())
       .then(([found, now]) => {
         if (mine !== asked.current) return
         stamp.current = now.stamp

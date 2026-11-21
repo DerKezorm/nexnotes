@@ -23,7 +23,8 @@ export type NoteRowProps = {
   chosen?: boolean
   /** The date shown (formatted); by default nothing. */
   date?: string
-  /** "All notes": the note's folder as a column and a stripe in its color. */
+  /** "All notes": the note's folder and a stripe in its color; the folder as a column when `wide`, else in the second
+   * line. */
   folder?: RowFolder | null
   /** Wide enough for tags and the folder as columns of their own. */
   wide?: boolean
@@ -48,6 +49,8 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
   const tasks = locked ? '' : tasksText(item, t)
   const media = !locked && item.media && item.media.count > 0 ? item.media : null
   const title = item.title || t('notes.untitled')
+  // "All notes" on a narrow list (beside an open note, the phone): the folder goes in the second line, beside the date.
+  const place = !wide && folder?.name ? folder.name : ''
   return (
     <div
       className={'group relative flex h-full items-center gap-3 rounded-[10px] px-2.5 ' + (chosen ? 'nn-chosen' : 'hover:bg-ink-800')}
@@ -92,9 +95,17 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
         </span>
         <span className="flex min-w-0 items-center gap-1.5 text-[12.5px] text-mist-500">
           {date && <span className="shrink-0">{date}</span>}
-          {tasks && (
+          {place && (
             <>
               {date && <span aria-hidden>·</span>}
+              <span className="max-w-[45%] shrink-0 truncate text-mist-300" title={place} data-testid="note-folder">
+                {place}
+              </span>
+            </>
+          )}
+          {tasks && (
+            <>
+              {(date || place) && <span aria-hidden>·</span>}
               <span className="shrink-0">{tasks}</span>
             </>
           )}
@@ -103,7 +114,7 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
           ) : (
             item.preview && (
               <>
-                {(date || tasks) && <span aria-hidden>·</span>}
+                {(date || place || tasks) && <span aria-hidden>·</span>}
                 <span className="min-w-0 truncate" data-testid="note-preview">
                   {item.preview}
                 </span>
@@ -115,7 +126,7 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
       </Link>
       {wide && <span className="w-[120px] shrink-0 truncate text-[12.5px] text-accent-400">{tags}</span>}
       {wide && folder && (
-        <span className="w-[120px] shrink-0 truncate text-[12.5px] text-mist-300" title={folder.name}>
+        <span className="w-[120px] shrink-0 truncate text-[12.5px] text-mist-300" title={folder.name} data-testid="note-folder">
           {folder.name}
         </span>
       )}

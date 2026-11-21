@@ -8,19 +8,23 @@
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 
 import { registerNoteActions } from '../../folders/actions'
 import type { Folder } from '../../folders/api'
 import { hideNotice } from '../../folders/notice'
+import { FolderPage } from '../../folders/pages'
 import { forgetFolders } from '../../folders/store'
 import i18n from '../../i18n'
+import { accountChanged } from '../../state/account'
 import { NoteList } from '../NoteList'
 import { DEFAULT_VIEW, type ListItem, type ListView } from './api'
 import { NotePinButton } from './EditorMarks'
 import { anchorOf, layout, shiftFor, visibleRange } from './layout'
 import { arrange, dayGroup, sectionLabel, sortItems } from './order'
+import { listKeyOf, preloadList, takeEarly } from './preload'
 import { STAMP_EVERY_MS } from './useNoteList'
+import { Window } from './Window'
 
 // ---- The stand-in server ---------------------------------------------------------------------------------------------
 
@@ -131,6 +135,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  takeEarly()
   act(() => root.unmount())
   box.remove()
   for (const leftover of document.querySelectorAll('[role="menu"]')) leftover.remove()
@@ -287,18 +292,42 @@ describe('NOTES-6 list and tiles', () => {
     expect(headings()[0]).toBe('Pinned')
     expect(box.querySelector('[data-note="b"] [aria-label="pinned"]')).not.toBeNull()
     expect(box.querySelector('[data-note="a"] [aria-label="pinned"]')).toBeNull()
-    // Also in tiles, and also when grouping is off.
+    // Also in tiles, and also when grouping is off: then the others stand under a heading of their own, apart from the
+    // pinned ones.
     views.set('h', { ...DEFAULT_VIEW, mode: 'tiles', grouped: false })
     act(() => root.unmount())
     root = createRoot(box)
     await render('h')
-    expect(headings()).toEqual(['Pinned'])
+    expect(headings()).toEqual(['Pinned', 'Notes'])
     expect($$('note-tile')[0].textContent).toContain('Einkauf Samstag')
     // Unpinned from the right click.
     await act(async () => $$('note-tile')[0].parentElement!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 })))
     await click(byText('Unpin', document.querySelector<HTMLElement>('[data-testid="note-item-menu"]')!))
     expect(calls.filter((call) => call.path === '/api/notes/b/pin').at(-1)!.body).toEqual({ pinned: false })
     expect(headings()).toEqual([])
+  })
+
+  it('NOTES-6 AC-6 without date groups the other notes stand apart under "Notes", by title as well', async () => {
+    items = [item('a', { title: 'Zettel' }), item('b', { title: 'Abfall', pinned: true }), item('c', { title: 'Baumarkt' })]
+    views.set('h', { ...DEFAULT_VIEW, sort: 'title', direction: 'asc' })
+    await render('h')
+    expect(headings()).toEqual(['Pinned', 'Notes'])
+    expect(rowTitles()).toEqual(['Abfall', 'Baumarkt', 'Zettel'])
+    // The heading stands between the pinned note and the others.
+    const topOf = (element: HTMLElement) => parseFloat(element.parentElement!.style.top)
+    const [pinnedHeading, notesHeading] = $$('list-group-heading').map(topOf)
+    const top = (id: string) => topOf(box.querySelector<HTMLElement>(`[data-note="${id}"]`)!)
+    expect(pinnedHeading).toBeLessThan(top('b'))
+    expect(top('b')).toBeLessThan(notesHeading)
+    expect(notesHeading).toBeLessThan(top('c'))
+    // Nothing pinned: no heading at all.
+    expect(arrange(fifty(), { ...DEFAULT_VIEW, grouped: false }, NOW).map((section) => section.key)).toEqual(['all'])
+    const somePinned = fifty().map((note, index) => (index === 7 ? { ...note, pinned: true } : note))
+    expect(arrange(somePinned, { ...DEFAULT_VIEW, grouped: false }, NOW).map((section) => section.key)).toEqual(['pinned', 'notes'])
+    // In German as well.
+    await act(async () => void (await i18n.changeLanguage('de')))
+    await settle()
+    expect(headings()).toEqual(['Angeheftet', 'Notizen'])
   })
 
   it('NOTES-6 AC-8 a color from the fixed row: a stripe on the tile, a mark in the list', async () => {
@@ -344,6 +373,54 @@ describe('NOTES-6 list and tiles', () => {
     expect($('list-counts')!.textContent).toBe('2 notes')
   })
 
+  it('NOTES-6 AC-7 on a narrow list (beside an open note, the phone) the folder goes in the second line', async () => {
+    // The list measures 300 px, like the column beside an open note.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly told: ResizeObserverCallback) {}
+        observe() {
+          this.told([{ contentRect: { width: 300 } } as ResizeObserverEntry], this as unknown as ResizeObserver)
+        }
+        disconnect() {}
+        unobserve() {}
+      },
+    )
+    items = [item('a', { title: 'Einkauf', folder_id: 'h', preview: 'Milch' }), item('c', { title: 'Elternabend', folder_id: 'x', owner: { id: 7, name: 'Lena' } })]
+    await render(undefined, 'All notes')
+    const row = (id: string) => box.querySelector<HTMLElement>(`[data-note="${id}"]`)!
+    const place = row('a').querySelector<HTMLElement>('[data-testid="note-folder"]')!
+    expect(place.textContent).toBe('Haushalt')
+    // In the link's second line, beside the date, not as a column of its own.
+    expect(place.closest('[data-testid="note-row"]')).not.toBeNull()
+    expect(place.parentElement!.textContent).toContain('Milch')
+    expect((row('a').firstElementChild as HTMLElement).style.background).toBe('rgb(242, 193, 78)')
+    expect(row('c').querySelector('[data-testid="note-folder"]')!.textContent).toBe('Shared with me')
+    // A folder's own list names no folder, narrow or not.
+    act(() => root.unmount())
+    root = createRoot(box)
+    await render('h', 'Haushalt')
+    expect($('note-folder')).toBeNull()
+  })
+
+  it('NOTES-6 AC-2 rows and tiles show the date of the last change, also when sorted by creation', async () => {
+    const created = new Date(2025, 2, 3, 10, 0).toISOString()
+    items = [item('a', { title: 'Alt angelegt', created_at: created, updated_at: new Date(Date.now() - 60_000).toISOString() })]
+    views.set('h', { ...DEFAULT_VIEW, sort: 'created' })
+    await render('h')
+    const changed = new Date(Date.now() - 60_000).toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
+    const made = new Date(created).toLocaleDateString('en', { day: 'numeric', month: 'numeric', year: 'numeric' })
+    const row = box.querySelector<HTMLElement>('[data-note="a"]')!
+    expect(row.textContent).toContain(changed)
+    expect(row.textContent).not.toContain(made)
+    // Sorted and grouped by creation all the same.
+    expect(headings()).toEqual(['March 2025'])
+    await click(byText('Tiles'))
+    const tile = box.querySelector<HTMLElement>('[data-note="a"]')!
+    expect(tile.textContent).toContain(changed)
+    expect(tile.textContent).not.toContain(made)
+  })
+
   // ---- AC-2, AC-3, AC-9 (checked by eye; the pieces are checked here) ---------------------------------------------------
 
   it('NOTES-6 AC-2 AC-3 AC-9 rows and tiles carry tags, shared mark, picture count, progress and marks', async () => {
@@ -379,16 +456,35 @@ describe('NOTES-6 list and tiles', () => {
 
   // ---- EC-1 -----------------------------------------------------------------------------------------------------------
 
-  it('NOTES-6 EC-1 an empty folder invites to a new note in it and to drag notes in', async () => {
+  it('NOTES-6 EC-1 an empty folder opened from the tree invites to a new note in it and to drag notes in', async () => {
     const started: string[] = []
     registerNoteActions({ newNote: (id) => started.push(id) })
-    await render('h', 'Haushalt')
+    folders.push({ ...folder('g', 'Garten', 'green'), count: 0 })
+    // The folder page as the app shows it (`/folder/<id>`): its empty state is the one a member sees.
+    await act(async () =>
+      root.render(
+        <MemoryRouter initialEntries={['/folder/g']}>
+          <Routes>
+            <Route path="/folder/:id" element={<FolderPage />} />
+          </Routes>
+        </MemoryRouter>,
+      ),
+    )
     await settle()
-    const empty = $('list-empty')!
-    expect(empty.textContent).toContain('No notes in “Haushalt” yet')
+    const empty = $('folder-empty')!
+    expect(empty.textContent).toContain('No notes in “Garten” yet')
     expect(empty.textContent).toContain('drag')
-    await click(byText('New note in “Haushalt”', empty))
-    expect(started).toEqual(['h'])
+    await click(byText('New note in “Garten”', empty))
+    expect(started).toEqual(['g'])
+    // The list's own empty state says the same, for a folder whose count was not yet up to date.
+    act(() => root.unmount())
+    root = createRoot(box)
+    await render('h', 'Haushalt')
+    const stale = $('list-empty')!
+    expect(stale.textContent).toContain('No notes in “Haushalt” yet')
+    expect(stale.textContent).toContain('drag')
+    await click(byText('New note in “Haushalt”', stale))
+    expect(started).toEqual(['g', 'h'])
   })
 
   // ---- EC-2 -----------------------------------------------------------------------------------------------------------
@@ -417,6 +513,42 @@ describe('NOTES-6 list and tiles', () => {
     expect($$('note-row').length).toBeGreaterThan(5)
     expect($$('note-row').length).toBeLessThan(60)
     expect(performance.now() - started).toBeLessThan(3000)
+  })
+
+  it('NOTES-6 EC-2 the list of the page a tab opens on is asked for before the first render, and taken once', async () => {
+    expect(listKeyOf('/', '')).toBe('all')
+    expect(listKeyOf('/folder/h', '')).toBe('h')
+    expect(listKeyOf('/notes/x', '?folder=h')).toBe('h')
+    expect(listKeyOf('/notes/x', '')).toBe('all')
+    expect(listKeyOf('/settings', '')).toBeNull()
+    items = [item('a', { title: 'Früh' })]
+    preloadList('/folder/h', '')
+    expect(calls.map((call) => call.path)).toEqual(['/api/note-list', '/api/note-list/stamp'])
+    await render('h')
+    // The list drew from the answer already on its way: nothing asked twice.
+    expect(calls.filter((call) => call.path === '/api/note-list')).toHaveLength(1)
+    expect(rowTitles()).toEqual(['Früh'])
+    // Asked for another list (the page changed meanwhile): the list asks for its own.
+    act(() => root.unmount())
+    root = createRoot(box)
+    preloadList('/', '')
+    await render('h')
+    expect(calls.filter((call) => call.path === '/api/note-list').map((call) => call.query.get('folder_id'))).toEqual(['h', null, 'h'])
+    // Signed out or failed: the list asks itself as well.
+    act(() => root.unmount())
+    root = createRoot(box)
+    vi.mocked(fetch).mockResolvedValueOnce(new Response('{}', { status: 401 }))
+    preloadList('/folder/h', '')
+    await render('h')
+    expect(calls.filter((call) => call.path === '/api/note-list')).toHaveLength(4)
+    expect(rowTitles()).toEqual(['Früh'])
+    // Another account signed in meanwhile: what was asked for the first one is not taken.
+    act(() => root.unmount())
+    root = createRoot(box)
+    preloadList('/folder/h', '')
+    accountChanged()
+    await render('h')
+    expect(calls.filter((call) => call.path === '/api/note-list')).toHaveLength(6)
   })
 
   // ---- EC-3, EC-5 -------------------------------------------------------------------------------------------------------
@@ -488,6 +620,80 @@ describe('NOTES-6 list and tiles', () => {
     expect(shift).toBeGreaterThan(0)
     // At the very top nothing is held: new notes simply show.
     expect(anchorOf(first.entries, 0)).toBeNull()
+  })
+
+  it('NOTES-6 EC-2 the window draws one screen of a long list at first, not hundreds of entries on the way', async () => {
+    // A measured page: the list at the top of a 600 px column.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const height = this.dataset.testid === 'note-window' ? 640_000 : 600
+      return { top: 0, bottom: height, left: 0, right: 1024, width: 1024, height, x: 0, y: 0, toJSON: () => ({}) }
+    })
+    const many = Array.from({ length: 10_000 }, (_, index) => item(`n${index}`, { updated_at: new Date(NOW.getTime() - index * 60_000).toISOString() }))
+    const placed = layout(arrange(many, DEFAULT_VIEW, NOW), 'list', 1024)
+    let drawn = 0
+    await act(async () =>
+      root.render(
+        <div style={{ overflowY: 'auto', height: 600 }}>
+          <Window
+            entries={placed.entries}
+            height={placed.height}
+            render={(entry) => {
+              drawn++
+              return entry.key
+            }}
+          />
+        </div>,
+      ),
+    )
+    // The first drawing and the measured one together: a few dozen entries.
+    expect(drawn).toBeGreaterThan(5)
+    expect(drawn).toBeLessThan(100)
+    expect(box.querySelectorAll('[data-testid="note-window"] > div').length).toBeLessThan(40)
+  })
+
+  it('NOTES-6 EC-6 the window scrolls by what arrived above, so the note at the top of the screen does not jump', async () => {
+    // A scrolling column of 600 px, scrolled down 1000 px; the window measures itself against it.
+    let scrolled = 0
+    let total = 0
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      const inWindow = this.dataset.testid === 'note-window'
+      const top = inWindow ? -scrolled : 0
+      const height = inWindow ? total : 600
+      return { top, bottom: top + height, left: 0, right: 1024, width: 1024, height, x: 0, y: top, toJSON: () => ({}) }
+    })
+    const show = async (entries: ReturnType<typeof layout>) => {
+      total = entries.height
+      await act(async () =>
+        root.render(
+          <div data-testid="scroller" style={{ overflowY: 'auto', height: 600 }}>
+            <Window entries={entries.entries} height={entries.height} render={(entry) => <span data-entry={entry.key}>{entry.key}</span>} />
+          </div>,
+        ),
+      )
+    }
+    const first = layout(arrange(fifty(), DEFAULT_VIEW, NOW), 'list', 1024)
+    await show(first)
+    const scroller = $('scroller')!
+    Object.defineProperty(scroller, 'clientHeight', { configurable: true, get: () => 600 })
+    Object.defineProperty(scroller, 'scrollTop', { configurable: true, get: () => scrolled, set: (value: number) => void (scrolled = value) })
+    scrolled = 1000
+    await act(async () => scroller.dispatchEvent(new Event('scroll')))
+    // Where the note at the top of the screen stands, seen from the top of the screen.
+    const anchor = anchorOf(first.entries, 1000)!
+    const onScreen = () => parseFloat(box.querySelector<HTMLElement>(`[data-entry="${anchor.id}"]`)!.parentElement!.style.top) - scrolled
+    const before = onScreen()
+    expect(box.querySelectorAll('[data-entry]').length).toBeLessThan(40)
+    // Three notes arrive at the top (another device): the list grows above the screen, the window scrolls along.
+    const more = [...fifty(), ...['x1', 'x2', 'x3'].map((id) => item(id, { updated_at: NOW.toISOString() }))]
+    const second = layout(arrange(more, DEFAULT_VIEW, NOW), 'list', 1024)
+    await show(second)
+    expect(scrolled).toBe(1000 + 3 * 64)
+    expect(onScreen()).toBe(before)
+    // At the very top nothing is held: the new notes simply show.
+    scrolled = 0
+    await act(async () => scroller.dispatchEvent(new Event('scroll')))
+    await show(first)
+    expect(scrolled).toBe(0)
   })
 
   // ---- EC-7 -----------------------------------------------------------------------------------------------------------
