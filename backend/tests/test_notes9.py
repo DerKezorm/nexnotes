@@ -324,6 +324,7 @@ def test_notes9_ec4_ten_thousand_notes_two_thousand_hits_under_half_a_second(cli
         assert page["items"]
     assert len(seen) == 2000
     assert slowest < 0.5, slowest
+    print(f"EC-4: first page {took:.3f} s, slowest further page {slowest:.3f} s")
     # Short words go another way (too short for trigrams) and stay quick as well.
     started = time.perf_counter()
     assert find(client, "zä")["total"] == 2000
