@@ -84,8 +84,14 @@ def _tasks_of(state: bytes | None, updates: Iterable[bytes] = ()) -> tuple[int, 
 
 
 def recount(db: Session, note: Note) -> None:
-    """The checklists counted anew from what is stored: the folded state and the updates after it."""
-    updates = list(db.scalars(select(NoteUpdate.update).where(NoteUpdate.note_id == note.id).order_by(NoteUpdate.id)))
+    """The checklists counted anew from what is stored: the folded state and the updates after it. Never raises (a
+    hook on the text, ``notes.TEXT_WRITTEN``)."""
+    try:
+        updates = list(db.scalars(select(NoteUpdate.update).where(NoteUpdate.note_id == note.id)
+                                  .order_by(NoteUpdate.id))) if note.id else []
+    except Exception:  # the count waits for the next change rather than failing the write
+        logger.exception("Reading the updates of a note failed note=%s", note.id)
+        return
     found = _tasks_of(note.ydoc, updates)
     if found is not None:
         note.tasks_done, note.tasks_total = found
@@ -348,10 +354,9 @@ def tags_of(db: Session, _account: Account, rows: list[Any]) -> dict[str, dict[s
 
 
 def register() -> None:
-    """The checklists are counted whenever the notes' text is written anew from the document; the items carry their
-    tags."""
-    if recount not in notes.SUMMARY_HOOKS:
-        notes.SUMMARY_HOOKS.append(recount)
+    """The checklists are counted wherever a note's title or text is written (``notes.on_text_written``: made, copied,
+    the text written anew from the document 2 s after a change, folded); the items carry their tags."""
+    notes.on_text_written(recount)
     if tags_of not in ITEM_EXTRAS:
         ITEM_EXTRAS.append(tags_of)
 

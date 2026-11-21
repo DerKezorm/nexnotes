@@ -10,15 +10,17 @@
  * - Deleting moves the note to the trash and offers "Rückgängig" for ten seconds (AC-6).
  */
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import { Copy, Ellipsis, Trash2, WifiOff } from 'lucide-react'
+import { Copy, Ellipsis, History, Trash2, WifiOff } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import * as Y from 'yjs'
 
 import { Dialog } from '../components/Dialog'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
+import { historyHref } from '../history/href'
+import { RestoreWatch } from '../history/RestoreWatch'
 import { problemText } from '../lib/errors'
 import { useTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
@@ -332,6 +334,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
 
   return (
     <div className="flex min-h-full flex-col" data-testid="note-editor" data-status={status}>
+      <RestoreWatch noteId={noteId} doc={provider.doc} origin={provider} />
       {status === 'offline' && (
         <div role="status" data-testid="offline-bar" className="flex items-center gap-2.5 px-5 py-2.5 text-[13.5px] font-medium text-warn-500" style={{ background: 'rgb(251 146 60 / 0.14)' }}>
           <WifiOff className="h-4 w-4 shrink-0" aria-hidden />
@@ -376,6 +379,10 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
                   <Copy className="h-4 w-4" aria-hidden />
                   {t('editor.duplicate')}
                 </button>
+                <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
+                  <History className="h-4 w-4" aria-hidden />
+                  {t('history.menu')}
+                </Link>
                 <button type="button" role="menuitem" className="nn-menu-item text-bad-500" data-testid="note-delete" onClick={() => void remove()} disabled={!head?.can_write}>
                   <Trash2 className="h-4 w-4" aria-hidden />
                   {t('editor.delete')}
