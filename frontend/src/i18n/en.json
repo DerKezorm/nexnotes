@@ -901,6 +901,7 @@
     "emptied": "The trash is empty.",
     "failed": "The trash could not be loaded.",
     "final": "This cannot be undone.",
+    "folderTitle_zero": "{{name}} · empty folder",
     "folderTitle_one": "{{name}} · folder with {{count}} note",
     "folderTitle_other": "{{name}} · folder with {{count}} notes",
     "from": "from {{name}}",

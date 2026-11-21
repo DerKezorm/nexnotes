@@ -901,6 +901,7 @@
     "emptied": "Papierkorb geleert.",
     "failed": "Der Papierkorb ließ sich nicht laden.",
     "final": "Das lässt sich nicht rückgängig machen.",
+    "folderTitle_zero": "{{name}} · leerer Ordner",
     "folderTitle_one": "{{name}} · Ordner mit {{count}} Notiz",
     "folderTitle_other": "{{name}} · Ordner mit {{count}} Notizen",
     "from": "aus {{name}}",

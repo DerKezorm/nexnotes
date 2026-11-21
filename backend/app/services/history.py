@@ -150,10 +150,11 @@ def _current_state(db: Session, note_id: str) -> bytes | None:
 
 
 def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, force: bool = False,
-          author: int | None = None, state: bytes | None = None, until: datetime | None = None
-          ) -> NoteVersion | None:
+          author: int | None = None, state: bytes | None = None, until: datetime | None = None,
+          skip_same: bool = False) -> NoteVersion | None:
     """A version of the note as it is now (or ``state``, the note as it was at ``until``), named after who wrote since
-    the last one. Nothing when it would be the same as the last version (unless ``force``)."""
+    the last one. Nothing when it would be the same as the last version (unless ``force``; with ``skip_same`` not
+    even then)."""
     query = select(NoteEdit).where(NoteEdit.note_id == note_id)
     if until is not None:
         query = query.where(NoteEdit.first_at <= until)
@@ -166,7 +167,7 @@ def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, f
         return None
     last = db.execute(select(NoteVersion.state).where(NoteVersion.note_id == note_id)
                       .order_by(NoteVersion.created_at.desc(), NoteVersion.id.desc()).limit(1)).first()
-    if not force and last is not None and last.state == state:
+    if (not force or skip_same) and last is not None and last.state == state:
         return None
     if last is None and not edits and not force:
         return None
@@ -188,13 +189,14 @@ def _take(db: Session, note_id: str, *, restored_from: datetime | None = None, f
 
 
 def take_now(note_id: str, *, restored_from: datetime | None = None, force: bool = False,
-             author: int | None = None, state: bytes | None = None, until: datetime | None = None) -> int | None:
+             author: int | None = None, state: bytes | None = None, until: datetime | None = None,
+             skip_same: bool = False) -> int | None:
     """A version of the note right now (after a restore), or of ``state`` as it was at ``until`` (right before one);
     returns its id, or ``None`` when nothing was new."""
     with SessionLocal() as db:
         _write_lock(db)
         version = _take(db, note_id, restored_from=restored_from, force=force, author=author, state=state,
-                        until=until)
+                        until=until, skip_same=skip_same)
         db.commit()
         return version.id if version is not None else None
 
@@ -479,7 +481,13 @@ async def restore(account: Account, note_id: str, version_id: int) -> dict[str, 
     started = clock.now()
     before, _ = await notes.change(note_id, edit, account_id=account.id, rescue=remember)
     await asyncio.to_thread(take_now, note_id, state=before, until=started)
-    made = await asyncio.to_thread(take_now, note_id, restored_from=at, force=True, author=account.id)
+    # A restore that changes nothing (the note is the version already) makes no version of its own: each one is the
+    # whole note and counts towards the account's storage.
+    made = await asyncio.to_thread(take_now, note_id, restored_from=at, force=True, author=account.id, skip_same=True)
+    if made is None:
+        with SessionLocal() as db:
+            made = db.scalar(select(NoteVersion.id).where(NoteVersion.note_id == note_id)
+                             .order_by(NoteVersion.created_at.desc(), NoteVersion.id.desc()).limit(1))
     logger.info("Version restored note=%s version=%s", note_id, version_id)
     return {"id": made, "restored_from": at.isoformat()}
 

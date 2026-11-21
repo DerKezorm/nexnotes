@@ -10,8 +10,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 
-const PORT = 8571
-const PROVIDER_PORT = 8572
+// Other ports when 8571/8572 are taken (another checkout running its own tests): NEXNOTES_E2E_PORT, ..._PROVIDER_PORT.
+const PORT = Number(process.env.NEXNOTES_E2E_PORT ?? 8571)
+const PROVIDER_PORT = Number(process.env.NEXNOTES_E2E_PROVIDER_PORT ?? 8572)
 
 /** A fresh data directory per run. Made here and not in a global setup: the server starts first. The workers load
  * this file again and inherit the directory through the environment. */

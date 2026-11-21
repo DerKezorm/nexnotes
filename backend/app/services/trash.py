@@ -188,6 +188,9 @@ def _batch_of(db: Session, account: Account, folder_id: str) -> tuple[set[str], 
         return set(), {root.id}
     folder_ids = set(db.scalars(select(Folder.id).where(Folder.owner_id == account.id,
                                                         Folder.deleted_batch == root.deleted_batch)))
+    if root.parent_id in folder_ids:
+        # Only the top of a deletion is in the list; a folder that went with its parent goes with it, not on its own.
+        raise _not_found()
     note_ids = set(db.scalars(select(Note.id).where(Note.owner_id == account.id,
                                                     Note.deleted_batch == root.deleted_batch)))
     return note_ids, folder_ids
@@ -240,6 +243,8 @@ async def empty(account: Account, until: datetime) -> dict[str, int]:
     the question was asked stays (EC-3)."""
     if until.tzinfo is None:
         until = until.replace(tzinfo=UTC)
+    # A moment after the server's own clock would take what is deleted after the question was asked.
+    until = min(until, clock.now())
     result = await _remove(account, lambda db: _until_ids(db, account, until))
     logger.info("Trash emptied notes=%s folders=%s", result["notes"], result["folders"])
     return result

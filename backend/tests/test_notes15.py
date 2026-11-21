@@ -834,3 +834,88 @@ def test_notes15_ac4_a_restored_first_paragraph_stays_first(client, operator, ro
         asyncio.run(notes.change(note["id"], edit_first, account_id=operator.id))
         assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
         assert to_plain(stored_doc(note["id"])) == expected
+
+
+def test_notes15_ac4_restoring_what_the_note_is_already_makes_no_new_version(client, operator):
+    note = new_note(client, title="Plan", markdown="first idea")
+    session(note["id"], operator.id, ["second thought"], T0)
+    target = history_of(client, note["id"])["versions"][0]
+    history.clock.set(T0 + timedelta(hours=1))
+    write(note["id"], operator.id, "a mistake")
+    assert client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore").status_code == 200
+    count = len(versions(note["id"]))
+    for _ in range(5):
+        answer = client.post(f"/api/notes/{note['id']}/history/{target['id']}/restore")
+        assert answer.status_code == 200
+        assert answer.json()["id"] == versions(note["id"])[0].id
+    assert len(versions(note["id"])) == count
+    assert to_plain(stored_doc(note["id"])) == "first idea\nsecond thought"
+
+
+def test_notes15_ac6_only_the_top_of_a_deleted_folder_goes_for_good_on_its_own(client, operator):
+    top = folder(operator, "Top")
+    inner = folder(operator, "Inner", top)
+    note = new_note(client, title="Inside", folder_id=inner)
+    client.delete(f"/api/folders/{top}")
+    assert client.delete(f"/api/trash/folders/{inner}").status_code == 404
+    assert exists(note["id"])
+    with SessionLocal() as db:
+        assert db.get(Folder, top) is not None and db.get(Folder, inner) is not None
+    assert client.delete(f"/api/trash/folders/{top}").json() == {"notes": 1, "folders": 2}
+
+
+def test_notes15_ec3_emptying_never_reaches_past_the_server_s_clock(client, operator):
+    first = new_note(client, title="first")
+    client.delete(f"/api/notes/{first['id']}")
+    listed = trash_of(client)
+    # Deleted after the list was shown; the request names a moment far ahead.
+    history.clock.set(datetime.fromisoformat(listed["now"]) + timedelta(minutes=1))
+    later = new_note(client, title="later")
+    with SessionLocal() as db:
+        row = db.get(Note, later["id"])
+        row.deleted_at = history.clock.now() + timedelta(minutes=5)
+        row.deleted_batch = "later-batch"
+        db.commit()
+    future = (datetime.fromisoformat(listed["now"]) + timedelta(days=365)).isoformat()
+    assert client.post("/api/trash/empty", json={"until": future}).json() == {"notes": 1, "folders": 0}
+    assert exists(later["id"])
+
+
+def test_notes15_ec3_what_comes_back_and_goes_again_while_emptying_stays(client, operator, monkeypatch):
+    """The trash is looked at again under the write lock: a note brought back and deleted anew between the first look
+    and the lock was deleted after the question and stays."""
+    note = new_note(client, title="Twice")
+    client.delete(f"/api/notes/{note['id']}")
+    listed = trash_of(client)
+    from app.notedoc.room import Rooms
+
+    original = Rooms.close_note
+
+    async def meanwhile(self, note_id: str) -> None:
+        await original(self, note_id)
+        history.clock.set(datetime.fromisoformat(listed["now"]) + timedelta(minutes=2))
+        with SessionLocal() as db:
+            row = db.get(Note, note_id)
+            row.deleted_at = history.clock.now()
+            row.deleted_batch = "again"
+            db.commit()
+
+    monkeypatch.setattr(Rooms, "close_note", meanwhile)
+    assert client.post("/api/trash/empty", json={"until": listed["now"]}).json() == {"notes": 0, "folders": 0}
+    assert exists(note["id"])
+
+
+def test_notes15_ec1_a_note_whose_folder_is_in_the_trash_comes_back_into_the_inbox(client, operator):
+    crafts = folder(operator, "Crafts")
+    note = new_note(client, title="Advent ideas", folder_id=crafts)
+    client.delete(f"/api/notes/{note['id']}")
+    client.delete(f"/api/folders/{crafts}")
+    lands = {item["id"]: item["lands"] for item in trash_of(client)["items"]}
+    assert lands[note["id"]] == "inbox"
+    answer = client.post(f"/api/trash/notes/{note['id']}/restore")
+    assert answer.status_code == 200
+    with SessionLocal() as db:
+        inbox = inbox_for(db, operator.id).id
+        assert answer.json()["folder_id"] == inbox
+        assert db.get(Note, note["id"]).folder_id == inbox
+        assert db.get(Folder, crafts).deleted_at is not None
