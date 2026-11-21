@@ -35,14 +35,19 @@ export function AttachButton({ editor, noteId }: { editor: Editor; noteId: strin
     <>
       <input ref={anyFile} type="file" multiple hidden onChange={(event) => take(event.currentTarget)} data-testid="attach-input" aria-label={t('attachments.attachLabel')} />
       <input ref={photo} type="file" multiple hidden accept="image/*,video/*" onChange={(event) => take(event.currentTarget)} data-testid="attach-photo-input" aria-label={t('attachments.sheet.photo')} />
+      {/* With room in the head (a note alone) the word, beside another note only the clip: the tools keep their row. */}
       <button
         type="button"
-        className="hidden h-[34px] items-center gap-1.5 rounded-lg bg-accent-wash px-3 text-[13px] font-semibold text-accent-400 md:flex"
+        className="hidden h-[34px] min-w-[34px] items-center justify-center gap-1.5 rounded-lg bg-accent-wash px-2 text-[13px] font-semibold text-accent-400 md:flex @[700px]:px-3"
         onClick={() => anyFile.current?.click()}
+        aria-label={t('attachments.attach')}
+        title={t('attachments.attachLabel')}
         data-testid="attach"
       >
         <Paperclip className="h-3.5 w-3.5" strokeWidth={2.2} aria-hidden />
-        {t('attachments.attach')}
+        <span className="hidden @[700px]:inline" aria-hidden>
+          {t('attachments.attach')}
+        </span>
       </button>
       <button type="button" className="grid h-11 w-11 place-items-center rounded-lg text-accent-400 md:hidden" aria-label={t('attachments.attach')} onClick={() => setSheet(true)} data-testid="attach-phone">
         <Paperclip className="h-5 w-5" strokeWidth={2.2} aria-hidden />

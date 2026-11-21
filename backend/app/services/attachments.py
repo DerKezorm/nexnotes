@@ -369,10 +369,20 @@ def of_note(db: Session, account: Account, note_id: str) -> list[dict[str, Any]]
 # --- Where attachments stand --------------------------------------------------------------------------------------
 
 
-def _document_of(db: Session, note: Note) -> dict[str, Any] | None:
+#: The names of the blocks as Yjs writes them into an update: a note whose stored bytes hold none of them names no
+#: attachment, and its document need not be read (10,000 notes made at once stay fast).
+_BLOCK_NAMES = tuple(name.encode() for name in s.ATOMS)
+
+
+def _updates_of(db: Session, note: Note) -> list[bytes]:
+    return list(db.scalars(select(NoteUpdate.update).where(NoteUpdate.note_id == note.id)
+                           .order_by(NoteUpdate.id))) if note.id else []
+
+
+def _document_of(db: Session, note: Note, updates: list[bytes] | None = None) -> dict[str, Any] | None:
     try:
-        updates = list(db.scalars(select(NoteUpdate.update).where(NoteUpdate.note_id == note.id)
-                                  .order_by(NoteUpdate.id))) if note.id else []
+        if updates is None:
+            updates = _updates_of(db, note)
         return notedoc.to_json(notedoc.load(note.ydoc or None, updates))
     except Exception:  # noqa: BLE001 - a document that cannot be read keeps what was known before
         logger.warning("Reading the attachments of a note failed note=%s", note.id)
@@ -398,7 +408,10 @@ def sync_refs(db: Session, note: Note) -> None:
     try:
         old = {ref.attachment_id: ref for ref in db.scalars(select(AttachmentRef)
                                                             .where(AttachmentRef.note_id == note.id))}
-        document = _document_of(db, note) if note.ydoc or old else None
+        updates = _updates_of(db, note)
+        if not old and not any(name in part for part in (note.ydoc or b"", *updates) for name in _BLOCK_NAMES):
+            return
+        document = _document_of(db, note, updates)
         if document is None:
             return
         ids = notedoc.attachment_refs(document)
