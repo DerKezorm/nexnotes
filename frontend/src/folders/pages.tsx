@@ -4,7 +4,7 @@
  * (AC-7), "File" (AC-14) and its own empty state (EC-6); and on the phone the list of all folders (drawing
  * "Handy-Ordner").
  */
-import { CheckCheck, ChevronDown, ChevronRight, FileText, FolderInput, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
+import { Braces, CheckCheck, ChevronDown, ChevronRight, FileText, FolderInput, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
@@ -148,7 +148,7 @@ export function FolderPage() {
 
 // ---- The inbox -------------------------------------------------------------------------------------------------------
 
-/** A quiet sign of where a note came from (AC-7): shared, dictated, via MCP, a shortcut, nexdeck, made here. Never the
+/** A quiet sign of where a note came from (AC-7): shared, dictated, via MCP, via the API, a shortcut, nexdeck, made here. Never the
  * inbox's tray, which would only repeat the page. */
 export function OriginIcon({ origin }: { origin: string }) {
   const kind = origin.split(':')[0]
@@ -160,11 +160,13 @@ export function OriginIcon({ origin }: { origin: string }) {
         ? Mic
         : kind === 'mcp'
           ? Plug
-          : kind === 'shortcut'
-            ? Zap
-            : kind === 'nexdeck'
-              ? LayoutGrid
-              : StickyNote
+          : kind === 'api'
+            ? Braces
+            : kind === 'shortcut'
+              ? Zap
+              : kind === 'nexdeck'
+                ? LayoutGrid
+                : StickyNote
   return <Icon aria-hidden className="h-4 w-4 text-mist-500" strokeWidth={2} data-testid="inbox-origin-icon" data-origin={origin ? kind : 'here'} />
 }
 

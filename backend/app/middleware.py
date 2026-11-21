@@ -177,6 +177,21 @@ LARGE_BODIES: dict[str, int] = {
     "/api/vault/attachments": 100_000 * 1024**2 + 1024**2,
     "/api/vault/save": 32 * 1024**2,
 }
+#: The same for paths with an id in them: an upload through the API for programs (NOTES-25 AC-21) has the operator's
+#: limit per file, checked by the route; this is the ceiling.
+LARGE_BODY_PATTERNS: tuple[tuple[re.Pattern[str], int], ...] = (
+    (re.compile(r"^/api/v1/notes/[^/]{1,36}/attachments$"), 100_000 * 1024**2 + 1024**2),
+)
+
+
+def body_limit(path: str) -> int:
+    """The largest body a request to ``path`` may carry."""
+    if path in LARGE_BODIES:
+        return LARGE_BODIES[path]
+    for pattern, limit in LARGE_BODY_PATTERNS:
+        if pattern.match(path):
+            return limit
+    return MAX_BODY
 
 
 class BodyTooLarge(Exception):
@@ -219,7 +234,7 @@ class GuardMiddleware:
             for message in _refuse(400, "client_required", "Changes need the header X-Nexnotes-Client."):
                 await send(message)
             return
-        limit = LARGE_BODIES.get(scope["path"], MAX_BODY)
+        limit = body_limit(scope["path"])
         # The page says the limit in its sentence ("larger than allowed ({{max_mb}} MB)"), as the upload routes do.
         size = {"max_mb": max(1, limit // (1024 * 1024))}
         declared = headers.get(b"content-length")

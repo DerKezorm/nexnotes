@@ -47,6 +47,11 @@ REFUSALS: dict[str, tuple[int, str]] = {
     "note_trashed": (410, "This note is in the trash."),
     "note_locked": (409, "This note is locked."),
     "note_format": (409, "This note is in a format this server cannot read."),
+    "not_owner": (403, "Only the owner of the note may do this."),
+    "note_changed": (412, "The note changed since it was read. Read it again."),
+    "precondition_required": (428, "Name the state the change is based on: If-Match or base."),
+    "too_large": (413, "The request is too large."),
+    "invalid_input": (422, "The input is not valid."),
 }
 
 
@@ -223,9 +228,10 @@ def note(db: Session, caller: Caller, note_id: str, *, write: bool = False) -> t
     return found, access
 
 
-def folder(db: Session, caller: Caller, folder_id: str, *, write: bool = False) -> Folder:
+def folder(db: Session, caller: Caller, folder_id: str, *, write: bool = False, own: bool = False) -> Folder:
     """A folder the token may look into (``inbox`` names the account's inbox): the account's own or one shared with
-    it, within the token's folders."""
+    it, within the token's folders. ``own``: the account's own only (making, renaming, moving, deleting folders and
+    moving notes are the owner's, NOTES-4); one shared with it answers like one that is not there."""
     wanted = folder_id.strip()
     if wanted.lower() == "inbox":
         wanted = inbox_for(db, caller.account.id).id
@@ -234,12 +240,49 @@ def folder(db: Session, caller: Caller, folder_id: str, *, write: bool = False) 
     right = notes.folder_right(db, caller.account, found)
     if found is None or right not in (Access.READ, Access.WRITE) or not in_scope(db, caller, found.id):
         raise Refused("not_found")
+    if own and found.owner_id != caller.account.id:
+        raise Refused("not_found")
     if write:
         if not caller.writes:
             raise Refused("token_reads_only")
         if right != Access.WRITE:
             raise Refused("not_allowed")
     return found
+
+
+def trashed_note(db: Session, caller: Caller, note_id: str) -> Note:
+    """A note to bring back from the trash: one the account may write, within the token's folders as they were."""
+    if not caller.writes:
+        raise Refused("token_reads_only")
+    found = db.get(Note, note_id) if isinstance(note_id, str) and 0 < len(note_id) <= 36 else None
+    scope = caller.scope(db, with_trash=True)
+    if found is None or (scope is not None and found.folder_id not in scope):
+        raise Refused("not_found")
+    if notes.right_to(db, caller.account, found) != Access.WRITE:
+        raise Refused("not_found")
+    return found
+
+
+def trashed_folder(db: Session, caller: Caller, folder_id: str) -> Folder:
+    if not caller.writes:
+        raise Refused("token_reads_only")
+    found = db.get(Folder, folder_id) if 0 < len(folder_id) <= 36 else None
+    scope = caller.scope(db, with_trash=True)
+    if found is None or found.owner_id != caller.account.id or (scope is not None and found.id not in scope):
+        raise Refused("not_found")
+    return found
+
+
+def first_folder(db: Session, caller: Caller) -> str | None:
+    """Where a new note of a token limited to folders goes when it names none: the first chosen one still there
+    (AC-7)."""
+    found = caller.scope(db)
+    if found is None:
+        return None
+    for chosen in caller.folder_ids or []:
+        if chosen in found:
+            return chosen
+    raise Refused("not_found")
 
 
 def attachment(db: Session, caller: Caller, attachment_id: str) -> Attachment:

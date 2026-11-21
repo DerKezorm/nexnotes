@@ -21,7 +21,7 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
-from .routers import about, api_v1, auth, export, folders, health, history, invites, oidc, trash
+from .routers import about, api_v1, api_v1_write, auth, export, folders, health, history, invites, oidc, trash
 from .routers import accounts as accounts_router
 from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
@@ -216,6 +216,7 @@ app.add_exception_handler(api_v1.apiv1.BadInput, api_v1.bad_input)
 for module in ROUTERS + FEATURE_ROUTERS:
     app.include_router(module.router)
 app.include_router(api_v1.router)
+app.include_router(api_v1_write.router)
 app.include_router(api_v1.docs_router)
 
 # The shared sign-in module learns who it runs in before the first request (vendor/nexoidc).

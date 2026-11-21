@@ -510,11 +510,13 @@ def rewrite(doc: Any, key: str, new_label: str | None) -> Counter[str]:
     return tags_in(notedoc.to_json(doc))
 
 
-def _own_notes(db: Session, account: Account, key: str) -> list[str]:
+def _own_notes(db: Session, account: Account, key: str, folders: set[str] | None = None) -> list[str]:
     """Every note of the account's own with the tag, those in the trash too (AC-4, AC-5 say "all of its own notes"):
-    a note that comes back from the trash carries the new name. Locked notes stay as they are (EC-6)."""
+    a note that comes back from the trash carries the new name. Locked notes stay as they are (EC-6). ``folders``:
+    only notes in these (an API token limited to folders, NOTES-25 AC-7)."""
+    within = [Note.folder_id.in_(sorted(folders))] if folders is not None else []
     return list(db.scalars(select(Note.id).join(NoteTag, NoteTag.note_id == Note.id)
-                           .where(Note.owner_id == account.id, NoteTag.key == key,
+                           .where(Note.owner_id == account.id, NoteTag.key == key, *within,
                                   *(not_(hidden()) for hidden in HIDDEN_NOTES))
                            .group_by(Note.id)))
 
@@ -542,7 +544,8 @@ async def _apply(account: Account, note_ids: list[str], key: str, new_label: str
     return changed
 
 
-async def rename(account: Account, name: str, new_name: str, *, merge: bool = False) -> dict[str, Any]:
+async def rename(account: Account, name: str, new_name: str, *, merge: bool = False,
+                 folders: set[str] | None = None) -> dict[str, Any]:
     """Renames a tag in all of the account's own notes (AC-4). Onto a tag that exists already only with ``merge``
     (AC-7); without it ``tag_exists`` says which, so that the page can ask."""
     label = clean_name(name)
@@ -551,7 +554,7 @@ async def rename(account: Account, name: str, new_name: str, *, merge: bool = Fa
         raise error("tag_name_invalid", "This is not a tag.", 422)
     key, new_key = key_of(label), key_of(new_label)
     with SessionLocal() as db:
-        own = _own_notes(db, account, key)
+        own = _own_notes(db, account, key, folders)
         kept = _kept(db, account, key)
         if new_key != key and not merge:
             there = summary(db, account, [new_key]).get(new_key)

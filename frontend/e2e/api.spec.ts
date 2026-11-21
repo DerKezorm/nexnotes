@@ -3,7 +3,8 @@
  * a run-out, shown once; a program (played by `page.request`, no cookie counts and no `Origin` is sent) reads notes,
  * one note with Markdown and `etag`, searches, and ticks an item that the note open in the browser shows at once; the
  * description at /api/v1/docs loads without one request to another site; the operator's switch stops the API. The
- * page is the operator of global-setup.ts. Writing over the API (new notes, append) comes with round 2.
+ * page is the operator of global-setup.ts. A program makes a note, appends and replaces its text while it is open
+ * in the browser; the inbox and the history name where it came from.
  */
 import { expect, test, type Page } from '@playwright/test'
 
@@ -120,4 +121,42 @@ test('NOTES-25 AC-27 the operator sees the token of an account and blocks it', a
   expect((await page.request.get('/api/v1/me', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(401)
   await page.goto('/settings/connections')
   await expect(page.getByTestId('token-row').filter({ hasText: name })).toContainText('Blocked by the operator')
+})
+
+test('NOTES-25 AC-14 AC-16 AC-17 AC-22 a program makes a note, appends and replaces while it is open', async ({ page }) => {
+  const stamp = Date.now()
+  const made = await page.request.post('/api/tokens', { data: { name: `E2E weather ${stamp}`, level: 'write' }, headers: TAB })
+  const auth = { Authorization: `Bearer ${(await made.json()).token as string}` }
+  const ref = `weather-${stamp}`
+  const created = await page.request.post('/api/v1/notes', { data: { markdown: `Weather ${stamp}
+
+Sun in the morning`, external_ref: ref }, headers: auth })
+  expect(created.status()).toBe(201)
+  const id = (await created.json()).id as string
+  // The same request again: the same note, no second one.
+  const again = await page.request.post('/api/v1/notes', { data: { markdown: 'ignored', external_ref: ref }, headers: auth })
+  expect(again.status()).toBe(200)
+  expect((await again.json()).id).toBe(id)
+
+  await page.goto('/inbox')
+  const card = page.locator('[data-testid="note-list"] [data-note]').filter({ hasText: `Weather ${stamp}` })
+  await expect(card).toContainText(`Via the API from “E2E weather ${stamp}”`)
+  await expect(card.getByTestId('inbox-origin-icon')).toHaveAttribute('data-origin', 'api')
+
+  await page.goto(`/notes/${id}`)
+  await expect(page.getByTestId('note-body')).toContainText('Sun in the morning')
+  expect((await page.request.post(`/api/v1/notes/${id}/append`, { data: { markdown: 'Rain from noon' }, headers: auth })).status()).toBe(200)
+  await expect(page.getByTestId('note-body')).toContainText('Rain from noon')
+  const state = await (await page.request.get(`/api/v1/notes/${id}`, { headers: auth })).json()
+  const replaced = await page.request.put(`/api/v1/notes/${id}/content`, {
+    data: { markdown: state.markdown.replace('Rain from noon', 'Snow at night') },
+    headers: { ...auth, 'If-Match': `"${state.etag}"` },
+  })
+  expect(replaced.status()).toBe(200)
+  await expect(page.getByTestId('note-body')).toContainText('Snow at night')
+  await expect(page.getByTestId('note-body')).not.toContainText('Rain from noon')
+  // An older state is refused and changes nothing.
+  const stale = await page.request.put(`/api/v1/notes/${id}/content`, { data: { markdown: 'All gone', base: state.etag }, headers: auth })
+  expect(stale.status()).toBe(412)
+  await expect(page.getByTestId('note-body')).toContainText('Snow at night')
 })

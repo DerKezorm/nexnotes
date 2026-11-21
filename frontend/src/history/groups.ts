@@ -75,6 +75,8 @@ export function whoText(authors: Author[], t: (key: string, values?: Record<stri
     if (!author.via) return name
     // A nexdeck card that ticked an item (NOTES-21) names its key as well, beside the tools of MCP.
     if (author.via.startsWith('nexdeck:')) return t('history.viaDeck', { key: author.via.slice(8) })
+    // A program with an API token (NOTES-25 AC-22): the account and the token.
+    if (author.via.startsWith('api:')) return t('history.viaApi', { account: name, name: author.via.slice(4) })
     const key = author.via.startsWith('mcp:') ? author.via.slice(4) : author.via
     return t('history.viaKey', { key })
   })

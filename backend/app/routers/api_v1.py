@@ -53,7 +53,7 @@ PREFIX = "/api/v1"
 FREE_WRONG_TOKENS = 20
 #: What ``/me`` names, for a program to ask before it uses something (AC-26). It only grows.
 FEATURES = ["pinned", "notes", "check", "read", "search", "folders", "tags", "smart", "shares", "attachments",
-            "trash"]
+            "trash", "write", "external_ref", "replace", "upload"]
 
 
 class Problem(BaseModel):
@@ -351,18 +351,39 @@ DOCS_TEXT = (
 )
 
 
+#: A body for the examples of the routes that take one.
+EXAMPLE_BODIES = {
+    ("post", "/api/v1/notes"): '{"markdown": "- [ ] Milk", "external_ref": "shopping-2026-11-21"}',
+    ("post", "/api/v1/notes/{note_id}/items/{index}"): '{"checked": true, "text": "Milk"}',
+    ("post", "/api/v1/notes/{note_id}/append"): '{"markdown": "Rain from noon."}',
+    ("put", "/api/v1/notes/{note_id}/content"): '{"markdown": "- [ ] Milk", "base": "<etag>"}',
+    ("patch", "/api/v1/notes/{note_id}"): '{"title": "Shopping", "pinned": true}',
+    ("post", "/api/v1/folders"): '{"name": "Household"}',
+    ("patch", "/api/v1/folders/{folder_id}"): '{"name": "Home"}',
+    ("patch", "/api/v1/tags/{name}"): '{"name": "groceries"}',
+}
+
+
 def _example(base: str, path: str, method: str) -> str:
-    line = f'curl -H "Authorization: Bearer $NEXNOTES_TOKEN" "{base}{path}"'
-    if method == "post":
-        line = (f'curl -X POST -H "Authorization: Bearer $NEXNOTES_TOKEN" -H "Content-Type: application/json" '
-                f'-d \'{{"checked": true, "text": "Milk"}}\' "{base}{path}"')
+    auth = '-H "Authorization: Bearer $NEXNOTES_TOKEN"'
+    if method == "post" and path.endswith("/attachments"):
+        line = f'curl -X POST {auth} --data-binary @photo.jpg "{base}{path}?name=photo.jpg"'
+    elif (method, path) in EXAMPLE_BODIES:
+        line = (f'curl -X {method.upper()} {auth} -H "Content-Type: application/json" '
+                f"-d '{EXAMPLE_BODIES[(method, path)]}' \"{base}{path}\"")
+    elif method == "get":
+        line = f'curl {auth} "{base}{path}"'
+    else:
+        line = f'curl -X {method.upper()} {auth} "{base}{path}"'
     return f"\n\n```sh\n{line}\n```"
 
 
 def openapi(base: str) -> dict[str, Any]:
     """The description of every route under ``/api/v1/`` and nothing else, with an example each."""
-    schema = get_openapi(title="nexnotes API", version=__version__, description=DOCS_TEXT, routes=router.routes,
-                         servers=[{"url": base}])
+    from . import api_v1_write
+
+    schema = get_openapi(title="nexnotes API", version=__version__, description=DOCS_TEXT,
+                         routes=[*router.routes, *api_v1_write.router.routes], servers=[{"url": base}])
     schema.setdefault("components", {})["securitySchemes"] = {
         "bearerAuth": {"type": "http", "scheme": "bearer", "description": "An API token (`nn_api_...`)."}}
     schema["security"] = [{"bearerAuth": []}]

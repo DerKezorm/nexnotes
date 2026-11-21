@@ -413,6 +413,10 @@ def test_notes25_ac25_the_description_is_for_signed_in_members_only_and_holds_on
     # Everything from this server: no address of another site, no "Try it out".
     assert "http://" not in page.text and "https://" not in page.text and "//cdn" not in page.text
     assert '/api-docs/swagger-ui-bundle.js' in page.text and '/api-docs/init.js' in page.text
+    # Scripts from this server only, and no eval: Swagger UI's only `Function(...)` calls are fallbacks behind
+    # `globalThis`, never reached in a browser of today.
+    policy = page.headers["content-security-policy"]
+    assert "default-src 'self'" in policy and "unsafe-eval" not in policy and "script-src" not in policy
     schema = client.get("/api/v1/openapi.json").json()
     assert schema["info"]["title"] == "nexnotes API"
     paths = set(schema["paths"])

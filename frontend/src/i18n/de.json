@@ -720,7 +720,9 @@
         "shortcut": "Über einen Kurzbefehl",
         "nexdeck": "Aus nexdeck",
         "here": "Hier angelegt",
-        "other": "Schnell festgehalten"
+        "other": "Schnell festgehalten",
+        "api": "Über die API von „{{name}}“",
+        "apiAny": "Über die API"
       }
     },
     "create": "Anlegen"
@@ -754,7 +756,8 @@
     "viaKey": "MCP · {{key}}",
     "weekOf": "Woche ab {{date}}",
     "sealed": "Diese Fassung ist verschlüsselt. Entsperre die Notiz, dann lässt sie sich hier ansehen.",
-    "viaDeck": "nexdeck · {{key}}"
+    "viaDeck": "nexdeck · {{key}}",
+    "viaApi": "{{account}} über API-Token „{{name}}“"
   },
   "home": {
     "empty": "Hier erscheinen deine Notizen. Neue Notizen, Ordner und Suche kommen mit den nächsten Schritten.",

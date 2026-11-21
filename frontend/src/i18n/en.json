@@ -720,7 +720,9 @@
         "shortcut": "Via a shortcut",
         "nexdeck": "From nexdeck",
         "here": "Created here",
-        "other": "Captured quickly"
+        "other": "Captured quickly",
+        "api": "Via the API from “{{name}}”",
+        "apiAny": "Via the API"
       }
     },
     "create": "Create"
@@ -754,7 +756,8 @@
     "viaKey": "MCP · {{key}}",
     "weekOf": "Week of {{date}}",
     "sealed": "This version is encrypted. Unlock the note to see it here.",
-    "viaDeck": "nexdeck · {{key}}"
+    "viaDeck": "nexdeck · {{key}}",
+    "viaApi": "{{account}} via API token “{{name}}”"
   },
   "home": {
     "empty": "Your notes appear here. New notes, folders and search come with the next steps.",

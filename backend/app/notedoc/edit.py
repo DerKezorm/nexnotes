@@ -12,16 +12,17 @@ Appending goes to the end of the text; a last empty paragraph (where the cursor 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from difflib import SequenceMatcher
 from typing import Any
 
 from pycrdt import Doc, XmlElement, XmlFragment, XmlText
 
 from . import schema as s
-from .doc import body_of, check_format, clean_doc, set_title, write_blocks
-from .markdown import from_markdown
+from .doc import _read_element, body_of, check_format, clean_doc, set_title, write_blocks
+from .markdown import from_markdown, to_markdown
 
 __all__ = ["SHOWN_TASK_TEXT", "Task", "TaskNotFound", "append_markdown", "append_paragraph", "append_task",
-           "list_tasks", "set_title", "shown_task_text", "toggle_task"]
+           "list_tasks", "replace_markdown", "set_title", "shown_task_text", "toggle_task"]
 
 
 #: The most characters of a checklist item a program is shown (MCP ``read_note``, the nexdeck card). Ticking with that
@@ -91,6 +92,43 @@ def append_markdown(doc: Doc, markdown: str) -> int:
     if len(blocks) == 1 and blocks[0] == {"type": s.PARAGRAPH}:
         return 0
     return append_blocks(doc, blocks)
+
+
+def _block_markdown(block: dict[str, Any]) -> str:
+    return to_markdown({"type": s.DOC, "content": [block]})
+
+
+def replace_markdown(doc: Doc, markdown: str) -> dict[str, int]:
+    """Replaces the whole text by ``markdown`` block by block (the REST API, NOTES-25 AC-17): each block of the
+    document and of the new text is compared as Markdown, and what is the same stays exactly as it is, with its Yjs
+    identity and everything Markdown cannot say (highlights, folded sections, column widths, attachments, anchors).
+    Only blocks that differ go, and the new ones come in their place. The title stays. Returns how many blocks were
+    kept, removed and added."""
+    if len(markdown or "") > s.MAX_MARKDOWN:
+        raise ValueError("Markdown too long.")
+    check_format(doc)
+    new_blocks = from_markdown(markdown)["content"]
+    body = body_of(doc)
+    with doc.transaction():
+        old = [(index, child) for index, child in enumerate(body.children) if isinstance(child, XmlElement)]
+        old_md = [_block_markdown(_read_element(child)) for _index, child in old]
+    new_md = [_block_markdown(block) for block in new_blocks]
+    counts = {"kept": 0, "removed": 0, "added": 0}
+    operations = SequenceMatcher(None, old_md, new_md, autojunk=False).get_opcodes()
+    with doc.transaction():
+        # From the end: what is changed later in the text never moves what comes before it.
+        for operation, old_from, old_to, new_from, new_to in reversed(operations):
+            if operation == "equal":
+                counts["kept"] += old_to - old_from
+                continue
+            at = old[old_from][0] if old_from < len(old) else len(body.children)
+            for gone in range(old_to - 1, old_from - 1, -1):
+                del body.children[old[gone][0]]
+                counts["removed"] += 1
+            if new_to > new_from:
+                write_blocks(body, at, new_blocks[new_from:new_to])
+                counts["added"] += new_to - new_from
+    return counts
 
 
 def _paragraph_text(element: XmlElement) -> str:

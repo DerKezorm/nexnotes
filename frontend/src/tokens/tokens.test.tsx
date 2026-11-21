@@ -9,6 +9,9 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 
 import { CONNECTION_SECTIONS } from '../extensions'
+import { originText } from '../folders/origin'
+import { OriginIcon } from '../folders/pages'
+import { whoText } from '../history/groups'
 import i18n from '../i18n'
 import { FeaturesCard } from '../pages/settings/ServerCards'
 import type { ApiTokenEntry, OperatorToken } from './api'
@@ -274,5 +277,20 @@ describe('NOTES-25 the operator', () => {
     await click(document.querySelector<HTMLElement>('[role="dialog"] button[type="submit"]'))
     expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual(['/api/admin/tokens/7/block'])
     expect($$('all-token-row')[1].textContent).toContain('Vom Betreiber gesperrt')
+  })
+})
+
+describe('NOTES-25 what a program wrote, in the inbox and the history', () => {
+  it('NOTES-25 AC-14 a note made over the API says "Über die API von …" with a sign of its own', async () => {
+    expect(originText('api:Wetterbericht', i18n.t)).toBe('Über die API von „Wetterbericht“')
+    expect(originText('api:', i18n.t)).toBe('Über die API')
+    await render(<OriginIcon origin="api:Wetterbericht" />)
+    expect($('inbox-origin-icon')!.dataset.origin).toBe('api')
+    expect($('inbox-origin-icon')!.getAttribute('class')).toContain('lucide-braces')
+  })
+
+  it('NOTES-25 AC-22 the history names the account through the API token', () => {
+    expect(whoText([{ id: 1, name: 'Tester', via: 'api:Hausautomation' }], i18n.t)).toBe('Tester über API-Token „Hausautomation“')
+    expect(whoText([{ id: 1, name: 'Tester', via: 'mcp:Laptop' }], i18n.t)).toBe('MCP · Laptop')
   })
 })
