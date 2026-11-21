@@ -1755,6 +1755,9 @@ describe('the one toolbar over two notes', () => {
       expect(own.getAttribute('role')).toBe('group')
       expect(own.getAttribute('aria-label')).toBe('Tools of the note')
       for (const one of ['tool-width', 'tool-outline', 'note-menu']) expect($(one, own)).not.toBeNull()
+      // NOTES-3 EC-11: a side may be 340 px narrow; the buttons then break into a second row, never cut off.
+      expect(own.className.split(/\s+/)).toEqual(expect.arrayContaining(['flex-wrap', 'min-w-0']))
+      expect(own.className).not.toMatch(/\bshrink-0\b/)
     }
   })
 

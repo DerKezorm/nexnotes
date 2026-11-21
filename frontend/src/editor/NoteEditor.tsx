@@ -603,7 +603,14 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
         data-testid="editor-head"
       >
         {!toolsSlot && <div className="hidden min-w-[34px] flex-1 basis-0 md:block">{editor && writable && <Toolbar editor={editor} onLink={openLink} />}</div>}
-        <div className="ml-auto flex shrink-0 items-center gap-3" role={toolsSlot ? 'group' : undefined} aria-label={toolsSlot ? t('editor.tools.noteTools') : undefined} data-testid="note-tools">
+        {/* Side by side the note's own bar stands alone in the head, and a side may be as narrow as 340 px: its buttons
+            break into a second row at the right instead of being cut off (NOTES-3 EC-11). */}
+        <div
+          className={'ml-auto flex items-center gap-3 ' + (toolsSlot ? 'min-w-0 flex-wrap justify-end gap-y-2' : 'shrink-0')}
+          role={toolsSlot ? 'group' : undefined}
+          aria-label={toolsSlot ? t('editor.tools.noteTools') : undefined}
+          data-testid="note-tools"
+        >
           {toolsSlot && <NoteViewTools />}
           {editor && NOTE_HEAD_PARTS.map((Part, index) => <Part key={index} noteId={noteId} editor={editor} head={head} sealed={sealed} />)}
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}

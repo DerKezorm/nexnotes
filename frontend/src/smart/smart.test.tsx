@@ -23,6 +23,7 @@ import '../shares'
 import { forgetFolders } from '../folders/store'
 import i18n from '../i18n'
 import type { GalleryItem } from '../attachments/api'
+import { notesChanged } from '../notes/api'
 import type { ListItem } from '../notes/list/api'
 import { folderOfList, hrefIn, isListPath, listNameOf, noteOf } from '../notes/workspace'
 import { SearchPage } from '../search/SearchPage'
@@ -532,6 +533,19 @@ describe('NOTES-7 smart folders', () => {
     expect(posted('/api/smart-folders/p4/view', 'PUT')[0].body).toEqual({ mode: 'list' })
     expect($('gallery')).toBeNull()
     expect($$('note-row')).toHaveLength(2)
+  })
+
+  it('NOTES-7 AC-4 AC-7 the gallery follows its notes: a note that comes in with an attachment shows it without reloading', async () => {
+    smart = [...smart, preset('p4', 'attachments', 2)]
+    views = { p4: 'gallery' }
+    await render('/smart/p4')
+    expect($$('gallery-item')).toHaveLength(0)
+    // A file attached in the note open beside the gallery: the note now fits, and the list reads its notes anew.
+    items = [item('Vertrag')]
+    gallery = [attachment('a2', 'pdf', 'Vertrag')]
+    await act(async () => notesChanged())
+    await settle()
+    expect($$('gallery-item').map((tile) => tile.getAttribute('data-kind'))).toEqual(['pdf'])
   })
 
   it('NOTES-7 AC-4 a smart folder without "Anhang" offers no gallery, and one kept from before shows as a list', async () => {

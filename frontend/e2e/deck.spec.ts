@@ -49,6 +49,8 @@ test('NOTES-21 AC-1 AC-2 AC-5 a card reads the pinned notes, one checklist, and 
   await expect(row.getByTestId('deck-key-meta')).not.toContainText('never used')
   await row.getByTestId('deck-revoke').click()
   await page.getByTestId('deck-revoke-confirm').click()
+  // Asked once the server confirmed the revoke (the row is gone), not while the request is still on its way.
+  await expect(row).toHaveCount(0)
   expect((await page.request.get('/api/v1/me', { headers: auth })).status()).toBe(401)
 })
 
@@ -56,7 +58,7 @@ test('NOTES-21 EC-3 a key that only shows cannot tick', async ({ page }) => {
   const token = await makeKey(page, `E2E hall ${Date.now()}`, 'read')
   const made = await page.request.post('/api/notes', { data: { markdown: '- [ ] Milk' }, headers: TAB })
   const id = (await made.json()).id as string
-  const refused = await page.request.post(`/api/v1/notes/${id}/items/0`, { data: { checked: true }, headers: { Authorization: `Bearer ${token}` } })
+  const refused = await page.request.post(`/api/v1/notes/${id}/items/0`, { data: { checked: true, text: 'Milk' }, headers: { Authorization: `Bearer ${token}` } })
   expect(refused.status()).toBe(403)
   expect((await refused.json()).detail.code).toBe('token_reads_only')
 })

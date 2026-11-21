@@ -218,6 +218,20 @@ describe('NOTES-17 the notices of exports', () => {
     expect(document.querySelector('[data-testid="export-ready"]')).toBeNull()
   })
 
+  it('NOTES-17 AC-7 NOTES-23 AC-7 a notice lies below dialogs and viewers, and on a phone above the button "New note"', async () => {
+    jobs = [job({ status: 'ready', size: 100 })]
+    await renderNotices()
+    const classes = document.querySelector('[data-testid="export-notices"]')!.className.split(/\s+/)
+    // Dialogs and the full-screen viewers (text recognition, pictures, drawings) stand at z-50 with their own buttons
+    // at the bottom right: a notice from the background must not cover them.
+    const layer = Number(/^z-\[?(\d+)\]?$/.exec(classes.find((name) => /^z-/.test(name)) ?? '')?.[1])
+    expect(layer).toBeLessThan(50)
+    // The phone's "New note" is 56 px high and 28 px from the bottom (bottom-7): the notice starts above it there.
+    const phone = /^bottom-\[([\d.]+)rem\]$/.exec(classes.find((name) => /^bottom-/.test(name)) ?? '')
+    expect(phone && Number(phone[1]) * 16).toBeGreaterThanOrEqual(28 + 56 + 8)
+    expect(classes).toContain('md:bottom-4')
+  })
+
   it('NOTES-17 AC-7 nothing to tell, nothing shown; it stops asking once nothing runs', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
     jobs = [job({ status: 'ready', seen: true })]

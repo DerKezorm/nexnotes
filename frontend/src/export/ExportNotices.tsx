@@ -36,8 +36,10 @@ export function ExportNotices() {
     }
   }
 
+  // Below dialogs and the full-screen viewers (z-50), whose own buttons stand at the bottom right too; on a phone above
+  // the button "New note" at the bottom right (56 px, 28 px from the edge).
   return (
-    <div className="pointer-events-none fixed right-4 bottom-4 z-[55] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2" data-testid="export-notices">
+    <div className="pointer-events-none fixed right-4 bottom-[6.5rem] z-[45] flex w-[min(380px,calc(100vw-2rem))] flex-col gap-2 md:bottom-4" data-testid="export-notices">
       {running.map((job) => (
         <div key={job.id} role="status" data-testid="export-running" className="pointer-events-auto flex items-center gap-2.5 rounded-[12px] border border-ink-600 bg-ink-800 px-3.5 py-2.5 text-[13px] text-mist-300 shadow-xl shadow-black/40">
           <Loader2 aria-hidden className="h-4 w-4 shrink-0 animate-spin text-accent-400" />

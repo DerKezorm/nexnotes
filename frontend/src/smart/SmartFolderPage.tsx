@@ -51,8 +51,9 @@ export function ConditionList({ folder }: { folder: SmartFolder }) {
 
 const WITH_GALLERY: readonly ListMode[] = ['list', 'tiles', 'gallery']
 
-/** The attachments of the smart folder's notes; an entry opens its note beside the list, at the attachment. */
-function SmartGallery({ id }: { id: string }) {
+/** The attachments of the smart folder's notes; an entry opens its note beside the list, at the attachment. Read anew
+ * with every new answer of the list (`read`): a note that came in with its attachment shows it at once. */
+function SmartGallery({ id, read }: { id: string; read: number }) {
   const [params] = useSearchParams()
   const load = useCallback<GalleryLoad>((query) => smartApi.gallery(id, query), [id])
   const hrefFor = useCallback(
@@ -64,7 +65,7 @@ function SmartGallery({ id }: { id: string }) {
     },
     [id, params],
   )
-  return <Gallery load={load} sourceKey={id} embedded hrefFor={hrefFor} />
+  return <Gallery load={load} sourceKey={`${id}:${read}`} embedded hrefFor={hrefFor} />
 }
 
 function BrokenNote({ broken, folderId }: { broken: Broken[]; folderId: string }) {
@@ -127,6 +128,8 @@ export function SmartFolderPage() {
   const padding = useListPadding()
   const { folders } = useSmartFolders()
   const [answer, setAnswer] = useState<SmartAnswer | null>(null)
+  // How often the list read its notes; the gallery follows (its notes changed, so may their attachments).
+  const [reads, setReads] = useState(0)
   const [missing, setMissing] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const known = folders.find((folder) => folder.id === id) ?? null
@@ -142,6 +145,7 @@ export function SmartFolderPage() {
         smartApi.notes(id).then(
           (found) => {
             setAnswer(found)
+            setReads((count) => count + 1)
             setMissing(false)
             return found
           },
@@ -206,7 +210,7 @@ export function SmartFolderPage() {
         empty={empty || undefined}
         hrefFor={(noteId) => hrefIn(`/smart/${encodeURIComponent(id)}`, noteId)}
         modes={withGallery ? WITH_GALLERY : undefined}
-        gallery={withGallery ? <SmartGallery id={id} /> : undefined}
+        gallery={withGallery ? <SmartGallery id={id} read={reads} /> : undefined}
       />
       {deleting && folder && <DeleteDialog folder={folder} onClose={() => setDeleting(false)} />}
     </div>

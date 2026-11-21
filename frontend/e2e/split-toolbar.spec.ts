@@ -33,9 +33,26 @@ async function twoNotes(page: Page, first: string, second: string, firstText: st
   await expect(bar(page).getByTestId('tool-bold')).toBeVisible()
 }
 
-/** Chooses `word` in the text of a side by a double click (which also makes that side the one used last). */
+/** Chooses `word` in the text of a side by a double click on the word itself (which also makes that side the one used
+ * last). A double click on the paragraph would land in its middle, on whichever word stands there. */
 async function choose(page: Page, side: 'left' | 'right', word: string): Promise<void> {
-  await pane(page, side).getByTestId('note-body').getByText(word, { exact: false }).first().dblclick()
+  const body = pane(page, side).getByTestId('note-body')
+  await expect(body).toContainText(word)
+  const at = await body.evaluate((element, word) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const start = node.textContent!.indexOf(word)
+      if (start < 0) continue
+      const range = document.createRange()
+      range.setStart(node, start)
+      range.setEnd(node, start + word.length)
+      const box = range.getBoundingClientRect()
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+    }
+    return null
+  }, word)
+  expect(at, word).not.toBeNull()
+  await page.mouse.dblclick(at!.x, at!.y)
 }
 
 test('NOTES-8 AC-1 at 1920 px one toolbar stands over both notes; each sheet keeps a small bar of its own', async ({ page }) => {
