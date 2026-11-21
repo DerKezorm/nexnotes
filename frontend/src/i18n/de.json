@@ -371,7 +371,9 @@
     "unknown_language": "Diese Sprache hat nexnotes nicht.",
     "use_disable": "Schalte deinen eigenen zweiten Faktor auf deiner Kontoseite aus.",
     "wrong_credentials": "E-Mail oder Passwort stimmen nicht.",
-    "wrong_password": "Das Passwort stimmt nicht."
+    "wrong_password": "Das Passwort stimmt nicht.",
+    "tag_name_invalid": "Ein Schlagwort besteht aus Buchstaben, Ziffern, Bindestrich, Unterstrich oder Emoji, ohne Leerzeichen, mit mindestens einem Buchstaben und höchstens 64 Zeichen.",
+    "tag_exists": "Das Schlagwort #{{label}} gibt es schon."
   },
   "folders": {
     "section": "Ordner",
@@ -766,6 +768,35 @@
     "text": "Das erste Konto verwaltet den Server. Weitere Personen lädst du danach ein.",
     "title": "nexnotes einrichten",
     "version": "Version {{version}}"
+  },
+  "tags": {
+    "heading": "Schlagwörter",
+    "showAll": "Alle anzeigen ({{count}})",
+    "allTitle": "Alle Schlagwörter",
+    "none": "Noch keine Schlagwörter. Tippe #wort in eine Notiz.",
+    "failed": "Die Schlagwörter ließen sich nicht laden.",
+    "countNotes_one": "{{count}} Notiz",
+    "countNotes_other": "{{count}} Notizen",
+    "ofWhich": ", davon {{count}} von {{names}}",
+    "empty": "Keine Notiz hat dieses Schlagwort.",
+    "from": "von {{name}}",
+    "rename": "Umbenennen",
+    "delete": "Löschen",
+    "saveSmart": "Als intelligenten Ordner sichern",
+    "renameTitle": "Schlagwort umbenennen",
+    "newName": "Neuer Name",
+    "renameSays_one": "Ändert eine deiner Notizen.",
+    "renameSays_other": "Ändert {{count}} deiner Notizen.",
+    "kept_one": "In der Notiz von {{names}} bleibt",
+    "kept_other": "In den Notizen von {{names}} bleibt",
+    "keptEnd": " stehen.",
+    "mergeAsk": "{{tag}} gibt es schon. Beide werden zu einem Schlagwort zusammengeführt.",
+    "merge": "Zusammenführen",
+    "deleteTitle": "Schlagwort löschen",
+    "deleteSays_one": "{{tag}} verschwindet aus einer deiner Notizen, der übrige Text bleibt.",
+    "deleteSays_other": "{{tag}} verschwindet aus {{count}} deiner Notizen, der übrige Text bleibt.",
+    "suggestions": "Vorschläge für Schlagwörter",
+    "openTag": "Alle Notizen mit {{tag}}"
   },
   "theme": {
     "dark": "Dunkel",
