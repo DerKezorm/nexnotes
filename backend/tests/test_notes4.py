@@ -436,11 +436,27 @@ def test_notes4_ac10_symbol_and_colour_come_from_fixed_rows_and_reach_every_devi
         assert (seen["icon"], seen["color"]) == ("briefcase", "orange")
     for wrong in ({"icon": "skull"}, {"color": "pinkish"}):
         refused = client.patch(f"/api/folders/{folder}", json=wrong)
-        assert refused.status_code == 400 and code(refused) == "folder_style_unknown"
+        assert refused.status_code == 422 and code(refused) == "folder_style_unknown"
     assert code(client.post("/api/folders", json={"name": "X", "color": "pink"})) == "folder_style_unknown"
     # Back to plain.
     client.patch(f"/api/folders/{folder}", json={"icon": "", "color": ""})
     assert (by_id(client)[folder]["icon"], by_id(client)[folder]["color"]) == ("", "")
+
+
+def test_notes4_ac10_a_colour_of_its_own_as_rrggbb_reaches_every_device(client: TestClient, operator: Account) -> None:
+    folder = make(client, "Polizei")
+    answer = client.patch(f"/api/folders/{folder}", json={"color": "#1E3A8A"})
+    assert answer.status_code == 200, answer.text
+    with new_client(operator) as phone:
+        assert by_id(phone)[folder]["color"] == "#1e3a8a"
+    made = client.post("/api/folders", json={"name": "Feuerwehr", "color": "#c81e1e", "icon": "flame"})
+    assert made.status_code == 201 and made.json()["color"] == "#c81e1e"
+    # Only exactly #rrggbb or one of the twelve keys: no short form, no other names, nothing that is no colour.
+    for wrong in ("#fff", "crimson", "#12345", "#1234567", "#12345g", "1e3a8a", "rgb(1,2,3)", "#1e3a8a "):
+        refused = client.patch(f"/api/folders/{folder}", json={"color": wrong})
+        assert refused.status_code == 422 and code(refused) == "folder_style_unknown", wrong
+        assert code(client.post("/api/folders", json={"name": "Nein", "color": wrong})) == "folder_style_unknown"
+    assert by_id(client)[folder]["color"] == "#1e3a8a"
 
 
 def test_notes4_ac10_the_page_knows_the_same_colours_and_symbols() -> None:
@@ -467,7 +483,7 @@ def test_notes4_ac10_every_symbol_of_the_list_is_taken_and_an_unknown_one_refuse
     assert (made.json()["icon"], made.json()["color"]) == ("plane", "sky")
     for wrong in ("skull-crossbones", "Folder", "folder ", "<svg>"):
         refused = client.patch(f"/api/folders/{folder}", json={"icon": wrong})
-        assert refused.status_code == 400 and code(refused) == "folder_style_unknown", wrong
+        assert refused.status_code == 422 and code(refused) == "folder_style_unknown", wrong
         assert code(client.post("/api/folders", json={"name": "Nein", "icon": wrong})) == "folder_style_unknown"
 
 

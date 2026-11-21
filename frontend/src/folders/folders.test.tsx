@@ -6,6 +6,8 @@
  * A small stand-in for the server keeps the folders, so that two "devices" (two loads of the page with their own
  * `localStorage`) see the same order and colors.
  */
+import { readableColor } from '../lib/color'
+import { forgetPrefs } from '../lib/devicePref'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
@@ -110,6 +112,7 @@ async function render(at = '/'): Promise<void> {
 async function otherDevice(at = '/'): Promise<void> {
   act(() => root.unmount())
   localStorage.clear()
+  forgetPrefs()
   reloadOpenFolders()
   forgetFolders()
   root = createRoot(box)
@@ -337,6 +340,66 @@ describe('NOTES-4 AC-10 symbol and color when making a folder', () => {
     expect(document.activeElement).toBe(grid.querySelector('[role="radio"]'))
     type(dialog.querySelector<HTMLInputElement>('[data-testid="symbol-search"]')!, 'xylophonzz')
     expect(grid.textContent).toBe('No symbol found.')
+  })
+})
+
+describe('NOTES-4 AC-10 a color of its own', () => {
+  async function styleOf(name: string) {
+    await render()
+    click(row(name).querySelector(`button[aria-label="Menu of ${name}"]`)!)
+    click(button('Symbol and color …'))
+    await settle()
+    return document.querySelector<HTMLElement>('[role="dialog"]')!
+  }
+  const preview = (dialog: HTMLElement) => dialog.querySelector<HTMLElement>('[data-testid="look-preview"] span[aria-hidden], [data-testid="look-preview"] svg')!
+
+  it('NOTES-4 AC-10 the chosen color carries a check mark, focus alone does not; the preview shows the choice', async () => {
+    const dialog = await styleOf('Haushalt')
+    const chosen = [...dialog.querySelectorAll('[aria-pressed="true"][data-color]')]
+    expect(chosen.map((one) => one.getAttribute('aria-label'))).toEqual(['Honey'])
+    expect(dialog.querySelectorAll('[data-testid="color-chosen"]')).toHaveLength(1)
+    expect(preview(dialog).style.background).toBe('rgb(242, 193, 78)')
+    // Focus on another color is no choice: no check mark, the preview stays.
+    act(() => button('Green', dialog).focus())
+    expect(button('Green', dialog).getAttribute('aria-pressed')).toBe('false')
+    expect(button('Green', dialog).querySelector('[data-testid="color-chosen"]')).toBeNull()
+    click(button('Green', dialog))
+    await settle()
+    expect(preview(dialog).style.background).toBe('rgb(74, 222, 128)')
+    expect(button('Green', dialog).querySelector('[data-testid="color-chosen"]')).not.toBeNull()
+  })
+
+  it('NOTES-4 AC-10 an own color as #rrggbb or from the picker is saved, shown readable and kept at hand', async () => {
+    const dialog = await styleOf('Haushalt')
+    const hex = dialog.querySelector<HTMLInputElement>('[data-testid="color-hex"]')!
+    // Not a color: said at the field, nothing sent.
+    type(hex, '#fff')
+    key(hex, 'Enter')
+    await settle()
+    expect(dialog.querySelector('#color-hex-wrong')!.textContent).toBe('Enter the color as #rrggbb, for example #1e3a8a.')
+    expect(changes()).toEqual([])
+    type(hex, '#1E3A8A')
+    key(hex, 'Enter')
+    await settle()
+    expect(changes().map((call) => call.body)).toEqual([{ color: '#1e3a8a' }])
+    // The preview follows at once, lighter than the dark blue so that it reads on dark backgrounds too.
+    const shown = readableColor('#1e3a8a')
+    expect(shown).not.toBe('#1e3a8a')
+    const rgb = (value: string) => `rgb(${[1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16)).join(', ')})`
+    expect(preview(dialog).style.background).toBe(rgb(shown))
+    // The system's picker: its result counts when it closes.
+    const picker = dialog.querySelector<HTMLInputElement>('[data-testid="color-picker"]')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(picker, '#c81e1e')
+    act(() => void picker.dispatchEvent(new Event('change', { bubbles: true })))
+    await settle()
+    expect(changes().map((call) => call.body)).toEqual([{ color: '#1e3a8a' }, { color: '#c81e1e' }])
+    expect(preview(dialog).style.background).toBe('rgb(200, 30, 30)')
+    // Both own colors stay at hand, the last one first, and one click takes one again.
+    const own = [...dialog.querySelectorAll<HTMLElement>('[data-color^="#"]')].filter((one) => one.getAttribute('aria-label')!.startsWith('Own color'))
+    expect(own.map((one) => one.dataset.color)).toEqual(['#c81e1e', '#1e3a8a'])
+    click(own[1])
+    await settle()
+    expect(changes().at(-1)!.body).toEqual({ color: '#1e3a8a' })
   })
 })
 

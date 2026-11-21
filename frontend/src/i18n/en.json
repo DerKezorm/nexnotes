@@ -440,7 +440,12 @@
       "color": "Color",
       "icon": "Symbol",
       "noColor": "No color",
-      "noIcon": "No symbol"
+      "noIcon": "No symbol",
+      "ownColor": "Own color {{hex}}",
+      "pickColor": "Pick a color",
+      "custom": "Own color",
+      "hex": "Color as #rrggbb",
+      "hexWrong": "Enter the color as #rrggbb, for example #1e3a8a."
     },
     "colors": {
       "honey": "Honey",

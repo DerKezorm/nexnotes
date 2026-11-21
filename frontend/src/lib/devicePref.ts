@@ -5,7 +5,7 @@
  */
 import { useSyncExternalStore } from 'react'
 
-import { useAuth } from '../state/auth'
+import { useAccountId } from '../state/auth'
 
 const listeners = new Set<() => void>()
 /** What was read or set in this page load, so every reader sees the same at once. */
@@ -49,8 +49,7 @@ export function forgetPrefs(): void {
  * value means); and how to change it (`null` goes back to the default).
  */
 export function useDevicePref<T>(name: string, parse: (raw: string | null) => T): [T, (value: string | null) => void] {
-  const { me } = useAuth()
-  const account = me?.id ?? 0
+  const account = useAccountId() ?? 0
   const raw = useSyncExternalStore(
     (listener) => {
       listeners.add(listener)

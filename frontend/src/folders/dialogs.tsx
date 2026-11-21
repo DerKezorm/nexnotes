@@ -13,7 +13,8 @@ import { problemText } from '../lib/errors'
 import { foldersApi, type Folder, type Impact } from './api'
 import { FolderMark } from './FolderMark'
 import { notesMoved } from './actions'
-import { colorOf, FOLDER_COLORS } from './palette'
+import { ColorField } from './ColorField'
+import { colorOf } from './palette'
 import { flatten, refreshFolders, revealFolder, setFolderOpen, subtreeOf, useFolders } from './store'
 import { showNotice } from './notice'
 
@@ -80,29 +81,9 @@ type Look = { icon: string; color: string }
 /** The color and the symbol of a folder, for the dialog "Symbol and color" and for a new folder. */
 export function LookFields({ look, onChange }: { look: Look; onChange: (change: Partial<Look>) => void }) {
   const { t } = useTranslation()
-  const ring = (on: boolean) => (on ? 'border-2 border-mist-100' : 'border border-ink-600')
   return (
     <>
-      <fieldset>
-        <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.color')}</legend>
-        <div className="grid grid-cols-6 gap-2">
-          {FOLDER_COLORS.map((color) => (
-            <button
-              key={color.key}
-              type="button"
-              aria-label={t(`folders.colors.${color.key}`)}
-              aria-pressed={look.color === color.key}
-              title={t(`folders.colors.${color.key}`)}
-              onClick={() => onChange({ color: color.key })}
-              className={'h-8 rounded-lg ' + ring(look.color === color.key)}
-              style={{ background: color.hex }}
-            />
-          ))}
-        </div>
-        <button type="button" aria-pressed={!look.color} onClick={() => onChange({ color: '' })} className="nn-btn-quiet mt-2 text-sm">
-          {t('folders.style.noColor')}
-        </button>
-      </fieldset>
+      <ColorField value={look.color} onChange={(color) => onChange({ color })} />
       <fieldset>
         <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.icon')}</legend>
         <SymbolPicker value={look.icon} onChange={(icon) => onChange({ icon })} color={look.color ? colorOf(look.color) : undefined} />

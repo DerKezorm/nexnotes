@@ -2,6 +2,8 @@
  * The twelve colors a folder can carry (NOTES-4 AC-10); its symbols are those of `lib/symbols.ts`. The server knows the
  * same keys (`FOLDER_COLORS` in `backend/app/services/folders.py`); a test there reads this file and compares.
  */
+import { hexOf, readableColor } from '../lib/color'
+
 export type FolderColor = { key: string; hex: string }
 
 export const FOLDER_COLORS: FolderColor[] = [
@@ -23,5 +25,7 @@ const HEX = new Map(FOLDER_COLORS.map((color) => [color.key, color.hex]))
 
 /** The color of a folder as CSS; a folder without one in the dimmed text color. */
 export function colorOf(key: string): string {
+  const own = key.startsWith('#') ? hexOf(key) : null
+  if (own) return readableColor(own)
   return HEX.get(key) ?? 'var(--color-mist-500)'
 }

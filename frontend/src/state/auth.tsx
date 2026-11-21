@@ -154,6 +154,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return <Context.Provider value={value}>{children}</Context.Provider>
 }
 
+/** The account signed in, or null; also outside the provider (a part drawn on its own, as in a test). */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useAccountId(): number | null {
+  return useContext(Context)?.me?.id ?? null
+}
+
 // eslint-disable-next-line react-refresh/only-export-components
 export function useAuth(): Auth {
   const value = useContext(Context)

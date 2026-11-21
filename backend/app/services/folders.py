@@ -108,11 +108,26 @@ def same_name_key(name: str) -> str:
     return unicodedata.normalize("NFC", name).casefold()
 
 
+#: A colour of the folder's own beside the twelve: exactly ``#rrggbb``. Short forms (``#fff``), names (``red``) and
+#: anything else are refused, so every device draws the same.
+CUSTOM_COLOR = re.compile(r"#[0-9a-f]{6}")
+
+
+def folder_color(color: str) -> str:
+    """The colour as stored: a key of ``FOLDER_COLORS``, ``#rrggbb`` in lower case, or empty; else 422."""
+    if color in ("", *FOLDER_COLORS):
+        return color
+    lowered = color.lower()
+    if CUSTOM_COLOR.fullmatch(lowered):
+        return lowered
+    raise error("folder_style_unknown", "Choose a color from the list, or one as #rrggbb.", 422)
+
+
 def _check_style(icon: str | None, color: str | None) -> None:
     if icon is not None and icon not in ("", *FOLDER_ICONS):
-        raise error("folder_style_unknown", "Choose a symbol from the list.")
-    if color is not None and color not in ("", *FOLDER_COLORS):
-        raise error("folder_style_unknown", "Choose a color from the list.")
+        raise error("folder_style_unknown", "Choose a symbol from the list.", 422)
+    if color is not None:
+        folder_color(color)
 
 
 # --- Locks and lookups ------------------------------------------------------------------------------------------------
@@ -304,7 +319,7 @@ def create(db: Session, account_id: int, *, name: str, parent_id: str | None = N
     siblings = _siblings(db, account_id, parent_id)
     if _name_taken(siblings, clean):
         raise _refuse_taken(clean)
-    folder = Folder(owner_id=account_id, parent_id=parent_id, kind=FOLDER_NORMAL, name=clean, icon=icon, color=color,
+    folder = Folder(owner_id=account_id, parent_id=parent_id, kind=FOLDER_NORMAL, name=clean, icon=icon, color=folder_color(color),
                     position=_position_at_end(siblings))
     db.add(folder)
     db.commit()
@@ -327,7 +342,7 @@ def change(db: Session, account_id: int, folder_id: str, *, name: str | None = N
     if icon is not None:
         folder.icon = icon
     if color is not None:
-        folder.color = color
+        folder.color = folder_color(color)
     db.commit()
     return view(folder)
 
