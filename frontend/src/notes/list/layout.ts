@@ -49,7 +49,8 @@ export function layout(sections: Section[], mode: ListMode, width: number): Layo
       entries.push({ kind: 'header', key: `h:${section.key}`, section: section.key, top, height: SIZES.header })
       top += SIZES.header
     }
-    if (mode === 'list') {
+    // The gallery draws no rows; laid out as a list, the window is ready when switching back.
+    if (mode !== 'tiles') {
       for (const item of section.items) {
         entries.push({ kind: 'row', key: item.id, item, top, height: SIZES.row })
         top += SIZES.row

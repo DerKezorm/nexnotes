@@ -95,6 +95,16 @@ export function nameFromSearch(search: SearchConditions): string {
   return ''
 }
 
+/** Whether a smart folder asks for attachments: then its attachments can be looked at as the gallery. */
+export function asksAttachments(folder: Pick<SmartFolder, 'conditions'>): boolean {
+  return folder.conditions.some((condition) => condition.kind === 'attachment')
+}
+
+/** Whether a smart folder asks for what others shared with the member: then it leads to "Mit mir geteilt". */
+export function asksSharedWithMe(folder: Pick<SmartFolder, 'conditions'>): boolean {
+  return folder.conditions.some((condition) => condition.kind === 'shared' && condition.op === 'with_me')
+}
+
 /** The name a smart folder shows: its own, or the one of a preset in the page's language. */
 export function smartName(folder: Pick<SmartFolder, 'name' | 'preset'>, t: TFunction): string {
   if (folder.name) return folder.name

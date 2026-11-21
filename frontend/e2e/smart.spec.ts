@@ -27,7 +27,7 @@ async function smartFolder(page: Page, name: string, conditions: unknown[], matc
   return (await made.json()).id as string
 }
 
-test('NOTES-7 AC-7 AC-8 a new account has "Open checklists" and "Recently edited" in the section Smart, after the folders', async ({ page, browser }) => {
+test('NOTES-7 AC-7 AC-8 a new account has "Open checklists", "Recently edited", "Shared with me" and "Attachments" in the section Smart, after the folders', async ({ page, browser }) => {
   const invite = await page.request.post('/api/invites', { data: {}, headers: TAB })
   const token = String((await invite.json()).link).split('/invite/')[1]
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
@@ -41,8 +41,11 @@ test('NOTES-7 AC-7 AC-8 a new account has "Open checklists" and "Recently edited
   await member.goto('/')
   const section = member.getByTestId('sidebar-smart')
   await expect(section.getByRole('heading', { name: 'Smart' })).toBeVisible()
-  await expect(section.getByTestId('sidebar-smart-folder')).toHaveText(['Open checklists', 'Recently edited'])
+  await expect(section.getByTestId('sidebar-smart-folder')).toHaveText(['Open checklists', 'Recently edited', 'Shared with me', 'Attachments'])
+  // The last two took the place of the sidebar's fixed entries and keep their symbols.
   await expect(section.getByTestId('smart-filter-icon')).toHaveCount(2)
+  await expect(section.getByTestId('smart-icon-shared_with_me')).toHaveCount(1)
+  await expect(section.getByTestId('smart-icon-attachments')).toHaveCount(1)
   // In the sidebar's order: after the folders, before the tags.
   const order = await member.getByTestId('sidebar-places').evaluate((places) =>
     Array.from(places.querySelectorAll('[data-testid="sidebar-smart"], [data-testid="sidebar-tags"], [role="tree"]')).map(

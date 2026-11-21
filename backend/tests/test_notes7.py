@@ -15,7 +15,7 @@ from sqlalchemy import func, insert, select
 
 from app.db import SessionLocal
 from app.models import FOLDER_NORMAL, Account, Folder, Note, NoteListView, Setting
-from app.models_attachments import Attachment, AttachmentRef
+from app.models_attachments import Attachment, AttachmentMention, AttachmentRef
 from app.models_smart import SmartFolder
 from app.services import search, smart_folders
 from app.services.inbox import inbox_for
@@ -460,7 +460,9 @@ def test_notes7_ac6_names_are_checked(client, operator):
     assert make(client, " Nur Leerzeichen außen ", TASKS)["name"] == "Nur Leerzeichen außen"
 
 
-# --- AC-7: two for every new account ---------------------------------------------------------------------------------
+# --- AC-7: the ones every new account gets ----------------------------------------------------------------------------
+
+PRESETS = ["open_tasks", "recent", "shared_with_me", "attachments"]
 
 
 def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(client, operator):
@@ -469,9 +471,11 @@ def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(clien
     assert [(row.preset, row.name, row.match, row.conditions) for row in rows] == [
         ("open_tasks", "", "all", [{"kind": "tasks", "op": "open"}]),
         ("recent", "", "all", [{"kind": "date", "field": "updated", "period": "week"}]),
+        ("shared_with_me", "", "all", [{"kind": "shared", "op": "with_me"}]),
+        ("attachments", "", "all", [{"kind": "attachment", "type": "any"}]),
     ]
     with new_client(lena) as theirs:
-        open_tasks, recent = theirs.get("/api/smart-folders").json()["items"]
+        open_tasks, recent, *_ = theirs.get("/api/smart-folders").json()["items"]
         note(theirs, "Einkauf", "- [ ] Milch")
         old = note(theirs, "Alt")
         set_times(old, updated=datetime.now(UTC) - timedelta(days=9))
@@ -483,7 +487,9 @@ def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(clien
         assert renamed.status_code == 200 and renamed.json()["name"] == "Letzte 30 Tage"
         assert titles(shown(theirs, recent["id"])) == ["Alt", "Einkauf"]
         assert theirs.delete(f"/api/smart-folders/{open_tasks['id']}").status_code == 204
-        assert [item["id"] for item in theirs.get("/api/smart-folders").json()["items"]] == [recent["id"]]
+        left = theirs.get("/api/smart-folders").json()["items"]
+        assert [item["preset"] for item in left] == ["recent", "shared_with_me", "attachments"]
+        assert left[0]["id"] == recent["id"]
 
 
 def test_notes7_ac7_an_invited_account_gets_them_too(client, operator):
@@ -496,7 +502,7 @@ def test_notes7_ac7_an_invited_account_gets_them_too(client, operator):
         paula = db.scalar(select(Account).where(Account.display_name == "Paula"))
         assert paula is not None
         db.expunge(paula)
-    assert [row.preset for row in smart_rows(paula)] == ["open_tasks", "recent"]
+    assert [row.preset for row in smart_rows(paula)] == PRESETS
 
 
 def test_notes7_ac7_accounts_from_before_get_them_once_and_not_again(client, operator):
@@ -507,11 +513,158 @@ def test_notes7_ac7_accounts_from_before_get_them_once_and_not_again(client, ope
         db.commit()
         assert smart_folders.seed_existing(db) == 1
         assert smart_folders.seed_existing(db) == 0
-    assert [row.preset for row in smart_rows(operator)] == ["open_tasks", "recent"]
+    assert [row.preset for row in smart_rows(operator)] == PRESETS
     remove_presets(client)
     with SessionLocal() as db:
         assert smart_folders.seed_existing(db) == 0
     assert smart_rows(operator) == []
+
+
+def test_notes7_ac7_accounts_from_before_get_shared_with_me_and_attachments_once(client, operator):
+    """The sidebar's fixed entries became presets: accounts that had the first two get the other two once, at the
+    end of their own list; whoever deletes them does not get them again; a name of one's own is not taken twice."""
+    anna = make_account("anna-seed")
+    with SessionLocal() as db:
+        # A database from before: the first two presets, but neither of the new ones. (Straight into the database:
+        # a client starting the app would give them at once.)
+        db.execute(SmartFolder.__table__.delete().where(SmartFolder.preset.in_(smart_folders.PLACES)))
+        db.execute(Setting.__table__.delete().where(Setting.key == smart_folders.SEEDED_PLACES))
+        db.commit()
+        smart_folders.create(db, db.get(Account, anna.id), "Shared with me", "all", [TASKS])
+    own = make(client, "Mein Ordner", TASKS)
+    with SessionLocal() as db:
+        assert smart_folders.seed_existing(db) == 2
+        assert smart_folders.seed_existing(db) == 0
+    rows = smart_rows(operator)
+    assert [row.preset for row in rows] == ["open_tasks", "recent", "", "shared_with_me", "attachments"]
+    assert [row.position for row in rows] == [0, 1, 2, 3, 4] and rows[2].id == own["id"]
+    # Anna named one "Shared with me" herself: only "Anhänge" comes.
+    assert [row.preset for row in smart_rows(anna)] == ["open_tasks", "recent", "", "attachments"]
+    # Deleted, not given again (not even after the next start).
+    for item in client.get("/api/smart-folders").json()["items"]:
+        if item["preset"] in smart_folders.PLACES:
+            assert client.delete(f"/api/smart-folders/{item['id']}").status_code == 204
+    with SessionLocal() as db:
+        assert smart_folders.seed_existing(db) == 0
+    assert [row.preset for row in smart_rows(operator)] == ["open_tasks", "recent", ""]
+
+
+def test_notes7_ac7_shared_with_me_shows_what_the_shared_page_shows(client, operator):
+    """"Mit mir geteilt" as a smart folder: the notes of "Mit mir geteilt" (directly and through folders), with the
+    same rights: never a note of somebody else not shared, never one in the trash, never a locked one, never one of a
+    share that ended."""
+    anna = make_account("anna-share")
+    mine = note(client, "Meine Notiz")
+    share(client, "note", mine, anna)
+    folders = {item["preset"]: item for item in client.get("/api/smart-folders").json()["items"]}
+    with new_client(anna) as theirs:
+        direct = note(theirs, "Direkt geteilt")
+        trip = folder(theirs, "Reise")
+        inner = folder(theirs, "Packliste", trip)
+        note(theirs, "Im Ordner", "", inner)
+        note(theirs, "Nicht geteilt")
+        gone = note(theirs, "Im Papierkorb")
+        locked = note(theirs, "Gesperrt")
+        ended = note(theirs, "Nicht mehr geteilt")
+        for item_id in (direct, gone, locked, ended):
+            share(theirs, "note", item_id, operator)
+        share(theirs, "folder", trip, operator)
+        unshare(theirs, "note", ended, operator)
+        assert theirs.delete(f"/api/notes/{gone}").status_code == 204
+    set_fields(locked, locked=True)
+    listing = shown(client, folders["shared_with_me"]["id"])
+    assert titles(listing) == ["Direkt geteilt", "Im Ordner"]
+    assert listing["counts"] == {"own": 0, "shared": 2}
+    page = client.get("/api/shares/with-me").json()
+    assert {item["title"] for group in page["groups"] for item in group["items"]} == {"Direkt geteilt", "Reise"}
+    # Anna's side: what she shares is no "shared with me" for her; the operator's note is.
+    with new_client(anna) as theirs:
+        assert found(theirs, {"kind": "shared", "op": "with_me"}) == ["Meine Notiz"]
+
+
+def test_notes7_ac7_attachments_opens_as_the_gallery_of_its_notes(client, operator):
+    """"Anhänge" as a smart folder: the notes with any attachment, shown as the gallery until the member picks another
+    view; the gallery holds the attachments of those notes only, of shared ones what their owner put there, never of
+    a locked note, a note in the trash or a note of somebody else not shared."""
+    anna = make_account("anna-gallery")
+    folders = {item["preset"]: item for item in client.get("/api/smart-folders").json()["items"]}
+    attachments_id = folders["attachments"]["id"]
+    photo = note(client, "Urlaub")
+    attach(photo, "image")
+    paper = note(client, "Vertrag")
+    attach(paper, "pdf")
+    note(client, "Ohne Anhang")
+    locked = note(client, "Gesperrt")
+    attach(locked, "image")
+    gone = note(client, "Weg")
+    attach(gone, "file")
+    assert client.delete(f"/api/notes/{gone}").status_code == 204
+    set_fields(locked, locked=True)
+    with new_client(anna) as theirs:
+        shared = note(theirs, "Annas Rezept")
+        attach(shared, "recording")
+        hidden = note(theirs, "Annas Geheimnis")
+        attach(hidden, "image")
+        share(theirs, "note", shared, operator)
+    listing = shown(client, attachments_id)
+    assert titles(listing) == ["Annas Rezept", "Urlaub", "Vertrag"]
+    assert listing["view"]["mode"] == "gallery"
+    answer = client.get(f"/api/smart-folders/{attachments_id}/attachments")
+    assert answer.status_code == 200, answer.text
+    gallery = answer.json()
+    assert sorted(item["note"]["title"] for item in gallery["items"]) == ["Annas Rezept", "Urlaub", "Vertrag"]
+    assert gallery["all"] == 3 and gallery["counts"]["image"] == 1 and gallery["counts"]["recording"] == 1
+    only = client.get(f"/api/smart-folders/{attachments_id}/attachments", params={"kind": "pdf"}).json()
+    assert [item["note"]["title"] for item in only["items"]] == ["Vertrag"] and only["total"] == 1
+    # The account's own gallery stays its own: nothing of Anna's.
+    own = client.get("/api/attachments").json()
+    assert not {item["note"]["title"] for item in own["items"]} & {"Annas Rezept", "Annas Geheimnis"}
+    # A view saved without a mode keeps the gallery; another mode chosen is kept.
+    kept = client.put(f"/api/smart-folders/{attachments_id}/view", json={"sort": "title"}).json()
+    assert kept["mode"] == "gallery" and kept["sort"] == "title"
+    assert client.put(f"/api/smart-folders/{attachments_id}/view", json={"mode": "tiles"}).json()["mode"] == "tiles"
+    assert shown(client, attachments_id)["view"]["mode"] == "tiles"
+    # Somebody else's smart folder is nobody's gallery.
+    with new_client(anna) as theirs:
+        assert theirs.get(f"/api/smart-folders/{attachments_id}/attachments").status_code == 404
+    # Any other smart folder may be looked at as a gallery, but starts as a list.
+    mine = make(client, "Bilder", {"kind": "attachment", "type": "image"})
+    assert shown(client, mine["id"])["view"]["mode"] == "list"
+    pictures = client.get(f"/api/smart-folders/{mine['id']}/attachments").json()
+    assert [item["note"]["title"] for item in pictures["items"]] == ["Urlaub"]
+    # A locked note found by its title shows in the list, but nothing of it in the gallery.
+    titled = make(client, "Mit Titel", {"kind": "text", "value": "Gesperrt"}, {"kind": "attachment", "type": "pdf"},
+                  match="any")
+    assert titles(shown(client, titled["id"])) == ["Gesperrt", "Vertrag"]
+    pictures = client.get(f"/api/smart-folders/{titled['id']}/attachments").json()
+    assert [item["note"]["title"] for item in pictures["items"]] == ["Vertrag"] and pictures["all"] == 1
+
+
+def test_notes7_ac7_a_shared_note_shows_in_the_gallery_only_what_its_owner_put_there(client, operator):
+    """NOTES-13: an attachment of the owner that the member it is shared with wrote into the note (the owner never
+    did) stays out of the member's smart-folder gallery, as it stays out of every other view of it."""
+    anna = make_account("anna-vouch")
+    folders = {item["preset"]: item for item in client.get("/api/smart-folders").json()["items"]}
+    with new_client(anna) as theirs:
+        home = note(theirs, "Annas Fotos")
+        attach(home, "image")
+        other = note(theirs, "Annas Liste")
+        attach(other, "pdf")
+        share(theirs, "note", other, operator)
+    with SessionLocal() as db:
+        picture = db.scalar(select(Attachment).where(Attachment.note_id == home))
+        assert picture is not None
+        db.add(AttachmentRef(note_id=other, attachment_id=picture.id, position=1))
+        db.add(AttachmentMention(note_id=other, attachment_id=picture.id, vouched=False))
+        db.commit()
+    gallery = client.get(f"/api/smart-folders/{folders['attachments']['id']}/attachments").json()
+    assert [item["kind"] for item in gallery["items"]] == ["pdf"]
+    with SessionLocal() as db:
+        db.execute(AttachmentMention.__table__.update().where(AttachmentMention.note_id == other)
+                   .values(vouched=True))
+        db.commit()
+    gallery = client.get(f"/api/smart-folders/{folders['attachments']['id']}/attachments").json()
+    assert sorted(item["kind"] for item in gallery["items"]) == ["image", "pdf"]
 
 
 def test_notes7_ac7_a_preset_keeps_its_name_in_the_interface_language_until_renamed(client, operator):

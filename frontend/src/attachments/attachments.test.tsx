@@ -12,7 +12,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import * as Y from 'yjs'
 
-import { SHELL_BANNERS, SIDEBAR_SECTIONS } from '../extensions'
+import { FEATURE_ROUTES, SHELL_BANNERS, SIDEBAR_SECTIONS } from '../extensions'
 import i18n from '../i18n'
 import { editorExtensions, editorProps } from '../editor/extensions'
 import { presenceUser } from '../editor/presence'
@@ -779,10 +779,8 @@ describe('NOTES-10 AC-7 the gallery', () => {
     expect(box.querySelector('[data-testid="gallery-kinds"]')).toBeNull()
   })
 
-  it('NOTES-10 AC-7 "Attachments" stands in the sidebar right after the inbox', () => {
-    const keys = SIDEBAR_SECTIONS.map((section) => section.key)
-    expect(keys).toContain('attachments')
-    expect(keys.indexOf('attachments')).toBe(keys.indexOf('inbox') + 1)
-    expect(keys.indexOf('inbox')).toBeGreaterThanOrEqual(0)
+  it('NOTES-10 AC-7 NOTES-7 "Attachments" is a smart folder now, not a fixed entry; the gallery stays at its address', () => {
+    expect(SIDEBAR_SECTIONS.map((section) => section.key)).not.toContain('attachments')
+    expect(FEATURE_ROUTES.map((route) => route.path)).toContain('attachments')
   })
 })
