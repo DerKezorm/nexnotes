@@ -507,6 +507,35 @@
       }
     }
   },
+  "history": {
+    "asCopy": "Als Kopie",
+    "copied": "Fassung als neue Notiz angelegt.",
+    "current": "aktuell",
+    "groups": {
+      "days": "Davor, je Tag",
+      "today": "Heute",
+      "weeks": "Älter, je Woche",
+      "yesterday": "Gestern"
+    },
+    "keepDays_one": "Fassungen bleiben {{count}} Tag, ältere werden ausgedünnt. Die Frist stellt der Betreiber ein.",
+    "keepDays_other": "Fassungen bleiben {{count}} Tage, ältere werden ausgedünnt. Die Frist stellt der Betreiber ein.",
+    "keepYears_one": "Fassungen bleiben ein Jahr, ältere werden ausgedünnt. Die Frist stellt der Betreiber ein.",
+    "keepYears_other": "Fassungen bleiben {{count}} Jahre, ältere werden ausgedünnt. Die Frist stellt der Betreiber ein.",
+    "menu": "Verlauf",
+    "more": "Ältere laden",
+    "none": "Noch keine Fassungen. Eine Fassung entsteht, sobald du ein paar Minuten nicht schreibst.",
+    "now": "Jetzt",
+    "restore": "Wiederherstellen",
+    "restored": "Fassung von {{when}} wiederhergestellt. Die bisherige steht im Verlauf.",
+    "restoredBy": "{{name}} hat die Fassung von {{when}} wiederhergestellt.",
+    "restoredFrom": "Wiederhergestellt aus der Fassung von {{when}}",
+    "restoredShort": "wiederhergestellt",
+    "someone": "Jemand",
+    "title": "Verlauf",
+    "versionOf": "Fassung von",
+    "viaKey": "MCP · {{key}}",
+    "weekOf": "Woche ab {{date}}"
+  },
   "home": {
     "empty": "Hier erscheinen deine Notizen. Neue Notizen, Ordner und Suche kommen mit den nächsten Schritten.",
     "title": "Notizen"
@@ -803,6 +832,48 @@
     "group": "Darstellung",
     "light": "Hell",
     "system": "Wie das System"
+  },
+  "trash": {
+    "confirmEmpty": {
+      "folders_one": "Dazu {{count}} Ordner.",
+      "folders_other": "Dazu {{count}} Ordner.",
+      "go": "Endgültig löschen",
+      "text_one": "{{count}} Notiz wird endgültig gelöscht.",
+      "text_other": "{{count}} Notizen werden endgültig gelöscht.",
+      "title": "Papierkorb leeren?"
+    },
+    "confirmPurge": {
+      "folder": "„{{title}}“ wird mit allem darin endgültig gelöscht.",
+      "go": "Endgültig löschen",
+      "note": "„{{title}}“ wird endgültig gelöscht.",
+      "title": "Endgültig löschen?"
+    },
+    "deletedBy": "gelöscht von {{name}}",
+    "empty": "Papierkorb leeren …",
+    "emptied": "Papierkorb geleert.",
+    "failed": "Der Papierkorb ließ sich nicht laden.",
+    "final": "Das lässt sich nicht rückgängig machen.",
+    "folderTitle_one": "{{name}} · Ordner mit {{count}} Notiz",
+    "folderTitle_other": "{{name}} · Ordner mit {{count}} Notizen",
+    "from": "aus {{name}}",
+    "fromGoneToInbox": "aus {{name}}, den es nicht mehr gibt: kommt in den Eingang",
+    "fromGoneToTop": "aus {{name}}, den es nicht mehr gibt: kommt ganz nach oben",
+    "fromInbox": "aus dem Eingang",
+    "fromTop": "von ganz oben",
+    "goneToInbox": "Der Ordner ist nicht mehr da: kommt in den Eingang",
+    "goneToTop": "Der Ordner ist nicht mehr da: kommt ganz nach oben",
+    "keeps_one": "Gelöschtes bleibt {{count}} Tag, dann ist es endgültig weg.",
+    "keeps_other": "Gelöschtes bleibt {{count}} Tage, dann ist es endgültig weg.",
+    "lastDay": "geht heute endgültig",
+    "left_one": "noch {{count}} Tag",
+    "left_other": "noch {{count}} Tage",
+    "nothing": "Der Papierkorb ist leer.",
+    "purge": "Endgültig löschen: {{title}}",
+    "purged": "Endgültig gelöscht.",
+    "restore": "Zurückholen",
+    "restored": "„{{title}}“ ist zurück.",
+    "restoredInbox": "„{{title}}“ ist zurück, im Eingang.",
+    "title": "Papierkorb"
   },
   "twofactor": {
     "code": "Code aus der App",

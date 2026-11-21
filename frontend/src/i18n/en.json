@@ -507,6 +507,35 @@
       }
     }
   },
+  "history": {
+    "asCopy": "As a copy",
+    "copied": "The version is now a new note.",
+    "current": "current",
+    "groups": {
+      "days": "Earlier, by day",
+      "today": "Today",
+      "weeks": "Older, by week",
+      "yesterday": "Yesterday"
+    },
+    "keepDays_one": "Versions stay for {{count}} day, older ones are thinned out. The operator sets how long.",
+    "keepDays_other": "Versions stay for {{count}} days, older ones are thinned out. The operator sets how long.",
+    "keepYears_one": "Versions stay for a year, older ones are thinned out. The operator sets how long.",
+    "keepYears_other": "Versions stay for {{count}} years, older ones are thinned out. The operator sets how long.",
+    "menu": "History",
+    "more": "Load older",
+    "none": "No versions yet. A version is kept once you stop writing for a few minutes.",
+    "now": "Now",
+    "restore": "Restore",
+    "restored": "Version of {{when}} restored. The one before is in the history.",
+    "restoredBy": "{{name}} restored the version of {{when}}.",
+    "restoredFrom": "Restored from the version of {{when}}",
+    "restoredShort": "restored",
+    "someone": "Someone",
+    "title": "History",
+    "versionOf": "Version of",
+    "viaKey": "MCP · {{key}}",
+    "weekOf": "Week of {{date}}"
+  },
   "home": {
     "empty": "Your notes appear here. New notes, folders and search come with the next steps.",
     "title": "Notes"
@@ -803,6 +832,48 @@
     "group": "Appearance",
     "light": "Light",
     "system": "As the system"
+  },
+  "trash": {
+    "confirmEmpty": {
+      "folders_one": "Along with {{count}} folder.",
+      "folders_other": "Along with {{count}} folders.",
+      "go": "Delete for good",
+      "text_one": "{{count}} note will be deleted for good.",
+      "text_other": "{{count}} notes will be deleted for good.",
+      "title": "Empty the trash?"
+    },
+    "confirmPurge": {
+      "folder": "“{{title}}” and everything in it will be deleted for good.",
+      "go": "Delete for good",
+      "note": "“{{title}}” will be deleted for good.",
+      "title": "Delete for good?"
+    },
+    "deletedBy": "deleted by {{name}}",
+    "empty": "Empty trash …",
+    "emptied": "The trash is empty.",
+    "failed": "The trash could not be loaded.",
+    "final": "This cannot be undone.",
+    "folderTitle_one": "{{name}} · folder with {{count}} note",
+    "folderTitle_other": "{{name}} · folder with {{count}} notes",
+    "from": "from {{name}}",
+    "fromGoneToInbox": "from {{name}}, which is gone: comes back into the inbox",
+    "fromGoneToTop": "from {{name}}, which is gone: comes back at the top",
+    "fromInbox": "from the inbox",
+    "fromTop": "from the top",
+    "goneToInbox": "Its folder is gone: comes back into the inbox",
+    "goneToTop": "Its folder is gone: comes back at the top",
+    "keeps_one": "Deleted items stay for {{count}} day, then they are gone for good.",
+    "keeps_other": "Deleted items stay for {{count}} days, then they are gone for good.",
+    "lastDay": "goes for good today",
+    "left_one": "{{count}} day left",
+    "left_other": "{{count}} days left",
+    "nothing": "The trash is empty.",
+    "purge": "Delete for good: {{title}}",
+    "purged": "Deleted for good.",
+    "restore": "Restore",
+    "restored": "“{{title}}” is back.",
+    "restoredInbox": "“{{title}}” is back, in the inbox.",
+    "title": "Trash"
   },
   "twofactor": {
     "code": "Code from the app",
