@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 from ..deps import Account, DbSession
 from ..services import folders
+from ..services import notes as notes_service
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -84,7 +85,10 @@ def change(folder_id: FolderId, body: FolderChange, account: Account, db: DbSess
 
 @router.delete("/{folder_id}")
 def trash(folder_id: FolderId, account: Account, db: DbSession) -> dict[str, Any]:
-    return folders.trash(db, account.id, folder_id)
+    done = folders.trash(db, account.id, folder_id)
+    # Its notes may be open elsewhere (shared, NOTES-13; NOTES-4 EC-9): every editor looks again and hears they went.
+    notes_service.nudge_all()
+    return done
 
 
 @router.post("/{folder_id}/restore")

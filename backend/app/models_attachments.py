@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, Index, Integer, String
+from sqlalchemy import Boolean, ForeignKey, Index, Integer, String, true
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .models import Base, UtcDateTime, utcnow
@@ -85,3 +85,6 @@ class AttachmentMention(Base):
 
     note_id: Mapped[str] = mapped_column(ForeignKey("notes.id", ondelete="CASCADE"), primary_key=True)
     attachment_id: Mapped[str] = mapped_column(String(32), primary_key=True)
+    #: Its owner (or the server) put it into the note, not a member the note is shared with (NOTES-13): only then does
+    #: a reader of this note see an attachment that belongs to another note of the owner (``attachments.readable``).
+    vouched: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())

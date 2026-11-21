@@ -67,7 +67,8 @@ def save_view(body: ViewIn, db: DbSession, account: Account) -> dict[str, Any]:
 
 @router.put("/api/notes/{note_id}/pin")
 def pin(note_id: str, body: PinIn, db: DbSession, account: Account) -> dict[str, Any]:
-    return item_out(notes_list.set_pinned(db, account, note_id, body.pinned))
+    note = notes_list.set_pinned(db, account, note_id, body.pinned)
+    return {**item_out(note), "pinned": notes_list.pinned_for(db, account, note)}
 
 
 @router.put("/api/notes/{note_id}/color")

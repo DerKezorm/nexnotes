@@ -5,7 +5,7 @@
  */
 import { problemText } from '../lib/errors'
 import { foldersApi } from './api'
-import { notesMoved, type Dragged } from './actions'
+import { mayMoveNotes, notesMoved, type Dragged } from './actions'
 import { refreshFolders, setFolderOpen, subtreeOf, type TreeState } from './store'
 import { showNotice } from './notice'
 
@@ -39,6 +39,7 @@ export async function drop(tree: TreeState, dragged: Dragged, targetId: string |
   try {
     if (dragged.kind === 'notes') {
       if (!targetId) return
+      if (!(await mayMoveNotes(dragged.ids, targetId))) return
       await foldersApi.move(targetId, [], dragged.ids)
       notesMoved(dragged.ids, targetId)
     } else if (zone === 'into') {

@@ -5,8 +5,9 @@ per process) and its store here (``SqlNoteStore``); the columns ``title`` and ``
 lists, search and preview. Changes the server makes itself (a suggested title) go through ``Rooms.change`` as well, so
 a browser that has the note open sees them at once.
 
-Rights: ``access_to`` says what an account may do with a note. Today only the owner reads and writes; sharing
-(NOTES-13) adds its ways in through ``ACCESS_RULES``.
+Rights: ``access_to`` says what an account may do with a note: its owner reads and writes, sharing (NOTES-13,
+``services/shares.py``) adds its readers and writers through ``ACCESS_RULES`` (and ``FOLDER_RULES`` for the notes of
+a shared folder).
 """
 
 from __future__ import annotations
@@ -59,33 +60,63 @@ AccessRule = Callable[[Session, Account, Note], Access | None]
 ACCESS_RULES: list[AccessRule] = []
 
 
-def access_to(db: Session, account: Account | None, note: Note | None) -> Access:
-    """What ``account`` may do with ``note``: WRITE, READ, NONE, or GONE when it may and the note is in the trash."""
+def right_to(db: Session, account: Account | None, note: Note | None) -> Access:
+    """What ``account`` may do with ``note`` whether or not it is in the trash: WRITE, READ or NONE."""
     if account is None or note is None or account_out(account):
         return Access.NONE
-    found = Access.WRITE if note.owner_id == account.id else Access.NONE
-    if found == Access.NONE:
-        for rule in ACCESS_RULES:
-            answer = rule(db, account, note)
-            if answer in (Access.WRITE, Access.READ):
-                found = answer
-                break
+    if note.owner_id == account.id:
+        return Access.WRITE
+    for rule in ACCESS_RULES:
+        answer = rule(db, account, note)
+        if answer in (Access.WRITE, Access.READ):
+            return answer
+    return Access.NONE
+
+
+def access_to(db: Session, account: Account | None, note: Note | None) -> Access:
+    """What ``account`` may do with ``note``: WRITE, READ, NONE, or GONE when it may and the note is in the trash."""
+    found = right_to(db, account, note)
     if found == Access.NONE:
         return Access.NONE
+    assert note is not None
     return Access.GONE if note.deleted_at is not None else found
 
 
 def note_for(db: Session, account: Account, note_id: str, *, write: bool = False, deleted: bool = False) -> Note:
     """The note when the account may see it (and write, when asked), else ``not_found``: a note nobody may see is
-    not there for them."""
+    not there for them. With ``deleted`` a note in the trash counts with the right its reader would have."""
     note = db.get(Note, note_id) if len(note_id) <= 36 else None
     access = access_to(db, account, note)
     if access == Access.GONE and deleted:
-        access = Access.WRITE if note is not None and note.owner_id == account.id else Access.READ
+        access = right_to(db, account, note)
     if access not in (Access.WRITE, Access.READ) or (write and access != Access.WRITE):
         raise error("not_found", "Not found.", 404)
     assert note is not None
     return note
+
+
+FolderRule = Callable[[Session, Account, Folder], Access | None]
+#: Ways into a folder of somebody else besides owning it: sharing (NOTES-13) lets a writer of a shared folder make
+#: notes in it (they belong to the folder's owner, AC-2), and a reader list it.
+FOLDER_RULES: list[FolderRule] = []
+
+
+def folder_right(db: Session, account: Account, folder: Folder | None) -> Access:
+    """What ``account`` may do in ``folder`` (alive): WRITE for its own, else what a rule of ``FOLDER_RULES`` says."""
+    if folder is None or folder.deleted_at is not None or account_out(account):
+        return Access.NONE
+    if folder.owner_id == account.id:
+        return Access.WRITE
+    for rule in FOLDER_RULES:
+        answer = rule(db, account, folder)
+        if answer in (Access.WRITE, Access.READ):
+            return answer
+    return Access.NONE
+
+
+#: More fields of a note's head (``GET /api/notes/{id}``) for the account looking, e.g. who it is shared with
+#: (NOTES-13 AC-7). Each gives ``{field: value}``.
+HEAD_EXTRAS: list[Callable[[Session, Account, Note], dict[str, Any]]] = []
 
 
 # --- Hooks on the text --------------------------------------------------------------------------------------------
@@ -298,11 +329,14 @@ async def read_live(note_id: str) -> tuple[str, str]:
 
 
 def _folder_for(db: Session, account: Account, folder_id: str | None) -> Folder:
+    """The folder a new note goes into: the account's own, or one shared with it to write (the note is then the
+    folder owner's, NOTES-13 AC-2)."""
     if not folder_id:
         return inbox_for(db, account.id)
     folder = db.get(Folder, folder_id) if len(folder_id) <= 36 else None
-    if folder is None or folder.owner_id != account.id or folder.deleted_at is not None:
+    if folder_right(db, account, folder) != Access.WRITE:
         raise error("folder_not_found", "The folder does not exist.", 404)
+    assert folder is not None
     return folder
 
 
@@ -326,7 +360,7 @@ def create(db: Session, account: Account, *, note_id: str | None = None, folder_
     wanted = _valid_id(note_id)
     existing = db.get(Note, wanted)
     if existing is not None:
-        if existing.owner_id != account.id:
+        if access_to(db, account, existing) != Access.WRITE:
             raise error("note_id_taken", "This note id is taken.", 409)
         return existing, False
     folder = _folder_for(db, account, folder_id)
@@ -342,7 +376,7 @@ def create(db: Session, account: Account, *, note_id: str | None = None, folder_
         check = True
     document = notedoc.new_doc(clean, body)
     now = utcnow()
-    note = Note(id=wanted, owner_id=account.id, folder_id=folder.id, title=clean, title_check=check,
+    note = Note(id=wanted, owner_id=folder.owner_id, folder_id=folder.id, title=clean, title_check=check,
                 origin=(origin or "")[:100], ydoc=document.get_update(), text=to_plain(document), created_at=now,
                 updated_at=now, updated_by_id=account.id, paper=default_paper(account))
     db.add(note)
@@ -353,7 +387,7 @@ def create(db: Session, account: Account, *, note_id: str | None = None, folder_
         # The same id at the same moment from a second request: the first one made it.
         db.rollback()
         existing = db.get(Note, wanted)
-        if existing is None or existing.owner_id != account.id:
+        if existing is None or access_to(db, account, existing) != Access.WRITE:
             raise error("note_id_taken", "This note id is taken.", 409) from None
         return existing, False
     logger.info("Note created note=%s", note.id)
@@ -496,31 +530,31 @@ def title_ok(db: Session, account: Account, note_id: str) -> Note:
 
 
 async def delete_note(account: Account, note_id: str) -> None:
-    """Into the trash (NOTES-15 brings the trash page): gone from every list, everyone who has it open is told
-    (NOTES-12 EC-2)."""
+    """Into the trash of its owner (NOTES-15 brings the trash page): gone from every list, everyone who has it open is
+    told (NOTES-12 EC-2). Whoever may write it may delete it; somebody else than the owner is named in the owner's
+    trash (NOTES-13 AC-8)."""
     with SessionLocal() as db:
         note = note_for(db, account, note_id, write=True)
-        if note.owner_id != account.id:
-            raise error("not_found", "Not found.", 404)
         note.deleted_at = utcnow()
         # A mark of its own: bringing its folder back (NOTES-4) does not bring back a note deleted alone before.
         note.deleted_batch = str(uuid.uuid4())
+        note.deleted_by_id = None if note.owner_id == account.id else account.id
         db.commit()
     await rooms().close_note(note_id)
     logger.info("Note deleted note=%s", note_id)
 
 
 def restore(db: Session, account: Account, note_id: str) -> Note:
-    """Back from the trash ("Rückgängig", NOTES-3 AC-6)."""
+    """Back from the trash ("Rückgängig", NOTES-3 AC-6): by its owner, or by who may write it (a member it is shared
+    with, right after deleting it)."""
     note = note_for(db, account, note_id, write=True, deleted=True)
-    if note.owner_id != account.id:
-        raise error("not_found", "Not found.", 404)
     note.deleted_at = None
     note.deleted_batch = None
+    note.deleted_by_id = None
     folder = db.get(Folder, note.folder_id)
     if folder is None or folder.deleted_at is not None:
-        # Its folder went to the trash meanwhile: the note comes back into the inbox.
-        note.folder_id = inbox_for(db, account.id).id
+        # Its folder went to the trash meanwhile: the note comes back into its owner's inbox.
+        note.folder_id = inbox_for(db, note.owner_id).id
     db.commit()
     logger.info("Note restored note=%s", note_id)
     return note

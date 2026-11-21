@@ -114,7 +114,8 @@ def listing(db: Session, account: Account) -> dict[str, Any]:
             "icon": note.icon or "", "color": note.color or "",
             "origin": _origin(folder), "origin_gone": gone,
             "lands": "inbox" if gone or folder is None or folder.kind == FOLDER_INBOX else "origin",
-            "notes": 1, "folders": 0, "deleted_by": None,
+            # Who deleted it, when it was a member it is shared with (NOTES-13 AC-8, NOTES-15 AC-6).
+            "notes": 1, "folders": 0, "deleted_by": notes.person(db, note.deleted_by_id),
         })
     items.sort(key=lambda item: (item["deleted_at"], item["id"]), reverse=True)
     return {

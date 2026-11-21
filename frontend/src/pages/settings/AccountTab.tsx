@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
+import { ACCOUNT_SECTIONS } from '../../extensions'
 import { Avatar } from '../../components/Avatar'
 import { Field, Problem } from '../../components/Field'
 import { PasswordConfirmField } from '../../components/PasswordConfirm'
@@ -300,6 +301,9 @@ export function AccountTab() {
           </div>
         </div>
       </Card>
+      {ACCOUNT_SECTIONS.map((section) => (
+        <div key={section.key}>{section.render()}</div>
+      ))}
     </div>
   )
 }

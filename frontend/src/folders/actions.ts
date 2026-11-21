@@ -96,3 +96,18 @@ export function droppedFrom(event: DragEvent): Dragged {
 export function endDrag(): void {
   dragged = null
 }
+
+/** Asked before notes move into another folder (or the inbox, `null`): true lets them go. Sharing (NOTES-13 EC-2)
+ * asks whether a note leaving a shared folder may stop being shared; without a check every move goes. */
+export type NoteMoveCheck = (noteIds: string[], targetId: string | null) => Promise<boolean>
+
+let moveCheck: NoteMoveCheck | null = null
+
+export function registerNoteMoveCheck(check: NoteMoveCheck | null): void {
+  moveCheck = check
+}
+
+export async function mayMoveNotes(noteIds: string[], targetId: string | null): Promise<boolean> {
+  if (!moveCheck || noteIds.length === 0) return true
+  return moveCheck(noteIds, targetId)
+}
