@@ -1016,6 +1016,27 @@ describe('tabs in the page', () => {
     expect($('note-editor')).toBeNull()
   })
 
+  it('NOTES-13 AC-5 NOTES-8 EC-6 sharing ends while the note is on show: the side says so and keeps who ended it', async () => {
+    notes.set('soup', note('soup', 'Lentil soup', 'garden', { owner: { id: 9, name: 'Lena' }, can_write: false, level: 'read' } as Partial<NoteHead>))
+    await render('/notes/soup')
+    await settle(40)
+    expect($('note-editor')).not.toBeNull()
+    // The owner takes it back: the room refuses (4403), the head is not handed out any more (404).
+    notes.delete('soup')
+    const socket = openSockets().find((one) => one.id === 'soup')!
+    await act(async () => {
+      socket.readyState = 3
+      socket.onclose?.({ code: 4403 } as CloseEvent)
+    })
+    await settle(60)
+    expect($$('tab')[0].dataset.state).toBe('gone')
+    expect($('note-editor')).toBeNull()
+    expect($('tab-gone')!.textContent).toContain('This note is no longer available.')
+    expect($('tab-gone-said')!.textContent).toBe('“Lentil soup” is not here any more: Lena stopped sharing it.')
+    // Remembered by this page only: the tab itself keeps no title of a note that is not handed out any more.
+    expect(metaOf('soup')).toMatchObject({ state: 'gone', title: '' })
+  })
+
   it('NOTES-8 EC-5 a locked note shows the lock in its tab', async () => {
     notes.set('soup', { ...notes.get('soup')!, locked: true })
     await render('/notes/shop')

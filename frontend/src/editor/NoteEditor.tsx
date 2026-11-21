@@ -76,6 +76,9 @@ type Props = {
   onGuard?: (guard: LeaveGuard | null) => void
   /** More in the bar of a note that stopped (the way to the trash, closing the tab). */
   stoppedExtra?: (status: LiveStatus) => ReactNode
+  /** The sharing of the open note ended (NOTES-13 AC-5): the sentence that names who ended it, for the side that shows
+   * "no longer available" in the editor's place a moment later (NOTES-8 EC-6). */
+  onEnded?: (said: string) => void
 }
 
 /** Leaving a note runs a moment later: React's strict mode unmounts and mounts again at once, which is no leaving. */
@@ -144,7 +147,7 @@ function useKeyboardInset(): number {
 /** One note in the editor. `provider` is the live room's connection, or (`sealed`) a locked note's opened in this
  * browser (NOTES-16); then nothing of it goes to the server but encrypted, and what needs the server to read the text
  * (a copy, the export, the suggested title) is not offered. */
-export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra, sealed = false, onLocked }: Props & { provider: EditorConnection; sealed?: boolean; onLocked?: () => void }) {
+export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra, onEnded, sealed = false, onLocked }: Props & { provider: EditorConnection; sealed?: boolean; onLocked?: () => void }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const here = useLocation().pathname
@@ -515,6 +518,10 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const stoppedText = status === 'forbidden' && shared && head?.owner
     ? t('shares.ended', { title: shownTitle || head.title || t('notes.untitled'), name: head.owner.name })
     : t(`editor.stopped.${status}`)
+  const ended = status === 'forbidden' && shared && head?.owner ? stoppedText : ''
+  useEffect(() => {
+    if (ended) onEnded?.(ended)
+  }, [ended, onEnded])
   let saved: { text: string; tone: string }
   if (stopped) saved = { text: '', tone: '' }
   else if (pending > 0 && status !== 'online') saved = { text: t('editor.waiting', { count: pending }), tone: 'text-warn-500' }

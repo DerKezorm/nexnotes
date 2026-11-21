@@ -330,6 +330,62 @@ describe('the dialogs', () => {
     expect(new TextDecoder().decode(await unseal(await noteKey(vaultKey()!, 'n1'), staged.content as Uint8Array<ArrayBuffer>, noteAad('n1')))).toContain('Kontonummer')
   })
 
+  it('NOTES-16 AC-8 the lock dialog says "Locking …" from the first moment, never stands empty while it works', async () => {
+    const { server } = await serverVault()
+    const routes = vaultRoutes(server)
+    handler = (method, path, body) => {
+      if (method === 'POST' && path.endsWith('/lock/start')) return { status: 200, body: { state: toB64(Y.encodeStateAsUpdate(new Y.Doc()) as Uint8Array<ArrayBuffer>), versions: [], attachments: [], epoch: 1 } }
+      if (method === 'PUT' && path.startsWith('/api/vault/stage')) return { status: 200, body: { part: 'content', size: 1 } }
+      if (method === 'POST' && path.endsWith('/lock')) return { status: 200, body: { id: 'n1', locked: true, rev: 1 } }
+      return routes(method, path, body)
+    }
+    // The server holds the start of the lock: the password is taken, nothing is encrypted yet.
+    const answer = globalThis.fetch
+    let release = () => undefined as void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/lock/start')) await held
+      return answer(input, init)
+    })
+    let closed = false
+    await render(<LockDialog noteId="n1" onClose={() => (closed = true)} />)
+    type($('vault-password') as HTMLInputElement, PASSWORD)
+    await submit('vault-password')
+    await until(() => $('vault-progress'))
+    expect($('vault-unlock')).toBeNull()
+    expect($('vault-progress')!.textContent).toBe('Locking …')
+    expect($('vault-lock-dialog')!.textContent).toContain('Locking …')
+    expect(closed).toBe(false)
+    await act(async () => release())
+    await until(() => closed)
+    expect(sent('POST', '/api/vault/notes/n1/lock').some((call) => call.path.endsWith('/n1/lock'))).toBe(true)
+  })
+
+  it('NOTES-16 AC-3 while the password is checked the button says "Unlocking …" and the field holds still', async () => {
+    const { server } = await serverVault()
+    handler = vaultRoutes(server)
+    const answer = globalThis.fetch
+    let release = () => undefined as void
+    const held = new Promise<void>((resolve) => (release = resolve))
+    vi.stubGlobal('fetch', async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/vault/unlock') await held
+      return answer(input, init)
+    })
+    let opened = false
+    await render(<UnlockCard title="Konten" onOpened={() => (opened = true)} />)
+    type($('vault-password') as HTMLInputElement, PASSWORD)
+    await submit('vault-password')
+    await until(() => $('vault-submit')!.textContent === 'Unlocking …')
+    expect(($('vault-submit') as HTMLButtonElement).disabled).toBe(true)
+    // Typed while the answer is under way, it would be emptied with the answer: the field takes nothing meanwhile.
+    expect(($('vault-password') as HTMLInputElement).readOnly).toBe(true)
+    expect($('vault-unlock')!.getAttribute('aria-busy')).toBe('true')
+    await act(async () => release())
+    await until(() => opened)
+    expect(($('vault-password') as HTMLInputElement).readOnly).toBe(false)
+    expect($('vault-submit')!.textContent).toBe('Unlock')
+  })
+
   it('NOTES-16 EC-1 three wrong passwords bring the wait with its countdown', async () => {
     const { server } = await serverVault()
     handler = vaultRoutes(server)

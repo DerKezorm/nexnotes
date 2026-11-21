@@ -6,10 +6,11 @@
  *   the honey line on top while two stand side by side (AC-1).
  * - Deleted, here or anywhere (EC-3): the editor says so and offers the note back, the side adds the way to the trash
  *   and closing the tab. No longer there for this account at all (deleted for good, sharing ended, EC-6): the side
- *   says so instead of an editor.
+ *   says so instead of an editor. Ended while the note was on show here, the side keeps the editor's sentence that
+ *   names who ended it (NOTES-13 AC-5); only on this page, never in what the tabs remember.
  */
 import { Ban } from 'lucide-react'
-import { useCallback, type CSSProperties } from 'react'
+import { useCallback, useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
@@ -36,6 +37,10 @@ type Props = {
 export function TabPane({ tab, side, meta, focused, line, hidden, fresh, style }: Props) {
   const { t } = useTranslation()
   const onGuard = useCallback((guard: LeaveGuard | null) => setTabGuard(tab.key, guard), [tab.key])
+  const [ended, setEnded] = useState<{ note: string; said: string } | null>(null)
+  const note = tab.note
+  const onEnded = useCallback((said: string) => setEnded({ note, said }), [note])
+  const endedSaid = ended?.note === note ? ended.said : ''
   const take = () => {
     if (!focused && !hidden) focusSide(side)
   }
@@ -55,7 +60,13 @@ export function TabPane({ tab, side, meta, focused, line, hidden, fresh, style }
         <div role="alert" data-testid="tab-gone" className="mx-auto flex max-w-[460px] flex-col items-center gap-3 px-6 py-20 text-center">
           <Ban aria-hidden className="h-10 w-10 text-warn-500" strokeWidth={1.5} />
           <p className="text-lg font-semibold text-mist-100">{t('tabs.gone.title')}</p>
-          <p className="text-sm leading-relaxed text-mist-500">{t('tabs.gone.text')}</p>
+          {endedSaid ? (
+            <p className="text-sm leading-relaxed font-medium text-warn-500" data-testid="tab-gone-said">
+              {endedSaid}
+            </p>
+          ) : (
+            <p className="text-sm leading-relaxed text-mist-500">{t('tabs.gone.text')}</p>
+          )}
           <button type="button" className="nn-btn nn-btn-ghost" onClick={() => closeTab(tab.key)}>
             {t('tabs.closeTab')}
           </button>
@@ -67,6 +78,7 @@ export function TabPane({ tab, side, meta, focused, line, hidden, fresh, style }
           guarded={focused}
           onGuard={onGuard}
           onDeleted={() => closeDeletedTab(tab.key)}
+          onEnded={onEnded}
           stoppedExtra={(status) =>
             status === 'gone' ? (
               <>

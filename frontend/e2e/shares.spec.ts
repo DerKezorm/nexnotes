@@ -11,7 +11,7 @@ async function member(page: Page, browser: Browser, name: string): Promise<{ con
   const invite = await page.request.post('/api/invites', { data: {}, headers: TAB })
   const token = String((await invite.json()).link).split('/invite/')[1]
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
-  const email = `${name.toLowerCase()}-${Date.now()}@example.com`
+  const email = `${name.toLowerCase().replaceAll(' ', '-')}-${Date.now()}@example.com`
   const made = await context.request.post(`/api/invite/${token}`, { data: { display_name: name, email, password: 'a long e2e member password' }, headers: TAB })
   expect(made.ok()).toBe(true)
   const me = await (await context.request.get('/api/auth/me')).json()
@@ -19,17 +19,19 @@ async function member(page: Page, browser: Browser, name: string): Promise<{ con
 }
 
 test('NOTES-13 AC-1 AC-3 AC-4 AC-5 shared to read: no toolbar, under "Shared with me", taken back while open', async ({ page, browser }) => {
-  const reader = await member(page, browser, 'Rita')
+  // A name of this run only: a Rita of an earlier run (--repeat-each, a server kept) would be found first.
+  const name = `Rita ${Date.now().toString(36)}`
+  const reader = await member(page, browser, name)
   const note = await (await page.request.post('/api/notes', { data: { title: 'Lentil soup', markdown: '250 g red lentils' }, headers: TAB })).json()
   await page.goto(`/notes/${note.id}`)
   await page.getByTestId('note-menu').click()
   await page.getByTestId('note-share').click()
   await expect(page.getByTestId('share-hint')).toHaveText('Only you decide who sees the note. Others cannot share it further.')
-  await page.getByTestId('share-search').fill('Rit')
-  await page.getByTestId('share-found').first().click()
-  await expect(page.getByTestId('share-person')).toContainText('Rita')
+  await page.getByTestId('share-search').fill(name)
+  await page.getByTestId('share-found').filter({ hasText: name }).click()
+  await expect(page.getByTestId('share-person')).toContainText(name)
   await page.keyboard.press('Escape')
-  await expect(page.getByTestId('note-shared-mark')).toHaveText('shared with Rita')
+  await expect(page.getByTestId('note-shared-mark')).toHaveText(`shared with ${name}`)
 
   const theirs = await reader.context.newPage()
   await theirs.goto('/shared')
@@ -42,7 +44,10 @@ test('NOTES-13 AC-1 AC-3 AC-4 AC-5 shared to read: no toolbar, under "Shared wit
 
   const taken = await page.request.delete(`/api/shares/note/${note.id}/people/${reader.id}`, { headers: TAB })
   expect(taken.ok()).toBe(true)
-  await expect(theirs.getByTestId('stopped-bar')).toContainText('“Lentil soup” is not here any more: Tester stopped sharing it.', { timeout: 10_000 })
+  // The room refuses at once, the side then says the note is not available any more (NOTES-8 EC-6) and keeps the
+  // sentence that names who ended it (AC-5). The editor's own bar stood only until the tab heard the note was gone.
+  await expect(theirs.getByTestId('tab-gone')).toContainText('This note is no longer available.', { timeout: 10_000 })
+  await expect(theirs.getByTestId('tab-gone-said')).toHaveText('“Lentil soup” is not here any more: Tester stopped sharing it.')
   await reader.context.close()
 })
 
@@ -69,6 +74,9 @@ test('NOTES-13 AC-9 AC-12 EC-5 a read link opens light for somebody without an a
   expect(scripts).toEqual([])
 
   await page.getByTestId('share-link-revoke').click()
+  // Revoked once the server said so: the dialog takes the link away only then. A reload before could still show it.
+  await expect(page.getByTestId('share-link-url')).toHaveCount(0)
+  await expect(page.getByTestId('share-link-switch')).toHaveAttribute('aria-checked', 'false')
   await visitor.reload()
   await expect(visitor.locator('h1')).toHaveText('Dieser Link gilt nicht mehr')
   await expect(visitor.getByText('Recipe')).toHaveCount(0)
