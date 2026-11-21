@@ -172,7 +172,7 @@ export function HistoryPage() {
           )
         )}
       </main>
-      <aside aria-label={t('history.title')} className="flex min-w-[260px] flex-[0_1_320px] flex-col gap-1.5 border-l border-ink-700 bg-ink-900 px-3.5 py-4">
+      <aside aria-label={t('history.title')} className="flex min-w-[260px] flex-[1_1_320px] flex-col gap-1.5 border-l border-ink-700 bg-ink-900 px-3.5 py-4">
         <h2 className="mb-1.5 px-1.5 text-base font-bold text-mist-100">{t('history.title')}</h2>
         {page?.pending && (
           <button type="button" onClick={close} className="flex justify-between gap-2 rounded-[9px] px-2.5 py-2 text-left text-[13.5px] hover:bg-ink-800" data-testid="history-now">

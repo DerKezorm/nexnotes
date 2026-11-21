@@ -202,6 +202,22 @@ describe('the trash', () => {
     expect($('trash-empty-dialog')!.textContent).not.toContain('folder')
   })
 
+  it('NOTES-15 AC-6 a folder says how many notes went with it, in the right number, and an empty one says so', async () => {
+    list = {
+      ...list,
+      items: [item('Crafts', { kind: 'folder', notes: 0 }), item('Garden', { kind: 'folder', notes: 1 }), item('Recipes', { kind: 'folder', notes: 3 })],
+    }
+    for (const [language, expected] of [
+      ['en', ['Crafts · empty folder', 'Garden · folder with 1 note', 'Recipes · folder with 3 notes']],
+      ['de', ['Crafts · leerer Ordner', 'Garden · Ordner mit 1 Notiz', 'Recipes · Ordner mit 3 Notizen']],
+    ] as const) {
+      await i18n.changeLanguage(language)
+      await render()
+      expect(rows().map((element) => element.querySelector('.font-semibold')!.textContent)).toEqual(expected)
+    }
+    await i18n.changeLanguage('en')
+  })
+
   it('NOTES-15 AC-6 the sidebar leads to the trash', async () => {
     await render()
     const entry = box.querySelector<HTMLAnchorElement>('[data-testid="trash-entry"]')!

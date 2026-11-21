@@ -6,6 +6,7 @@
 import { createElement, useSyncExternalStore } from 'react'
 import { createRoot } from 'react-dom/client'
 
+import { onAccountChange } from '../state/account'
 import { NoticeHost } from './NoticeHost'
 
 /** How long "Undo" stays (the spec: 10 seconds). */
@@ -57,3 +58,6 @@ function ensureHost(): void {
   document.body.append(box)
   createRoot(box).render(createElement(NoticeHost))
 }
+
+// A notice names a folder of the account before ("Garden" went to the trash) and could undo it: it goes.
+onAccountChange(hideNotice)

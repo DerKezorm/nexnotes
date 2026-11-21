@@ -493,3 +493,32 @@ describe('NOTES-3 EC-10 every script', () => {
     expect(bodyIsEmpty(editor)).toBe(false)
   })
 })
+
+describe('NOTES-15 AC-4 a restore while somebody writes', () => {
+  it('NOTES-15 AC-4 the caret of somebody writing in a paragraph a restore replaces stands at the end of the one that took its place', () => {
+    // The server puts the restored paragraph right after the one it replaces, then deletes that one; text typed into
+    // it on the way goes to the end of the restored paragraph (backend `rescue.py`), where the caret is: one word.
+    const mine = new Y.Doc()
+    const editor = makeEditor(mine)
+    editor.commands.setContent('<p>first session w7 w</p><p>second</p>')
+    let end = 0
+    editor.state.doc.forEach((node, offset, index) => {
+      if (index === 0) end = offset + node.nodeSize - 1
+    })
+    editor.commands.setTextSelection(end)
+    const server = new Y.Doc()
+    Y.applyUpdate(server, Y.encodeStateAsUpdate(mine))
+    const body = server.getXmlFragment('body')
+    server.transact(() => {
+      const restored = new Y.XmlElement('paragraph')
+      const text = new Y.XmlText()
+      text.insert(0, 'first session')
+      restored.insert(0, [text])
+      body.insert(1, [restored])
+      body.delete(0, 1)
+    })
+    Y.applyUpdate(mine, Y.encodeStateAsUpdate(server))
+    const caret = editor.state.doc.resolve(editor.state.selection.from)
+    expect([caret.index(0), caret.parent.textContent, caret.parentOffset]).toEqual([0, 'first session', 13])
+  })
+})

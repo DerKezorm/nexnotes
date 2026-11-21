@@ -346,3 +346,41 @@ def test_notes5_ec7_two_renames_and_typing_at_the_same_moment_lose_nothing(clien
 def test_notes5_renaming_is_for_signed_in_members_only(client):
     assert client.get("/api/tags").status_code == 401
     assert client.put("/api/tags/bad", json={"name": "x"}).status_code in (401, 403)
+
+
+# --- Findings of the review: the trash, a trailing ``_``, the list and locked notes --------------------------------
+
+
+def test_notes5_ac4_ac5_notes_in_the_trash_change_too(client, account):
+    """AC-4 and AC-5 say "all of its own notes": a note in the trash comes back with the new name, or without the tag.
+    The count the dialog shows stays with the notes the member sees."""
+    living = new_note(client, title="Living", markdown="#trashtag here")
+    binned = new_note(client, title="Binned", markdown="#trashtag there")
+    assert client.delete(f"/api/notes/{binned['id']}").status_code == 204
+    assert client.get("/api/tags/trashtag").json()["mine"] == 1
+    renamed = client.put("/api/tags/trashtag", json={"name": "renamed"})
+    assert renamed.status_code == 200, renamed.text
+    assert renamed.json()["changed"] == 2
+    assert to_plain(stored_doc(binned["id"])) == "#renamed there"
+    assert client.post(f"/api/notes/{binned['id']}/restore").status_code == 200
+    assert dict(listed(client)) == {"renamed": 2}
+    assert client.delete(f"/api/notes/{living['id']}").status_code == 204
+    assert client.delete("/api/tags/renamed").json()["changed"] == 2
+    assert to_plain(stored_doc(living["id"])) == "here"
+    assert to_plain(stored_doc(binned["id"])) == "there"
+
+
+def test_notes5_ac5_a_dash_or_underscore_right_after_the_tag_goes_with_it(client, account):
+    note = new_note(client, title="Garden", markdown="#Gemüse-Garten_ und #gemüse-garten-- dort `#gemüse-garten_` #gemüse-garten`_x`")
+    assert client.delete("/api/tags/gemüse-garten").json()["changed"] == 1
+    assert to_plain(stored_doc(note["id"])) == "und dort #gemüse-garten__x"
+
+
+def test_notes5_ec6_the_note_list_shows_no_tags_of_a_locked_note(client, account, locking):
+    """Prepared for the vault (NOTES-16): the list of notes reads ``note_tags`` through the same docking point."""
+    secret = new_note(client, title="Secret", markdown="#geheim")
+    open_note = new_note(client, title="Open", markdown="#offen")
+    locking.add(secret["id"])
+    items = {item["id"]: item for item in client.get("/api/notes").json()}
+    assert items[secret["id"]]["tags"] == []
+    assert items[open_note["id"]]["tags"] == ["offen"]
