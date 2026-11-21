@@ -38,6 +38,7 @@ import { setLeaveGuard, setOpenNote, setPopGuard, type LeaveGuard } from '../not
 import { isListPath, keepsNotesOpen, noteOf } from '../notes/workspace'
 import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
 import { noteHref } from '../notes/newNote'
+import { NotifyBell, useJumpToChange, useViewing } from '../notify'
 import { useAuth } from '../state/auth'
 import { acquireProvider, othersOpen, releaseProvider } from '../tabs/live'
 import { noteTitle } from '../tabs/meta'
@@ -246,6 +247,9 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
   const canAttach = editable && Boolean(head?.can_write)
   const dragging = useFileDrag(sheet, canAttach)
   useJumpToAttachment(Boolean(editor) && provider.synced)
+  // Notifications (NOTES-14): opened at the line a notification named (AC-5); none here while it is in view (AC-9).
+  useJumpToChange(editor, Boolean(editor) && provider.synced)
+  useViewing(noteId, guarded)
 
   useEffect(() => {
     if (provider.synced && titleAtSync.current === null) titleAtSync.current = provider.doc.getText('title').toString()
@@ -511,6 +515,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           {editor && canAttach && <AttachButton editor={editor} noteId={noteId} />}
           <PresenceBar presence={presence} />
           <NotePinButton noteId={noteId} head={head} />
+          {head && <NotifyBell noteId={noteId} on={Boolean(head.notify)} shared={Boolean(head.owner && head.owner.id !== myId) || Boolean(head.shared_with?.length)} />}
           <span className="relative">
             <button
               type="button"

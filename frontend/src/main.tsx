@@ -17,6 +17,8 @@ import './search'
 import './tags'
 import './history'
 import './export'
+// Notifications (NOTES-14): the bell of a shared note, the service worker, Web Push.
+import './notify'
 // The trash closes the sidebar's places (drawing "Seitenleiste"): imported after every feature with an entry there.
 import './trash'
 import './i18n'

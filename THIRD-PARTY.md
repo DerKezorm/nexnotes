@@ -18,6 +18,12 @@ fetched by the package managers alone: files that lie in this repository or go i
 | typst 0.15.0 | sets the PDF of a note (Python binding of Typst, which it bundles) | Apache-2.0 |
 | pypdf (tests only, not in the image) | reads the text of the PDFs in the tests | BSD-3-Clause |
 
+## Python packages added by features
+
+| Package | What it does here | Licence |
+|---|---|---|
+| http-ece 1.2.1 | encrypts a notification for one browser (Web Push, RFC 8291, aes128gcm; NOTES-14) | MIT |
+
 ## Programs in the image
 
 | Program | What it does here | Licence |

@@ -43,6 +43,7 @@ about a data folder on a network share.
 | `NEXNOTES_LOG_LEVEL` | Overrides the log level set in the interface: `quiet`, `normal`, `detailed` or `trace`. |
 | `NEXNOTES_SESSION_DAYS` | Days a browser stays signed in, 1 to 3650 (default 30). |
 | `NEXNOTES_COOKIE_SUFFIX` | Appended to the cookie names when two instances share a host: letters, digits and `_`. |
+| `NEXNOTES_PUSH_RELAY` | Where notifications for the iOS app go (default `https://push.nexapps.dev`; it sees only what is encrypted for the device). Empty: none to iPhones and iPads. |
 | `NEXNOTES_PORT` | Port inside the container, 1 to 65535 (default 8000), for host networking. |
 
 A variable with a value nexnotes cannot use stops the start with a line in the log that names the variable and the
@@ -52,6 +53,13 @@ values it takes.
 
 Password with an optional second factor (TOTP with recovery codes), and any number of OpenID Connect providers
 (authentik, Microsoft Entra ID, Keycloak, Authelia, Pocket ID). authentik can be set up in one step from the settings.
+
+## Notifications
+
+Members can switch on notifications for a shared note or folder: when somebody else changes it, a notification names
+who, the note and what was added or ticked, bundled once nobody has written for two minutes. They arrive in every
+browser that allowed them (Web Push; the message is encrypted for the browser, so the push service never reads it) and
+in the iOS app. The key that signs Web Push is made at the first start and kept encrypted with the server's secret.
 
 ## Languages
 

@@ -34,6 +34,8 @@ export type NoteHead = NoteItem & {
   can_share?: boolean
   level?: 'read' | 'write'
   pinned?: boolean
+  /** Notifications (NOTES-14): the bell is on for this note. */
+  notify?: boolean
 }
 
 export type NewNote = { id?: string; folder_id?: string; title?: string; markdown?: string; origin?: string; title_suggested?: boolean }
