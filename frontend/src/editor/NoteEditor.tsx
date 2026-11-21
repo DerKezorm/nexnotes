@@ -9,32 +9,35 @@
  *   text goes (EC-4); one left otherwise without a title (a closed tab) gets the suggestion with "Titel prüfen"
  *   (AC-10).
  * - Deleting moves the note to the trash and offers "Rückgängig" for ten seconds (AC-6).
+ * - Beside another note (NOTES-8) only the side used last guards the ways out of the page and names the browser tab;
+ *   the other hands its guard to the page (`onGuard`), which asks it before closing that side. The connection comes
+ *   from `tabs/live.ts`, which keeps it open while changes still wait and bridges two editors of the same note.
  */
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { Copy, Ellipsis, History, Trash2, WifiOff } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import * as Y from 'yjs'
-
 import { Dialog } from '../components/Dialog'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
 import { historyHref } from '../history/href'
 import { RestoreWatch } from '../history/RestoreWatch'
 import { problemText } from '../lib/errors'
-import { useTitle } from '../lib/title'
+import { pageTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
-import { setLeaveGuard, setPopGuard } from '../notes/context'
+import { setLeaveGuard, setPopGuard, type LeaveGuard } from '../notes/context'
 import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
 import { noteHref } from '../notes/newNote'
 import { useAuth } from '../state/auth'
+import { acquireProvider, othersOpen, releaseProvider } from '../tabs/live'
+import { noteTitle } from '../tabs/meta'
 import './editor.css'
 import { bodyIsEmpty, editorExtensions, editorProps, safeHref } from './extensions'
 import { presenceFromAwareness, presenceUser, type Presence } from './presence'
 import { PresenceBar } from './PresenceBar'
-import { NoteProvider } from './provider'
+import type { LiveStatus, NoteProvider } from './provider'
 import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
@@ -46,6 +49,13 @@ type Props = {
   fresh?: boolean
   /** After deleting: where to go (the list by default). */
   onDeleted?: () => void
+  /** The note on the side used last (the only one, without a second side): it guards leaving the page and names the
+   * browser tab. True by default. */
+  guarded?: boolean
+  /** Hands the editor's guard to the page, to be asked before this side closes (NOTES-8). */
+  onGuard?: (guard: LeaveGuard | null) => void
+  /** More in the bar of a note that stopped (the way to the trash, closing the tab). */
+  stoppedExtra?: (status: LiveStatus) => ReactNode
 }
 
 /** Leaving a note runs a moment later: React's strict mode unmounts and mounts again at once, which is no leaving. */
@@ -55,19 +65,19 @@ export function NoteEditor(props: Props) {
   return <OneNote key={props.noteId} {...props} />
 }
 
-function OneNote({ noteId, fresh, onDeleted }: Props) {
+function OneNote(props: Props) {
+  const { noteId } = props
   const [provider, setProvider] = useState<NoteProvider | null>(null)
   useEffect(() => {
-    const made = new NoteProvider(noteId, new Y.Doc())
-    made.connect()
+    const made = acquireProvider(noteId)
     setProvider(made)
     return () => {
-      made.destroy()
+      releaseProvider(made)
       setProvider(null)
     }
   }, [noteId])
   if (!provider) return null
-  return <LiveNote provider={provider} noteId={noteId} fresh={fresh} onDeleted={onDeleted} />
+  return <LiveNote {...props} provider={provider} />
 }
 
 function useKeyboardInset(): number {
@@ -87,7 +97,7 @@ function useKeyboardInset(): number {
   return inset
 }
 
-function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: NoteProvider }) {
+function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard, stoppedExtra }: Props & { provider: NoteProvider }) {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const here = useLocation().pathname
@@ -184,7 +194,14 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
     if (provider.synced && titleAtSync.current === null) titleAtSync.current = provider.doc.getText('title').toString()
   }, [live, provider])
 
-  useTitle(cleanTitle(title) || t('notes.untitled'))
+  const shownTitle = cleanTitle(title)
+  useEffect(() => {
+    if (guarded) document.title = pageTitle(shownTitle || t('notes.untitled'))
+  }, [guarded, shownTitle, t])
+  // The tab shows the title as it is typed.
+  useEffect(() => {
+    if (provider.synced) noteTitle(noteId, shownTitle)
+  }, [noteId, shownTitle, provider.synced])
 
   const onTitle = useCallback((value: string) => {
     titleRef.current = value
@@ -195,17 +212,54 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
 
   const needsTitle = useCallback(() => !deleted.current && !cleanTitle(titleRef.current) && !bodyIsEmpty(editor), [editor])
 
+  const guard = useCallback<LeaveGuard>(
+    (proceed) => {
+      if (!needsTitle()) return false
+      setAskLeave(() => proceed)
+      return true
+    },
+    [needsTitle],
+  )
+
+  useEffect(() => {
+    if (!onGuard) return
+    onGuard(guard)
+    return () => onGuard(null)
+  }, [onGuard, guard])
+
+  // Leaving the note: the editor goes (another note, a tab closed, the page left).
   useEffect(() => {
     const pendingLeave = leaving.get(noteId)
     if (pendingLeave) {
       clearTimeout(pendingLeave)
       leaving.delete(noteId)
     }
-    setLeaveGuard((proceed) => {
-      if (!needsTitle()) return false
-      setAskLeave(() => proceed)
-      return true
-    })
+    return () => {
+      const emptyTitle = !cleanTitle(titleRef.current)
+      const emptyBody = bodyIsEmpty(editor)
+      // The same note still open on the other side: it is not left.
+      if (deleted.current || !emptyTitle || !provider.synced || othersOpen(provider) > 0) return
+      leaving.set(
+        noteId,
+        setTimeout(() => {
+          leaving.delete(noteId)
+          // Neither title nor text: nothing stays (EC-4). Text without a title: the suggestion, to be checked (AC-10).
+          const done = emptyBody ? notesApi.discard(noteId) : notesApi.suggestTitle(noteId)
+          void done
+            .then(() => {
+              notesChanged()
+              void refreshFolders()
+            })
+            .catch(() => undefined)
+        }, 50),
+      )
+    }
+  }, [noteId, editor, provider])
+
+  // The ways out of the page ask the note on the side used last.
+  useEffect(() => {
+    if (!guarded) return
+    setLeaveGuard(guard)
     const onClick = (event: MouseEvent) => {
       if (event.defaultPrevented || event.button !== 0 || event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return
       const anchor = (event.target as Element | null)?.closest?.('a[href]') as HTMLAnchorElement | null
@@ -241,25 +295,8 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
       setLeaveGuard(null)
       document.removeEventListener('click', onClick, true)
       setPopGuard(null)
-      const emptyTitle = !cleanTitle(titleRef.current)
-      const emptyBody = bodyIsEmpty(editor)
-      if (deleted.current || !emptyTitle || !provider.synced) return
-      leaving.set(
-        noteId,
-        setTimeout(() => {
-          leaving.delete(noteId)
-          // Neither title nor text: nothing stays (EC-4). Text without a title: the suggestion, to be checked (AC-10).
-          const done = emptyBody ? notesApi.discard(noteId) : notesApi.suggestTitle(noteId)
-          void done
-            .then(() => {
-              notesChanged()
-              void refreshFolders()
-            })
-            .catch(() => undefined)
-        }, 50),
-      )
     }
-  }, [noteId, editor, needsTitle, navigate, provider, here])
+  }, [guarded, guard, editor, needsTitle, navigate, here])
 
   // Closing the tab while changes wait: the browser asks (NOTES-12 EC-4).
   useEffect(() => {
@@ -366,6 +403,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
       {stopped && (
         <div role="alert" data-testid="stopped-bar" className="flex flex-wrap items-center gap-3 px-5 py-2.5 text-[13.5px] font-medium text-warn-500" style={{ background: 'rgb(251 146 60 / 0.14)' }}>
           <span>{t(`editor.stopped.${status}`)}</span>
+          {stoppedExtra?.(status as LiveStatus)}
           {status === 'gone' && head?.can_write && (
             <button type="button" className="nn-btn nn-btn-ghost h-8 px-3" onClick={() => void restore()}>
               {t('editor.restore')}

@@ -903,6 +903,36 @@
     "title": "nexnotes einrichten",
     "version": "Version {{version}}"
   },
+  "tabs": {
+    "close": "Tab schließen: {{title}}",
+    "closeTab": "Tab schließen",
+    "closedOldest": "„{{title}}“ wurde geschlossen, weil schon {{max}} Tabs offen waren.",
+    "count": "{{count}} von {{max}}",
+    "dropBeside": "Hier loslassen: daneben öffnen",
+    "endSplit": "Nebeneinander beenden",
+    "gone": {
+      "text": "Sie wurde endgültig gelöscht, oder das Teilen wurde beendet.",
+      "title": "Diese Notiz ist nicht mehr verfügbar."
+    },
+    "keys": {
+      "help": "Tastenkürzel: {{mod}}+1 bis 6 wählt einen Tab, {{mod}}+Pfeil nach rechts oder links den nächsten oder vorigen, {{mod}}+S die andere Seite, {{mod}}+W schließt den Tab.",
+      "mod": "Alt+Umschalt"
+    },
+    "label": "Offene Notizen",
+    "left": "links",
+    "newTab": "Neue Notiz in neuem Tab",
+    "openBeside": "Daneben öffnen",
+    "openInNewTab": "In neuem Tab öffnen",
+    "openTrash": "Papierkorb öffnen",
+    "resize": "Breite ändern",
+    "right": "rechts",
+    "sides": "Welche Seite",
+    "state": {
+      "deleted": "im Papierkorb",
+      "gone": "nicht mehr verfügbar",
+      "locked": "gesperrt"
+    }
+  },
   "tags": {
     "heading": "Schlagwörter",
     "showAll": "Alle anzeigen ({{count}})",

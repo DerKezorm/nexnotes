@@ -1,0 +1,90 @@
+/**
+ * One side of the notes: the editor of its tab, or what the tab has to say instead.
+ *
+ * - The side used last guards the ways out of the page and names the browser tab; the other hands its guard to the
+ *   tabs, which ask it before it closes. A click or the keyboard's focus in a side makes it the side used last, with
+ *   the honey line on top while two stand side by side (AC-1).
+ * - Deleted, here or anywhere (EC-3): the editor says so and offers the note back, the side adds the way to the trash
+ *   and closing the tab. No longer there for this account at all (deleted for good, sharing ended, EC-6): the side
+ *   says so instead of an editor.
+ */
+import { Ban } from 'lucide-react'
+import { useCallback, type CSSProperties } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Link } from 'react-router-dom'
+
+import { NoteEditor } from '../editor/NoteEditor'
+import type { LeaveGuard } from '../notes/context'
+import type { TabMeta } from './meta'
+import { closeDeletedTab, closeTab, focusSide, setTabGuard } from './open'
+import type { Side, Tab } from './state'
+
+type Props = {
+  tab: Tab
+  side: Side
+  meta: TabMeta | undefined
+  /** The side used last. */
+  focused: boolean
+  /** The honey line on top: two sides on show, this the one used last. */
+  line: boolean
+  /** Out of view for now (a narrow window shows one side with the switcher, EC-2); the editor stays connected. */
+  hidden: boolean
+  fresh: boolean
+  style: CSSProperties
+}
+
+export function TabPane({ tab, side, meta, focused, line, hidden, fresh, style }: Props) {
+  const { t } = useTranslation()
+  const onGuard = useCallback((guard: LeaveGuard | null) => setTabGuard(tab.key, guard), [tab.key])
+  const take = () => {
+    if (!focused && !hidden) focusSide(side)
+  }
+  return (
+    <section
+      aria-label={t(`tabs.${side}`)}
+      data-testid="tab-pane"
+      data-side={side}
+      data-note={tab.note}
+      data-focused={focused}
+      onPointerDownCapture={take}
+      onFocusCapture={take}
+      style={{ ...style, borderTopColor: line ? 'var(--color-accent-500)' : 'transparent' }}
+      className={'nn-scroll min-h-0 min-w-0 overflow-y-auto border-t-2 ' + (hidden ? 'hidden' : '')}
+    >
+      {meta?.state === 'gone' ? (
+        <div role="alert" data-testid="tab-gone" className="mx-auto flex max-w-[460px] flex-col items-center gap-3 px-6 py-20 text-center">
+          <Ban aria-hidden className="h-10 w-10 text-warn-500" strokeWidth={1.5} />
+          <p className="text-lg font-semibold text-mist-100">{t('tabs.gone.title')}</p>
+          <p className="text-sm leading-relaxed text-mist-500">{t('tabs.gone.text')}</p>
+          <button type="button" className="nn-btn nn-btn-ghost" onClick={() => closeTab(tab.key)}>
+            {t('tabs.closeTab')}
+          </button>
+        </div>
+      ) : (
+        <NoteEditor
+          noteId={tab.note}
+          fresh={fresh}
+          guarded={focused}
+          onGuard={onGuard}
+          onDeleted={() => closeDeletedTab(tab.key)}
+          stoppedExtra={(status) =>
+            status === 'gone' ? (
+              <>
+                <Link to="/trash" className="nn-btn nn-btn-ghost h-8 px-3" data-testid="tab-open-trash">
+                  {t('tabs.openTrash')}
+                </Link>
+                <button type="button" className="nn-btn nn-btn-quiet h-8 px-2" onClick={() => closeTab(tab.key)}>
+                  {t('tabs.closeTab')}
+                </button>
+              </>
+            ) : status === 'forbidden' ? (
+              <button type="button" className="nn-btn nn-btn-quiet h-8 px-2" onClick={() => closeTab(tab.key)}>
+                {t('tabs.closeTab')}
+              </button>
+            ) : null
+          }
+        />
+      )}
+    </section>
+  )
+}
