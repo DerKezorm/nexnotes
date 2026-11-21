@@ -19,9 +19,10 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Account, AuthSession, Setting
 from app.security import decrypt_secret
-from app.services import backups, mailer, settings_service
+from app.services import backups, mailer, search, settings_service
 
 from .conftest import PASSWORD, make_account, sign_in
+from .test_notes9 import break_index_like_before, index_problems
 
 
 class FakeSmtp:
@@ -175,6 +176,27 @@ def test_a_backup_keeps_the_secret_key_and_a_restore_signs_everybody_out(
             assert settings_service.get(db, "smtp_host") == "mail.example.com"
     finally:
         key_file.unlink(missing_ok=True)
+
+
+def test_a_backup_whose_search_index_secure_delete_broke_is_restored_and_the_index_built_anew(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """FTS5 "secure-delete", which versions before set, broke the search index of some databases, and every backup of
+    them was refused as damaged. The index is made from the notes: the restore goes ahead and builds it anew."""
+    try:
+        break_index_like_before(client)
+        name = backups.create().name
+        monkeypatch.setattr(backups, "restart_soon", lambda: None)
+        answer = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
+        assert answer.status_code == 202, answer.text
+        assert backups.apply_pending() is True
+        assert index_problems() == ["ok"]
+        with SessionLocal() as db:
+            found = db.execute(search._sql("SELECT rowid FROM @index WHERE @index MATCH :word"), {"word": "kartoffel"})
+            assert len(found.all()) == 1
+    finally:
+        # Whatever is left broken goes, so that no later test meets it.
+        search.ensure_schema()
 
 
 def test_a_restore_is_not_refused_as_damaged_when_the_system_held_the_database_copy_for_a_moment(

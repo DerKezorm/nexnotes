@@ -408,6 +408,11 @@ def _compare_notes(archived: dict[str, _NoteRow], current: dict[str, _NoteRow],
     }
 
 
+#: What ``PRAGMA integrity_check`` says of the search index alone (``services/search.py``): FTS5 "secure-delete", which
+#: versions before set, left it malformed in some databases. The index is built from the notes, so a backup holding
+#: such a one is whole all the same; ``_end_restored_sessions`` builds it anew.
+SEARCH_INDEX_PROBLEM = re.compile(r"FTS5 table main\.search_index_v\d+")
+
 #: How often the check reads the archive's database when the system does not let it for a moment, and the pause between.
 DATABASE_TRIES = 3
 DATABASE_PAUSE_SECONDS = 0.25
@@ -434,10 +439,14 @@ def _archived_database(archive: zipfile.ZipFile) -> tuple[bool, dict[str, _NoteR
                 return False, {}
             connection = sqlite3.connect(scratch)
             try:
-                result = connection.execute("PRAGMA integrity_check").fetchone()[0]
-                if result != "ok":
-                    logger.warning("The database in the backup is damaged: %s", result)
-                    return False, {}
+                found = [row[0] for row in connection.execute("PRAGMA integrity_check").fetchall()]
+                if found != ["ok"]:
+                    if all(SEARCH_INDEX_PROBLEM.search(line) for line in found):
+                        # The search index is made from the notes and built anew at the restore: no damage.
+                        logger.info("The search index in the backup is damaged and is built anew at the restore")
+                    else:
+                        logger.warning("The database in the backup is damaged: %s", found[0])
+                        return False, {}
                 return True, _notes_in(connection)
             finally:
                 connection.close()
@@ -539,12 +548,22 @@ def stage_restore(name: str) -> Brief:
 
 
 def _end_restored_sessions(database: Path) -> None:
-    """Sign-ins stored in the backup would come back to life, even ones ended since: everybody signs in anew."""
+    """Sign-ins stored in the backup would come back to life, even ones ended since: everybody signs in anew. A search
+    index the check let pass although damaged (``SEARCH_INDEX_PROBLEM``) is built anew from the notes' texts."""
     connection = sqlite3.connect(database)
     try:
         if connection.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='auth_sessions'").fetchone():
             connection.execute("DELETE FROM auth_sessions")
             connection.commit()
+        for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall():
+            if not re.fullmatch(r"search_index_v\d+", name):
+                continue
+            try:
+                connection.execute(f"INSERT INTO \"{name}\"(\"{name}\", rank) VALUES('integrity-check', 0)")
+            except sqlite3.DatabaseError:
+                logger.warning("The search index of the restored database was damaged and is built anew")
+                connection.execute(f"INSERT INTO \"{name}\"(\"{name}\") VALUES('rebuild')")
+                connection.commit()
     finally:
         connection.close()
 
