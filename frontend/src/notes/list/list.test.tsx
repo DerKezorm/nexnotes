@@ -16,6 +16,7 @@ import { hideNotice } from '../../folders/notice'
 import { FolderPage } from '../../folders/pages'
 import { forgetFolders } from '../../folders/store'
 import i18n from '../../i18n'
+import { accountChanged } from '../../state/account'
 import { NoteList } from '../NoteList'
 import { DEFAULT_VIEW, type ListItem, type ListView } from './api'
 import { NotePinButton } from './EditorMarks'
@@ -541,6 +542,13 @@ describe('NOTES-6 list and tiles', () => {
     await render('h')
     expect(calls.filter((call) => call.path === '/api/note-list')).toHaveLength(4)
     expect(rowTitles()).toEqual(['Früh'])
+    // Another account signed in meanwhile: what was asked for the first one is not taken.
+    act(() => root.unmount())
+    root = createRoot(box)
+    preloadList('/folder/h', '')
+    accountChanged()
+    await render('h')
+    expect(calls.filter((call) => call.path === '/api/note-list')).toHaveLength(6)
   })
 
   // ---- EC-3, EC-5 -------------------------------------------------------------------------------------------------------

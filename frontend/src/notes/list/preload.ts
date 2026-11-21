@@ -4,9 +4,11 @@
  * Without this the list waits for the program, then for the sign-in check, then for the page to draw, before it even
  * asks. Here it leaves while the program is still starting, next to the sign-in check; `useNoteList` takes the answer
  * for its first load when it is for the same list and still fresh, and asks itself otherwise (signed out, another
- * page, an error). Only in the built app: tests and the development server ask the usual way.
+ * page, an error, another account signed in meanwhile). Only in the built app: tests and the development server ask
+ * the usual way.
  */
 import { tabId } from '../../api/client'
+import { onAccountChange } from '../../state/account'
 import type { ListAnswer } from './api'
 
 /** An answer older than this is not taken: the list asks anew. */
@@ -47,6 +49,11 @@ export function takeEarly(folderId?: string): Early['answer'] | null {
   if (!found || found.key !== (folderId ?? 'all') || Date.now() - found.at > FRESH_MS) return null
   return found.answer
 }
+
+// An answer asked for one account is never shown to the next one in the same tab.
+onAccountChange(() => {
+  early = null
+})
 
 // The built app asks as soon as this module loads, before the first render.
 if (import.meta.env.PROD && typeof window !== 'undefined') preloadList(window.location.pathname, window.location.search)
