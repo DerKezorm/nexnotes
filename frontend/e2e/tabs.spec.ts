@@ -125,6 +125,44 @@ test('NOTES-8 AC-8 EC-4 six tabs with long titles grow narrower, then stand in t
   expect(seen[1280].rows).toBe(1)
   expect(Math.max(...seen[1280].widths)).toBeLessThan(200)
   expect(seen[768].rows).toBe(2)
+
+  // Two of them side by side, the last two of the row: their tabs say "left" and "right" and still keep a readable
+  // start of the title (TITLE_MIN in layout.ts: 56 px).
+  await page.setViewportSize({ width: 1600, height: 900 })
+  await page.evaluate(
+    ([account, ids, folderId]) => {
+      const tabs = (ids as string[]).map((note, index) => ({ key: `k${index}`, note, folder: folderId, used: index + 1 }))
+      localStorage.setItem(`nexnotes.tabs.${account}`, JSON.stringify({ v: 1, tabs, left: 'k4', right: 'k5', focus: 'right', ratio: 0.5, seq: 6 }))
+    },
+    [me.id, notes, folder] as const,
+  )
+  await page.goto('/')
+  await expect(page).toHaveURL(new RegExp(`/notes/${notes[5]}`))
+  await expect(page.getByTestId('tab-side')).toHaveCount(2)
+  for (const [width, height] of [
+    [1280, 800],
+    [1024, 768],
+    [900, 900],
+    [820, 1180],
+    [768, 1024],
+  ]) {
+    await page.setViewportSize({ width, height })
+    await page.waitForTimeout(150)
+    const now = await measure()
+    expect(now.overflow, `${width}px split`).toBeLessThanOrEqual(0)
+    expect(now.pageOverflow, `${width}px split`).toBeLessThanOrEqual(0)
+    expect(now.scrollbars, `${width}px split`).toBe(0)
+    expect(now.rows, `${width}px split`).toBeLessThanOrEqual(2)
+    const titles = await page.evaluate(() =>
+      [...document.querySelectorAll<HTMLElement>('[data-testid="tab"]')].map((tab) => ({
+        side: tab.dataset.side,
+        title: Math.round((tab.querySelector('[data-testid="tab-title"]') as HTMLElement).getBoundingClientRect().width),
+      })),
+    )
+    for (const one of titles) expect(one.title, `${width}px split, ${one.side || 'tab'}: ${JSON.stringify(titles)}`).toBeGreaterThanOrEqual(56)
+    expect(titles.filter((one) => one.side).map((one) => one.side)).toEqual(['left', 'right'])
+  }
+  expect((await measure()).rows).toBe(2)
 })
 
 test('NOTES-8 EC-1 the same note on both sides: what is typed on one side shows on the other at once, offline too', async ({ page }) => {

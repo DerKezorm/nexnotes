@@ -30,7 +30,7 @@ import { forgetMeta } from './meta'
 import { openNoteBeside, openNoteInNewTab } from './open'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabsNow } from './store'
-import { forgetRestored, rowsFor, TAB_MIN } from './layout'
+import { forgetRestored, rowsFor, SIDE_LABEL, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
@@ -433,6 +433,30 @@ describe('tabs in the page', () => {
     expect(rowsFor(6, 1200, 150)).toBe(1)
     expect(rowsFor(6, 6 * TAB_MIN + 150 - 1, 150)).toBe(2)
     expect(rowsFor(1, 200, 150)).toBe(1)
+  })
+
+  it('NOTES-8 EC-4 the two tabs on show keep the start of their title beside "left" and "right": the labels count, else two rows', async () => {
+    // Room for six tabs in a row, but not with the labels of the two on show.
+    const room = 6 * TAB_MIN + 6 * TAB_GAP + 90
+    expect(rowsFor(6, room, 90)).toBe(1)
+    expect(rowsFor(6, room, 90, 2)).toBe(2)
+    expect(tabMin(true) - tabMin(false)).toBe(SIDE_LABEL)
+    expect(TAB_MIN - TAB_CHROME).toBe(TITLE_MIN)
+    // An iPad held upright: 768 px less the sidebar (260) and the bar's paddings (24); the two on show at the end.
+    const mins = [0, 1, 2, 3, 4, 5].map((index) => tabMin(index >= 4))
+    const layout = tabRows(mins, 484, 124)
+    expect(layout.rows).toBe(2)
+    expect(layout.fits).toBe(true)
+    const sum = (from: number, to: number) => mins.slice(from, to).reduce((a, b) => a + b, 0) + (to - from) * TAB_GAP
+    expect(sum(0, layout.first) + (layout.extrasFirst ? 124 : 0)).toBeLessThanOrEqual(484)
+    expect(sum(layout.first, 6) + (layout.extrasFirst ? 0 : 124)).toBeLessThanOrEqual(484)
+
+    // In the page: the tabs on show hold their least width, the others shrink first.
+    await render('/notes/soup')
+    await act(async () => openNoteBeside('shop'))
+    await settle(60)
+    const shown = $$('tab').filter((tab) => tab.dataset.side)
+    expect(shown.map((tab) => tab.style.minWidth)).toEqual([`${tabMin(true)}px`, `${tabMin(true)}px`])
   })
 
   it('NOTES-8 EC-1 the same note twice side by side: what is typed on one side shows on the other at once, offline too', async () => {

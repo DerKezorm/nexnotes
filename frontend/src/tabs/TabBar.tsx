@@ -15,7 +15,7 @@ import { colorOf } from '../folders/palette'
 import { useCurrentFolder, useFolders } from '../folders/store'
 import { createNote } from '../notes/newNote'
 import { isMac } from './desktop'
-import { draggedTab as draggedTabNow, rowsFor, setDraggedTab, shortcutText, TAB_DRAG, TAB_MAX } from './layout'
+import { draggedTab as draggedTabNow, setDraggedTab, shortcutText, SIDE_LABEL, TAB_DRAG, TAB_MAX, tabMin, tabRows } from './layout'
 import type { TabMeta } from './meta'
 import { closeTab, endSplit, openNoteInNewTab, showTab } from './open'
 import { focusedKey, MAX_TABS, type Tab, type TabsState } from './state'
@@ -51,9 +51,16 @@ export function TabBar({ state, metas, split, open }: Props) {
   const list = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState<string | null>(null)
   const focused = focusedKey(state)
-  const extras = 34 + 72 + (state.right ? 34 : 0) + 8
-  const rows = rowsFor(state.tabs.length, width, extras)
-  const firstRow = rows === 1 ? state.tabs.length : Math.ceil(state.tabs.length / 2)
+  // The buttons after the tabs: their padding (4), "new tab" (30), "end split" (4 + 30), and the count with its gap
+  // ("6 von 6" in 12 px with its padding, 4 + 52). When the tabs would not keep their least width in two rows
+  // otherwise, the count goes (it is in the tooltip of "new tab" then) before the titles do.
+  const buttons = 4 + 30 + (state.right ? 34 : 0)
+  const mins = state.tabs.map((tab) => tabMin(split && (tab.key === state.left || tab.key === state.right)))
+  const full = tabRows(mins, width, buttons + 56)
+  const compact = full.fits ? full : tabRows(mins, width, buttons)
+  const layout = compact.fits ? compact : full
+  const showCount = layout === full
+  const { rows, first: firstRow } = layout
   const mod = isMac() ? '⌥⇧' : t('tabs.keys.mod')
 
   const titleOf = (tab: Tab) => metas.get(tab.note)?.title || t('notes.untitled')
@@ -151,7 +158,11 @@ export function TabBar({ state, metas, split, open }: Props) {
           if (event.button === 1) event.preventDefault()
         }}
         onKeyDown={(event) => onKey(event, tab, index)}
-        style={{ flex: `0 1 ${TAB_MAX}px` }}
+        style={{
+          flex: `0 1 ${TAB_MAX + (split && side ? SIDE_LABEL : 0)}px`,
+          // The start of the title stays readable (EC-4) wherever the rows can hold it; else the tabs share alike.
+          minWidth: layout.fits ? tabMin(Boolean(split && side)) : undefined,
+        }}
         className={
           'group flex h-[38px] min-w-0 cursor-default items-center gap-1.5 rounded-t-[9px] border border-b-0 pr-1 pl-3 text-[13px] outline-offset-[-2px] select-none ' +
           (shown ? 'border-ink-700 bg-ink-850 text-mist-100' : 'border-transparent text-mist-500 hover:bg-ink-900 hover:text-mist-300') +
@@ -193,7 +204,7 @@ export function TabBar({ state, metas, split, open }: Props) {
       <button
         type="button"
         aria-label={t('tabs.newTab')}
-        title={t('tabs.newTab')}
+        title={showCount ? t('tabs.newTab') : `${t('tabs.newTab')} · ${t('tabs.count', { count: state.tabs.length, max: MAX_TABS })}`}
         data-testid="tab-new"
         className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 hover:text-mist-100"
         onClick={newTab}
@@ -212,9 +223,11 @@ export function TabBar({ state, metas, split, open }: Props) {
           <PanelRightClose className="h-4 w-4" aria-hidden />
         </button>
       )}
-      <span className="px-1 text-[12px] whitespace-nowrap text-mist-500" title={t('tabs.keys.help', { mod })} data-testid="tab-count">
-        {t('tabs.count', { count: state.tabs.length, max: MAX_TABS })}
-      </span>
+      {showCount && (
+        <span className="px-1 text-[12px] whitespace-nowrap text-mist-500" title={t('tabs.keys.help', { mod })} data-testid="tab-count">
+          {t('tabs.count', { count: state.tabs.length, max: MAX_TABS })}
+        </span>
+      )}
     </div>
   )
 
@@ -225,7 +238,7 @@ export function TabBar({ state, metas, split, open }: Props) {
         {rowsOfTabs.map((row, rowIndex) => (
           <div key={rowIndex} className="flex min-w-0 items-end gap-0.5" data-testid="tab-row">
             {row.map((tab, index) => renderTab(tab, rowIndex === 0 ? index : firstRow + index))}
-            {rowIndex === rowsOfTabs.length - 1 && extrasRow}
+            {rowIndex === (layout.extrasFirst ? 0 : rowsOfTabs.length - 1) && extrasRow}
           </div>
         ))}
       </div>
