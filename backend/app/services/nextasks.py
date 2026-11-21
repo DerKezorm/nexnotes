@@ -1,0 +1,467 @@
+"""A member's own nextasks (NOTES-19): connecting it, its lists, a line sent as a task, the mark beside the line.
+
+nexnotes speaks nextasks' ``/api/v1`` (``nextasks/docs/api.md``) with the member's API token (``ntk_…``) in
+``Authorization: Bearer`` and never an ``Origin``, as nexmail does (``nexmail/backend/app/services/nextasks.py``).
+
+* **``/me`` first (AC-5, EC-7).** A token that only reads, or a nextasks whose ``features`` lack ``tasks`` and
+  ``external_ref``, or one without ``/api/v1`` at all, is refused while connecting, not at the first task sent.
+* **``external_ref`` makes sending safe to repeat (EC-6).** Each line of one sending carries
+  ``nexnotes:<account>:<sending>:<n>``; nextasks answers the same key with the task it made before, also when two
+  calls come at once. nexnotes keeps one mark per sending and line.
+* **The address is checked at every request.** A member types it, and nextasks mostly runs in the home network. As
+  in nexmail: an address in the operator's own network only when the operator allowed it
+  (``connections_local_network``), the machine itself and the special addresses never; the name is resolved once and
+  the connection goes to exactly what was checked (``outbound.pin``), no redirect is followed, the answer is read up
+  to a size and within a deadline.
+* **The token is stored sealed** with the server's key (``security.encrypt_secret``), never logged, never answered.
+  No body of nextasks' answers reaches the log, only status and code: task texts stand in them.
+* **Errors are codes, never 401** (that means "signed out" in the interface).
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import json as jsonlib
+import logging
+import re
+import time
+from dataclasses import dataclass
+from datetime import date
+from typing import Any, NoReturn
+from urllib.parse import urlsplit
+
+import httpx
+from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
+
+from ..errors import error
+from ..models import utcnow
+from ..models_nextasks import NextasksConnection, NextasksLink
+from ..security import decrypt_secret, encrypt_secret
+from . import outbound, settings_service
+
+logger = logging.getLogger("nexnotes.nextasks")
+
+#: A person waits in front of the dialog: short.
+SECONDS = 10.0
+CONNECT_SECONDS = 3.0
+#: The largest answer read (the lists of a big household fit many times).
+MAX_ANSWER = 2 * 1024 * 1024
+MAX_URL = 500
+MAX_TOKEN = 500
+MAX_TITLE = 500
+#: What nextasks takes in ``notes`` and ``external_ref``.
+MAX_NOTES = 20_000
+MAX_REF = 200
+#: Lines one sending may hold (EC-2).
+MAX_LINES = 50
+#: The features a nextasks must name in ``/me``.
+FEATURES = ("tasks", "external_ref")
+#: Between list and section in a list choice (nextasks' ids are UUIDs, without a slash).
+SECTION = "/"
+AGENT = "nexnotes"
+#: The operator's switch for addresses in the own network.
+LOCAL_SWITCH = "connections_local_network"
+
+#: The own network: private ranges, carrier-grade NAT (Tailscale and other VPNs), unique-local and site-local IPv6.
+LOCAL_NETWORKS = tuple(ipaddress.ip_network(net) for net in (
+    "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "100.64.0.0/10", "fc00::/7", "fec0::/10",
+))
+#: Names that are the machine itself (in a container: nexnotes, not the host nextasks runs on).
+OWN_NAMES = ("localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback")
+
+ANCHOR = re.compile(r"^\d{1,20}\.\d{1,20}$")
+REQUEST = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
+LIST_ID = re.compile(r"^[A-Za-z0-9-]{1,64}(/[A-Za-z0-9-]{1,64})?$")
+
+#: Stand-ins for the tests: how a name is resolved, and the transport (``None``: the network).
+RESOLVER = outbound.resolve
+TRANSPORT: httpx.BaseTransport | None = None
+
+
+class NextasksError(Exception):
+    """A refusal with its code, its HTTP status for the interface and values for the sentence."""
+
+    def __init__(self, code: str, message: str, status: int = 502, **values: Any) -> None:
+        super().__init__(code)
+        self.code = code
+        self.message = message
+        self.status = status
+        self.values = values
+
+    def http(self, **more: Any) -> Exception:
+        return error(self.code, self.message, self.status, **self.values, **more)
+
+
+# --- The address ----------------------------------------------------------------------------------------------------
+
+
+def clean_url(raw: str) -> str:
+    """The address in its form, without resolving: http(s), a host, no credentials, query or fragment; a path is
+    allowed (nextasks behind a sub-path). The machine itself by name is never one."""
+    url = (raw or "").strip().rstrip("/")
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError as exc:
+        raise NextasksError("nextasks_address_invalid", "This is not an address of nextasks.", 422) from exc
+    if (len(url) > MAX_URL or parts.scheme not in ("http", "https") or not parts.hostname or parts.query
+            or parts.fragment or parts.username or parts.password or (port is not None and not 0 < port < 65536)):
+        raise NextasksError("nextasks_address_invalid", "This is not an address of nextasks.", 422)
+    host = parts.hostname.lower().rstrip(".")
+    if host in OWN_NAMES or host.endswith(".localhost"):
+        raise NextasksError("nextasks_address_refused", "nexnotes never asks this address.", 422)
+    return url
+
+
+def _local(ip: outbound.IP) -> bool:
+    return any(ip in net for net in LOCAL_NETWORKS if ip.version == net.version)
+
+
+def address_rule(local_allowed: bool) -> Any:
+    """The rule for each address a name resolves to (``outbound.pin`` refuses the ones never reached first)."""
+
+    def rule(ip: outbound.IP) -> None:
+        for one in outbound.inner(ip):
+            if one.is_loopback:
+                raise outbound.Refused("refused")
+            if outbound.public(str(one)):
+                continue
+            if _local(one):
+                if not local_allowed:
+                    raise outbound.Refused("local")
+                continue
+            raise outbound.Refused("refused")
+
+    return rule
+
+
+def local_allowed(db: Session) -> bool:
+    return bool(settings_service.get(db, LOCAL_SWITCH))
+
+
+# --- Talking to nextasks --------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Access:
+    url: str
+    token: str
+    #: The operator's switch at the time of asking.
+    local: bool
+
+
+def _code(answer: httpx.Response) -> tuple[str, list[Any]]:
+    try:
+        data = answer.json()
+    except ValueError:
+        return "", []
+    detail = data.get("detail") if isinstance(data, dict) else None
+    if not isinstance(detail, dict):
+        return "", []
+    fields = detail.get("fields")
+    return str(detail.get("code") or ""), fields if isinstance(fields, list) else []
+
+
+def _refusal(answer: httpx.Response, method: str, path: str) -> NoReturn:
+    status = answer.status_code
+    code, fields = _code(answer)
+    logger.info("nextasks answered HTTP %s (%s) on %s %s", status, code or "-", method, path.split("/")[0])
+    if status == 401 and code == "api_off":
+        raise NextasksError("nextasks_api_off", "The operator of nextasks has switched API tokens off.", 409)
+    if status == 401:
+        raise NextasksError("nextasks_token_invalid", "nextasks does not take this key.", 409)
+    if status == 403 and code == "token_reads_only":
+        raise NextasksError("nextasks_read_only", "This key of nextasks may only read.", 409)
+    if status == 403 and code == "not_allowed":
+        raise NextasksError("nextasks_list_unknown", "nextasks does not let this key write into the list.", 409)
+    if status == 404:
+        raise NextasksError("nextasks_not_found", "nextasks does not know this.", 404)
+    if status == 422 and "list_id" in fields:
+        raise NextasksError("nextasks_list_unknown", "nextasks does not know the list.", 409)
+    if status == 429:
+        wait = answer.headers.get("retry-after", "")
+        seconds = int(wait) if wait.isdigit() and 0 < int(wait) < 86_400 else 60
+        raise NextasksError("nextasks_slow_down", "nextasks asks for fewer requests.", 429, seconds=seconds)
+    raise NextasksError("nextasks_failed", "nextasks could not do this.", 502, upstream=status)
+
+
+def request(access: Access, method: str, path: str, *, params: dict[str, str] | None = None,
+            body: dict[str, Any] | None = None) -> Any:
+    """``<address>/api/v1/<path>`` with the token; the JSON of the answer, every failure as ``NextasksError``."""
+    if not access.token:
+        raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
+    url = clean_url(access.url) + "/api/v1/" + path
+    try:
+        place = outbound.pin(url, RESOLVER, address_rule(access.local))
+    except outbound.Refused as exc:
+        if exc.reason == "local":
+            raise NextasksError("nextasks_address_local",
+                                "This address is in the own network; the operator has not allowed that.", 422) from exc
+        raise NextasksError("nextasks_address_refused", "nexnotes never asks this address.", 422) from exc
+    except outbound.Unreachable as exc:
+        raise NextasksError("nextasks_unreachable", "nextasks cannot be reached.", 502) from exc
+    headers = {"Authorization": f"Bearer {access.token}", "User-Agent": AGENT, "Accept": "application/json"}
+    sent: dict[str, Any] = {}
+    if params:
+        sent["params"] = params
+    if body is not None:
+        sent["content"] = jsonlib.dumps(body).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    try:
+        with outbound.client(TRANSPORT) as session:
+            answer = outbound.send(session, method, place, headers, deadline=time.monotonic() + SECONDS,
+                                   ticks=time.monotonic, limit=MAX_ANSWER, connect_seconds=CONNECT_SECONDS, **sent)
+    except (outbound.Late, httpx.TimeoutException) as exc:
+        logger.info("nextasks did not answer in time")
+        raise NextasksError("nextasks_timeout", "nextasks did not answer in time.", 504) from exc
+    except outbound.TooLarge as exc:
+        raise NextasksError("nextasks_failed", "nextasks answered with too much.", 502, upstream=0) from exc
+    except (outbound.Refused, httpx.HTTPError, OSError) as exc:
+        logger.info("nextasks was unreachable: %s", type(exc).__name__)
+        raise NextasksError("nextasks_unreachable", "nextasks cannot be reached.", 502) from exc
+    if answer.status_code >= 300:
+        # A redirect counts as a refusal: nexnotes follows none.
+        _refusal(answer, method, path)
+    try:
+        return answer.json()
+    except ValueError as exc:
+        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0) from exc
+
+
+def check(access: Access) -> str:
+    """``GET /me``: the token holds, may write, and nextasks offers what nexnotes needs. The name nextasks gives."""
+    try:
+        me = request(access, "GET", "me")
+    except NextasksError as exc:
+        if exc.code == "nextasks_not_found":
+            # No ``/api/v1``: a nextasks from before the API (or after it moved to another one), or no nextasks.
+            raise NextasksError("nextasks_too_old", "This nextasks speaks another API than nexnotes.", 409) from exc
+        raise
+    features = me.get("features") if isinstance(me, dict) else None
+    if not isinstance(features, list) or not all(feature in features for feature in FEATURES):
+        raise NextasksError("nextasks_too_old", "This nextasks speaks another API than nexnotes.", 409)
+    if me.get("level") != "write":
+        raise NextasksError("nextasks_read_only", "This key of nextasks may only read.", 409)
+    return str(me.get("display_name") or me.get("name") or "")[:200]
+
+
+def lists(access: Access) -> list[dict[str, Any]]:
+    """The lists the token may write into, each with its sections after it, as "Space › List (› Section)"; those of
+    hidden spaces at the end."""
+    data = request(access, "GET", "lists")
+    rows = data.get("lists") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0)
+    found: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not LIST_ID.match(row["id"]):
+            continue
+        if row.get("writable") is False:
+            continue
+        name = " › ".join(str(part)[:100] for part in (row.get("space_name"), row.get("name")) if part)
+        hidden = row.get("hidden") is True
+        found.append({"id": row["id"], "name": name, "hidden": hidden})
+        for section in row.get("sections") or []:
+            if isinstance(section, dict) and isinstance(section.get("id"), str) and LIST_ID.match(section["id"]):
+                found.append({"id": f"{row['id']}{SECTION}{section['id']}",
+                              "name": f"{name} › {str(section.get('name') or '')[:100]}", "hidden": hidden})
+    return sorted(found, key=lambda one: one["hidden"])
+
+
+def _link_of(value: Any) -> str:
+    # Only http(s): the link becomes an ``href`` in the interface.
+    if isinstance(value, str) and len(value) <= 2000 and urlsplit(value).scheme in ("http", "https"):
+        return value
+    return ""
+
+
+def create_task(access: Access, *, title: str, note_url: str, note_title: str, list_id: str, due: date | None,
+                ref: str) -> dict[str, Any]:
+    """One task (``POST /tasks``): its id and link. The same ``ref`` again gives the task made before."""
+    back = f"From nexnotes: [{_markdown_text(note_title) or note_url}]({note_url})"
+    body: dict[str, Any] = {"title": title[:MAX_TITLE], "url": note_url, "external_ref": ref[:MAX_REF],
+                            "notes": back[:MAX_NOTES]}
+    list_part, _, section = list_id.partition(SECTION)
+    if list_part:
+        body["list_id"] = list_part
+    if section:
+        body["section_id"] = section
+    if due is not None:
+        body["due_date"] = due.isoformat()
+    try:
+        task = request(access, "POST", "tasks", body=body)
+    except NextasksError as exc:
+        if exc.code == "nextasks_not_found":
+            # nextasks answers a list the token cannot see with 404 (measured by nexmail on 07.11.2026).
+            raise NextasksError("nextasks_list_unknown", "nextasks does not know the list.", 409) from exc
+        raise
+    if not isinstance(task, dict) or not isinstance(task.get("id"), str) or not task["id"]:
+        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0)
+    return {"id": task["id"][:100], "link": _link_of(task.get("link"))}
+
+
+def _markdown_text(text: str) -> str:
+    """A title inside the brackets of a Markdown link: brackets and backslashes escaped, one line."""
+    return re.sub(r"([\\\[\]])", r"\\\1", " ".join(text.split()))[:300]
+
+
+def task_state(access: Access, task_id: str) -> dict[str, Any]:
+    """How nextasks sees a task now: ``gone`` (deleted for good, or in its trash) or its current link (EC-4)."""
+    if not re.fullmatch(r"[A-Za-z0-9-]{1,100}", task_id):
+        return {"gone": True, "trashed": False, "link": ""}
+    try:
+        task = request(access, "GET", f"tasks/{task_id}")
+    except NextasksError as exc:
+        if exc.code == "nextasks_not_found":
+            return {"gone": True, "trashed": False, "link": ""}
+        raise
+    if not isinstance(task, dict):
+        raise NextasksError("nextasks_failed", "nextasks answered with something unreadable.", 502, upstream=0)
+    trashed = task.get("trashed") is True
+    return {"gone": trashed, "trashed": trashed, "link": _link_of(task.get("link"))}
+
+
+# --- The connection -------------------------------------------------------------------------------------------------
+
+
+def _context(account_id: int) -> str:
+    return f"nextasks:{account_id}"
+
+
+def connection_of(db: Session, account_id: int) -> NextasksConnection | None:
+    return db.get(NextasksConnection, account_id)
+
+
+def access_of(db: Session, row: NextasksConnection) -> Access:
+    return Access(url=row.url, token=decrypt_secret(row.token_enc, _context(row.account_id)), local=local_allowed(db))
+
+
+def connected_access(db: Session, account_id: int) -> Access:
+    row = connection_of(db, account_id)
+    if row is None:
+        raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
+    access = access_of(db, row)
+    if not access.token:
+        # A server key changed since: the token is lost, the member connects again.
+        raise NextasksError("nextasks_token_invalid", "nextasks does not take this key.", 409)
+    return access
+
+
+def connect(db: Session, account_id: int, url: str, token: str) -> NextasksConnection:
+    """Checks address and token at once (AC-5, EC-7) and keeps them only when they hold."""
+    token = (token or "").strip()
+    if not token or len(token) > MAX_TOKEN or any(ord(char) < 33 or ord(char) > 126 for char in token):
+        raise NextasksError("nextasks_token_invalid", "nextasks does not take this key.", 409)
+    clean = clean_url(url)
+    name = check(Access(url=clean, token=token, local=local_allowed(db)))
+    row = connection_of(db, account_id)
+    if row is None:
+        row = NextasksConnection(account_id=account_id, url=clean, token_enc="")
+        db.add(row)
+    if row.url != clean:
+        row.last_list_id, row.last_list_name = "", ""
+    row.url = clean
+    row.token_enc = encrypt_secret(token, _context(account_id))
+    row.name = name
+    row.checked_at = utcnow()
+    db.commit()
+    logger.info("nextasks connected account_id=%s host=%s", account_id, urlsplit(clean).hostname)
+    return row
+
+
+def disconnect(db: Session, account_id: int) -> None:
+    row = connection_of(db, account_id)
+    if row is not None:
+        db.delete(row)
+        db.commit()
+        logger.info("nextasks disconnected account_id=%s", account_id)
+
+
+def connection_out(db: Session, row: NextasksConnection | None) -> dict[str, Any]:
+    allowed = local_allowed(db)
+    if row is None:
+        return {"connected": False, "local_allowed": allowed}
+    return {
+        "connected": True,
+        "url": row.url,
+        "host": urlsplit(row.url).hostname or "",
+        "name": row.name,
+        "checked_at": row.checked_at.isoformat() if row.checked_at else None,
+        "last_list": {"id": row.last_list_id, "name": row.last_list_name} if row.last_list_id else None,
+        "local_allowed": allowed,
+    }
+
+
+# --- Sending and the marks ------------------------------------------------------------------------------------------
+
+
+@dataclass
+class Line:
+    text: str
+    anchor: str
+
+
+def ref_for(account_id: int, request_id: str, position: int) -> str:
+    return f"nexnotes:{account_id}:{request_id}:{position}"
+
+
+def link_out(row: NextasksLink) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "note_id": row.note_id,
+        "anchor": row.anchor,
+        "task_url": row.task_url,
+        "list_name": row.list_name,
+        "due_date": row.due_date.isoformat() if row.due_date else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    }
+
+
+def links_of(db: Session, account_id: int, note_id: str) -> list[NextasksLink]:
+    """Only the account's own marks (EC-5): another member of the note sees none of them."""
+    return list(db.scalars(select(NextasksLink).where(NextasksLink.account_id == account_id,
+                                                      NextasksLink.note_id == note_id).order_by(NextasksLink.id)))
+
+
+def send(db: Session, account_id: int, *, note_id: str, note_title: str, note_url: str, request_id: str,
+         list_id: str, list_name: str, due: date | None, lines: list[Line]) -> list[NextasksLink]:
+    """One task per line (EC-2), each with the way back to the note (AC-2); a mark per line once nextasks made it.
+    A sending again (a second click, a retry after a failure) makes no second task and no second mark (EC-6). On a
+    failure the lines sent before keep their marks, and the error names how many went."""
+    access = connected_access(db, account_id)
+    made: list[NextasksLink] = []
+    for position, line in enumerate(lines):
+        existing = db.scalar(select(NextasksLink).where(NextasksLink.account_id == account_id,
+                                                        NextasksLink.request_id == request_id,
+                                                        NextasksLink.position == position))
+        if existing is not None:
+            made.append(existing)
+            continue
+        try:
+            task = create_task(access, title=line.text, note_url=note_url, note_title=note_title, list_id=list_id,
+                               due=due, ref=ref_for(account_id, request_id, position))
+        except NextasksError as exc:
+            exc.values["sent"] = len(made)
+            raise
+        row = NextasksLink(account_id=account_id, note_id=note_id, request_id=request_id, position=position,
+                           anchor=line.anchor, task_id=task["id"], task_url=task["link"], list_name=list_name[:300],
+                           due_date=due)
+        db.add(row)
+        try:
+            db.commit()
+        except IntegrityError:
+            # The same sending at the same moment made it: that one counts.
+            db.rollback()
+            row = db.scalar(select(NextasksLink).where(NextasksLink.account_id == account_id,
+                                                       NextasksLink.request_id == request_id,
+                                                       NextasksLink.position == position))
+            assert row is not None
+        made.append(row)
+    connection = connection_of(db, account_id)
+    if connection is not None:
+        connection.last_list_id, connection.last_list_name = list_id, list_name[:300]
+        db.commit()
+    logger.info("Lines sent to nextasks note=%s count=%s account_id=%s", note_id, len(made), account_id)
+    return made

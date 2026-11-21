@@ -94,7 +94,7 @@ def tool_names(client: TestClient, token: str) -> set[str]:
     return {tool["name"] for tool in answer.json()["result"]["tools"]}
 
 
-READ_TOOLS = {"search_notes", "read_note", "list_notes", "list_folders", "list_tags"}
+READ_TOOLS = {"search_notes", "read_note", "list_notes", "list_folders", "list_tags", "list_smart_folders"}
 WRITE_TOOLS = {"create_note", "append_to_note", "check_item", "move_note", "create_folder", "trash_note"}
 
 

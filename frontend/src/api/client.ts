@@ -237,6 +237,8 @@ export type ServerSettings = {
   link_previews: boolean
   share_links: boolean
   mcp_enabled: boolean
+  /** Members' connections (their own nextasks, NOTES-19) may point into the own network. */
+  connections_local_network: boolean
   ocr_languages: string[]
   update_check: boolean
   data_total: number
