@@ -53,6 +53,8 @@ FOLDER_COLORS: dict[str, str] = {
 #: The fixed row of symbols (``services/symbols.py``, shared with the notes). An empty symbol shows the colour as a
 #: small square.
 FOLDER_ICONS: tuple[str, ...] = SYMBOLS
+#: Every folder carries a symbol; this one unless its owner picks another (review of 21.11.2026).
+DEFAULT_FOLDER_ICON = "folder"
 
 #: Characters that never belong in a name: control characters, line and paragraph separators.
 _CONTROL = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
@@ -227,7 +229,7 @@ def view(folder: Any, count: int = 0) -> dict[str, Any]:
         "id": folder.id,
         "parent_id": folder.parent_id,
         "name": folder.name,
-        "icon": folder.icon or "",
+        "icon": folder.icon or DEFAULT_FOLDER_ICON,
         "color": folder.color or "",
         "position": folder.position,
         "count": count,
@@ -323,7 +325,8 @@ def create(db: Session, account_id: int, *, name: str, parent_id: str | None = N
     siblings = _siblings(db, account_id, parent_id)
     if _name_taken(siblings, clean):
         raise _refuse_taken(clean)
-    folder = Folder(owner_id=account_id, parent_id=parent_id, kind=FOLDER_NORMAL, name=clean, icon=icon, color=folder_color(color),
+    folder = Folder(owner_id=account_id, parent_id=parent_id, kind=FOLDER_NORMAL, name=clean,
+                    icon=icon or DEFAULT_FOLDER_ICON, color=folder_color(color),
                     position=_position_at_end(siblings))
     db.add(folder)
     db.commit()
@@ -344,7 +347,7 @@ def change(db: Session, account_id: int, folder_id: str, *, name: str | None = N
             raise _refuse_taken(clean)
         folder.name = clean
     if icon is not None:
-        folder.icon = icon
+        folder.icon = icon or DEFAULT_FOLDER_ICON
     if color is not None:
         folder.color = folder_color(color)
     db.commit()

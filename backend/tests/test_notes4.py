@@ -439,8 +439,9 @@ def test_notes4_ac10_symbol_and_colour_come_from_fixed_rows_and_reach_every_devi
         assert refused.status_code == 422 and code(refused) == "folder_style_unknown"
     assert code(client.post("/api/folders", json={"name": "X", "color": "pink"})) == "folder_style_unknown"
     # Back to plain.
+    # A folder keeps a symbol: taking its own away gives it the folder symbol again (review of 21.11.2026); the color may go.
     client.patch(f"/api/folders/{folder}", json={"icon": "", "color": ""})
-    assert (by_id(client)[folder]["icon"], by_id(client)[folder]["color"]) == ("", "")
+    assert (by_id(client)[folder]["icon"], by_id(client)[folder]["color"]) == ("folder", "")
 
 
 def test_notes4_ac10_a_colour_of_its_own_as_rrggbb_reaches_every_device(client: TestClient, operator: Account) -> None:
@@ -775,3 +776,11 @@ def test_notes4_every_folder_error_has_its_sentence_in_both_languages() -> None:
     for language in ("de", "en"):
         texts = json.loads((ROOT / "frontend" / "src" / "i18n" / f"{language}.json").read_text(encoding="utf-8"))
         assert codes <= set(texts["errors"]), language
+
+
+def test_notes4_ac10_a_new_folder_without_a_symbol_carries_the_folder_symbol(client, operator):
+    """Every folder shows a symbol: the folder symbol unless its owner picks another (review of 21.11.2026)."""
+    made = client.post("/api/folders", json={"name": "Ohne Wahl"}).json()
+    assert made["icon"] == "folder"
+    listed = {row["id"]: row for row in client.get("/api/folders").json()["folders"]}
+    assert listed[made["id"]]["icon"] == "folder"

@@ -97,7 +97,7 @@ export function SymbolPicker({ value, onChange, color }: { value: string; onChan
           data-testid="symbol-search"
         />
       </label>
-      <div ref={grid} className="nn-scroll h-60 overflow-y-auto pr-1" role="radiogroup" aria-label={t('folders.style.icon')} onKeyDown={move} data-testid="symbol-grid">
+      <div ref={grid} className="nn-scroll h-60 overflow-y-auto p-1.5" role="radiogroup" aria-label={t('folders.style.icon')} onKeyDown={move} data-testid="symbol-grid">
         {searching ? (
           found.length > 0 ? (
             <div className={cells}>{found.map(button)}</div>

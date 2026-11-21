@@ -12,7 +12,7 @@ import { NoteIcon } from '../components/NoteIcon'
 import { SymbolPicker } from '../components/SymbolPicker'
 import { problemText } from '../lib/errors'
 import { foldersApi, type Folder, type Impact } from './api'
-import { FolderMark } from './FolderMark'
+import { DEFAULT_SYMBOL, FolderMark } from './FolderMark'
 import { mayMoveNotes, notesMoved } from './actions'
 import { ColorField } from './ColorField'
 import { colorOf } from './palette'
@@ -88,9 +88,6 @@ export function LookFields({ look, onChange }: { look: Look; onChange: (change: 
       <fieldset>
         <legend className="mb-2 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('folders.style.icon')}</legend>
         <SymbolPicker value={look.icon} onChange={(icon) => onChange({ icon })} color={look.color ? colorOf(look.color) : undefined} />
-        <button type="button" aria-pressed={!look.icon} onClick={() => onChange({ icon: '' })} className="nn-btn-quiet mt-2 text-sm">
-          {t('folders.style.noIcon')}
-        </button>
       </fieldset>
     </>
   )
@@ -100,7 +97,7 @@ export function LookFields({ look, onChange }: { look: Look; onChange: (change: 
 export function NewFolderDialog({ title, onSave, onClose }: { title: string; onSave: (name: string, look: Look) => Promise<void>; onClose: () => void }) {
   const { t } = useTranslation()
   const [name, setName] = useState('')
-  const [look, setLook] = useState<Look>({ icon: '', color: '' })
+  const [look, setLook] = useState<Look>({ icon: DEFAULT_SYMBOL, color: '' })
   const [problem, setProblem] = useState('')
   const [busy, setBusy] = useState(false)
   const save = async (event: React.FormEvent) => {
@@ -150,7 +147,7 @@ export function NewFolderDialog({ title, onSave, onClose }: { title: string; onS
 
 export function StyleDialog({ folder, onClose }: { folder: Folder; onClose: () => void }) {
   const { t } = useTranslation()
-  const [look, setLook] = useState({ icon: folder.icon, color: folder.color })
+  const [look, setLook] = useState({ icon: folder.icon || DEFAULT_SYMBOL, color: folder.color })
   const [problem, setProblem] = useState('')
   const choose = async (change: { icon?: string; color?: string }) => {
     const before = look

@@ -621,7 +621,6 @@
       "color": "Color",
       "icon": "Symbol",
       "noColor": "No color",
-      "noIcon": "No symbol",
       "ownColor": "Own color {{hex}}",
       "pickColor": "Pick a color",
       "custom": "Own color",
