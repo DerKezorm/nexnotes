@@ -63,6 +63,12 @@ async function answer(call: Call): Promise<Response> {
   if (path === '/api/auth/me') return reply(200, { id: 1, name: 'me', display_name: 'Me', role: 'member', language: 'en', version: '1', whats_new_seen: '1' })
   if (path === '/api/folders') return reply(200, { inbox: { id: INBOX, count: notes.size }, folders: [{ id: 'garden', name: 'Garden', parent_id: null, icon: '', color: '', position: null, count: 0 }] })
   if (method === 'GET' && path === '/api/notes') return reply(200, [...notes.values()].filter((n) => !n.deleted_at))
+  // The list of NOTES-6: the same notes, with a view and the counts.
+  if (method === 'GET' && path === '/api/note-list') {
+    const alive = [...notes.values()].filter((n) => !n.deleted_at)
+    return reply(200, { key: 'all', view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: true }, counts: { own: alive.length, shared: 0 }, items: alive })
+  }
+  if (method === 'GET' && path === '/api/note-list/stamp') return reply(200, { stamp: String(notes.size) })
   if (method === 'POST' && path === '/api/notes') {
     if (createDelay) await new Promise((resolve) => setTimeout(resolve, createDelay))
     const id = String(body?.id)

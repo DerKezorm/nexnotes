@@ -1,0 +1,15 @@
+/* The "…" of a row or tile: shown on hover and in focus; always on a touch screen, which has no hover. */
+.nn-row-more {
+  opacity: 0;
+}
+
+.group:hover .nn-row-more,
+.group:focus-within .nn-row-more {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .nn-row-more {
+    opacity: 1;
+  }
+}

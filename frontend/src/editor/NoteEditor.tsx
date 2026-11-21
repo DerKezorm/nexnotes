@@ -23,6 +23,7 @@ import { problemText } from '../lib/errors'
 import { useTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
 import { setLeaveGuard } from '../notes/context'
+import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
 import { noteHref } from '../notes/newNote'
 import { useAuth } from '../state/auth'
 import './editor.css'
@@ -351,6 +352,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
         <div className="hidden min-w-0 md:block">{editor && <Toolbar editor={editor} onLink={() => setLinkOpen(true)} />}</div>
         <div className="ml-auto flex min-w-0 items-center gap-3">
           <PresenceBar presence={presence} />
+          <NotePinButton noteId={noteId} head={head} disabled={!head?.can_write} />
           <span className="relative">
             <button
               type="button"
@@ -378,6 +380,7 @@ function LiveNote({ provider, noteId, fresh, onDeleted }: Props & { provider: No
                   <Trash2 className="h-4 w-4" aria-hidden />
                   {t('editor.delete')}
                 </button>
+                {head?.can_write && <NoteColorRow noteId={noteId} head={head} onDone={() => setMenuOpen(false)} />}
               </div>
             )}
           </span>
