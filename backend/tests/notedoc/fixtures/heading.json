@@ -1,0 +1,56 @@
+{
+  "title": "Case heading",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 1,
+          "collapsed": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "One"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 2,
+          "collapsed": true
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Two, folded"
+          }
+        ]
+      },
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "under two"
+          }
+        ]
+      },
+      {
+        "type": "heading",
+        "attrs": {
+          "level": 3,
+          "collapsed": false
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "Three"
+          }
+        ]
+      }
+    ]
+  }
+}

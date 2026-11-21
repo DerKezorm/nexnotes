@@ -1,0 +1,156 @@
+{
+  "nodes": {
+    "paragraph": {
+      "attrs": {},
+      "content": "inline*",
+      "group": "block"
+    },
+    "blockquote": {
+      "attrs": {},
+      "content": "block+",
+      "group": "block"
+    },
+    "bulletList": {
+      "attrs": {},
+      "content": "listItem+",
+      "group": "block list"
+    },
+    "codeBlock": {
+      "attrs": {
+        "language": null
+      },
+      "content": "text*",
+      "group": "block"
+    },
+    "doc": {
+      "attrs": {},
+      "content": "block+",
+      "group": ""
+    },
+    "hardBreak": {
+      "attrs": {},
+      "content": "",
+      "group": "inline"
+    },
+    "horizontalRule": {
+      "attrs": {},
+      "content": "",
+      "group": "block"
+    },
+    "listItem": {
+      "attrs": {},
+      "content": "paragraph block*",
+      "group": ""
+    },
+    "orderedList": {
+      "attrs": {
+        "start": 1,
+        "type": null
+      },
+      "content": "listItem+",
+      "group": "block list"
+    },
+    "text": {
+      "attrs": {},
+      "content": "",
+      "group": "inline"
+    },
+    "heading": {
+      "attrs": {
+        "level": 1,
+        "collapsed": false
+      },
+      "content": "inline*",
+      "group": "block"
+    },
+    "taskList": {
+      "attrs": {
+        "doneToBottom": false
+      },
+      "content": "taskItem+",
+      "group": "block list"
+    },
+    "taskItem": {
+      "attrs": {
+        "checked": false
+      },
+      "content": "paragraph block*",
+      "group": ""
+    },
+    "table": {
+      "attrs": {},
+      "content": "tableRow+",
+      "group": "block"
+    },
+    "tableRow": {
+      "attrs": {},
+      "content": "(tableCell | tableHeader)*",
+      "group": ""
+    },
+    "tableHeader": {
+      "attrs": {
+        "colspan": 1,
+        "rowspan": 1,
+        "colwidth": null,
+        "align": null
+      },
+      "content": "block+",
+      "group": ""
+    },
+    "tableCell": {
+      "attrs": {
+        "colspan": 1,
+        "rowspan": 1,
+        "colwidth": null,
+        "align": null
+      },
+      "content": "block+",
+      "group": ""
+    }
+  },
+  "marks": {
+    "link": {
+      "attrs": {
+        "href": null,
+        "target": "_blank",
+        "rel": "noopener noreferrer nofollow",
+        "class": null,
+        "title": null
+      },
+      "excludes": null,
+      "rank": 0
+    },
+    "bold": {
+      "attrs": {},
+      "excludes": null,
+      "rank": 1
+    },
+    "code": {
+      "attrs": {},
+      "excludes": "_",
+      "rank": 2
+    },
+    "italic": {
+      "attrs": {},
+      "excludes": null,
+      "rank": 3
+    },
+    "strike": {
+      "attrs": {},
+      "excludes": null,
+      "rank": 4
+    },
+    "underline": {
+      "attrs": {},
+      "excludes": null,
+      "rank": 5
+    },
+    "highlight": {
+      "attrs": {
+        "color": null
+      },
+      "excludes": null,
+      "rank": 6
+    }
+  }
+}

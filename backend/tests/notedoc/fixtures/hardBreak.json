@@ -1,0 +1,24 @@
+{
+  "title": "Case hardBreak",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "line one"
+          },
+          {
+            "type": "hardBreak"
+          },
+          {
+            "type": "text",
+            "text": "line two"
+          }
+        ]
+      }
+    ]
+  }
+}

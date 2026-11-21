@@ -1,0 +1,20 @@
+{
+  "title": "Case codeBlock",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "codeBlock",
+        "attrs": {
+          "language": "python"
+        },
+        "content": [
+          {
+            "type": "text",
+            "text": "print('hi')\nx = 1"
+          }
+        ]
+      }
+    ]
+  }
+}
