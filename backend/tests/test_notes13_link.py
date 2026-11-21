@@ -87,9 +87,11 @@ def test_notes13_ac9_a_link_runs_to_a_chosen_day_never_without_one_and_can_be_ch
         row = db.scalar(select(ReadLink).where(ReadLink.note_id == note["id"]))
         assert row.token_hash == shares.hash_token(token) and token not in repr(row.__dict__)
     assert "rote Linsen" in visitor.get(link["path"]).text
-    # The day: at the earliest tomorrow, never without one.
+    # The day: at the earliest tomorrow, never without one. Asked with the member's midnight, as the browser does:
+    # without it the server counts days in UTC, and in the first hour after midnight in Berlin "today" is still
+    # yesterday there.
     for wrong in (day(0), day(-3)):
-        refused = client.post(f"/api/notes/{note['id']}/read-link", json={"expires_on": wrong})
+        refused = client.post(f"/api/notes/{note['id']}/read-link", json={"expires_on": wrong, "ends_at": ends(wrong)})
         assert refused.status_code == 422 and refused.json()["detail"]["code"] == "link_expiry_too_soon"
     assert client.post(f"/api/notes/{note['id']}/read-link", json={}).status_code == 422
     assert client.post(f"/api/notes/{note['id']}/read-link", json={"expires_on": None}).status_code == 422

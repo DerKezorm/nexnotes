@@ -9,6 +9,7 @@ import secrets
 import time
 import uuid
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import func, insert, select
@@ -168,7 +169,8 @@ def test_notes7_ac1_every_condition_alone(client, operator):
     assert "Stromrechnung" not in found(client, {"kind": "date", "field": "updated", "period": "week"})
     assert "Stromrechnung" in found(client, {"kind": "date", "field": "updated", "period": "month"})
     assert "Stromrechnung" not in found(client, {"kind": "date", "field": "created", "period": "month"})
-    day = (old - timedelta(days=200)).date().isoformat()
+    # A period of one's own counts days in the zone asked with, not in UTC: near midnight the two differ.
+    day = (old - timedelta(days=200)).astimezone(ZoneInfo("Europe/Berlin")).date().isoformat()
     assert found(client, {"kind": "date", "field": "created", "period": "custom", "from": day, "to": day}) == \
         sorted(["Linsensuppe", "Shakshuka", "Stromrechnung", "Erledigt", "Urlaubsbild", "Vertrag"])
 

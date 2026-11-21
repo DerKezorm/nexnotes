@@ -57,7 +57,8 @@ test('NOTES-13 AC-1 the ✕ of the field clears it; a folder\'s dialog says the 
   await shareNote(page, `Clear ${Date.now().toString(36)}`)
   const field = page.getByTestId('share-search')
   await field.fill('zz')
-  const clear = page.getByRole('button', { name: 'Clear' })
+  // The ✕ inside the dialog, by its exact name: the tab and the row of a note called "Clear …" carry the word too.
+  const clear = page.getByTestId('share-dialog').getByRole('button', { name: 'Clear', exact: true })
   await expect(clear).toBeVisible()
   await clear.click()
   await expect(field).toHaveValue('')
