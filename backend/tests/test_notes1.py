@@ -172,6 +172,24 @@ def test_notes1_ac4_the_schedule_makes_one_at_night_and_keeps_only_the_newest(
     assert len([entry for entry in backups.entries() if entry.kind == backups.SCHEDULED]) == 2
 
 
+def test_notes1_ac4_weekly_is_due_after_seven_days_at_night_not_after_six(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import datetime, timedelta
+    from types import SimpleNamespace
+
+    # The last scheduled backup on a Sunday night at 03:10.
+    made = datetime(2026, 11, 1, 3, 10).astimezone()
+    monkeypatch.setattr(backups, "entries", lambda: [SimpleNamespace(kind=backups.SCHEDULED, created=made.isoformat())])
+    # Six nights later a weekly backup is not due yet, a daily one is.
+    assert backups.due("weekly", now=made + timedelta(days=6)) is False
+    assert backups.due("daily", now=made + timedelta(days=6)) is True
+    # The seventh night it is; by day only a day late, for a server that sleeps at night.
+    assert backups.due("weekly", now=made + timedelta(days=7)) is True
+    assert backups.due("weekly", now=made + timedelta(days=7, hours=10)) is False
+    assert backups.due("weekly", now=made + timedelta(days=8, hours=10)) is True
+    assert backups.due("off", now=made + timedelta(days=30)) is False
+
 def test_notes1_ac5_the_check_says_what_a_restore_adds_changes_and_removes(
     client: TestClient, operator: Account
 ) -> None:
