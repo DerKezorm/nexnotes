@@ -305,7 +305,7 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     type(document.querySelector<HTMLInputElement>('[role="dialog"] input')!, 'Garten')
     click(button('Create'))
     await settle()
-    expect(changes().at(-1)).toMatchObject({ method: 'POST', path: '/api/folders', body: { name: 'Garten', parent_id: 'h', icon: '', color: '' } })
+    expect(changes().at(-1)).toMatchObject({ method: 'POST', path: '/api/folders', body: { name: 'Garten', parent_id: 'h', icon: 'folder', color: '' } })
     // The parent opens, so the new one shows.
     expect(row('Garten').getAttribute('aria-level')).toBe('2')
 
@@ -357,9 +357,12 @@ describe('NOTES-4 AC-10 symbol and color when making a folder', () => {
     const grid = dialog.querySelector<HTMLElement>('[data-testid="symbol-grid"]')!
     const stops = [...grid.querySelectorAll<HTMLButtonElement>('[role="radio"]')].filter((one) => one.tabIndex === 0)
     expect(stops).toHaveLength(1)
+    // A new folder starts with the folder symbol chosen: that is the stop, the arrow goes to the one after it.
+    expect(stops[0].getAttribute('data-symbol')).toBe('folder')
+    const radios = [...grid.querySelectorAll('[role="radio"]')]
     act(() => stops[0].focus())
     key(stops[0], 'ArrowRight')
-    expect(document.activeElement?.getAttribute('data-symbol')).toBe(grid.querySelectorAll('[role="radio"]')[1].getAttribute('data-symbol'))
+    expect(document.activeElement?.getAttribute('data-symbol')).toBe(radios[radios.indexOf(stops[0]) + 1].getAttribute('data-symbol'))
     key(document.activeElement!, 'End')
     expect(document.activeElement).toBe([...grid.querySelectorAll('[role="radio"]')].at(-1))
     key(document.activeElement!, 'Home')
@@ -377,21 +380,21 @@ describe('NOTES-4 AC-10 a color of its own', () => {
     await settle()
     return document.querySelector<HTMLElement>('[role="dialog"]')!
   }
-  const preview = (dialog: HTMLElement) => dialog.querySelector<HTMLElement>('[data-testid="look-preview"] span[aria-hidden], [data-testid="look-preview"] svg')!
+  const preview = (dialog: HTMLElement) => dialog.querySelector<HTMLElement>('[data-testid="look-preview"] svg')!
 
   it('NOTES-4 AC-10 the chosen color carries a check mark, focus alone does not; the preview shows the choice', async () => {
     const dialog = await styleOf('Haushalt')
     const chosen = [...dialog.querySelectorAll('[aria-pressed="true"][data-color]')]
     expect(chosen.map((one) => one.getAttribute('aria-label'))).toEqual(['Honey'])
     expect(dialog.querySelectorAll('[data-testid="color-chosen"]')).toHaveLength(1)
-    expect(preview(dialog).style.background).toBe('rgb(242, 193, 78)')
+    expect(preview(dialog).style.color).toBe('rgb(242, 193, 78)')
     // Focus on another color is no choice: no check mark, the preview stays.
     act(() => button('Green', dialog).focus())
     expect(button('Green', dialog).getAttribute('aria-pressed')).toBe('false')
     expect(button('Green', dialog).querySelector('[data-testid="color-chosen"]')).toBeNull()
     click(button('Green', dialog))
     await settle()
-    expect(preview(dialog).style.background).toBe('rgb(74, 222, 128)')
+    expect(preview(dialog).style.color).toBe('rgb(74, 222, 128)')
     expect(button('Green', dialog).querySelector('[data-testid="color-chosen"]')).not.toBeNull()
   })
 
@@ -412,14 +415,14 @@ describe('NOTES-4 AC-10 a color of its own', () => {
     const shown = readableColor('#1e3a8a')
     expect(shown).not.toBe('#1e3a8a')
     const rgb = (value: string) => `rgb(${[1, 3, 5].map((at) => parseInt(value.slice(at, at + 2), 16)).join(', ')})`
-    expect(preview(dialog).style.background).toBe(rgb(shown))
+    expect(preview(dialog).style.color).toBe(rgb(shown))
     // The system's picker: its result counts when it closes.
     const picker = dialog.querySelector<HTMLInputElement>('[data-testid="color-picker"]')!
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(picker, '#c81e1e')
     act(() => void picker.dispatchEvent(new Event('change', { bubbles: true })))
     await settle()
     expect(changes().map((call) => call.body)).toEqual([{ color: '#1e3a8a' }, { color: '#c81e1e' }])
-    expect(preview(dialog).style.background).toBe('rgb(200, 30, 30)')
+    expect(preview(dialog).style.color).toBe('rgb(200, 30, 30)')
     // Both own colors stay at hand, the last one first, and one click takes one again.
     const own = [...dialog.querySelectorAll<HTMLElement>('[data-color^="#"]')].filter((one) => one.getAttribute('aria-label')!.startsWith('Own color'))
     expect(own.map((one) => one.dataset.color)).toEqual(['#c81e1e', '#1e3a8a'])
