@@ -563,7 +563,11 @@
     "notify_not_shared": "Notifications are only for shared notes and folders.",
     "browser_only": "This only works in a browser.",
     "webpush_endpoint": "The browser sent no valid address for notifications.",
-    "webpush_keys": "The browser sent no valid keys for notifications."
+    "webpush_keys": "The browser sent no valid keys for notifications.",
+    "smart_folder_exists": "There is already a smart folder named “{{name}}”. Choose another name.",
+    "smart_folder_name_invalid": "A smart folder needs a name of at most {{maximum}} characters.",
+    "smart_condition_invalid": "A condition is not complete. Check it once more.",
+    "smart_folder_not_found": "This smart folder no longer exists."
   },
   "folders": {
     "section": "Folders",
@@ -1768,5 +1772,108 @@
     "preview": "How it arrives",
     "notSharedNote": "Notifications are for shared notes: they tell you when others change something.",
     "notSharedFolder": "Notifications are for shared folders: share the folder first, then they tell you when others change something in it."
+  },
+  "smart": {
+    "heading": "Smart",
+    "new": "New smart folder",
+    "newTitle": "New smart folder",
+    "editTitle": "Edit smart folder",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteSays": "Only the smart folder goes, without the trash. The notes in it stay where they are.",
+    "name": "Name",
+    "matchBefore": "Show notes that meet",
+    "matchAfter": "of the conditions:",
+    "matchLabel": "Combine",
+    "match": {
+      "all": "all",
+      "any": "at least one"
+    },
+    "matchAllSays": "Fits when all conditions are met:",
+    "matchAnySays": "Fits when at least one condition is met:",
+    "addCondition": "Condition",
+    "removeCondition": "Remove condition",
+    "kindLabel": "Kind of condition",
+    "op": "How",
+    "periodLabel": "Period",
+    "chooseFolder": "Choose a folder",
+    "textPlaceholder": "Words, “a phrase” or #tag",
+    "save": "Save",
+    "previewLabel": "Preview",
+    "previewHint": "Choose a condition to see here which notes fit.",
+    "previewCount_one": "Fits right now: {{count}} note",
+    "previewCount_other": "Fits right now: {{count}} notes",
+    "previewMore_one": "and {{count}} more",
+    "previewMore_other": "and {{count}} more",
+    "tasksDone": "{{done}} of {{total}}",
+    "emptyTitle": "No note fits right now",
+    "missingTitle": "This smart folder does not exist",
+    "missingText": "It was deleted, perhaps on another device.",
+    "preset": {
+      "open_tasks": "Open checklists",
+      "recent": "Recently edited"
+    },
+    "kind": {
+      "tag": "Tag",
+      "folder": "Folder",
+      "updated": "Changed",
+      "created": "Created",
+      "tasks": "Contains",
+      "attachment": "Attachment",
+      "shared": "Shared",
+      "pinned": "Pinned",
+      "color": "Color",
+      "text": "Text contains"
+    },
+    "tagOp": {
+      "has": "is",
+      "not": "is not"
+    },
+    "folderOp": {
+      "tree": "in, with subfolders",
+      "in": "in"
+    },
+    "period": {
+      "today": "today",
+      "week": "in the last 7 days",
+      "month": "in the last 30 days",
+      "year": "in the last 12 months",
+      "custom": "in a period"
+    },
+    "attachment": {
+      "any": "any attachment",
+      "image": "Picture",
+      "pdf": "PDF",
+      "scan": "Scan",
+      "recording": "Recording",
+      "sketch": "Sketch",
+      "video": "Video",
+      "file": "File"
+    },
+    "shared": {
+      "by_me": "shared by me",
+      "with_me": "shared with me"
+    },
+    "says": {
+      "text": "Text contains “{{value}}”",
+      "tagHas": "Tag {{tag}}",
+      "tagNot": "without tag {{tag}}",
+      "folderIn": "in “{{name}}”",
+      "folderTree": "in “{{name}}” with subfolders",
+      "between": "from {{from}} to {{to}}",
+      "since": "from {{from}}",
+      "until": "until {{to}}",
+      "tasks": "Contains open checklist items",
+      "tasksShort": "open checklist items",
+      "attachment": "Attachment: {{type}}",
+      "color": "Color {{color}}"
+    },
+    "broken": {
+      "folder": "The folder “{{name}}” of a condition was deleted. This condition fits no note.",
+      "tag": "The tag {{tag}} of a condition is in no note any more.",
+      "unnamed": "without a name",
+      "gone": "Deleted: {{name}}"
+    }
   }
 }

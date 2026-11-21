@@ -12,7 +12,7 @@ import { focusedKey, tabOf } from '../tabs/state'
 
 const NOTE_PATH = /^\/notes\/([^/]+)$/
 /** The paths that show a list beside the notes. */
-const LIST_PATH = /^\/(?:|notes\/[^/]+|folder\/[^/]+|inbox|folders|tags|tags\/[^/]+|search|shared|shared\/folder\/[^/]+)$/
+const LIST_PATH = /^\/(?:|notes\/[^/]+|folder\/[^/]+|inbox|folders|tags|tags\/[^/]+|search|shared|shared\/folder\/[^/]+|smart\/(?!new$)[^/]+)$/
 
 export function isListPath(pathname: string): boolean {
   return LIST_PATH.test(pathname)
@@ -55,6 +55,25 @@ export function hrefIn(list: string, note: string | null | undefined): string {
   const params = new URLSearchParams(query)
   params.set('note', note)
   return `${path}?${params.toString()}`
+}
+
+/** What a list of another feature is called, for the way back to it on a phone (a smart folder, NOTES-7): its name,
+ * or `null` when the path is none of its lists. */
+export type ListNamer = (path: string) => string | null
+
+const namers: ListNamer[] = []
+
+export function registerListName(namer: ListNamer): void {
+  if (!namers.includes(namer)) namers.push(namer)
+}
+
+/** The name a feature gives the list at `path`, if one does. */
+export function listNameOf(path: string): string | null {
+  for (const namer of namers) {
+    const name = namer(path)
+    if (name !== null) return name
+  }
+  return null
 }
 
 let current = '/'

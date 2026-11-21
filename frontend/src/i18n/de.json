@@ -563,7 +563,11 @@
     "notify_not_shared": "Mitteilungen gibt es nur für geteilte Notizen und Ordner.",
     "browser_only": "Das geht nur im Browser.",
     "webpush_endpoint": "Der Browser hat keine gültige Adresse für Mitteilungen geliefert.",
-    "webpush_keys": "Der Browser hat keine gültigen Schlüssel für Mitteilungen geliefert."
+    "webpush_keys": "Der Browser hat keine gültigen Schlüssel für Mitteilungen geliefert.",
+    "smart_folder_exists": "Einen intelligenten Ordner „{{name}}“ gibt es schon. Wähle einen anderen Namen.",
+    "smart_folder_name_invalid": "Gib dem intelligenten Ordner einen Namen mit höchstens {{maximum}} Zeichen.",
+    "smart_condition_invalid": "Eine Bedingung ist nicht vollständig. Prüf sie noch einmal.",
+    "smart_folder_not_found": "Diesen intelligenten Ordner gibt es nicht mehr."
   },
   "folders": {
     "section": "Ordner",
@@ -1768,5 +1772,108 @@
     "preview": "So kommt sie an",
     "notSharedNote": "Mitteilungen gibt es für geteilte Notizen: Sie melden, wenn andere etwas ändern.",
     "notSharedFolder": "Mitteilungen gibt es für geteilte Ordner: Teile den Ordner zuerst, dann melden sie, wenn andere darin etwas ändern."
+  },
+  "smart": {
+    "heading": "Intelligent",
+    "new": "Neuer intelligenter Ordner",
+    "newTitle": "Neuer intelligenter Ordner",
+    "editTitle": "Intelligenten Ordner bearbeiten",
+    "edit": "Bearbeiten",
+    "delete": "Löschen",
+    "deleteTitle": "„{{name}}“ löschen?",
+    "deleteSays": "Nur der intelligente Ordner geht, ohne Papierkorb. Die Notizen darin bleiben, wo sie sind.",
+    "name": "Name",
+    "matchBefore": "Notizen zeigen, bei denen",
+    "matchAfter": "Bedingungen erfüllt sind:",
+    "matchLabel": "Verknüpfung",
+    "match": {
+      "all": "alle",
+      "any": "mindestens eine"
+    },
+    "matchAllSays": "Passt, wenn alle Bedingungen erfüllt sind:",
+    "matchAnySays": "Passt, wenn mindestens eine Bedingung erfüllt ist:",
+    "addCondition": "Bedingung",
+    "removeCondition": "Bedingung entfernen",
+    "kindLabel": "Art der Bedingung",
+    "op": "Wie",
+    "periodLabel": "Zeitraum",
+    "chooseFolder": "Ordner wählen",
+    "textPlaceholder": "Wörter, „Wortfolge“ oder #schlagwort",
+    "save": "Sichern",
+    "previewLabel": "Vorschau",
+    "previewHint": "Wähle eine Bedingung, dann siehst du hier, welche Notizen passen.",
+    "previewCount_one": "Passt gerade: {{count}} Notiz",
+    "previewCount_other": "Passt gerade: {{count}} Notizen",
+    "previewMore_one": "und {{count}} weitere",
+    "previewMore_other": "und {{count}} weitere",
+    "tasksDone": "{{done}} von {{total}}",
+    "emptyTitle": "Gerade passt keine Notiz",
+    "missingTitle": "Diesen intelligenten Ordner gibt es nicht",
+    "missingText": "Er wurde gelöscht, vielleicht auf einem anderen Gerät.",
+    "preset": {
+      "open_tasks": "Offene Checklisten",
+      "recent": "Zuletzt bearbeitet"
+    },
+    "kind": {
+      "tag": "Schlagwort",
+      "folder": "Ordner",
+      "updated": "Geändert",
+      "created": "Erstellt",
+      "tasks": "Enthält",
+      "attachment": "Anhang",
+      "shared": "Geteilt",
+      "pinned": "Angeheftet",
+      "color": "Farbe",
+      "text": "Text enthält"
+    },
+    "tagOp": {
+      "has": "hat",
+      "not": "hat nicht"
+    },
+    "folderOp": {
+      "tree": "in, mit Unterordnern",
+      "in": "in"
+    },
+    "period": {
+      "today": "heute",
+      "week": "in den letzten 7 Tagen",
+      "month": "in den letzten 30 Tagen",
+      "year": "in den letzten 12 Monaten",
+      "custom": "im Zeitraum"
+    },
+    "attachment": {
+      "any": "irgendein Anhang",
+      "image": "Bild",
+      "pdf": "PDF",
+      "scan": "Scan",
+      "recording": "Aufnahme",
+      "sketch": "Skizze",
+      "video": "Video",
+      "file": "Datei"
+    },
+    "shared": {
+      "by_me": "von mir geteilt",
+      "with_me": "mit mir geteilt"
+    },
+    "says": {
+      "text": "Text enthält „{{value}}“",
+      "tagHas": "Schlagwort {{tag}}",
+      "tagNot": "ohne Schlagwort {{tag}}",
+      "folderIn": "in „{{name}}“",
+      "folderTree": "in „{{name}}“ mit Unterordnern",
+      "between": "vom {{from}} bis {{to}}",
+      "since": "ab {{from}}",
+      "until": "bis {{to}}",
+      "tasks": "Enthält offene Checklistenpunkte",
+      "tasksShort": "offene Checklistenpunkte",
+      "attachment": "Anhang: {{type}}",
+      "color": "Farbe {{color}}"
+    },
+    "broken": {
+      "folder": "Der Ordner „{{name}}“ aus einer Bedingung ist gelöscht. Diese Bedingung passt auf keine Notiz.",
+      "tag": "Das Schlagwort {{tag}} aus einer Bedingung steht in keiner Notiz mehr.",
+      "unnamed": "ohne Namen",
+      "gone": "Gelöscht: {{name}}"
+    }
   }
 }

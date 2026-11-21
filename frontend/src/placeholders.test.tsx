@@ -25,6 +25,8 @@ const VALUES: Record<string, Record<string, unknown>> = {
   folder_name_taken: { name: 'Arbeit' },
   folder_name_too_long: { maximum: 60 },
   tag_exists: { label: 'einkauf', count: 2 },
+  smart_folder_exists: { name: 'Rezepte' },
+  smart_folder_name_invalid: { maximum: 60 },
   search_too_many_terms: { maximum: 16 },
   search_term_too_long: { maximum: 100 },
   attachment_too_large: { name: 'Drohnenflug.mp4', size: 1468006400, max_mb: 100 },

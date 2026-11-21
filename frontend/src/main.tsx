@@ -15,6 +15,8 @@ import './shares'
 import './ocr'
 import './search'
 import './tags'
+// Smart folders: their section right after the folders, and the buttons of the search and a tag's page (NOTES-7).
+import './smart'
 import './history'
 import './export'
 // Locked notes: their view in the editor's place, the menu entries, the part of Settings, Connections.

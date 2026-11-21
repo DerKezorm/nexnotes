@@ -21,6 +21,17 @@ import { takeEarly } from './preload'
 /** How often an open list asks whether anything changed. */
 export const STAMP_EVERY_MS = 5000
 
+/**
+ * Where a list other than a folder's comes from (a smart folder, NOTES-7): its notes, its stamp and its view, in the
+ * shape of `/api/note-list`. `key` names it: another key is another list.
+ */
+export type ListSource = {
+  key: string
+  read: () => Promise<ListAnswer>
+  stamp: () => Promise<{ stamp: string }>
+  saveView: (view: Partial<ListView>) => Promise<ListView>
+}
+
 export type NoteListState = {
   answer: ListAnswer | null
   failed: boolean
@@ -36,7 +47,7 @@ function patchItem(answer: ListAnswer | null, id: string, change: Partial<ListIt
   return { ...answer, items: answer.items.map((item) => (item.id === id ? { ...item, ...change } : item)) }
 }
 
-export function useNoteList(folderId?: string): NoteListState {
+export function useNoteList(folderId?: string, source?: ListSource): NoteListState {
   const [answer, setAnswer] = useState<ListAnswer | null>(null)
   const [failed, setFailed] = useState(false)
   const [view, setViewState] = useState<ListView>(DEFAULT_VIEW)
@@ -44,12 +55,19 @@ export function useNoteList(folderId?: string): NoteListState {
   const stamp = useRef('')
   /** A view chosen here and not yet confirmed: an answer that left before it keeps the choice. */
   const chosen = useRef<Partial<ListView> | null>(null)
+  // The source of the list as it is now; a new object with the same key is the same list.
+  const from = useRef(source)
+  from.current = source
+  const sourceKey = source?.key ?? ''
+  // `sourceKey`: another smart folder is another list, and loads anew.
+  const readList = useCallback(() => (sourceKey && from.current ? from.current.read() : listApi.read(folderId)), [folderId, sourceKey])
+  const readStamp = useCallback(() => (sourceKey && from.current ? from.current.stamp() : listApi.stamp(folderId)), [folderId, sourceKey])
 
   const load = useCallback(() => {
     const mine = ++asked.current
-    const ask = () => Promise.all([listApi.read(folderId), listApi.stamp(folderId).catch(() => ({ stamp: '' }))])
+    const ask = () => Promise.all([readList(), readStamp().catch(() => ({ stamp: '' }))])
     // The first load takes the answer asked for while the program started (`preload.ts`), when there is one.
-    const early = takeEarly(folderId)
+    const early = from.current ? null : takeEarly(folderId)
     ;(early ? early.then((answer) => answer ?? ask()) : ask())
       .then(([found, now]) => {
         if (mine !== asked.current) return
@@ -61,7 +79,7 @@ export function useNoteList(folderId?: string): NoteListState {
       .catch(() => {
         if (mine === asked.current) setFailed(true)
       })
-  }, [folderId])
+  }, [folderId, readList, readStamp])
 
   // Another folder: start from what the server says, not from the last folder's view.
   useEffect(() => {
@@ -76,8 +94,7 @@ export function useNoteList(folderId?: string): NoteListState {
     const again = () => load()
     const check = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return
-      listApi
-        .stamp(folderId)
+      readStamp()
         .then((now) => {
           if (now.stamp !== stamp.current) load()
         })
@@ -93,14 +110,13 @@ export function useNoteList(folderId?: string): NoteListState {
       window.removeEventListener('focus', check)
       clearInterval(timer)
     }
-  }, [folderId, load])
+  }, [folderId, load, readStamp])
 
   const setView = useCallback(
     (change: Partial<ListView>) => {
       chosen.current = { ...(chosen.current ?? {}), ...change }
       setViewState((old) => ({ ...old, ...change }))
-      listApi
-        .saveView(folderId, change)
+      ;(from.current ? from.current.saveView(change) : listApi.saveView(folderId, change))
         .then((saved) => {
           chosen.current = null
           setViewState((old) => ({ ...old, ...saved }))
