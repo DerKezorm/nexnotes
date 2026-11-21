@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 
 import pytest
@@ -381,6 +382,70 @@ def test_notes12_ac5_ec8_awareness_names_the_account_of_the_connection_not_what_
         a.announce('"just a string"')
         await world.settle()
         assert a.closed == [CLOSE_BAD]
+        await world.rooms.shutdown()
+
+    asyncio.run(scenario())
+
+
+def _lib0_strings(message: bytes) -> list[str]:
+    """The JSON states of an awareness message read as lib0 reads them in the browser: each string is as many UTF-8
+    bytes as its length says, and nothing is left over."""
+    data = memoryview(message)
+    at = 0
+
+    def uint() -> int:
+        nonlocal at
+        value, shift = 0, 0
+        while True:
+            byte = data[at]
+            at += 1
+            value |= (byte & 0x7F) << shift
+            shift += 7
+            if byte < 0x80:
+                return value
+
+    assert uint() == 1  # awareness
+    end = uint() + at
+    assert end == len(message)
+    states = []
+    for _ in range(uint()):
+        uint()
+        uint()
+        size = uint()
+        states.append(bytes(data[at:at + size]).decode("utf-8"))
+        at += size
+    assert at == end
+    return states
+
+
+def test_notes12_awareness_with_an_umlaut_and_an_emoji_in_the_name_arrives_whole():
+    async def scenario():
+        world = World()
+        _seed(world)
+        a = world.client("Jürgen 🦊", 1, client_id=1001)
+        b = world.client("Zoë", 2, client_id=2002)
+        a.connect()
+        b.connect()
+        await world.settle()
+        a.announce('{"user":{"name":"x","color":"#f2c14e"},"cursor":{"note":"Grüße ✓"}}')
+        b.announce('{"user":{"name":"y"}}')
+        await world.settle()
+        state = _seen(b)[1001]
+        assert state["user"]["name"] == "Jürgen 🦊"
+        assert state["cursor"] == {"note": "Grüße ✓"}
+        assert _seen(a)[2002]["user"]["name"] == "Zoë"
+        # The browser reads lengths as bytes: every message is exactly as long as it says.
+        for message in [*a.awareness.values(), *b.awareness.values()]:
+            for text in _lib0_strings(message):
+                json.loads(text)
+        # Who comes later is told the same, and the goodbye of a name with an umlaut is whole too.
+        late = world.client("Ännchen", 3, client_id=3003)
+        late.connect()
+        await world.settle()
+        assert _seen(late)[1001]["user"]["name"] == "Jürgen 🦊"
+        a.disconnect()
+        await world.settle()
+        assert _seen(b)[1001] is None
         await world.rooms.shutdown()
 
     asyncio.run(scenario())

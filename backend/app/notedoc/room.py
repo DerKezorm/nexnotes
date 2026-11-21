@@ -83,7 +83,6 @@ from typing import Any, Protocol, TypeVar
 from pycrdt import (
     Decoder,
     Doc,
-    Encoder,
     YMessageType,
     YSyncMessageType,
     create_sync_message,
@@ -642,14 +641,20 @@ def _own_awareness(room: Room, peer: Peer, entries: list[AwarenessEntry]) -> lis
     return kept
 
 
+def var_string(text: str) -> bytes:
+    """A string as lib0 writes it: the number of its UTF-8 bytes, then the bytes. (pycrdt's
+    ``Encoder.write_var_string`` writes the number of characters instead, which cuts every name with an umlaut or an
+    emoji short in the browser.)"""
+    data = text.encode("utf-8")
+    return write_var_uint(len(data)) + data
+
+
 def _awareness_message(entries: list[AwarenessEntry]) -> bytes:
-    inner = Encoder()
-    inner.write_var_uint(len(entries))
+    parts = [write_var_uint(len(entries))]
     for client, clock, state in entries:
-        inner.write_var_uint(client)
-        inner.write_var_uint(clock)
-        inner.write_var_string(json.dumps(state, ensure_ascii=False, separators=(",", ":")))
-    data = inner.to_bytes()
+        parts += [write_var_uint(client), write_var_uint(clock),
+                  var_string(json.dumps(state, ensure_ascii=False, separators=(",", ":")))]
+    data = b"".join(parts)
     return bytes([YMessageType.AWARENESS]) + write_var_uint(len(data)) + data
 
 

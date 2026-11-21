@@ -13,7 +13,6 @@ from typing import Any
 
 from pycrdt import (
     Doc,
-    Encoder,
     YMessageType,
     YSyncMessageType,
     create_sync_message,
@@ -22,7 +21,7 @@ from pycrdt import (
     write_var_uint,
 )
 
-from app.notedoc.room import Access, Folded, Peer, Rooms
+from app.notedoc.room import Access, Folded, Peer, Rooms, var_string
 
 _CLOSED = object()
 
@@ -202,12 +201,8 @@ class SimClient:
 
     def announce(self, state: str, *, client: int | None = None, clock: int = 1) -> None:
         """An awareness update for one client: this one's own unless ``client`` names another."""
-        inner = Encoder()
-        inner.write_var_uint(1)
-        inner.write_var_uint(self.doc.client_id if client is None else client)
-        inner.write_var_uint(clock)
-        inner.write_var_string(state)
-        data = inner.to_bytes()
+        data = (write_var_uint(1) + write_var_uint(self.doc.client_id if client is None else client)
+                + write_var_uint(clock) + var_string(state))
         self._send(bytes([YMessageType.AWARENESS]) + write_var_uint(len(data)) + data)
 
     def send_raw(self, data: bytes) -> None:
