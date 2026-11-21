@@ -45,9 +45,10 @@ export const notesApi = {
   create: (body: NewNote) => api<NoteHead>('/api/notes', { method: 'POST', body }),
   get: (id: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}`),
   setTitle: (id: string, title: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/title`, { method: 'PUT', body: { title } }),
-  /** Takes the suggested title (given, or the server's from the first words); the note gets "Titel prüfen". */
-  suggestTitle: (id: string, title?: string) =>
-    api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/title/suggestion`, { method: 'POST', body: title ? { title } : {} }),
+  /** Takes the suggested title (given, or the server's from the first words). The note gets "Titel prüfen" unless the
+   * person `confirmed` the suggestion, having seen it (NOTES-3 AC-9). */
+  suggestTitle: (id: string, title?: string, confirmed = false) =>
+    api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/title/suggestion`, { method: 'POST', body: { ...(title ? { title } : {}), ...(confirmed ? { confirmed } : {}) } }),
   setIcon: (id: string, icon: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/icon`, { method: 'PUT', body: { icon } }),
   setPaper: (id: string, paper: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/paper`, { method: 'PUT', body: { paper } }),
   titleOk: (id: string) => api<NoteHead>(`/api/notes/${encodeURIComponent(id)}/title/ok`, { method: 'POST' }),

@@ -57,6 +57,9 @@ class TitleIn(BaseModel):
 
 class SuggestionIn(BaseModel):
     title: str | None = Field(default=None, max_length=1000)
+    #: The person looked at the suggestion and took it ("Take suggestion" when leaving): a title like a typed one, no
+    #: "Titel prüfen". Without it (a tab closed, the back button unanswered) nobody looked, and the mark comes.
+    confirmed: bool = False
 
 
 def _iso(value: datetime | None) -> str | None:
@@ -154,7 +157,7 @@ async def put_title(note_id: str, body: TitleIn, account: Account) -> dict[str, 
 async def take_suggestion(note_id: str, body: SuggestionIn, account: Account) -> dict[str, Any]:
     with SessionLocal() as db:
         notes.note_for(db, account, note_id, write=True)
-    await notes.suggest(note_id, body.title)
+    await notes.suggest(note_id, body.title, confirmed=body.confirmed)
     return _out(note_id, account)
 
 

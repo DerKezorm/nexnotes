@@ -461,9 +461,10 @@ async def set_title(account: Account, note_id: str, title: str) -> Note:
     return _fresh(note_id)
 
 
-async def suggest(note_id: str, title: str | None = None) -> str:
-    """The suggested title (given, or from the first words) into the column with "Titel prüfen", then into the
-    document as a change of the server. Empty when there is nothing to suggest."""
+async def suggest(note_id: str, title: str | None = None, *, confirmed: bool = False) -> str:
+    """The suggested title (given, or from the first words) into the column, then into the document as a change of
+    the server. With "Titel prüfen" unless the person ``confirmed`` it, having seen it (NOTES-3 AC-9, AC-10). Empty
+    when there is nothing to suggest."""
     if title is None:
         _, text = await read_live(note_id)
         title = suggest_title(text)
@@ -475,12 +476,12 @@ async def suggest(note_id: str, title: str | None = None) -> str:
         if note is None:
             return ""
         note.title = clean
-        note.title_check = True
+        note.title_check = not confirmed
         note.updated_at = utcnow()
         _written(db, note)
         db.commit()
     await change(note_id, lambda doc: notedoc.set_title(doc, clean))
-    logger.info("Title suggested note=%s", note_id)
+    logger.info("Title suggested note=%s confirmed=%s", note_id, confirmed)
     return clean
 
 

@@ -323,12 +323,13 @@ describe('a note on the page', () => {
     await act(async () => $('leave-type')!.click())
     expect($('leave-dialog')).toBeNull()
     expect(left).toBe(false)
-    // Asked again, "Use suggestion": the server gets it as a suggestion ("Check title"), then the way out goes on.
+    // Asked again, "Use suggestion": the server gets it as the person's choice, then the way out goes on.
     await act(async () => tryLeave(() => (left = true)))
     await act(async () => $('leave-take')!.click())
     await settle(20)
     expect(left).toBe(true)
-    expect(calls.find((call) => call.path === '/api/notes/n1/title/suggestion')?.body).toEqual({ title: 'Dentist Tuesday 15:30 confirm' })
+    // Seen and taken on purpose: confirmed, so the note gets no "Check title" (NOTES-3 AC-9).
+    expect(calls.find((call) => call.path === '/api/notes/n1/title/suggestion')?.body).toEqual({ title: 'Dentist Tuesday 15:30 confirm', confirmed: true })
     // A link of the page counts as leaving too.
     notes.set('n2', note('n2'))
     rooms.set('n2', new Y.Doc())
@@ -340,6 +341,20 @@ describe('a note on the page', () => {
     await act(async () => link.click())
     expect($('leave-dialog')).not.toBeNull()
     expect(where).toBe('/notes/n2')
+  })
+
+  it('NOTES-3 AC-10 a note with text but no title, closed without anybody looking, gets the suggestion unconfirmed', async () => {
+    notes.set('n1', note('n1'))
+    rooms.set('n1', new Y.Doc())
+    writeInRoom('n1', 'Ring the landlord about the heating')
+    await render('/notes/n1')
+    await settle(50)
+    // The tab goes away (the editor unmounts) without the question being answered.
+    await act(async () => root.unmount())
+    await new Promise((resolve) => setTimeout(resolve, 120))
+    const asked = calls.find((call) => call.path === '/api/notes/n1/title/suggestion')
+    expect(asked).toBeTruthy()
+    expect((asked!.body as Record<string, unknown> | undefined)?.confirmed).toBeUndefined()
   })
 
   it('NOTES-3 EC-4 EC-5 a note with neither title nor text is left without a question and goes', async () => {

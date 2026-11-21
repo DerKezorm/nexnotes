@@ -279,7 +279,22 @@ def test_notes3_ac10_another_app_stopping_meanwhile_does_not_cancel_the_suggesti
     assert stored(note["id"]).title == "Return the drill to the neighbour"
 
 
-def test_notes3_ac9_taking_the_suggestion_marks_it_for_checking(client, operator):
+def test_notes3_ac9_ac10_a_suggestion_taken_on_purpose_is_ok_one_nobody_saw_is_marked(client, operator):
+    """Taken in the question when leaving: the person saw it, no mark. A tab closed without a title: nobody saw the
+    suggestion, it carries "Titel prüfen" (review of 21.11.2026)."""
+    seen = new_note(client)
+    live_seen = Live(client, seen["id"], token_for(operator))
+    assert live_seen.pump(lambda: live_seen.synced)
+    edit.append_paragraph(live_seen.doc, "Buy a new kettle")
+    live_seen.settle(0.2)
+    taken = client.post(f"/api/notes/{seen['id']}/title/suggestion",
+                        json={"title": "Buy a new kettle", "confirmed": True}).json()
+    assert taken["title"] == "Buy a new kettle" and taken["title_check"] is False
+    assert live_seen.pump(lambda: live_seen.title == "Buy a new kettle")
+    time.sleep(2.3)
+    assert stored(seen["id"]).title_check is False
+    live_seen.close()
+    # The tab closed: the editor asks the server for the suggestion without confirming.
     note = new_note(client)
     live = Live(client, note["id"], token_for(operator))
     assert live.pump(lambda: live.synced)

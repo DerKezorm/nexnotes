@@ -625,7 +625,8 @@ function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, onGuard,
           onTake={async () => {
             const proceed = askLeave
             try {
-              await notesApi.suggestTitle(noteId, suggestion)
+              // Seen and taken: a title like a typed one, no "Titel prüfen".
+              await notesApi.suggestTitle(noteId, suggestion, true)
               titleRef.current = suggestion
               notesChanged()
               setAskLeave(null)
