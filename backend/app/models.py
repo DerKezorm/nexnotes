@@ -358,6 +358,15 @@ class Note(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True, index=True)
     #: Went to the trash with its folder (NOTES-4 AC-5): the mark of that deletion, ``None`` for a note deleted alone.
     deleted_batch: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    #: Pinned since (NOTES-6 AC-6); ``None`` when not. Kept through the trash: a note comes back pinned (EC-8).
+    pinned_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The note's color (NOTES-6 AC-8): a key of ``FOLDER_COLORS``, empty for none.
+    color: Mapped[str] = mapped_column(String(16), default="", server_default="")
+    #: Checked and all items of its checklists (NOTES-6 AC-3); ``None`` while not counted yet.
+    tasks_done: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tasks_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The last change to anything a list shows (``services/notes_list.py``): lists ask for it to load again (EC-6).
+    listed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
 
 class NoteUpdate(Base):
@@ -370,3 +379,26 @@ class NoteUpdate(Base):
     update: Mapped[bytes] = mapped_column(LargeBinary)
     account_id: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+
+
+#: How a list of notes is shown (NOTES-6): as rows or as tiles, sorted by when it changed, when it was made or by title.
+LIST_MODES = ("list", "tiles")
+LIST_SORTS = ("updated", "created", "title")
+LIST_DIRECTIONS = ("asc", "desc")
+
+
+class NoteListView(Base):
+    """How one account looks at one folder's notes (NOTES-6 AC-1, AC-4, AC-5), on every device. ``key`` is the
+    folder's id, or ``all`` for "All notes". No row: a list, newest change first, grouped by date."""
+
+    __tablename__ = "note_list_views"
+    __table_args__ = (UniqueConstraint("account_id", "key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
+    key: Mapped[str] = mapped_column(String(40))
+    mode: Mapped[str] = mapped_column(String(8), default="list")
+    sort: Mapped[str] = mapped_column(String(8), default="updated")
+    direction: Mapped[str] = mapped_column(String(4), default="desc")
+    grouped: Mapped[bool] = mapped_column(Boolean, default=True)
+    updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, onupdate=utcnow)

@@ -342,6 +342,7 @@
     "network": "Der Server ist nicht erreichbar.",
     "no_offer": "Es gibt keine Adresse zum Übernehmen.",
     "not_found": "Nicht gefunden, oder für dich nicht offen.",
+    "note_color_unknown": "Diese Farbe gibt es nicht.",
     "note_id_taken": "Diese Notiz gibt es schon unter einem anderen Konto.",
     "oidc_account": "Dieses Konto meldet sich über den Anbieter an.",
     "operator_network": "Die Einstellungen des Betreibers sind nur aus dem Heimnetz erreichbar.",
@@ -594,17 +595,76 @@
     "home": "Zur Startseite",
     "page": "Diese Seite gibt es nicht."
   },
+  "noteList": {
+    "colorMark": "Farbe der Notiz",
+    "count_one": "{{count}} Notiz",
+    "count_other": "{{count}} Notizen",
+    "countsShared": "{{own}} eigene, {{shared}} mit dir geteilt",
+    "editorPin": "Notiz anheften",
+    "editorUnpin": "Notiz lösen",
+    "emptyAll": "Noch keine Notizen",
+    "emptyAllText": "Was du schreibst, steht hier: alle Notizen aus allen Ordnern und die, die andere mit dir teilen.",
+    "group": "Nach Datum",
+    "groupLabel": "Nach Datum gruppieren",
+    "groupOffByTitle": "Nach Titel sortiert gibt es keine Gruppen.",
+    "groups": {
+      "month": "Letzte 30 Tage",
+      "pinned": "Angeheftet",
+      "today": "Heute",
+      "week": "Letzte 7 Tage",
+      "yesterday": "Gestern"
+    },
+    "locked": "gesperrt",
+    "lockedBody": "Gesperrt",
+    "media": {
+      "drawing_one": "{{count}} Skizze",
+      "drawing_other": "{{count}} Skizzen",
+      "image_one": "{{count}} Foto",
+      "image_other": "{{count}} Fotos",
+      "scanText": "Scan · Text erkannt",
+      "scan_one": "{{count}} Scan",
+      "scan_other": "{{count}} Scans"
+    },
+    "menu": {
+      "color": "Farbe",
+      "label": "Aktionen für „{{title}}“",
+      "noColor": "Ohne Farbe",
+      "pin": "Anheften",
+      "unpin": "Lösen"
+    },
+    "pinned": "angeheftet",
+    "shared": "geteilt",
+    "sharedCount": "geteilt mit {{count}}",
+    "sharedFolder": "Mit mir geteilt",
+    "sharedFrom": "von {{name}}",
+    "sharedWith": "geteilt mit {{name}}",
+    "sort": {
+      "asc": "Älteste zuerst",
+      "ascTitle": "A bis Z",
+      "created": "Erstellt",
+      "desc": "Neueste zuerst",
+      "descTitle": "Z bis A",
+      "label": "Sortierung",
+      "title": "Titel A bis Z",
+      "titleDesc": "Titel Z bis A",
+      "updated": "Zuletzt geändert"
+    },
+    "tasks": "{{done}} von {{total}}",
+    "view": {
+      "label": "Ansicht",
+      "list": "Liste",
+      "tiles": "Kacheln"
+    }
+  },
   "notes": {
     "all": "Alle Notizen",
     "deleted": "Notiz in den Papierkorb gelegt.",
     "inbox": "Eingang",
     "list": {
-      "empty": "Hier ist noch keine Notiz.",
       "failed": "Die Notizen ließen sich nicht laden.",
       "title": "Notizen"
     },
     "new": "Neue Notiz",
-    "pick": "Wähle links eine Notiz oder fang eine neue an.",
     "titleCheck": "Titel prüfen",
     "titleOk": "Titel ok",
     "untitled": "Ohne Titel"

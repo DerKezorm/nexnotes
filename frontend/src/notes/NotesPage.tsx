@@ -37,12 +37,18 @@ export function NotesPage() {
   }, [folderId])
 
   const back = folderId ? (inbox ? '/inbox' : `/folder/${encodeURIComponent(folderId)}`) : '/'
+  // Without an open note the list takes the whole width (drawing N6-Liste); beside a note it is the column of N3-Editor.
   return (
     <div className="flex h-full min-h-0" data-testid="notes-page">
-      <div className={'min-h-0 w-full shrink-0 flex-col overflow-y-auto border-ink-700 px-3 py-4 md:flex md:w-[300px] md:border-r ' + (noteId ? 'hidden' : 'flex')}>
+      <div
+        className={
+          'nn-scroll min-h-0 w-full shrink-0 flex-col overflow-y-auto border-ink-700 ' +
+          (noteId ? 'hidden px-3 py-4 md:flex md:w-[300px] md:border-r' : 'flex px-4 py-5 md:flex-1 md:shrink md:px-8 md:py-6')
+        }
+      >
         <NoteList folderId={folderId} selectedId={noteId} heading={heading} />
       </div>
-      {noteId ? (
+      {noteId && (
         <div className="nn-scroll min-h-0 min-w-0 flex-1 overflow-y-auto">
           <Link to={back} className="flex items-center gap-1.5 px-4 pt-3 text-[15px] text-accent-400 md:hidden">
             <ArrowLeft className="h-4 w-4" aria-hidden />
@@ -50,14 +56,17 @@ export function NotesPage() {
           </Link>
           <NoteEditor noteId={noteId} fresh={fresh} onDeleted={() => navigate(back)} />
         </div>
-      ) : (
-        <div className="hidden min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center md:flex">
-          <p className="max-w-sm text-sm text-mist-500">{t('notes.pick')}</p>
-          <button type="button" className="nn-btn nn-btn-accent" onClick={start} disabled={busy}>
-            <Plus className="h-4 w-4" aria-hidden />
-            {t('notes.new')}
-          </button>
-        </div>
+      )}
+      {!noteId && (
+        <button
+          type="button"
+          aria-label={t('notes.new')}
+          onClick={start}
+          disabled={busy}
+          className="fixed right-4 bottom-7 z-20 flex h-14 w-14 items-center justify-center rounded-[18px] bg-accent-500 text-on-accent shadow-lg md:hidden"
+        >
+          <Plus className="h-[22px] w-[22px]" strokeWidth={2.6} aria-hidden />
+        </button>
       )}
     </div>
   )

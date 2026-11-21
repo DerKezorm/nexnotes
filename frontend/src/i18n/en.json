@@ -342,6 +342,7 @@
     "network": "The server cannot be reached.",
     "no_offer": "There is no address to take.",
     "not_found": "Not found, or not open to you.",
+    "note_color_unknown": "This color does not exist.",
     "note_id_taken": "A note with this id belongs to another account.",
     "oidc_account": "This account signs in through the provider.",
     "operator_network": "The operator's settings are open only from the home network.",
@@ -594,17 +595,76 @@
     "home": "To the start",
     "page": "There is no such page."
   },
+  "noteList": {
+    "colorMark": "Color of the note",
+    "count_one": "{{count}} note",
+    "count_other": "{{count}} notes",
+    "countsShared": "{{own}} own, {{shared}} shared with you",
+    "editorPin": "Pin note",
+    "editorUnpin": "Unpin note",
+    "emptyAll": "No notes yet",
+    "emptyAllText": "What you write shows up here: every note from every folder, and the ones others share with you.",
+    "group": "By date",
+    "groupLabel": "Group by date",
+    "groupOffByTitle": "Sorted by title, there are no groups.",
+    "groups": {
+      "month": "Last 30 days",
+      "pinned": "Pinned",
+      "today": "Today",
+      "week": "Last 7 days",
+      "yesterday": "Yesterday"
+    },
+    "locked": "locked",
+    "lockedBody": "Locked",
+    "media": {
+      "drawing_one": "{{count}} sketch",
+      "drawing_other": "{{count}} sketches",
+      "image_one": "{{count}} photo",
+      "image_other": "{{count}} photos",
+      "scanText": "Scan · text recognized",
+      "scan_one": "{{count}} scan",
+      "scan_other": "{{count}} scans"
+    },
+    "menu": {
+      "color": "Color",
+      "label": "Actions for “{{title}}”",
+      "noColor": "No color",
+      "pin": "Pin",
+      "unpin": "Unpin"
+    },
+    "pinned": "pinned",
+    "shared": "shared",
+    "sharedCount": "shared with {{count}}",
+    "sharedFolder": "Shared with me",
+    "sharedFrom": "from {{name}}",
+    "sharedWith": "shared with {{name}}",
+    "sort": {
+      "asc": "Oldest first",
+      "ascTitle": "A to Z",
+      "created": "Created",
+      "desc": "Newest first",
+      "descTitle": "Z to A",
+      "label": "Sort",
+      "title": "Title A to Z",
+      "titleDesc": "Title Z to A",
+      "updated": "Last changed"
+    },
+    "tasks": "{{done}} of {{total}}",
+    "view": {
+      "label": "View",
+      "list": "List",
+      "tiles": "Tiles"
+    }
+  },
   "notes": {
     "all": "All notes",
     "deleted": "Note moved to the trash.",
     "inbox": "Inbox",
     "list": {
-      "empty": "No notes here yet.",
       "failed": "The notes could not be loaded.",
       "title": "Notes"
     },
     "new": "New note",
-    "pick": "Pick a note on the left or start a new one.",
     "titleCheck": "Check title",
     "titleOk": "Title OK",
     "untitled": "Untitled"
