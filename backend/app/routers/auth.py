@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from sqlalchemy.orm import Session
 
 from .. import __version__
@@ -40,7 +40,7 @@ from ..security import (
     session_account,
     start_session,
 )
-from ..services import accounts, locales, mailer, mounts, settings_service, storage, totp
+from ..services import accounts, locales, mailer, mounts, notes_list, settings_service, storage, totp
 from ..services import notes as notes_service
 from ..services.accounts import AccountError
 from ..services.oidc_store import SqlStore, offered_address
@@ -327,6 +327,8 @@ def me(account: Account, db: DbSession) -> dict[str, Any]:
         "min_password": MIN_PASSWORD,
         # The paper new notes start on (NOTES-3 AC-17): the account's own, not in the operator's list of accounts.
         "paper": notes_service.default_paper(account),
+        # How every list of notes looks (rows, cards, compact, tiles; with hints or without), on every device.
+        **{f"list_{key}": value for key, value in notes_list.list_look(account).items()},
     }
 
 
@@ -407,6 +409,20 @@ def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession) 
     preferences["paper"] = paper
     row.preferences = preferences
     db.commit()
+    return me(row, db)
+
+
+class ListLookIn(BaseModel):
+    style: str | None = Field(default=None, max_length=8)
+    hints: StrictBool | None = None
+
+
+@router.put("/me/list-look", summary="How every list of notes of the own account looks: list, cards, compact or tiles, "
+                                     "with hints or without")
+def set_list_look(payload: ListLookIn, account: Account, db: DbSession) -> dict[str, Any]:
+    row = db.get(AccountRow, account.id)
+    assert row is not None
+    notes_list.set_list_look(db, row, payload.style, payload.hints)
     return me(row, db)
 
 

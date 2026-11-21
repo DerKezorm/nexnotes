@@ -1,5 +1,6 @@
 """Lists of notes over HTTP (NOTES-6): a folder's notes or all of them with the account's view, the stamp lists ask
-for to load again, the view per folder, pinning and colors (``services/notes_list.py``)."""
+for to load again, the sort and grouping per folder, pinning and colors (``services/notes_list.py``). How
+the notes look is the account's (``PUT /api/me/list-look``, ``routers/auth.py``)."""
 
 from __future__ import annotations
 
@@ -22,8 +23,11 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     notes_list.register()
     with SessionLocal() as db:
         counted = notes_list.count_missing(db)
+        tiles = notes_list.forget_tile_modes(db)
     if counted:
         notes_list.logger.info("Checklists counted notes=%s", counted)
+    if tiles:
+        notes_list.logger.info("Folder views as tiles became lists views=%s", tiles)
     yield
 
 
@@ -33,7 +37,6 @@ router = APIRouter(tags=["note-list"], lifespan=lifespan)
 class ViewIn(BaseModel):
     #: The folder; left out (or ``all``): "All notes".
     folder_id: str | None = Field(default=None, max_length=36)
-    mode: Literal["list", "tiles"] | None = None
     sort: Literal["updated", "created", "title"] | None = None
     direction: Literal["asc", "desc"] | None = None
     grouped: bool | None = None
