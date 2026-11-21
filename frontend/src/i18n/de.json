@@ -529,6 +529,8 @@
     "attachment_id_taken": "Dieser Anhang gehört schon zu einer anderen Notiz.",
     "attachment_empty": "Die Datei ist leer.",
     "attachment_wrong_kind": "Die Datei ist nicht das, als was sie geschickt wurde.",
+    "text_not_possible": "In diesem Anhang gibt es keinen Text.",
+    "note_locked": "Die Notiz ist gesperrt.",
     "upload_broken": "Das Hochladen brach ab. Der Anhang fehlt noch.",
     "export_expired": "Der Export lag 24 Stunden bereit und ist jetzt gelöscht. Starte ihn neu.",
     "export_not_ready": "Der Export ist noch nicht fertig.",

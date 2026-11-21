@@ -144,7 +144,7 @@ def holiday_photo() -> bytes:
 def pdf_with_text(pages: list[str | None]) -> bytes:
     """A PDF whose pages carry the given text of their own (``None``: an empty page, as a scan without a layer)."""
     import pypdfium2 as pdfium
-    import pypdfium2.raw as raw
+    from pypdfium2 import raw
 
     document = pdfium.PdfDocument.new()
     for text in pages:
