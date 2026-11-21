@@ -42,6 +42,11 @@ export const COLUMN_PANE = 480
  */
 export const SPLIT_ROOM = 2 * COLUMN_PANE + SEPARATOR
 
+/** The narrow strip at the left edge beside two notes while the list is folded away or has no room as a column: "»"
+ * and the words "Liste aufklappen" running down, 30 px, enough for a 16 px symbol with a calm margin and a 12 px line
+ * on its side. */
+export const LIST_STRIP = 30
+
 /** How the list stands beside the open notes: a column, a drawer over the left note, or not at all (one note and too
  * little room: it gives way to the note, as before). */
 export type ListStand = 'column' | 'drawer' | 'none'

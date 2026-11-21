@@ -2,10 +2,11 @@
  * The list beside two notes (NOTES-8 AC-9, decision of 21.11.2026 "column, else drawer") and the side used last
  * standing out (NOTES-8 AC-1), in a real browser at 1920 and 1600 px.
  *
- * - With room (both sides keep 480 px, fifth review) the list is a column between the sidebar and the two notes; the button
- *   "List" hides and shows it, and the choice stays on this device.
+ * - With room (both sides keep 480 px, fifth review) the list is a column between the sidebar and the two notes; "«" in
+ *   its head folds it to a narrow strip at the left edge, "»" there brings it back, and the choice stays on this device
+ *   (sixth review: no button "List" in the row of tabs any more).
  * - With less (here: the list dragged to its widest at 1600 px) a folder chosen in the sidebar opens the list as a
- *   drawer over the left note; a note chosen in it opens on the side used last and closes it; Escape closes it and
+ *   drawer over the left note (the strip at the left edge opens it too); a note chosen in it opens on the side used last and closes it; Escape closes it and
  *   gives the focus back.
  * - The side used last has a honey frame around its sheet, the other is dimmed; a click there makes it the one.
  */
@@ -38,7 +39,7 @@ async function twoNotes(page: Page, folderId: string, first: string, second: str
   await expect(pane(page, 'left')).toBeVisible()
 }
 
-test('NOTES-8 AC-9 at 1920 px the list stands as a column beside two notes; "List" hides it, kept after a reload', async ({ page }) => {
+test('NOTES-8 AC-9 at 1920 px the list stands as a column beside two notes; "«" folds it to a strip, kept after a reload', async ({ page }) => {
   const stamp = Date.now().toString(36)
   const a = await folder(page, `Desk ${stamp}`)
   const b = await folder(page, `Shed ${stamp}`)
@@ -63,17 +64,35 @@ test('NOTES-8 AC-9 at 1920 px the list stands as a column beside two notes; "Lis
   await expect(row(page, `Hammer ${stamp}`)).toBeVisible()
   await expect(page.getByTestId('list-drawer')).toHaveCount(0)
 
-  // "List" hides the column; the notes take the room; the choice stays after a reload.
-  const toggle = page.getByTestId('tab-list-toggle')
-  await expect(toggle).toHaveAttribute('aria-pressed', 'true')
-  await toggle.click()
+  // No button "List" in the row of tabs; "«" at the end of the list's head folds the column to a strip.
+  await expect(page.getByTestId('tab-list-toggle')).toHaveCount(0)
+  const collapse = page.getByTestId('list-head').getByTestId('list-collapse')
+  await expect(collapse).toHaveAttribute('aria-label', 'Collapse list')
+  const headBox = (await page.getByTestId('list-head').boundingBox())!
+  const collapseBox = (await collapse.boundingBox())!
+  expect(collapseBox.x + collapseBox.width).toBeGreaterThan(headBox.x + headBox.width - 40)
+  await collapse.click()
   await expect(column).toHaveCount(0)
-  await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+  // The strip: narrow, the whole height, between the sidebar and the notes; the notes take the room.
+  const strip = page.getByTestId('list-expand')
+  await expect(strip).toBeFocused()
+  await expect(strip).toHaveAttribute('aria-label', 'Expand list')
+  const stripBox = (await strip.boundingBox())!
+  const notesBox = (await pane(page, 'left').boundingBox())!
+  expect(stripBox.width).toBeGreaterThanOrEqual(28)
+  expect(stripBox.width).toBeLessThanOrEqual(32)
+  expect(stripBox.x + stripBox.width).toBeLessThanOrEqual(notesBox.x + 1)
+  expect(stripBox.height).toBeGreaterThan(notesBox.height - 2)
+  expect(notesBox.x).toBeLessThan(leftBox.x - 200)
+  // The choice stays after a reload; Enter on the strip brings the column back, the focus on its "«".
   await page.reload()
   await expect(pane(page, 'right')).toBeVisible()
   await expect(page.getByTestId('list-column')).toHaveCount(0)
-  await page.getByTestId('tab-list-toggle').click()
+  await page.getByTestId('list-expand').focus()
+  await page.keyboard.press('Enter')
   await expect(page.getByTestId('list-column')).toBeVisible()
+  await expect(page.getByTestId('list-collapse')).toBeFocused()
+  await expect(page.getByTestId('list-expand')).toHaveCount(0)
 })
 
 test('NOTES-8 AC-9 at 1600 px with a wide list: a folder chosen opens the list as a drawer, a note chosen opens on the side used last', async ({ page }) => {
@@ -89,11 +108,11 @@ test('NOTES-8 AC-9 at 1600 px with a wide list: a folder chosen opens the list a
   // 480 px beside the column since the fifth review, so 1280 px no longer hold it).
   await twoNotes(page, a, `Minutes ${stamp}`, `Budget ${stamp}`)
   await expect(page.getByTestId('list-column')).toBeVisible()
-  // The list at its widest leaves the two notes too little: no column, the button opens a drawer.
+  // The list at its widest leaves the two notes too little: no column, the strip at the left edge opens a drawer.
   await page.getByTestId('column-handle-list').focus()
   await page.keyboard.press('End')
   await expect(page.getByTestId('list-column')).toHaveCount(0)
-  const toggle = page.getByTestId('tab-list-toggle')
+  const toggle = page.getByTestId('list-expand')
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
 
   // A folder from the sidebar: the drawer slides in right beside the sidebar, over the left note, with its list.
@@ -106,7 +125,10 @@ test('NOTES-8 AC-9 at 1600 px with a wide list: a folder chosen opens the list a
   const drawerBox = (await drawer.boundingBox())!
   const leftBox = (await pane(page, 'left').boundingBox())!
   expect(Math.round(drawerBox.width)).toBe(560)
-  expect(Math.abs(drawerBox.x - leftBox.x)).toBeLessThanOrEqual(2)
+  // Over the strip and the left note, right beside the sidebar.
+  const stripBox = (await toggle.boundingBox())!
+  expect(Math.abs(drawerBox.x - stripBox.x)).toBeLessThanOrEqual(2)
+  expect(drawerBox.x + drawerBox.width).toBeGreaterThan(leftBox.x)
 
   // Escape closes it, the focus goes back to the folder.
   await page.keyboard.press('Escape')
@@ -122,7 +144,7 @@ test('NOTES-8 AC-9 at 1600 px with a wide list: a folder chosen opens the list a
   await expect(pane(page, 'right').getByTestId('note-title')).toHaveValue(`Wine ${stamp}`)
   await expect(pane(page, 'left').getByTestId('note-title')).toHaveValue(`Minutes ${stamp}`)
 
-  // "List" opens it with the focus inside; a click beside it closes it.
+  // The strip opens it with the focus inside; a click beside it closes it.
   await toggle.click()
   await expect(drawer).toBeFocused()
   await pane(page, 'right').click({ position: { x: 200, y: 300 } })

@@ -12,13 +12,16 @@
  *   (EC-2). The line between them moves with the mouse or the arrow keys, never below 340 px a side (AC-2).
  * - Beside two notes the list is a column while both sides keep 480 px (`COLUMN_PANE`), else a drawer over the left note
  *   (`ListDrawer.tsx`): a list chosen in the sidebar opens it, a note chosen in it opens on the side used last and
- *   closes it. The button "List" in the row of tabs shows and hides the column (kept on this device) or the drawer.
+ *   closes it. "«" in the list's head folds the column away to a narrow strip at the left edge, "»" there brings it
+ *   back (kept on this device); without room for the column the strip opens the drawer (sixth review: the button
+ *   "List" in the row of tabs is gone).
  * - Two sides on show: one toolbar over both with the text tools, working on the side used last (`SharedToolbar.tsx`);
  *   each sheet keeps a small bar of its own for the whole note (21.11.2026). One side, or the switcher: as before.
  * - A note dragged from a list, or a tab, onto the right edge opens beside (AC-1).
  * - On the first visit of a page load at "/", the tabs of last time come back with their split (AC-5).
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
+import { ChevronsRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
@@ -28,7 +31,7 @@ import { draggedNow } from '../folders/actions'
 import { useFolders } from '../folders/store'
 import { useColumnWidth } from '../lib/columns'
 import { useDevicePref } from '../lib/devicePref'
-import { ListPlaceContext } from '../notes/listPlace'
+import { ListCollapseContext, ListPlaceContext } from '../notes/listPlace'
 import { folderOfList, hrefIn } from '../notes/workspace'
 import { useAuth } from '../state/auth'
 import { listenForTabKeys } from './keys'
@@ -38,7 +41,7 @@ import { refreshMeta, useTabMetas } from './meta'
 import { closeDiscardedNote, focusSide as focusSideAction, openNoteBeside, setNavigation, wasLeftEmpty } from './open'
 import { focusedKey, focusSide, MAX_RATIO, MIN_RATIO, tabOf, type Side } from './state'
 import { isOtherAccountsNote, loadAccountTabs, tabs, tabsNow, useTabs } from './store'
-import { draggedTab, listStand, MIN_PANE, SEPARATOR } from './layout'
+import { draggedTab, LIST_STRIP, listStand, MIN_PANE, SEPARATOR } from './layout'
 import { useListDrawer } from './drawerState'
 import { ListDrawer } from './ListDrawer'
 import { SharedToolbar } from './SharedToolbar'
@@ -152,19 +155,27 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const side = focusSide(state)
   const open = settled && Boolean(left)
   const split = open && Boolean(right)
-  const both = split && width >= 2 * MIN_PANE + SEPARATOR
   const stand = open ? listStand(split, width, listWidth) : 'none'
   const showList = stand === 'column' && (!split || columnOn)
-  // Two notes and no column: the list comes as a drawer over the left note.
-  const drawer = useListDrawer(split && !showList, listPath)
-  // "List": with room it shows or hides the column, else it opens or closes the drawer.
-  const toggleList = (button: HTMLElement) => {
+  // Two notes and no column (folded away, or no room for it): the narrow strip at the left edge, and the list comes as
+  // a drawer over the left note.
+  const strip = split && !showList
+  const both = split && width - (strip ? LIST_STRIP : 0) >= 2 * MIN_PANE + SEPARATOR
+  const drawer = useListDrawer(strip, listPath)
+  // "«" in the list's head folds the column away; the focus goes to the strip, which brings it back.
+  const collapseList = useCallback(() => {
+    setColumnOn('off')
+    requestAnimationFrame(() => page.current?.querySelector<HTMLElement>('[data-testid="list-expand"]')?.focus())
+  }, [setColumnOn, page])
+  // The strip: with room it unfolds the column (the focus goes to its "«"), else it opens or closes the drawer.
+  const expandList = (button: HTMLElement) => {
     if (stand === 'column') {
-      setColumnOn(columnOn ? 'off' : null)
+      setColumnOn(null)
       drawer.close(false)
+      requestAnimationFrame(() => page.current?.querySelector<HTMLElement>('[data-testid="list-collapse"]')?.focus())
     } else drawer.toggle(button)
   }
-  const areaWidth = width - (showList ? listWidth : 0)
+  const areaWidth = width - (showList ? listWidth : strip ? LIST_STRIP : 0)
   const room = areaWidth - SEPARATOR
   const leftWidth = Math.round(Math.min(Math.max(state.ratio * room, MIN_PANE), room - MIN_PANE))
 
@@ -229,23 +240,37 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
           metas={metas}
           split={split}
           open={open}
-          listToggle={
-            split
-              ? stand === 'column'
-                ? { pressed: showList, onToggle: toggleList }
-                : { expanded: drawer.open, controls: drawer.id, onToggle: toggleList }
-              : undefined
-          }
         />
       )}
       <div className="relative flex min-h-0 flex-1">
         {(!open || showList) && (
           <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined} data-testid="list-column">
             <div className={'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r' : 'flex w-full')}>
-              <ListPlaceContext.Provider value={open ? 'column' : 'page'}>{list}</ListPlaceContext.Provider>
+              <ListPlaceContext.Provider value={open ? 'column' : 'page'}>
+                <ListCollapseContext.Provider value={split ? collapseList : null}>{list}</ListCollapseContext.Provider>
+              </ListPlaceContext.Provider>
             </div>
             {open && <ColumnHandle column="list" />}
           </div>
+        )}
+        {strip && (
+          <button
+            type="button"
+            aria-label={t('tabs.expandList')}
+            title={t('tabs.expandList')}
+            aria-expanded={stand === 'column' ? false : drawer.open}
+            aria-controls={stand !== 'column' && drawer.open ? drawer.id : undefined}
+            data-list-toggle=""
+            data-testid="list-expand"
+            style={{ width: LIST_STRIP }}
+            className="group flex min-h-0 shrink-0 flex-col items-center gap-3 border-r border-ink-700 pt-3 text-mist-500 outline-offset-[-2px] hover:bg-ink-900 hover:text-mist-100"
+            onClick={(event) => expandList(event.currentTarget)}
+          >
+            <ChevronsRight className="h-4 w-4 shrink-0" aria-hidden />
+            <span aria-hidden className="text-[12px] font-medium tracking-wide [writing-mode:vertical-rl]">
+              {t('tabs.expandList')}
+            </span>
+          </button>
         )}
         {drawer.open && <ListDrawer drawer={drawer} width={Math.min(listWidth, width)} list={list} />}
         {open && (

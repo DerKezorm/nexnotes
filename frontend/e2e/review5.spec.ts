@@ -8,7 +8,8 @@
  * 3. Beside a second note the sheet's own small bar stands at the top right inside the sheet: above the sheets only the
  *    bar over both needs a row. A narrow sheet says less under its title.
  * 6. The same note on both sides of one window shows no "you, other window"; a second browser tab does.
- * 7. The button that ends side by side says "Show one note only".
+ * 7. The button that ends side by side says "Show one note only"; the list folds away with "«" in its head to a strip at
+ *    the left edge (sixth review), no button "List" in the row of tabs.
  */
 import { expect, test, type Page } from '@playwright/test'
 
@@ -159,17 +160,33 @@ test('NOTES-12 EC-8 NOTES-8 EC-1 the same note on both sides of one window is no
   await other.close()
 })
 
-test('NOTES-8 the button that ends side by side says "Show one note only" and stands apart from "List"', async ({ page }) => {
+test('NOTES-8 the button that ends side by side says "Show one note only"; the list folds with "«" in its head, not from the row of tabs', async ({ page }) => {
   const stamp = Date.now().toString(36)
   const id = await note(page, `Ends ${stamp}`, 'a')
   await note(page, `Ends beside ${stamp}`, 'b')
   await page.setViewportSize({ width: 1920, height: 1000 })
   await page.goto(`/notes/${id}`)
+  // One note: nothing to fold.
+  await expect(page.getByTestId('list-head')).toBeVisible()
+  await expect(page.getByTestId('list-collapse')).toHaveCount(0)
   await beside(page, `Ends beside ${stamp}`)
   const end = page.getByTestId('tab-end-split')
   await expect(end).toHaveAttribute('aria-label', 'Show one note only')
   await expect(end).toHaveAttribute('title', 'Show one note only')
-  const list = (await page.getByTestId('tab-list-toggle').boundingBox())!
-  const endBox = (await end.boundingBox())!
-  expect(endBox.x - (list.x + list.width)).toBeGreaterThanOrEqual(10)
+  await expect(page.getByTestId('tab-list-toggle')).toHaveCount(0)
+  // "«" folds the list away, "»" in the strip at the left edge brings it back; both by keyboard.
+  await page.getByTestId('list-collapse').focus()
+  await page.keyboard.press('Enter')
+  await expect(page.getByTestId('list-column')).toHaveCount(0)
+  await expect(page.getByTestId('list-expand')).toBeFocused()
+  await expect(page.getByTestId('list-expand')).toHaveAttribute('title', 'Expand list')
+  await page.keyboard.press('Space')
+  await expect(page.getByTestId('list-column')).toBeVisible()
+  await expect(page.getByTestId('list-collapse')).toBeFocused()
+  // Folded, a folder chosen in the sidebar opens the drawer, as before.
+  await page.getByTestId('list-collapse').click()
+  await page.getByRole('link', { name: /^Inbox/ }).first().click()
+  await expect(page.getByTestId('list-drawer')).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByTestId('list-drawer')).toHaveCount(0)
 })

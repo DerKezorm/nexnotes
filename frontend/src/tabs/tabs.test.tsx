@@ -37,7 +37,7 @@ import { openNoteBeside, openNoteInNewTab, showTab } from './open'
 import { startNewNote } from '../notes/newNote'
 import * as rules from './state'
 import { forgetTabs, storageKey, tabs, tabsNow } from './store'
-import { COLUMN_PANE, listStand, MIN_PANE, rowsFor, SEPARATOR, SIDE_LABEL, SPLIT_ROOM, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
+import { COLUMN_PANE, LIST_STRIP, listStand, MIN_PANE, rowsFor, SEPARATOR, SIDE_LABEL, SPLIT_ROOM, TAB_CHROME, TAB_GAP, TAB_MIN, tabMin, tabRows, TITLE_MIN } from './layout'
 
 // ---- The stand-in server -------------------------------------------------------------------------------------------
 
@@ -1527,7 +1527,8 @@ describe('the list beside two notes', () => {
     await idle()
   }
   const drawer = () => $('list-drawer')
-  const toggle = () => $('tab-list-toggle')!
+  // Without room for the column the strip at the left edge opens and closes the drawer.
+  const toggle = () => $('list-expand')!
   const focusedPane = () => box.querySelector('[data-testid="tab-pane"][data-focused="true"]') as HTMLElement
   const escape = async () => {
     const target = (document.activeElement as HTMLElement | null) ?? document.body
@@ -1548,37 +1549,57 @@ describe('the list beside two notes', () => {
     expect(listStand(false, 300 + MIN_PANE - 1, 300)).toBe('none')
   })
 
-  it('NOTES-8 AC-9 with room the column stands between sidebar and notes; "List" hides and shows it, kept on this device', async () => {
+  it('NOTES-8 AC-9 with room the column stands between sidebar and notes; "«" in its head folds it to a strip, "»" brings it back, kept on this device', async () => {
     await twoNotes(300 + SPLIT_ROOM)
     expect($('list-column')!.style.width).toBe('300px')
     expect($('note-list')).not.toBeNull()
     expect(pane('left')).not.toBeNull()
     expect(pane('right')).not.toBeNull()
-    expect(toggle().getAttribute('aria-label')).toBe('List')
-    expect(toggle().getAttribute('aria-pressed')).toBe('true')
-    expect(toggle().hasAttribute('aria-expanded')).toBe(false)
-    await act(async () => toggle().click())
+    // The button "List" in the row of tabs is gone (sixth review); "«" stands at the end of the list's head.
+    expect($('tab-list-toggle')).toBeNull()
+    expect($('list-expand')).toBeNull()
+    const collapse = $('list-collapse', $('list-head')!)!
+    expect(collapse.getAttribute('aria-label')).toBe('Collapse list')
+    expect(collapse.getAttribute('title')).toBe('Collapse list')
+    expect(i18n.getResource('de', 'translation', 'tabs.collapseList')).toBe('Liste einklappen')
+    expect(i18n.getResource('de', 'translation', 'tabs.expandList')).toBe('Liste aufklappen')
+    await act(async () => collapse.click())
     expect($('list-column')).toBeNull()
-    expect(toggle().getAttribute('aria-pressed')).toBe('false')
+    // Folded: a narrow strip at the left edge, the whole height, between the sidebar and the notes; the focus on it.
+    const strip = () => $('list-expand')!
+    expect(strip().tagName).toBe('BUTTON')
+    expect(strip().style.width).toBe(`${LIST_STRIP}px`)
+    expect(strip().getAttribute('aria-label')).toBe('Expand list')
+    expect(strip().getAttribute('aria-expanded')).toBe('false')
+    expect(strip().compareDocumentPosition(pane('left')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await until(() => document.activeElement === strip())
+    // "»" brings it back, the focus on its "«"; by keyboard both ways.
+    await act(async () => strip().click())
+    expect($('list-column')).not.toBeNull()
+    await until(() => document.activeElement === $('list-collapse'))
+    await act(async () => $('list-collapse')!.click())
+    await until(() => document.activeElement === strip())
     expect(localStorage.getItem(prefKey('splitList', 1))).toBe('off')
     // Kept after a reload on this device.
     forgetPrefs()
     await reload('/notes/shop')
     expect($('list-column')).toBeNull()
-    expect(toggle().getAttribute('aria-pressed')).toBe('false')
-    // Hidden, a list chosen in the sidebar still shows: in the drawer.
+    expect(strip()).not.toBeNull()
+    // Folded, a list chosen in the sidebar still shows: in the drawer.
     await act(async () => $('place-kitchen')!.click())
     await idle()
     expect(drawer()).not.toBeNull()
-    await act(async () => toggle().click())
+    // "»" brings the column back, the focus on its "«".
+    await act(async () => strip().click())
     expect(drawer()).toBeNull()
     expect($('list-column')).not.toBeNull()
-    expect(toggle().getAttribute('aria-pressed')).toBe('true')
+    expect($('list-expand')).toBeNull()
     expect(localStorage.getItem(prefKey('splitList', 1))).toBeNull()
-    // One note: no button, the list as always.
+    // One note: no "«", no strip, the list as always.
     await act(async () => tabs.endSplit())
     await idle()
-    expect($('tab-list-toggle')).toBeNull()
+    expect($('list-collapse')).toBeNull()
+    expect($('list-expand')).toBeNull()
     expect($('list-column')).not.toBeNull()
   })
 
@@ -2003,7 +2024,7 @@ describe('fifth review (21.11.2026)', () => {
     expect(tabOfNote('bath')).toBeTruthy()
   })
 
-  it('NOTES-8 the button that ends side by side says "Show one note only" and stands apart from "List"', async () => {
+  it('NOTES-8 the button that ends side by side says "Show one note only"', async () => {
     await render('/notes/soup')
     await act(async () => openNoteBeside('shop'))
     await idle()
@@ -2011,10 +2032,6 @@ describe('fifth review (21.11.2026)', () => {
     expect(end.getAttribute('aria-label')).toBe('Show one note only')
     expect(end.getAttribute('title')).toBe('Show one note only')
     expect(i18n.getResource('de', 'translation', 'tabs.endSplit')).toBe('Nur eine Notiz zeigen')
-    // A thin line between "List" and it.
-    const gap = $('tab-buttons-gap')!
-    expect(gap.previousElementSibling).toBe($('tab-list-toggle'))
-    expect(gap.nextElementSibling).toBe(end)
   })
 
   it('NOTES-3 a long title breaks into further lines in the sheet, never cut off (one note and side by side)', async () => {

@@ -7,7 +7,7 @@
  * Tabs can be dragged into another order or onto the right edge of the notes (AC-1), and the keyboard moves through
  * them as through any row of tabs (EC-7).
  */
-import { Ban, List, Lock, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
+import { Ban, Lock, PanelRightClose, Plus, Trash2, X } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -37,9 +37,6 @@ function useWidth(): [React.RefObject<HTMLDivElement | null>, number] {
   return [box, width]
 }
 
-/** The thin line between "List" and "Show one note only": 1 px, its margins (2 × 4) and one more gap of the row (4). */
-const GAP_LINE = 13
-
 type Props = {
   state: TabsState
   metas: Map<string, TabMeta>
@@ -47,13 +44,9 @@ type Props = {
   split: boolean
   /** A note is open on the page (not the list alone at "/"). */
   open: boolean
-  /** Beside two notes: the button "List", for the column (`pressed`) or the drawer (`expanded`, `controls`). */
-  listToggle?: ListToggle
 }
 
-export type ListToggle = { pressed?: boolean; expanded?: boolean; controls?: string; onToggle: (button: HTMLElement) => void }
-
-export function TabBar({ state, metas, split, open, listToggle }: Props) {
+export function TabBar({ state, metas, split, open }: Props) {
   const { t } = useTranslation()
   const tree = useFolders()
   const { openFolderId, targetFolderId } = useCurrentFolder()
@@ -61,11 +54,10 @@ export function TabBar({ state, metas, split, open, listToggle }: Props) {
   const list = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState<string | null>(null)
   const focused = focusedKey(state)
-  // The buttons after the tabs: their padding (4), "new tab" (30), "list" and "end split" (4 + 30 each) with the line
-  // between them (`GAP_LINE`), and the count
+  // The buttons after the tabs: their padding (4), "new tab" (30), "end split" (4 + 30), and the count
   // with its gap ("6 von 6" in 12 px with its padding, 4 + 52). When the tabs would not keep their least width in two
   // rows otherwise, the count goes (it is in the tooltip of "new tab" then) before the titles do.
-  const buttons = 4 + 30 + (state.right ? 34 : 0) + (listToggle ? 34 : 0) + (state.right && listToggle ? GAP_LINE : 0)
+  const buttons = 4 + 30 + (state.right ? 34 : 0)
   const mins = state.tabs.map((tab) => tabMin(split && (tab.key === state.left || tab.key === state.right)))
   const full = tabRows(mins, width, buttons + 56)
   const compact = full.fits ? full : tabRows(mins, width, buttons)
@@ -240,28 +232,6 @@ export function TabBar({ state, metas, split, open, listToggle }: Props) {
       >
         <Plus className="h-4 w-4" aria-hidden />
       </button>
-      {listToggle && (
-        <button
-          type="button"
-          aria-label={t('tabs.list')}
-          title={t('tabs.listHint')}
-          aria-pressed={listToggle.pressed}
-          aria-expanded={listToggle.expanded}
-          aria-controls={listToggle.expanded ? listToggle.controls : undefined}
-          data-list-toggle=""
-          data-testid="tab-list-toggle"
-          className={
-            'flex h-[30px] w-[30px] items-center justify-center rounded-lg hover:bg-ink-800 hover:text-mist-100 ' +
-            (listToggle.pressed || listToggle.expanded ? 'bg-ink-800 text-accent-400' : 'text-mist-300')
-          }
-          onClick={(event) => listToggle.onToggle(event.currentTarget)}
-        >
-          <List className="h-4 w-4" aria-hidden />
-        </button>
-      )}
-      {/* "Nur eine Notiz zeigen" stands apart from "List" by a thin line, so that the two are not mistaken for each other
-          (fifth review). */}
-      {state.right && listToggle && <span aria-hidden className="mx-1 h-4 w-px bg-ink-700" data-testid="tab-buttons-gap" />}
       {state.right && (
         <button
           type="button"

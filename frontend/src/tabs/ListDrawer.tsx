@@ -4,7 +4,7 @@
  * over the left note, as wide as the list's column.
  *
  * - A list chosen in the sidebar (a folder, a tag, the inbox, all notes, a smart folder, the search) opens it, the same
- *   list chosen again too; so does the button "List" in the row of tabs.
+ *   list chosen again too; so does the strip at the left edge ("»") when there is no room for the column.
  * - A note chosen in it opens on the side used last, as in the column, and closes it. Alt-click and the list's menu
  *   open tabs and keep it open.
  * - Escape closes it and gives the focus back to what opened it; a click beside it closes it too.

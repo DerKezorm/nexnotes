@@ -1,6 +1,6 @@
 /**
  * Whether the list's drawer beside two notes is open (`ListDrawer.tsx`): what opens it (a list chosen in the sidebar or
- * elsewhere, the button "List") and what closes it (Escape with the focus back to what opened it, a click beside it).
+ * elsewhere, the strip at the left edge) and what closes it (Escape with the focus back to what opened it, a click beside it).
  */
 import { useEffect, useId, useRef, useState } from 'react'
 
@@ -11,7 +11,7 @@ type Opened = { trigger: HTMLElement | null; focus: boolean }
 export type ListDrawerState = {
   open: boolean
   id: string
-  /** Opened by the button "List": the focus goes into the drawer. */
+  /** Opened by the strip at the left edge: the focus goes into the drawer. */
   focusInside: boolean
   toggle: (button: HTMLElement) => void
   /** `back`: the focus returns to what opened it (Escape). */
@@ -30,7 +30,8 @@ function sidebarListPlace(target: EventTarget | null): HTMLElement | null {
   return url.origin === window.location.origin && isListPath(url.pathname) ? anchor : null
 }
 
-/** Places a click may land in without closing the drawer: the drawer, its button, the menus and dialogs it opens. */
+/** Places a click may land in without closing the drawer: the drawer, the strip that opens it, the menus and dialogs it
+ * opens. */
 const INSIDE = '[data-list-drawer], [data-list-toggle], [role="menu"], [role="dialog"], [role="alertdialog"]'
 
 /**
