@@ -282,7 +282,26 @@ def _clean_atom(kind: str, attrs: Any) -> dict[str, Any] | None:
     out["name"] = clean_label(given.get("name"), s.MAX_NAME)
     if kind == s.IMAGE:
         out["size"] = given.get("size") if given.get("size") in s.IMAGE_SIZES else s.IMAGE_SIZES[0]
+    elif kind == s.DRAWING:
+        # The sketch itself (NOTES-18) is a second attachment; without it the sketch is a picture only.
+        out["data"] = attachment_id(given.get("data"))
+    elif kind == s.RECORDING:
+        duration = _number(given.get("duration"))
+        out["duration"] = duration if duration is not None and 0 <= duration <= s.MAX_DURATION else None
+        out["transcript"] = attachment_id(given.get("transcript"))
     return out
+
+
+def _named_ids(kind: str, attrs: dict[str, Any]) -> list[Any]:
+    """The attributes of a block that name attachments, in this order: a card its picture, a sketch its picture and
+    its data, a recording its sound and its transcript, any other block its id."""
+    if kind == s.LINK_PREVIEW:
+        return [attrs.get("image")]
+    if kind == s.DRAWING:
+        return [attrs.get("id"), attrs.get("data")]
+    if kind == s.RECORDING:
+        return [attrs.get("id"), attrs.get("transcript")]
+    return [attrs.get("id")]
 
 
 def clean_marks(marks: Any) -> list[dict[str, Any]]:
@@ -658,8 +677,9 @@ def to_json(doc: Doc) -> dict[str, Any]:
 
 
 def attachment_refs(source: Doc | dict[str, Any]) -> list[str]:
-    """The ids of the attachments a note names (NOTES-10), in the order of the text, each once: pictures, files and
-    the pictures of link cards. Only ids of the right shape; the rest is no attachment."""
+    """The ids of the attachments a note names (NOTES-10), in the order of the text, each once: pictures, files, the
+    pictures of link cards, sketches with their data and recordings with their transcripts (NOTES-18). Only ids of the
+    right shape; the rest is no attachment."""
     document = to_json(source) if isinstance(source, Doc) else source
     found: dict[str, None] = {}
     stack = list(reversed(document.get("content") or [])) if isinstance(document, dict) else []
@@ -670,9 +690,10 @@ def attachment_refs(source: Doc | dict[str, Any]) -> list[str]:
         kind = node.get("type")
         if kind in s.ATOMS:
             attrs = node.get("attrs") if isinstance(node.get("attrs"), dict) else {}
-            found_id = attachment_id(attrs.get("image" if kind == s.LINK_PREVIEW else "id"))
-            if found_id:
-                found.setdefault(found_id)
+            for value in _named_ids(kind, attrs):
+                found_id = attachment_id(value)
+                if found_id:
+                    found.setdefault(found_id)
             continue
         stack.extend(reversed(node.get("content") or []))
     return list(found)

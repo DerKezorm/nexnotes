@@ -104,6 +104,63 @@ export const NoteLinkPreview = Node.create({
   },
 })
 
+/** The longest recording whose length a document carries, in milliseconds (NOTES-18). */
+export const MAX_DURATION = 48 * 3600 * 1000
+
+const duration = (value) => {
+  const found = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10)
+  return Number.isInteger(found) && found >= 0 && found <= MAX_DURATION ? found : null
+}
+
+/**
+ * Sketches and recordings (NOTES-18) come from the iOS app; the browser only shows and plays them. Blocks without
+ * content like the attachments: a sketch names the picture the app drew of it and, in `data`, the sketch itself
+ * (PencilKit's data, only the app reads it); a recording names its sound, its length in milliseconds as a hint and, in
+ * `transcript`, the attachment with its words and their times.
+ */
+export const NoteDrawing = Node.create({
+  name: 'drawing',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addAttributes() {
+    return { id: dataAttribute('id', attachmentId), data: dataAttribute('data', attachmentId), name: dataAttribute('name') }
+  },
+  parseHTML() {
+    return [{ tag: 'figure[data-type="drawing"]' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['figure', mergeAttributes({ 'data-type': 'drawing' }, HTMLAttributes)]
+  },
+})
+
+export const NoteRecording = Node.create({
+  name: 'recording',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  selectable: true,
+  addAttributes() {
+    return {
+      id: dataAttribute('id', attachmentId),
+      name: dataAttribute('name'),
+      duration: {
+        default: null,
+        parseHTML: (element) => duration(element.getAttribute('data-duration')),
+        renderHTML: (attributes) => (attributes.duration !== null && attributes.duration !== undefined ? { 'data-duration': String(attributes.duration) } : {}),
+      },
+      transcript: dataAttribute('transcript', attachmentId),
+    }
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type="recording"]' }]
+  },
+  renderHTML({ HTMLAttributes }) {
+    return ['div', mergeAttributes({ 'data-type': 'recording' }, HTMLAttributes)]
+  },
+})
+
 /** Headings 1 to 3, each one can be folded (NOTES-3 AC-12); the state is part of the document. */
 export const CollapsibleHeading = Heading.extend({
   addAttributes() {
@@ -174,6 +231,8 @@ export function noteExtensions() {
     NoteImage,
     NoteAttachment,
     NoteLinkPreview,
+    NoteDrawing,
+    NoteRecording,
   ]
 }
 

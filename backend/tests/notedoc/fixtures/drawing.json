@@ -1,0 +1,33 @@
+{
+  "title": "Case drawing",
+  "doc": {
+    "type": "doc",
+    "content": [
+      {
+        "type": "paragraph",
+        "content": [
+          {
+            "type": "text",
+            "text": "Ablauf:"
+          }
+        ]
+      },
+      {
+        "type": "drawing",
+        "attrs": {
+          "id": "Sk3tchP1ctur3_0000000a",
+          "data": "Sk3tchD4t4_00000000000a",
+          "name": "Skizze.png"
+        }
+      },
+      {
+        "type": "drawing",
+        "attrs": {
+          "id": "Sk3tchP1ctur3_0000000b",
+          "data": null,
+          "name": null
+        }
+      }
+    ]
+  }
+}

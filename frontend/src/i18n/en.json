@@ -528,6 +528,7 @@
     "storage_limit_reached": "Your storage is full. New attachments only once there is room.",
     "attachment_id_taken": "This attachment belongs to another note already.",
     "attachment_empty": "The file is empty.",
+    "attachment_wrong_kind": "The file is not what it was sent as.",
     "upload_broken": "The upload broke off. The attachment is still missing.",
     "export_expired": "The export was ready for 24 hours and is gone now. Start it again.",
     "export_not_ready": "The export is not ready yet.",
@@ -1517,6 +1518,38 @@
       "disk_full": "The export “{{name}}” broke off: the server has not enough room for the ZIP.",
       "not_found": "The export “{{name}}” could not run: the folder is gone.",
       "failed": "The export “{{name}}” failed."
+    }
+  },
+  "sketches": {
+    "drawing": {
+      "title": "Sketch",
+      "viewOnly": "view only in the browser, draw on iPhone and iPad",
+      "download": "Save as picture",
+      "open": "Open sketch “{{name}}” large",
+      "alt": "Sketch “{{name}}”",
+      "viewer": "Sketch “{{name}}”",
+      "zoomIn": "Zoom in",
+      "zoomOut": "Zoom out",
+      "fit": "Fit"
+    },
+    "recording": {
+      "title": "Recording",
+      "label": "Recording “{{name}}”",
+      "keys": "Space plays and pauses, the arrow keys jump five seconds.",
+      "play": "Play",
+      "pause": "Pause",
+      "position": "Position",
+      "positionText": "{{at}} of {{total}}",
+      "speed": "Speed",
+      "rate": {
+        "1": "1×",
+        "1_5": "1.5×",
+        "2": "2×"
+      },
+      "hint": "Tap a word to jump to that point of the recording.",
+      "transcriptLoading": "Loading the text …",
+      "transcriptMissing": "The text is not there yet.",
+      "cannotPlay": "Your browser cannot play this format."
     }
   }
 }

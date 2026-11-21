@@ -1,0 +1,31 @@
+/* Sketches and recordings (NOTES-18). A sketch lies on light paper in both themes: the app draws dark ink on a
+   transparent ground, which would vanish on the dark page. */
+.nn-sketch-paper {
+  background: #f5f5f8;
+}
+
+/* The transcript while it plays: what was heard is dimmer than what comes, the sentence being spoken stands out, the
+   word being spoken is marked in honey (AC-3). */
+.nn-transcript .nn-w {
+  color: var(--color-mist-300);
+  cursor: pointer;
+  border-radius: 3px;
+}
+.nn-transcript .nn-w:hover {
+  text-decoration: underline;
+  text-decoration-color: var(--color-accent-500);
+}
+.nn-transcript .nn-w-heard {
+  color: var(--color-mist-500);
+}
+.nn-transcript .nn-w-sentence {
+  color: var(--color-mist-100);
+}
+.nn-transcript .nn-w-now {
+  color: var(--color-mist-100);
+  background: rgb(242 193 78 / 0.3);
+  box-shadow: 0 0 0 2px rgb(242 193 78 / 0.3);
+}
+.nn-recording input[type='range'] {
+  accent-color: var(--color-accent-500);
+}

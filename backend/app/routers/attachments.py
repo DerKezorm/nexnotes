@@ -87,12 +87,15 @@ async def upload(
     note_id: Annotated[str, Query(max_length=36)],
     attachment_id: Annotated[str, Query(alias="id", max_length=32)],
     name: Annotated[str, Query(max_length=1000)] = "",
+    role: Annotated[str | None, Query(alias="as", max_length=20)] = None,
 ) -> dict[str, Any]:
+    """``as`` (NOTES-18, from the iOS app): ``drawing``, ``drawing-data``, ``recording`` or ``transcript``; the content
+    must be what it says (``attachment_wrong_kind``). Without it the content alone decides."""
     declared_text = request.headers.get("content-length")
     declared = int(declared_text) if declared_text and declared_text.isdigit() else None
     try:
         with SessionLocal() as db:
-            started = attachments.begin(db, account, note_id, attachment_id, name, declared)
+            started = attachments.begin(db, account, note_id, attachment_id, name, declared, role)
         if isinstance(started, Attachment):
             response.status_code = 200
             return attachments.out(started)
