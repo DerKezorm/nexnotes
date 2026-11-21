@@ -256,6 +256,25 @@ describe('NOTES-23 AC-5 Save to nexnotes', () => {
     expect(created).toHaveLength(0)
   })
 
+  it('NOTES-23 AC-5 the title field takes 120 characters, as the server keeps them, and counts the last 20', async () => {
+    stash[ID] = { title: 'Rezept', text: '', url: 'https://kochen.example/x', files: [] }
+    await open()
+    const field = find('share-title') as HTMLInputElement
+    expect(field.maxLength).toBe(120)
+    expect(find('share-title-count')).toBeNull()
+    type(field, 'x'.repeat(99))
+    expect(find('share-title-count')).toBeNull()
+    type(field, 'x'.repeat(100))
+    expect(find('share-title-count')?.textContent).toBe(t('pwa.share.titleCount', { chars: 100, max: 120 }))
+    expect(field.getAttribute('aria-describedby')).toBe('share-title-count')
+    type(field, 'ü'.repeat(120))
+    const count = find('share-title-count')!
+    expect(count.textContent).toBe('120 von 120 Zeichen')
+    expect(count.className).toContain('text-warn-500')
+    await click(find('share-save'))
+    expect(created[0].title).toBe('ü'.repeat(120))
+  })
+
   it('NOTES-23 AC-5 shared text is kept as text, never read as Markdown', async () => {
     stash[ID] = { title: 'Notiz', text: '# keine Überschrift\n- kein Punkt\n**nicht fett** [kein](link)', url: '', files: [] }
     await open()
