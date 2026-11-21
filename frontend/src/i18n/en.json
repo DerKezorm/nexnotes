@@ -175,6 +175,7 @@
     "empty": "This is where you will connect iPhone and iPad, nextasks and AI tools (MCP), and manage the vault password."
   },
   "errors": {
+    "folder_not_found": "This folder does not exist.",
     "internal_error": "That did not work.",
     "account_blocked": "This account is blocked. Ask the operator.",
     "account_locked": "Too many wrong passwords. The account waits a quarter of an hour.",
@@ -211,6 +212,7 @@
     "network": "The server cannot be reached.",
     "no_offer": "There is no address to take.",
     "not_found": "Not found, or not open to you.",
+    "note_id_taken": "A note with this id belongs to another account.",
     "oidc_account": "This account signs in through the provider.",
     "operator_network": "The operator's settings are open only from the home network.",
     "operator_only": "Only the operator may do this.",
