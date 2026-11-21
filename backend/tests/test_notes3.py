@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import threading
 import time
 import uuid
+from collections import defaultdict
 
 import pytest
 from fastapi.testclient import TestClient
 from pycrdt import XmlFragment
 
-from app.db import SessionLocal
+from app.db import BUSY_SECONDS, SessionLocal
 from app.models import FOLDER_NORMAL, Account, Folder, Note, NoteUpdate
 from app.notedoc import doc as notedoc
 from app.notedoc import edit
@@ -223,18 +225,58 @@ def test_notes3_ac8_the_head_names_folder_path_created_and_changed(client, opera
 # --- AC-9, AC-10, EC-4, EC-5, EC-12 -------------------------------------------------------------------------------
 
 
-def test_notes3_ac10_a_tab_closed_without_a_title_gets_the_suggestion(client, operator):
+@pytest.fixture
+def after_leave(monkeypatch: pytest.MonkeyPatch) -> dict[str, threading.Event]:
+    """Set per note once the work after the last one left (``notes.after_last_left``) is over: a test waits for that
+    event, not for a guessed time. Its bound is ``AFTER_LEAVE_BOUND``."""
+    done: dict[str, threading.Event] = defaultdict(threading.Event)
+    real = notes.after_last_left
+
+    async def watched(note_id: str, grace: float | None = None) -> None:
+        try:
+            await real(note_id, grace)
+        finally:
+            done[note_id].set()
+
+    monkeypatch.setattr(notes, "after_last_left", watched)
+    return done
+
+
+#: How long the work after leaving may take: it writes to SQLite, and a write waits up to ``BUSY_SECONDS`` for another
+#: writer's lock (the app's own margin); a check giving up sooner (it was 8 s) fails on a wait the app takes as normal.
+AFTER_LEAVE_BOUND = BUSY_SECONDS + 5
+
+
+def test_notes3_ac10_a_tab_closed_without_a_title_gets_the_suggestion(client, operator, after_leave):
     note = new_note(client)
     live = Live(client, note["id"], token_for(operator))
     assert live.pump(lambda: live.synced)
     edit.append_paragraph(live.doc, "Dentist Tuesday 15:30 confirm, bring the booklet.")
     live.settle(0.2)
     live.close()
-    assert wait_for(lambda: stored(note["id"]).title == "Dentist Tuesday 15:30 confirm")
+    assert after_leave[note["id"]].wait(AFTER_LEAVE_BOUND), "the work after leaving never ended"
+    assert stored(note["id"]).title == "Dentist Tuesday 15:30 confirm"
     assert stored(note["id"]).title_check is True
     assert notedoc.title_of(stored_doc(note["id"])) == "Dentist Tuesday 15:30 confirm"
     item = client.get("/api/notes").json()[0]
     assert item["title_check"] is True
+
+
+def test_notes3_ac10_another_app_stopping_meanwhile_does_not_cancel_the_suggestion(client, operator, monkeypatch,
+                                                                                 after_leave):
+    """The wait after the last one left belongs to its own loop: another app in the same process stopping (a second
+    test client, a real server in a thread) does not cancel it."""
+    monkeypatch.setattr(notes, "LEAVE_GRACE", 2.0)  # still waiting while the other app starts and stops
+    note = new_note(client)
+    live = Live(client, note["id"], token_for(operator))
+    assert live.pump(lambda: live.synced)
+    edit.append_paragraph(live.doc, "Return the drill to the neighbour")
+    live.settle(0.2)
+    live.close()
+    with new_client(operator):  # starts and stops an app of its own while the suggestion waits
+        pass
+    assert after_leave[note["id"]].wait(AFTER_LEAVE_BOUND), "the work after leaving never ended"
+    assert stored(note["id"]).title == "Return the drill to the neighbour"
 
 
 def test_notes3_ac9_taking_the_suggestion_marks_it_for_checking(client, operator):

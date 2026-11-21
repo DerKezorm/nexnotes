@@ -249,10 +249,13 @@ def nudge_all() -> None:
 
 
 async def shutdown() -> None:
-    """At a stop: every room folded, every connection told to come back (NOTES-12 EC-7)."""
-    for task in list(_leaving):
-        task.cancel()
+    """At a stop: every room folded, every connection told to come back (NOTES-12 EC-7). Only this loop's own: the
+    tests run several apps at once (a second client, a real server), and one stopping must not cancel what waits in
+    another's loop (from another thread, too)."""
     loop = asyncio.get_running_loop()
+    for task in list(_leaving):
+        if task.get_loop() is loop:
+            task.cancel()
     found = _rooms.pop(loop, None)
     if found is not None:
         await found.shutdown()
@@ -490,6 +493,9 @@ async def after_last_left(note_id: str, grace: float | None = None) -> None:
             await suggest(note_id)
     except notedoc.FormatError:
         return
+    except Exception:
+        # A task nobody awaits: without this its failure (a database lock that did not end) would vanish unseen.
+        logger.exception("Tidying a note after the last one left failed note=%s", note_id)
 
 
 def schedule_after_leave(note_id: str) -> None:
