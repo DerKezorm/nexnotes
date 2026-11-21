@@ -54,7 +54,12 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
   const place = !wide && folder?.name ? folder.name : ''
   return (
     <div
-      className={'group relative flex h-full items-center gap-3 rounded-[10px] px-2.5 ' + (chosen ? 'nn-chosen' : 'hover:bg-ink-800')}
+      // The keyboard's focus ring goes round the whole row with its rounding, the "…" included; never after a click.
+      className={
+        'group relative flex h-full items-center gap-3 rounded-[10px] px-2.5 outline-accent-600 has-[a:focus-visible]:outline-2 has-[a:focus-visible]:outline-offset-2 ' +
+        (chosen ? 'nn-chosen' : 'hover:bg-ink-800')
+      }
+      data-testid="note-row-box"
       draggable={Boolean(onDragStart)}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -74,7 +79,7 @@ export function NoteRow({ item, href, chosen, date, folder, wide, onOpen, onMenu
         onClick={onOpen}
         aria-current={chosen ? 'page' : undefined}
         data-testid="note-row"
-        className="flex min-w-0 flex-1 flex-col gap-1 py-2 outline-offset-2"
+        className="flex min-w-0 flex-1 flex-col gap-1 py-2 focus-visible:outline-none"
       >
         <span className="flex min-w-0 items-center gap-2">
           {dot && <span aria-label={t('noteList.colorMark')} role="img" className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: dot }} data-testid="note-color" />}

@@ -58,7 +58,8 @@ export function NoteTile({ item, href, chosen, date, onOpen, onMenu, onDragStart
         aria-current={chosen ? 'page' : undefined}
         data-testid="note-tile"
         className={
-          'flex h-full min-w-0 flex-col gap-[7px] overflow-hidden rounded-[12px] border bg-ink-850 p-3 hover:bg-ink-800 ' +
+          // The whole tile is the link: the keyboard's focus ring follows its rounding, never after a click.
+          'flex h-full min-w-0 flex-col gap-[7px] overflow-hidden rounded-[12px] border bg-ink-850 p-3 outline-accent-600 hover:bg-ink-800 focus-visible:outline-2 focus-visible:outline-offset-2 ' +
           (chosen ? 'border-accent-600' : 'border-ink-700')
         }
         style={stripe ? { borderTop: `4px solid ${stripe}` } : undefined}
