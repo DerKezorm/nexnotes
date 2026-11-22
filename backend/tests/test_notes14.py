@@ -460,7 +460,8 @@ def test_notes14_ac6_the_relay_gets_only_what_is_encrypted_for_the_device(client
     assert "Eier" not in json.dumps(body) and "Anna" not in json.dumps(body)
     shown = json.loads(push_crypto.decrypt(body["enc"], private))
     assert shown == {"title": "Anna in “Einkauf Samstag”", "text": "+ Eier", "note_id": note_id, "at": 2,
-                     "type": "changed"}
+                     "type": "changed", "account": operator.id, "server": apppush.server_id(), "who": "Anna",
+                     "note": "Einkauf Samstag", "anchor": {"block": 2, "text": "Eier"}, "locked": False}
 
 
 # --- EC-1: a locked note tells no content --------------------------------------------------------------------------------

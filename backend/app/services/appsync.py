@@ -56,7 +56,7 @@ KEEP_DAYS = 400
 
 #: Columns of a note whose change the app has to hear of. The text comes as a new row of ``note_updates``.
 NOTE_COLUMNS = ("title", "title_check", "folder_id", "paper", "icon", "color", "pinned_at", "deleted_at", "locked",
-                "owner_id", "updated_at", "created_at")
+                "owner_id", "updated_at", "updated_by_id", "created_at")
 FOLDER_COLUMNS = ("name", "parent_id", "icon", "color", "position", "deleted_at", "owner_id", "kind")
 SMART_COLUMNS = ("name", "preset", "match", "conditions", "icon", "color", "position", "owner_id")
 #: Columns of an attachment's text whose change the notes naming it have to bring (``texts``).
@@ -491,6 +491,11 @@ class View:
     pins: set[str]
     tags: dict[str, list[str]] = field(default_factory=dict)
     texts: dict[str, str] = field(default_factory=dict)
+    #: The people a page names (owners of things of others, who wrote last): id to ``{"id", "name", "avatar"}``.
+    people: dict[int, dict[str, Any]] = field(default_factory=dict)
+    #: Own notes shared with somebody by themselves, and own folders shared themselves or through one above.
+    shared_notes: set[str] = field(default_factory=set)
+    shared_folders: set[str] = field(default_factory=set)
 
     def folder_ref(self, folder_id: str | None, owner_id: int) -> str | None:
         """``inbox`` for the own inbox; a folder of somebody else only when it is shared too, else none (the note
@@ -503,6 +508,9 @@ class View:
             return folder_id
         return None
 
+    def person(self, account_id: int | None) -> dict[str, Any] | None:
+        return self.people.get(account_id) if account_id is not None else None
+
     def note(self, row: Note) -> dict[str, Any]:
         own = row.owner_id == self.account_id
         return {
@@ -513,6 +521,10 @@ class View:
             "right": "owner" if own else self.rights.note(row),
             "tags": [] if row.locked else self.tags.get(row.id, []),
             "texts": "" if row.locked else self.texts.get(row.id, ""),
+            # Sharing (NOTESIOS-14): whose a note of somebody else is, whether an own one is shared, who wrote last.
+            "owner": None if own else self.person(row.owner_id),
+            "shared": own and (row.id in self.shared_notes or row.folder_id in self.shared_folders),
+            "updated_by": self.person(row.updated_by_id),
             "created_at": _iso(row.created_at), "updated_at": _iso(row.updated_at), "deleted_at": _iso(row.deleted_at),
             "seq": int(row.sync_seq or 0),
         }
@@ -525,8 +537,39 @@ class View:
         parent = row.parent_id if own or row.parent_id in self.rights.folders else None
         return {
             "id": row.id, "name": row.name, "parent_id": parent, "icon": row.icon or "", "color": row.color or "",
-            "position": row.position, "deleted_at": _iso(row.deleted_at), "seq": int(row.sync_seq or 0),
+            "position": row.position,
+            "right": "owner" if own else self.rights.folders.get(row.id, READ),
+            "owner": None if own else self.person(row.owner_id),
+            "shared": own and row.id in self.shared_folders,
+            "deleted_at": _iso(row.deleted_at), "seq": int(row.sync_seq or 0),
         }
+
+
+def _people(db: Session, ids: set[int]) -> dict[int, dict[str, Any]]:
+    """Name and picture of the accounts a page names; an account gone names nobody."""
+    wanted = [account_id for account_id in ids if account_id is not None]
+    found: dict[int, dict[str, Any]] = {}
+    for start in range(0, len(wanted), 500):
+        for row in db.execute(select(Account.id, Account.display_name, Account.name, Account.avatar_at)
+                              .where(Account.id.in_(wanted[start:start + 500]), Account.deleted_at.is_(None))):
+            found[row.id] = {"id": row.id, "name": row.display_name or row.name, "avatar": _iso(row.avatar_at) or ""}
+    return found
+
+
+def _own_shared(db: Session, account_id: int) -> tuple[set[str], set[str]]:
+    """The account's own notes shared by themselves, and its folders shared by themselves or through a folder above
+    (with somebody whose account is alive), as the lists mark them (NOTES-13 AC-7)."""
+    from .shares import _below, _owned_shares, _tree_of
+
+    shares = _owned_shares(db, account_id)
+    notes = {share.note_id for share in shares if share.note_id}
+    folders: set[str] = set()
+    roots = [share.folder_id for share in shares if share.folder_id]
+    if roots:
+        children = _below(db, account_id)
+        for root in roots:
+            folders |= _tree_of(children, root)
+    return notes, folders
 
 
 def tags_of(db: Session, note_ids: list[str]) -> dict[str, list[str]]:
@@ -621,12 +664,19 @@ def text_stamps(db: Session, account_id: int, notes: dict[str, int]) -> dict[str
     return {note_id: _stamp(found) for note_id, found in parts.items()}
 
 
-def view_of(db: Session, account_id: int, note_ids: Iterable[str] = (), rows: Iterable[Note] = ()) -> View:
+def view_of(db: Session, account_id: int, note_ids: Iterable[str] = (), rows: Iterable[Note] = (),
+            folders: Iterable[Folder] = ()) -> View:
     wanted = list(note_ids)
+    rows = list(rows)
+    folders = list(folders)
     pins = set(db.scalars(select(SharePin.note_id).where(SharePin.account_id == account_id,
                                                          SharePin.note_id.in_(wanted)))) if wanted else set()
+    named = {row.updated_by_id for row in rows} | {row.owner_id for row in rows if row.owner_id != account_id}
+    named |= {row.owner_id for row in folders if row.owner_id != account_id}
+    shared_notes, shared_folders = _own_shared(db, account_id) if rows or folders else (set(), set())
     return View(account_id=account_id, inbox=inbox_id(db, account_id), rights=rights_of(db, account_id), pins=pins,
-                tags=tags_of(db, wanted) if wanted else {}, texts=texts_of(db, account_id, rows))
+                tags=tags_of(db, wanted) if wanted else {}, texts=texts_of(db, account_id, rows),
+                people=_people(db, named), shared_notes=shared_notes, shared_folders=shared_folders)
 
 
 def account_out(db: Session, account: Account) -> dict[str, Any]:
@@ -765,7 +815,7 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
     if full and not more and since is not None:
         stones = list(db.scalars(select(AppTombstone).where(
             _stones(account.id), AppTombstone.seq > since, AppTombstone.seq <= value).order_by(AppTombstone.seq)))
-    view = view_of(db, account.id, [row.id for row in note_rows], note_rows)
+    view = view_of(db, account.id, [row.id for row in note_rows], note_rows, folder_rows)
     out: dict[str, Any] = {
         "cursor": bound if more else value,
         "full": full,

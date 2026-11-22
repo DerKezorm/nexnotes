@@ -313,9 +313,10 @@ def inbox_view(db: Session, account_id: int) -> dict[str, Any]:
 
 
 def create(db: Session, account_id: int, *, name: str, parent_id: str | None = None, icon: str = "",
-           color: str = "", folder_id: str | None = None) -> dict[str, Any]:
+           color: str = "", folder_id: str | None = None, rename_taken: bool = False) -> dict[str, Any]:
     """A new folder at the top or in any other folder, at any depth (AC-1). ``folder_id``: the id a device made for it
-    (NOTES-24); otherwise a new one."""
+    (NOTES-24); otherwise a new one. ``rename_taken``: a name taken beside it becomes "Name (2)" instead of being
+    refused (folders brought over from another account, NOTESIOS-13 EC-3)."""
     clean = checked_name(name)
     _check_style(icon, color)
     _write_lock(db)
@@ -325,7 +326,9 @@ def create(db: Session, account_id: int, *, name: str, parent_id: str | None = N
             raise error("folder_target_not_allowed", "Folders cannot go into the inbox.")
     siblings = _siblings(db, account_id, parent_id)
     if _name_taken(siblings, clean):
-        raise _refuse_taken(clean)
+        if not rename_taken:
+            raise _refuse_taken(clean)
+        clean = _free_name(siblings, clean)
     folder = Folder(id=folder_id or new_uuid(), owner_id=account_id, parent_id=parent_id, kind=FOLDER_NORMAL,
                     name=clean, icon=icon or DEFAULT_FOLDER_ICON, color=folder_color(color),
                     position=_position_at_end(siblings))

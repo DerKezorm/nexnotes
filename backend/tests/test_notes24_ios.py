@@ -635,7 +635,7 @@ def test_notes24_folge6_hello_and_me_say_what_the_server_can(client, operator, m
     from app.services import settings_service
 
     hello = client.get("/api/app/1/hello").json()
-    assert hello["features"] == ["smart_folders", "history", "trash", "gallery", "texts"]
+    assert hello["features"][:5] == ["smart_folders", "history", "trash", "gallery", "texts"]
     monkeypatch.setattr(ocr, "engine_info", lambda **_: ocr.EngineInfo(False, ()))
     device = paired(client)
     me = device.get("/me").json()

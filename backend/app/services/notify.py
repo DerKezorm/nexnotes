@@ -203,9 +203,16 @@ def _names(db: Session, ids: list[int], language: str) -> str:
     return ", ".join(names[:-1]) + TEXTS[language]["and"] + names[-1]
 
 
+#: Characters of the line a notification names as the place of the change (``anchor``, NOTESIOS-15 AC-3).
+ANCHOR_CHARS = 80
+
+
 def message(db: Session, receiver: Account, note: Note, writers: list[int], items: list[tuple[str, str]],
-            at: int | None, *, locked: bool, trashed_by: int | None) -> dict[str, Any]:
-    """The notification for one receiver, in their language: title, text, and where a tap leads (AC-2, AC-5)."""
+            at: int | None, *, locked: bool, trashed_by: int | None, line: str = "") -> dict[str, Any]:
+    """The notification for one receiver, in their language: title, text, and where a tap leads (AC-2, AC-5). For the
+    app also whose it is (``account``; ``server`` comes with ``apppush.plaintext``), who and which note apart
+    (``who``, ``note``: the app lock shows only these, NOTESIOS-15 AC-7) and the place (``anchor``: the index of the
+    text block and its line, never of a locked note)."""
     language = language_of(receiver)
     texts = TEXTS[language]
     title = note.title or texts["untitled"]
@@ -213,7 +220,8 @@ def message(db: Session, receiver: Account, note: Note, writers: list[int], item
     if trashed_by is not None:
         names = _names(db, [trashed_by], language)
         return {"title": _cut(title, 100), "text": texts["trashed"].format(names=names, note=_cut(title, 60)),
-                "note_id": note.id, "at": None, "url": "/trash", "type": "trashed", "locked": locked}
+                "note_id": note.id, "at": None, "url": "/trash", "type": "trashed", "locked": locked,
+                "account": receiver.id, "who": names, "note": title, "anchor": None}
     names = _names(db, writers, language)
     if locked:
         text = texts["locked"]
@@ -222,8 +230,10 @@ def message(db: Session, receiver: Account, note: Note, writers: list[int], item
         text = summary(items, language) or texts["changed" if len(writers) == 1 else "changed_many"]
     if at is not None:
         url += f"?change={at}"
+    anchor = {"block": at, "text": _cut(line, ANCHOR_CHARS)} if at is not None else None
     return {"title": _cut(texts["title"].format(names=names, note=_cut(title, 60)), 140), "text": text,
-            "note_id": note.id, "at": at, "url": url, "type": "changed", "locked": locked}
+            "note_id": note.id, "at": at, "url": url, "type": "changed", "locked": locked,
+            "account": receiver.id, "who": names, "note": title, "anchor": anchor}
 
 
 # --- The switch ---------------------------------------------------------------------------------------------------
@@ -482,8 +492,30 @@ def _shows(session_id: int, note_id: str) -> bool:
     return found is not None and found[0] == note_id and found[1] > clock.now()
 
 
+#: Which app device shows which note right now (NOTESIOS-15 EC-6): device (token) id -> (note id, until).
+_device_viewing: dict[int, tuple[str, datetime]] = {}
+
+
+def device_viewing(device_id: int, note_id: str | None) -> None:
+    """An app device says it shows ``note_id`` in view (``None``: none any more), as a browser does (``viewing``)."""
+    now = clock.now()
+    for key, (_note, until) in list(_device_viewing.items()):
+        if until <= now:
+            _device_viewing.pop(key, None)
+    if note_id:
+        _device_viewing[device_id] = (note_id, now + VIEWING_FOR)
+    else:
+        _device_viewing.pop(device_id, None)
+
+
+def _device_shows(device_id: int, note_id: str) -> bool:
+    found = _device_viewing.get(device_id)
+    return found is not None and found[0] == note_id and found[1] > clock.now()
+
+
 def forget_viewing() -> None:
     _viewing.clear()
+    _device_viewing.clear()
 
 
 def _enqueue(db: Session, account: Account, note_id: str, payload: dict[str, Any]) -> int:
@@ -498,6 +530,8 @@ def _enqueue(db: Session, account: Account, note_id: str, payload: dict[str, Any
         count += 1
     if apppush.relay_url():
         for device, _token in apppush.devices(db, account.id):
+            if _device_shows(device.token_id, note_id):
+                continue
             db.add(NotifyOutbox(account_id=account.id, channel="app", target_id=device.token_id, payload=payload,
                                 created_at=now, next_try_at=now))
             count += 1
@@ -523,8 +557,11 @@ def _bundle(db: Session, note_id: str) -> int:
     locked = _locked(db, note_id)
     items: list[tuple[str, str]] = []
     at: int | None = None
+    line = ""
     if trashed_by is None and not locked:
-        items, at = changes(baseline.lines or [], _lines_now(db, note_id))
+        now_lines = _lines_now(db, note_id)
+        items, at = changes(baseline.lines or [], now_lines)
+        line = str(now_lines[at][0]) if at is not None and at < len(now_lines) else ""
         if baseline.trashed_by is not None and not items:
             # Put in the trash and taken back right after: nothing to tell.
             return 0
@@ -542,7 +579,7 @@ def _bundle(db: Session, note_id: str) -> int:
         on, _ = _nearest(db, account_id, note.id, path)
         if not on or notes.right_to(db, receiver, note) not in (Access.READ, Access.WRITE):
             continue
-        payload = message(db, receiver, note, others, items, at, locked=locked, trashed_by=trashed_by)
+        payload = message(db, receiver, note, others, items, at, locked=locked, trashed_by=trashed_by, line=line)
         queued += _enqueue(db, receiver, note.id, payload)
     return queued
 

@@ -71,7 +71,7 @@ WAIT_RECHECK = 5.0
 #: Notes one ``sync`` takes at most.
 SYNC_NOTES = 50
 #: The parts of the interface beyond 0.4 this server has (``hello``): an app tells an older server by their absence.
-FEATURES = ("smart_folders", "history", "trash", "gallery", "texts")
+FEATURES = ("smart_folders", "history", "trash", "gallery", "texts", "import", "sharing", "live", "notify")
 
 
 def _refused(code: str, text: str, status: int, retry: int | None = None) -> HTTPException:
@@ -238,6 +238,8 @@ def me(found: Device) -> dict[str, Any]:
         "offers": {"push": bool(apppush.relay_url()), "share_links": share_links, "link_previews": link_previews,
                    "ocr": bool(ocr.engine_info().available)},
         "storage": {"used": stored["used"], "limit": stored["limit"], "full": stored["full"]},
+        # The mark notifications name this server by (NOTESIOS-15): the same for every account and call.
+        "server_id": apppush.server_id(),
     }
 
 
@@ -364,8 +366,39 @@ class NewNote(BaseModel):
     update: str = Field(max_length=4 * s.MAX_UPDATE)
     paper: str | None = Field(default=None, max_length=16)
     icon: str | None = Field(default=None, max_length=64)
+    color: str | None = Field(default=None, max_length=16)
+    pinned: bool | None = None
     created_at: datetime | None = None
+    updated_at: datetime | None = None
     origin: str = Field(default="", max_length=100)
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    return value.replace(tzinfo=UTC) if value is not None and value.tzinfo is None else value
+
+
+def check_note_color(color: str | None) -> None:
+    from ..services.folders import FOLDER_COLORS
+
+    if color and color not in FOLDER_COLORS:
+        raise error("note_color_unknown", "Choose a color from the list.", 422)
+
+
+def finish_new(account: AccountRow, note_id: str, *, color: str | None, pinned: bool | None,
+               updated_at: datetime | None) -> None:
+    """What a note brought from elsewhere keeps besides its text (NOTESIOS-13): colour, pin and when it was last
+    changed there (not after now). Only on its first creation."""
+    with SessionLocal() as db:
+        note = db.get(Note, note_id)
+        if note is None:
+            return
+        if color:
+            note.color = color
+        if pinned:
+            notes_list.set_pinned(db, account, note_id, True)
+        if updated_at is not None:
+            note.updated_at = min(updated_at.astimezone(UTC), datetime.now(UTC))
+        db.commit()
 
 
 def _folder(db: Any, account: AccountRow, folder_id: str | None) -> str | None:
@@ -391,15 +424,15 @@ def _discard(note_id: str) -> None:
             db.commit()
 
 
-@router.post("/notes", status_code=201, summary="A new note with the device's id; the same id again is the same note")
-async def create(found: Device, body: NewNote, response: Response) -> dict[str, Any]:
-    account = found.account
+async def make_note(account: AccountRow, body: NewNote) -> tuple[bool, Any]:
+    """A note with the device's id and its update (``POST /notes``, ``POST /import``): whether it is new, and what
+    the sync gave. The same id again applies the update once more (nothing doubles); colour, pin and times count on
+    the first creation only."""
     update = _unb64(body.update)
     if not update:
         raise error("invalid_update", "The update is not valid.", 422, fields=["update"])
-    made = body.created_at
-    if made is not None and made.tzinfo is None:
-        made = made.replace(tzinfo=UTC)
+    made = _utc(body.created_at)
+    check_note_color(body.color)
 
     def make() -> bool:
         with SessionLocal() as db:
@@ -415,6 +448,16 @@ async def create(found: Device, body: NewNote, response: Response) -> dict[str, 
             await asyncio.to_thread(_discard, body.id)
         status = {"not_found": 404, "no_right": 403, "note_locked": 409, "too_large": 413}.get(done.error, 422)
         raise error(done.error, "The update was not taken.", status)
+    if new:
+        await asyncio.to_thread(finish_new, account, body.id, color=body.color, pinned=body.pinned,
+                                updated_at=_utc(body.updated_at))
+    return new, done
+
+
+@router.post("/notes", status_code=201, summary="A new note with the device's id; the same id again is the same note")
+async def create(found: Device, body: NewNote, response: Response) -> dict[str, Any]:
+    account = found.account
+    new, done = await make_note(account, body)
     if not new:
         response.status_code = 200
     return await asyncio.to_thread(_out, account, body.id, sv=_b64(done.state_vector))

@@ -218,9 +218,29 @@ def _origin_ok(socket: WebSocket) -> bool:
     return bool(host) and host in allowed
 
 
-def _admit(token: str, note_id: str) -> tuple[Any, Access, bool]:
+#: The token of a paired device opens nothing (disconnected, its account blocked): the app signs in anew.
+CLOSE_SIGN_IN = 4401
+
+
+def _device_token(socket: WebSocket) -> str | None:
+    """The token of a paired device in ``Authorization`` (the app, NOTESIOS-14 AC-4). A browser cannot set this
+    header on a WebSocket, so it never stands in for a cookie a page of another site could use."""
+    header = socket.headers.get("authorization", "")
+    return header[7:].strip() if header[:7].lower() == "bearer " else None
+
+
+def _admit(token: str, note_id: str, *, device: bool = False) -> tuple[Any, Access, bool]:
     with SessionLocal() as db:
-        account = session_account(db, token)
+        if device:
+            from ..models import Account as AccountRow
+            from ..services import devices
+
+            try:
+                account = db.get(AccountRow, devices.authenticate(db, token).account.id)
+            except devices.Refusal:
+                return None, Access.NONE, False
+        else:
+            account = session_account(db, token)
         if account is None or totp.setup_required(db, account):
             return None, Access.NONE, False
         access = notes.access_to(db, account, db.get(Note, note_id) if len(note_id) <= 36 else None)
@@ -242,8 +262,13 @@ async def live(socket: WebSocket, note_id: str) -> None:
     if not _origin_ok(socket):
         await _refuse(socket, CLOSE_FORBIDDEN)
         return
-    token = socket.cookies.get(SESSION_COOKIE, "")
-    account, access, locked = await asyncio.to_thread(_admit, token, note_id)
+    bearer = _device_token(socket)
+    device = bearer is not None
+    token = bearer if device else socket.cookies.get(SESSION_COOKIE, "")
+    account, access, locked = await asyncio.to_thread(_admit, token, note_id, device=device)
+    if device and account is None:
+        await _refuse(socket, CLOSE_SIGN_IN)
+        return
     if locked:
         # Locked in the vault (NOTES-16): no live room; the page opens the note with the vault password.
         await _refuse(socket, CLOSE_LOCKED)
@@ -258,7 +283,7 @@ async def live(socket: WebSocket, note_id: str) -> None:
     rooms = notes.rooms()
     try:
         await rooms.serve(socket, note_id, account_id=account.id, name=account.display_name or account.name,
-                          can_write=access == Access.WRITE, session=notes.LiveSession(token, note_id))
+                          can_write=access == Access.WRITE, session=notes.LiveSession(token, note_id, device=device))
     except Exception as exc:
         if type(exc).__name__ not in ("WebSocketDisconnect", "ClientDisconnected", "CancelledError"):
             logger.exception("Live connection failed note=%s", note_id)

@@ -44,11 +44,14 @@ class Live:
         while cls.opened:
             cls.opened.pop().disconnect(wait=False)
 
-    def __init__(self, client: TestClient, note_id: str, token: str | None = None, *, doc: Doc | None = None) -> None:
+    def __init__(self, client: TestClient, note_id: str, token: str | None = None, *, doc: Doc | None = None,
+                 headers: dict[str, str] | None = None) -> None:
         Live.opened.append(self)
         self.client = client
         self.note_id = note_id
         self.token = token
+        #: Headers of the handshake besides the cookie (a paired device's token, an ``Origin``).
+        self.extra_headers = dict(headers or {})
         self.doc = doc or Doc()
         self.doc.get("body", type=XmlFragment)
         self.doc.get("title", type=Text)
@@ -65,6 +68,7 @@ class Live:
 
     def connect(self) -> None:
         headers = {"cookie": f"{SESSION_COOKIE}={self.token}"} if self.token else {}
+        headers.update(self.extra_headers)
         self.closed = None
         self.synced = False
         self._queue = queue.Queue()

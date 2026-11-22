@@ -249,6 +249,10 @@ def disconnect(db: Session, account_id: int, token_id: int) -> bool:
     db.commit()
     if gone_rows:
         logger.info("Device disconnected token_id=%s", token_id)
+        # Its open live connections close at once (NOTESIOS-14), as when a session ends.
+        from . import notes
+
+        notes.nudge_all()
     return bool(gone_rows)
 
 

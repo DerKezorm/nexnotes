@@ -67,10 +67,26 @@ def key_valid(value: str) -> bool:
     return True
 
 
+def server_id() -> str:
+    """A fixed mark of this server (``me.server_id``), which every notification names so that the app finds the
+    account it belongs to (NOTESIOS-15 EC-5): a keyed hash, nothing to learn from it."""
+    import hashlib
+    import hmac
+
+    from ..security import server_key
+
+    return hmac.new(server_key(), b"nexnotes-server-id", hashlib.sha256).hexdigest()[:16]
+
+
 def plaintext(message: dict[str, object]) -> bytes:
-    """What the app decrypts: compact, the fields in a fixed order."""
+    """What the app decrypts: compact, the fields in a fixed order. Since interface 0.6 also whose it is
+    (``account``, ``server``), who and which note apart (``who``, ``note``, for the app lock) and the place of the
+    change (``anchor``)."""
     fields = {"title": str(message.get("title") or "")[:TITLE_MAX], "text": str(message.get("text") or "")[:TEXT_MAX],
-              "note_id": message.get("note_id"), "at": message.get("at"), "type": message.get("type") or "changed"}
+              "note_id": message.get("note_id"), "at": message.get("at"), "type": message.get("type") or "changed",
+              "account": message.get("account"), "server": server_id(),
+              "who": str(message.get("who") or "")[:TITLE_MAX], "note": str(message.get("note") or "")[:TITLE_MAX],
+              "anchor": message.get("anchor"), "locked": bool(message.get("locked"))}
     return json.dumps(fields, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
 
 

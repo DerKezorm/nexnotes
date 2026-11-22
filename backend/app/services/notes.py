@@ -212,10 +212,12 @@ def _after_update(db: Session, note_id: str, account_id: int | None) -> None:
 
 @dataclass(frozen=True)
 class LiveSession:
-    """What the check of a live connection looks at again: the browser's session and the note."""
+    """What the check of a live connection looks at again: the browser's session (or, ``device``, the token of a
+    paired device, NOTESIOS-14) and the note."""
 
     token: str
     note_id: str
+    device: bool = False
 
 
 class SqlNoteStore:
@@ -289,7 +291,16 @@ def _check_now(peer: Peer) -> Access:
     from ..security import session_account
 
     with SessionLocal() as db:
-        account = session_account(db, session.token)
+        if session.device:
+            from . import devices
+
+            try:
+                account = devices.authenticate(db, session.token).account
+            except devices.Refusal:
+                # Disconnected, or its account blocked meanwhile.
+                return Access.NONE
+        else:
+            account = session_account(db, session.token)
         if account is None or account.id != peer.account_id:
             return Access.NONE
         if busy(db, session.note_id):

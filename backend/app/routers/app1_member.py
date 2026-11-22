@@ -34,7 +34,7 @@ router = APIRouter(prefix="/api/app/1", tags=["app"])
 
 
 def _folder_out(db: Any, account_id: int, folder: Folder) -> dict[str, Any]:
-    return appsync.view_of(db, account_id).folder(folder)
+    return appsync.view_of(db, account_id, folders=[folder]).folder(folder)
 
 
 def _parent(db: Any, account_id: int, parent_id: str | None) -> str | None:
@@ -151,7 +151,8 @@ def order_folders(found: Device, body: OrderIn) -> dict[str, Any]:
                                                if parent is None else Folder.parent_id == parent,
                                                Folder.deleted_at.is_(None), Folder.kind != "inbox")
                           .order_by(Folder.position, Folder.name))
-        view = appsync.view_of(db, account.id)
+        rows = list(rows)
+        view = appsync.view_of(db, account.id, folders=rows)
         return {"folders": [view.folder(row) for row in rows]}
 
 
