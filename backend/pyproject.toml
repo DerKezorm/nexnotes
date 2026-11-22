@@ -25,6 +25,8 @@ extend-immutable-calls = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+# A test that hangs fails after five minutes instead of holding the run (the longest take seconds).
+timeout = 300
 markers = [
     "timing: measures time against a limit; runs serially on its own (pytest -m timing), skipped in parallel workers",
 ]

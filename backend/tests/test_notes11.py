@@ -655,6 +655,30 @@ def test_notes11_without_tesseract_a_picture_waits_and_says_so(client, operator,
     assert found["items"][0]["state"] == "pending"
 
 
+def test_notes11_ec4_a_worker_without_tesseract_while_the_server_finds_it_reads_the_file_once(client, operator,
+                                                                                               monkeypatch):
+    # The server finds Tesseract, the worker cannot start it: the attachment waits for the next start instead of
+    # coming back each time the queue runs dry (a worker after worker, for ever).
+    asked: list[dict[str, Any]] = []
+
+    def no_tesseract_in_the_worker(request: dict[str, Any]) -> dict[str, Any]:
+        asked.append(request)
+        return {"ok": True, "pages": 1, "read": [1], "unavailable": True,
+                "results": [{"page": 1, "state": "unavailable", "source": "", "text": ""}]}
+
+    monkeypatch.setattr(ocr, "ENGINE", no_tesseract_in_the_worker)
+    monkeypatch.setattr(ocr, "engine_info", lambda **_: ocr.EngineInfo(True, tuple(ocr.TESSERACT)))
+    note = new_note(client, title="Ohne")
+    row = attach(client, note["id"], picture(), "Ohne.png", operator.id)
+    assert workqueue.run_pending(limit=5) == 1
+    assert len(asked) == 1
+    assert text_of(client, row["id"])["state"] == "unavailable"
+    # At the next start Tesseract is there: it is read again.
+    assert ocr.catch_up() == 1
+    assert workqueue.run_pending(limit=5) == 1
+    assert len(asked) == 2
+
+
 # --- EC-6: a long PDF does not hold up the others ---------------------------------------------------------------------
 
 

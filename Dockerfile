@@ -1,7 +1,7 @@
 # nexnotes as a single container.
 #
-# Two stages: the interface is built first, then only the finished files go into the image. Node and
-# node_modules stay out; at runtime FastAPI serves the built files itself.
+# Three stages: the interface and SQLite's library are built first, then only the finished files go into the image.
+# Node, node_modules and the compiler stay out; at runtime FastAPI serves the built files itself.
 
 # --- Stage 1: build the interface ------------------------------------------------------------------
 #
@@ -18,7 +18,30 @@ COPY frontend/ ./
 RUN npm run build
 
 
-# --- Stage 2: runtime ------------------------------------------------------------------------------
+# --- Stage 2: SQLite -------------------------------------------------------------------------------
+#
+# A current SQLite from sqlite.org instead of Debian's (3.46): the search's trigram index is many times faster with it.
+# docker/sqlite.sh fetches the source, checks its SHA3-256 and builds the library; CI builds its tests with the same
+# script. Compiled on the build platform for the target (a cross compiler for arm64), not under emulation. Only
+# /out/libsqlite3.so.0 moves on from here.
+FROM --platform=$BUILDPLATFORM python:3.14-slim AS sqlite
+ARG TARGETARCH
+COPY docker/sqlite.sh /sqlite.sh
+RUN set -eu; \
+    case "$TARGETARCH" in \
+        amd64) triplet=x86_64-linux-gnu; cross="gcc-x86-64-linux-gnu libc6-dev-amd64-cross" ;; \
+        arm64) triplet=aarch64-linux-gnu; cross="gcc-aarch64-linux-gnu libc6-dev-arm64-cross" ;; \
+        *) echo "no SQLite build for $TARGETARCH" >&2; exit 1 ;; \
+    esac; \
+    if [ "$(dpkg --print-architecture)" = "$TARGETARCH" ]; then compiler="gcc libc6-dev"; else compiler="$cross"; fi; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends $compiler; \
+    rm -rf /var/lib/apt/lists/*; \
+    sed -i 's/\r$//' /sqlite.sh; \
+    CC=$triplet-gcc sh /sqlite.sh /out
+
+
+# --- Stage 3: runtime ------------------------------------------------------------------------------
 FROM python:3.14-slim
 
 ENV PYTHONUNBUFFERED=1 \
@@ -38,6 +61,14 @@ RUN apt-get update \
         tesseract-ocr tesseract-ocr-deu tesseract-ocr-eng tesseract-ocr-fra tesseract-ocr-spa tesseract-ocr-ita \
         tesseract-ocr-nld tesseract-ocr-por tesseract-ocr-pol tesseract-ocr-tur \
     && rm -rf /var/lib/apt/lists/*
+
+# SQLite from stage 2. /usr/local/lib comes before Debian's folders for the loader, so Python's sqlite3 module (and
+# anything else of the image) takes this one; the build stops when it does not, or when FTS5 with trigrams is missing.
+COPY --from=sqlite /out/libsqlite3.so.0 /usr/local/lib/libsqlite3.so.0
+RUN ldconfig \
+    && python -c "import sqlite3; assert sqlite3.sqlite_version_info >= (3, 50), sqlite3.sqlite_version; \
+sqlite3.connect(':memory:').execute(\"CREATE VIRTUAL TABLE t USING fts5(x, tokenize='trigram')\"); \
+print('SQLite', sqlite3.sqlite_version)"
 
 COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
