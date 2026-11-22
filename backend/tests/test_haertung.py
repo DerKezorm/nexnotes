@@ -62,7 +62,8 @@ def test_a_lock_from_wrong_passwords_leaves_the_tokens_working(client: TestClien
     assert program.get("/api/auth/me", headers=bearer).status_code == 200
     assert client.post(f"/api/accounts/{anna.id}/block", json={"current_password": PASSWORD}).status_code == 204
     refused = program.get("/api/auth/me", headers=bearer)
-    assert refused.status_code == 401 and _code(refused) == "sign_in_required"
+    # A device's token hears why, as under ``/api/app/1`` (NOTES-24 EC-5, interface 0.5).
+    assert refused.status_code == 401 and _code(refused) == "account_blocked"
 
 
 # --- the brake per sender always counts ---------------------------------------------------------------------------
