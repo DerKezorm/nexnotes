@@ -1,0 +1,14 @@
+{
+  "name": "Guide",
+  "icon": "book",
+  "color": "honey",
+  "folders": [
+    {"dir": "1 Getting started", "icon": "flag", "color": "honey"},
+    {"dir": "2 Writing", "icon": "pen", "color": "orange"},
+    {"dir": "3 Organise and find", "icon": "search", "color": "blue"},
+    {"dir": "4 Several notes", "icon": "presentation", "color": "violet"},
+    {"dir": "5 Sharing", "icon": "people", "color": "green"},
+    {"dir": "6 Safe and sound", "icon": "shield", "color": "teal"},
+    {"dir": "7 Connections", "icon": "link", "color": "sky"}
+  ]
+}

@@ -73,6 +73,8 @@ export function whoText(authors: Author[], t: (key: string, values?: Record<stri
   const names = authors.map((author) => {
     const name = author.name || t('history.someone')
     if (!author.via) return name
+    // The guide (NOTES-26): written by nexnotes, not by a member.
+    if (author.via === 'guide') return t('history.viaGuide')
     // A nexdeck card that ticked an item (NOTES-21) names its key as well, beside the tools of MCP.
     if (author.via.startsWith('nexdeck:')) return t('history.viaDeck', { key: author.via.slice(8) })
     // A program with an API token (NOTES-25 AC-22): the account and the token.

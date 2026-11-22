@@ -1,0 +1,14 @@
+{
+  "name": "Anleitung",
+  "icon": "book",
+  "color": "honey",
+  "folders": [
+    {"dir": "1 Erste Schritte", "icon": "flag", "color": "honey"},
+    {"dir": "2 Schreiben", "icon": "pen", "color": "orange"},
+    {"dir": "3 Ordnen und finden", "icon": "search", "color": "blue"},
+    {"dir": "4 Mehrere Notizen", "icon": "presentation", "color": "violet"},
+    {"dir": "5 Teilen", "icon": "people", "color": "green"},
+    {"dir": "6 Sicher und geschützt", "icon": "shield", "color": "teal"},
+    {"dir": "7 Verbindungen", "icon": "link", "color": "sky"}
+  ]
+}

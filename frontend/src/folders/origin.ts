@@ -10,5 +10,6 @@ export function originText(origin: string, t: (key: string, values?: Record<stri
   if (kind === 'api') return source ? t('folders.inbox.origin.api', { name: source }) : t('folders.inbox.origin.apiAny')
   if (kind === 'shortcut') return t('folders.inbox.origin.shortcut')
   if (kind === 'nexdeck') return t('folders.inbox.origin.nexdeck')
+  if (kind === 'guide') return t('folders.inbox.origin.guide')
   return t('folders.inbox.origin.other')
 }

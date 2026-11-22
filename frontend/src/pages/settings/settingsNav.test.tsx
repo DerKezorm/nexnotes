@@ -224,7 +224,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it.each([
     ['profile', ['profile']],
     ['security', ['security']],
-    ['appearance', ['looks', 'lists']],
+    ['appearance', ['looks', 'lists', 'guide']],
     ['general', ['limits', 'features', 'languages']],
     ['sign-in', ['sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
