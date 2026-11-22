@@ -1,7 +1,6 @@
 /**
- * The sign-in providers as buttons, in the order of the operator's list: on the sign-in page "Sign in with …" at the top
- * (the line "or" and the password form below them), on the invitation page "Continue with …" below the line "or" (the
- * invitation travels along to the provider).
+ * The sign-in providers as buttons, in the order of the operator's list, with the line "or" above them: on the sign-in
+ * page "Sign in with …", on the invitation page "Continue with …" (the invitation travels along to the provider).
  * Words from the shared sign-in module (`oidc.login.*`, `oidc.invite.button`), the same in every nex app.
  */
 import { useTranslation } from 'react-i18next'
@@ -25,7 +24,6 @@ export function ProviderButtons({
   invite,
   next,
   withOr = true,
-  autoFocus = false,
 }: {
   providers: ProviderButton[]
   /** The invitation's key: the buttons say "Continue with" and take it along. */
@@ -34,8 +32,6 @@ export function ProviderButtons({
   next?: string
   /** The line "or" above, when something stands before the buttons. */
   withOr?: boolean
-  /** The first button takes the focus when the page opens (the sign-in page, where the buttons stand first). */
-  autoFocus?: boolean
 }) {
   const { t } = useTranslation()
   if (providers.length === 0) return null
@@ -43,11 +39,10 @@ export function ProviderButtons({
     <>
       {withOr && <OrLine />}
       <div className="space-y-2" data-testid="provider-buttons">
-        {providers.map((provider, index) => (
+        {providers.map((provider) => (
           <button
             key={provider.slug}
             type="button"
-            autoFocus={autoFocus && index === 0}
             onClick={() => go(startAddress(provider.slug, { invite, next }))}
             className="nn-btn nn-btn-ghost w-full"
           >

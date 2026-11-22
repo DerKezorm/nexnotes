@@ -1,7 +1,7 @@
 /**
  * The pages a person meets around sign-in providers, as the shared sign-in blueprint lays them out: the
- * sign-in page with a button per provider on top, "or" and the password form below (only the buttons and the
- * operator's way when the password is off), the code step after a provider that is not trusted with the second factor, an error from the address only as a
+ * sign-in page with a button per provider below "or" (only the buttons and the operator's way when the password is
+ * off), the code step after a provider that is not trusted with the second factor, an error from the address only as a
  * fixed sentence, the invitation's "Continue with …", the account page's row per provider, and the address a provider
  * offers.
  */
@@ -91,7 +91,7 @@ const click = async (text: string) => {
 }
 
 describe('the sign-in page', () => {
-  it('has a button per provider in the order of the list, the line "or" and the password form', async () => {
+  it('has the password form, the line "or" and a button per provider in the order of the list', async () => {
     const { LoginPage } = await import('./AuthPages')
     handler = (_m, path) => (path === '/api/auth/methods' ? { status: 200, body: { password: true, providers } } : undefined)
     await render(<LoginPage />, '/login?next=%2Fb%2F5')
@@ -102,72 +102,15 @@ describe('the sign-in page', () => {
     expect(assigned).toEqual(['/api/oidc/entra/start?next=%2Fb%2F5'])
   })
 
-  /** The parts of the page in the order they stand: buttons, the line "or", the form. */
-  const layout = () =>
-    [...box.querySelectorAll('[data-testid="provider-buttons"], form, div')]
-      .map((node) =>
-        node.matches('[data-testid="provider-buttons"]') ? 'buttons' : node.matches('form') ? 'form' : node.textContent === i18n.t('oidc.login.or') ? 'or' : null,
-      )
-      .filter((part) => part !== null)
-
-  it('NOTES-2 sign-in page: the providers on top, below them "or", below that the password form; the focus on the first button', async () => {
-    const { LoginPage } = await import('./AuthPages')
-    handler = (_m, path) => (path === '/api/auth/methods' ? { status: 200, body: { password: true, providers } } : undefined)
-    await render(<LoginPage />, '/login')
-    expect(layout()).toEqual(['buttons', 'or', 'form'])
-    expect(document.activeElement?.textContent).toBe('Sign in with authentik')
-  })
-
-  it('NOTES-2 sign-in page: without a provider only the password form, no "or", the focus in the address field', async () => {
-    const { LoginPage } = await import('./AuthPages')
-    handler = (_m, path) => (path === '/api/auth/methods' ? { status: 200, body: { password: true, providers: [] } } : undefined)
-    await render(<LoginPage />, '/login')
-    expect(layout()).toEqual(['form'])
-    expect(buttons().some((text) => text?.startsWith('Sign in with'))).toBe(false)
-    expect(document.activeElement).toBe(box.querySelector('input[name="email"]'))
-  })
-
-  it("NOTES-2 sign-in page: a wrong password says so at the form, a provider's refusal above the buttons", async () => {
-    const { LoginPage } = await import('./AuthPages')
-    handler = (method, path) => {
-      if (path === '/api/auth/methods') return { status: 200, body: { password: true, providers } }
-      if (method === 'POST' && path === '/api/auth/login') return { status: 401, body: { detail: { code: 'wrong_credentials' } } }
-      return undefined
-    }
-    await render(<LoginPage />, '/login?error=oidc_no_account')
-    const refusal = box.querySelector('[role="alert"]')!
-    expect(refusal.textContent).toBe(i18n.t('oidc.error.oidc_no_account'))
-    expect(refusal.closest('form')).toBeNull()
-    expect(refusal.compareDocumentPosition(box.querySelector('[data-testid="provider-buttons"]')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-
-    const form = box.querySelector('form')!
-    const type = (input: HTMLInputElement, value: string) => {
-      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, value)
-      input.dispatchEvent(new Event('input', { bubbles: true }))
-    }
-    act(() => {
-      type(form.querySelector('input[name="email"]')!, 'ossie@example.com')
-      type(form.querySelector('input[type="password"]')!, 'not the one')
-    })
-    await act(async () => form.requestSubmit())
-    await settle()
-    const alerts = [...box.querySelectorAll('[role="alert"]')]
-    expect(alerts).toHaveLength(1)
-    expect(alerts[0].closest('form')).toBe(form)
-    expect(alerts[0].textContent).toBe(i18n.t('errors.wrong_credentials'))
-  })
-
   it("with the password off shows only the buttons, and small the operator's way with the password", async () => {
     const { LoginPage } = await import('./AuthPages')
     handler = (_m, path) => (path === '/api/auth/methods' ? { status: 200, body: { password: false, providers } } : undefined)
     await render(<LoginPage />, '/login')
     expect(box.querySelector('input[type="password"]')).toBeNull()
     expect([...box.querySelectorAll('div')].some((node) => node.textContent === i18n.t('oidc.login.or'))).toBe(false)
-    expect(document.activeElement?.textContent).toBe('Sign in with authentik')
     await click(i18n.t('oidc.login.operator'))
     expect(box.querySelector('input[type="password"]')).not.toBeNull()
     expect(buttons()).toContain('Sign in with authentik')
-    expect(document.activeElement).toBe(box.querySelector('input[name="email"]'))
   })
 
   it('says an error from the address in the fixed words, an unknown one never as it stands', async () => {
