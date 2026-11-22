@@ -613,7 +613,14 @@
     "nextasks_task_gone": "This task is no longer in nextasks.",
     "list_style_unknown": "Choose list, cards, compact or tiles.",
     "api_off": "The operator has switched the API off.",
-    "tokens_too_many": "An account can have at most {{max}} API tokens. Revoke one first."
+    "tokens_too_many": "An account can have at most {{max}} API tokens. Revoke one first.",
+    "app_address_missing": "nexnotes does not know its address. The operator enters it under Settings, Server.",
+    "too_many_pairings": "At most 5 codes may wait at once.",
+    "pairing_gone": "The code has expired, was used already, or is not valid.",
+    "push_ticket_invalid": "Notifications could not be set up for this device.",
+    "too_many_notes": "Too many notes at once.",
+    "invalid_update": "The change could not be read.",
+    "no_right": "You may only read here."
   },
   "folders": {
     "section": "Folders",
@@ -2217,5 +2224,43 @@
     "making": "Making it …",
     "made": "“{{name}}” is ready.",
     "open": "Open"
+  },
+  "devices": {
+    "section": {
+      "title": "Devices",
+      "text": "iPhone, iPad and Mac with the nexnotes app.",
+      "none": "No device connected yet.",
+      "connect": "Connect iPhone or iPad",
+      "lastSeen": "last seen {{when}}",
+      "neverSeen": "not seen yet",
+      "push": "notifications on",
+      "disconnect": "Disconnect",
+      "disconnectTitle": "Disconnect “{{name}}”?",
+      "disconnectText": "From now on the device cannot reach your notes. To connect it again, scan a new code."
+    },
+    "kind": {
+      "ios": "iOS app",
+      "mac": "iPad app on the Mac"
+    },
+    "connect": {
+      "title": "Connect iPhone or iPad",
+      "qr": "QR code to connect",
+      "valid": "Valid for 10 minutes",
+      "renew": "new code",
+      "expired": "The code has expired.",
+      "step1": "Open nexnotes on the iPhone or iPad.",
+      "step2": "Tap “Connect server” and scan the code.",
+      "step3": "Done. Your notes load, and the sign-in travels to your other devices through your Apple ID.",
+      "noCamera": "Without a camera: in the app, enter the address",
+      "noCameraEnd": "and sign in."
+    }
+  },
+  "appConnect": {
+    "title": "Connect the nexnotes app to this account?",
+    "text": "Signed in as {{account}}. The app gets the same rights you have in the browser.",
+    "confirm": "Connect",
+    "invalid": "The nexnotes app opens this page itself. Start connecting in the app.",
+    "doneTitle": "Connected",
+    "done": "Carry on in the app."
   }
 }

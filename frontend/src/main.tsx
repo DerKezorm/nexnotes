@@ -19,6 +19,8 @@ import './tags'
 import './smart'
 import './history'
 import './export'
+// The app for iPhone, iPad and Mac (NOTES-24): "Geräte" first in Settings, Connections, with the QR code.
+import './devices/register'
 // The member's own nextasks (NOTES-19): its card in Settings, Connections, "An nextasks" in an open note.
 import './nextasks/register'
 // The consent page of connecting AI programs (NOTES-20).
