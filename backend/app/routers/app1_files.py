@@ -64,13 +64,14 @@ def texts(found: Device, body: TextsIn) -> dict[str, Any]:
         rows = {row.id: row for row in db.scalars(select(Note).where(Note.id.in_(wanted)))} if wanted else {}
         seen = {note_id: row for note_id, row in rows.items()
                 if notes.right_to(db, account, row) in (Access.WRITE, Access.READ)}
-        held = appsync.attachment_texts(db, account.id, {note_id: row.owner_id for note_id, row in seen.items()
-                                                         if not row.locked})
+        owners = {note_id: row.owner_id for note_id, row in seen.items() if not row.locked}
+        held = appsync.attachment_texts(db, account.id, owners)
+        stamps = appsync.text_stamps(db, account.id, owners)
     out: list[dict[str, Any]] = []
     for note_id in wanted:
         if note_id not in seen:
             out.append({"id": note_id, "error": "not_found"})
             continue
         entries = held.get(note_id, [])
-        out.append({"id": note_id, "texts": appsync.text_stamp(entries), "attachments": entries})
+        out.append({"id": note_id, "texts": stamps.get(note_id, ""), "attachments": entries})
     return {"notes": out}

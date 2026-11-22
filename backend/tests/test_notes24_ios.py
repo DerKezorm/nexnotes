@@ -186,6 +186,9 @@ def test_notes24_notesios7_another_account_s_smart_folders_are_not_there(client,
     device = paired(client)
     device.post("/smart-folders", {"id": SMART, "name": "Mine", "conditions": OPEN})
     lena = make_account("lena")
+    # Mila shares something with Lena: still no tombstone of her smart folders reaches Lena (S3).
+    device.new_note(NOTE, "Shared")
+    share(client, "note", NOTE, lena, "read")
     with new_client(lena) as other:
         lenas = paired(other)
         theirs = lenas.changes()
@@ -657,3 +660,120 @@ def test_notes24_notesios7_smart_folders_in_changes_have_the_contract_s_fields(c
     entry = next(item for item in device.changes()["smart_folders"] if item["id"] == SMART)
     assert set(entry) == {"id", "name", "preset", "match", "conditions", "icon", "color", "position", "created_at",
                           "updated_at", "seq"}
+
+
+# --- Review of 0.5 (S1 to S10) ------------------------------------------------------------------------------------
+
+
+def test_notes24_notesios10_texts_never_show_what_a_writer_slipped_into_a_shared_note(client, operator):
+    """S1, S9: in a note of somebody else only what its owner put there counts, as in the browser; a reference
+    without a row of its own counts as not vouched either."""
+    from app.models_attachments import AttachmentMention
+
+    device = paired(client)
+    lena = make_account("lena")
+    with new_client(lena) as other:
+        lenas = paired(other)
+        lenas.new_note(NOTE, "Private")
+        private = _scan_with_text(lenas, NOTE, "bank details")
+        lenas.new_note(NOTE_2, "Shared plan")
+        own = _scan_with_text(lenas, NOTE_2, "garden layout")
+        add_blocks(NOTE_2, lena.id, {"type": "image", "attrs": {"id": own, "name": "scan.png"}})
+        share(other, "note", NOTE_2, operator, "write")
+        # Mila, who may write, puts a reference to the owner's private scan into the shared note.
+        add_blocks(NOTE_2, operator.id, {"type": "image", "attrs": {"id": private, "name": "x.png"}})
+        answer = device.post("/texts", {"notes": [NOTE_2]}).json()["notes"][0]
+        assert [entry["id"] for entry in answer["attachments"]] == [own]
+        stamp = answer["texts"]
+        assert {item["id"]: item for item in device.changes()["notes"]}[NOTE_2]["texts"] == stamp
+        # Without a row in the table of mentions it still does not count (as ``attachments._vouched``).
+        with SessionLocal() as db:
+            db.query(AttachmentMention).filter_by(note_id=NOTE_2, attachment_id=private).delete()
+            db.commit()
+        again = device.post("/texts", {"notes": [NOTE_2]}).json()["notes"][0]
+        assert [entry["id"] for entry in again["attachments"]] == [own] and again["texts"] == stamp
+        # Its owner sees both: her own note, her own scans.
+        mine = lenas.post("/texts", {"notes": [NOTE_2]}).json()["notes"][0]["attachments"]
+        assert {entry["id"] for entry in mine} == {own, private}
+
+
+def test_notes24_notesios10_text_forgotten_in_bulk_gives_a_new_number(client, operator):
+    """S4: text that goes without new pages (a note locked, ``ocr._forget``) gives the notes naming it a number."""
+    device = paired(client)
+    device.new_note(NOTE, "Lease")
+    scan = _scan_with_text(device, NOTE, "Garden Street 12")
+    add_blocks(NOTE, operator.id, {"type": "image", "attrs": {"id": scan, "name": "scan.png"}})
+    assert {item["id"]: item for item in device.changes()["notes"]}[NOTE]["texts"] != ""
+    with SessionLocal() as db:
+        ocr._forget(db, scan)
+        db.commit()
+    after = {item["id"]: item for item in device.changes()["notes"]}.get(NOTE)
+    assert after is not None and after["texts"] == ""
+
+
+def test_notes24_notesios9_ac1_a_copy_takes_no_id_of_another_note(client, operator, monkeypatch):
+    """S2, S10: the same id again is the copy made before; any other note's id is taken; two at once make one."""
+    from app.routers import app1_trash
+
+    device = paired(client)
+    device.new_note(NOTE, "Plan", "first idea")
+    session(NOTE, operator.id, ["second thought"], T0)
+    version = device.get(f"/notes/{NOTE}/versions").json()["versions"][0]["id"]
+    device.new_note(NOTE_2, "Unrelated own note")
+    own = device.post(f"/notes/{NOTE}/versions/{version}/copy", {"id": NOTE_2})
+    assert own.status_code == 409 and code(own) == "note_id_taken"
+    lena = make_account("lena")
+    shared_id = "lN_sharedToRead-0aSdFgH"
+    with new_client(lena) as other:
+        paired(other).new_note(shared_id, "Shared to read")
+        share(other, "note", shared_id, operator, "read")
+    theirs = device.post(f"/notes/{NOTE}/versions/{version}/copy", {"id": shared_id})
+    assert theirs.status_code == 409 and code(theirs) == "note_id_taken"
+    # A copy of another version under the id of the first copy is no repeat either.
+    assert device.post(f"/notes/{NOTE}/versions/{version}/copy", {"id": COPY}).status_code == 201
+    session(NOTE, operator.id, ["third"], T0 + timedelta(hours=2))
+    newer = device.get(f"/notes/{NOTE}/versions").json()["versions"][0]["id"]
+    assert code(device.post(f"/notes/{NOTE}/versions/{newer}/copy", {"id": COPY})) == "note_id_taken"
+    # Two requests at once: the second finds the id taken only when it writes, and answers with the first's copy.
+    real = app1_trash._same_copy
+    calls = {"n": 0}
+
+    def late(*args):
+        calls["n"] += 1
+        return None if calls["n"] == 1 else real(*args)
+
+    monkeypatch.setattr(app1_trash, "_same_copy", late)
+    raced = device.post(f"/notes/{NOTE}/versions/{version}/copy", {"id": COPY})
+    assert raced.status_code == 200 and raced.json()["id"] == COPY
+
+
+def test_notes24_notesios9_times_of_history_and_trash_in_utc_with_z(client, operator):
+    """S6: as everywhere in the interface."""
+    device = paired(client)
+    found = _versioned(device, operator.id)
+    for entry in found:
+        assert entry["created_at"].endswith("Z") and entry["started_at"].endswith("Z")
+    read = device.get(f"/notes/{NOTE}/versions/{found[1]['id']}").json()
+    assert read["created_at"].endswith("Z") and read["started_at"].endswith("Z")
+    restored = device.post(f"/notes/{NOTE}/versions/{found[1]['id']}/restore").json()
+    assert restored["restored_from"] == found[1]["created_at"]
+    assert device.get(f"/notes/{NOTE}/versions").json()["versions"][0]["restored_from"].endswith("Z")
+    # The trash goes by the server's clock again (the versions above were made on a clock set back).
+    history.clock.reset()
+    device.delete(f"/notes/{NOTE}")
+    listed = device.get("/trash").json()
+    item = listed["items"][0]
+    assert listed["now"].endswith("Z") and item["deleted_at"].endswith("Z") and item["expires_at"].endswith("Z")
+    assert device.post("/trash/empty", {"until": listed["now"]}).json() == {"notes": 1, "folders": 0}
+
+
+def test_notes24_notesios7_too_long_or_too_many_hear_the_rule(client, operator):
+    """S7: a name past 200 characters and more than 50 conditions hear the rule's code, not ``invalid_input``."""
+    device = paired(client)
+    long_name = device.post("/smart-folders", {"id": SMART, "name": "x" * 300, "conditions": OPEN})
+    assert long_name.status_code == 422 and code(long_name) == "smart_folder_name_invalid"
+    many = device.post("/smart-folders", {"id": SMART, "name": "Many", "conditions": OPEN * 60})
+    assert many.status_code == 422 and code(many) == "smart_condition_invalid"
+    device.post("/smart-folders", {"id": SMART, "name": "Fine", "conditions": OPEN})
+    assert code(device.patch(f"/smart-folders/{SMART}", {"name": "y" * 300})) == "smart_folder_name_invalid"
+    assert code(device.patch(f"/smart-folders/{SMART}", {"conditions": OPEN * 60})) == "smart_condition_invalid"

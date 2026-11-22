@@ -378,6 +378,9 @@ class Note(Base):
     title_check: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     #: Where a quickly captured note came from (NOTES-4 AC-7), e.g. "share:Safari", "dictation", "mcp:<client>".
     origin: Mapped[str] = mapped_column(String(100), default="")
+    #: For a copy of a version the app made with its own id (NOTES-24): ``<note id>/<version id>``, so the same copy
+    #: asked for again is known; empty otherwise.
+    copied_from: Mapped[str] = mapped_column(String(80), default="", server_default="")
     ydoc: Mapped[bytes] = mapped_column(LargeBinary, default=b"")
     #: Plain text of the body, for search and preview.
     text: Mapped[str] = mapped_column(Text, default="")

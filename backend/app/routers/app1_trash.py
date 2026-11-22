@@ -16,6 +16,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Response
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 
 from ..db import SessionLocal
 from ..errors import error
@@ -26,6 +27,21 @@ from ..services import appsync, history, notes, trash
 from .app1 import Device
 
 router = APIRouter(prefix="/api/app/1", tags=["app"])
+
+#: The times of versions and of the trash, written in UTC with ``Z`` as everywhere in the interface.
+_TIMES = ("created_at", "started_at", "restored_from", "deleted_at", "expires_at", "now")
+
+
+def _z(value: Any) -> Any:
+    """An ISO time of the browser's services (``+00:00``) as the interface writes it (``Z``)."""
+    if isinstance(value, str) and value.endswith("+00:00"):
+        return value[:-6] + "Z"
+    return value
+
+
+def _zoned(item: dict[str, Any]) -> dict[str, Any]:
+    return {key: _z(value) if key in _TIMES else value for key, value in item.items()}
+
 
 def _no_right() -> HTTPException:
     return error("no_right", "Only reading is allowed here.", 403)
@@ -50,7 +66,9 @@ def versions(note_id: str, found: Device, before: int | None = Query(default=Non
         _readable(db, found.account, note_id)
         listed = history.listing(db, found.account, note_id, before=before, limit=limit)
     keep = ("versions", "next", "pending", "can_restore", "history_days", "locked")
-    return {key: listed[key] for key in keep}
+    out = {key: listed[key] for key in keep}
+    out["versions"] = [_zoned(entry) for entry in listed["versions"]]
+    return out
 
 
 @router.get("/notes/{note_id}/versions/{version_id}", summary="One version whole, with its Yjs state")
@@ -61,7 +79,7 @@ def version(note_id: str, version_id: int, found: Device) -> dict[str, Any]:
         if not answer.get("sealed"):
             state = db.scalar(_state_of(note_id, version_id))
             answer["state"] = base64.b64encode(state or b"").decode("ascii")
-        return answer
+        return _zoned(answer)
 
 
 def _state_of(note_id: str, version_id: int) -> Any:
@@ -79,7 +97,7 @@ async def restore(note_id: str, version_id: int, found: Device) -> dict[str, Any
     with SessionLocal() as db:
         note = db.get(Note, note_id)
         assert note is not None
-        return {"version": done["id"], "restored_from": done["restored_from"],
+        return {"version": done["id"], "restored_from": _z(done["restored_from"]),
                 "note": appsync.note_out(db, account.id, note)}
 
 
@@ -97,15 +115,37 @@ def copy(note_id: str, version_id: int, body: CopyIn, found: Device, response: R
         raise error("invalid_input", "The input is not valid.", 422, fields=["id"])
     with SessionLocal() as db:
         _readable(db, account, note_id, write=True)
-        existing = db.get(Note, body.id)
-        if existing is not None:
-            if notes.right_to(db, account, existing) not in (Access.WRITE, Access.READ):
-                raise error("note_id_taken", "This note id is taken.", 409)
-            # Sent again (the answer got lost): the copy made the first time.
+        again = _same_copy(db, account, body.id, note_id, version_id)
+        if again is not None:
             response.status_code = 200
-            return appsync.note_out(db, account.id, existing)
-        made = history.copy(db, account, note_id, version_id, body.when, new_id=body.id)
+            return again
+        try:
+            made = history.copy(db, account, note_id, version_id, body.when, new_id=body.id)
+        except IntegrityError:
+            # The same copy at the same moment from a second request: the first one made it.
+            db.rollback()
+            again = _same_copy(db, account, body.id, note_id, version_id)
+            if again is None:
+                raise _id_taken() from None
+            response.status_code = 200
+            return again
         return appsync.note_out(db, account.id, made)
+
+
+def _id_taken() -> HTTPException:
+    return error("note_id_taken", "This note id is taken.", 409)
+
+
+def _same_copy(db: Any, account: Any, copy_id: str, note_id: str, version_id: int) -> dict[str, Any] | None:
+    """The copy made under ``copy_id`` before (sent again, the answer got lost), or None when the id is free;
+    ``note_id_taken`` when it belongs to any other note."""
+    existing = db.get(Note, copy_id)
+    if existing is None:
+        return None
+    seen = notes.right_to(db, account, existing) in (Access.WRITE, Access.READ)
+    if existing.copied_from != f"{note_id}/{version_id}" or not seen:
+        raise _id_taken()
+    return appsync.note_out(db, account.id, existing)
 
 
 # --- Trash --------------------------------------------------------------------------------------------------------
@@ -115,11 +155,13 @@ def copy(note_id: str, version_id: int, body: CopyIn, found: Device, response: R
 def listing(found: Device) -> dict[str, Any]:
     with SessionLocal() as db:
         listed = trash.listing(db, found.account)
+    items = []
     for item in listed["items"]:
         origin = item.get("origin")
         if origin and origin.get("inbox"):
-            item["origin"] = {**origin, "id": "inbox"}
-    return listed
+            item = {**item, "origin": {**origin, "id": "inbox"}}
+        items.append(_zoned(item))
+    return {**_zoned(listed), "items": items}
 
 
 @router.delete("/trash/notes/{note_id}", summary="A note in the trash gone for good")

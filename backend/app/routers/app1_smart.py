@@ -28,7 +28,9 @@ logger = logging.getLogger("nexnotes.app")
 
 router = APIRouter(prefix="/api/app/1", tags=["app"])
 
-Conditions = Annotated[list[Any], Field(max_length=50)]
+#: Wider than the rules (``search.CONDITIONS_MAX``, ``smart_folders.NAME_MAX``): too many or too long hears the rule's
+#: code from the service, as the contract names it; only absurd sizes stop here.
+Conditions = Annotated[list[Any], Field(max_length=1000)]
 Zone = Annotated[str, Query(max_length=64)]
 
 
@@ -55,7 +57,7 @@ def presets(_found: Device) -> dict[str, Any]:
 
 class NewSmart(BaseModel):
     id: str = Field(min_length=1, max_length=64)
-    name: str = Field(default="", max_length=200)
+    name: str = Field(default="", max_length=10_000)
     preset: str | None = Field(default=None, max_length=32)
     match: Literal["all", "any"] = "all"
     conditions: Conditions | None = None
@@ -106,7 +108,7 @@ def create(found: Device, body: NewSmart, response: Response) -> dict[str, Any]:
 
 
 class SmartPatch(BaseModel):
-    name: str | None = Field(default=None, max_length=200)
+    name: str | None = Field(default=None, max_length=10_000)
     match: Literal["all", "any"] | None = None
     conditions: Conditions | None = None
     icon: str | None = Field(default=None, max_length=32)

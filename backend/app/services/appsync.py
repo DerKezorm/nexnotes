@@ -543,59 +543,82 @@ def tags_of(db: Session, note_ids: list[str]) -> dict[str, list[str]]:
 
 
 def _vouched_pairs(db: Session, account_id: int, owners: dict[str, int]) -> set[tuple[str, str]]:
-    """In notes of somebody else: the (note, attachment) pairs its owner did not put there (NOTES-13, as
-    ``attachments.readable``)."""
+    """In notes of somebody else: the (note, attachment) pairs its owner put there (NOTES-13). As
+    ``attachments._vouched`` in the browser, a pair without a row counts as not vouched."""
     from ..models_attachments import AttachmentMention
 
     theirs = [note_id for note_id, owner_id in owners.items() if owner_id != account_id]
-    unvouched: set[tuple[str, str]] = set()
+    vouched: set[tuple[str, str]] = set()
     for start in range(0, len(theirs), 500):
-        unvouched.update((row.note_id, row.attachment_id) for row in db.execute(
+        vouched.update((row.note_id, row.attachment_id) for row in db.execute(
             select(AttachmentMention.note_id, AttachmentMention.attachment_id)
-            .where(AttachmentMention.note_id.in_(theirs[start:start + 500]), AttachmentMention.vouched.is_(False))))
-    return unvouched
+            .where(AttachmentMention.note_id.in_(theirs[start:start + 500]), AttachmentMention.vouched.is_(True))))
+    return vouched
 
 
-def attachment_texts(db: Session, account_id: int, notes: dict[str, int]) -> dict[str, list[dict[str, Any]]]:
-    """The recognised text of the attachments each note names (``notes``: id to owner), the pages that hold text, in
-    the order the note names them: what the search reads (``ocr.texts_of``), for the app's search offline. Only
-    attachments of the note's owner; in a note of somebody else only what its owner put there."""
-    if not notes:
-        return {}
-    unvouched = _vouched_pairs(db, account_id, notes)
-    found: dict[str, dict[str, dict[str, Any]]] = {}
+def _text_rows(db: Session, account_id: int, notes: dict[str, int], *, words: bool) -> Iterable[Any]:
+    """The pages with text of the attachments each note names (``notes``: id to owner), in the order the note names
+    them: only attachments of the note's owner; in a note of somebody else only those in their own note or vouched
+    for by the owner (``attachments.readable``). ``words``: each page with its text; else one row per attachment with
+    how many pages hold text and when the last changed (a stamp, which never reads the text: every write of a page
+    sets its ``updated_at``)."""
+    vouched = _vouched_pairs(db, account_id, notes)
     ids = list(notes)
+    if words:
+        columns: tuple[Any, ...] = (AttachmentText.page, AttachmentText.text.label("body"), AttachmentText.language)
+        order: tuple[Any, ...] = (AttachmentText.page,)
+    else:
+        columns = (func.count(AttachmentText.page).label("pages"),
+                   func.max(AttachmentText.updated_at).label("changed"))
+        order = ()
     for start in range(0, len(ids), 500):
-        for note_id, attachment_id, kind, name, owner_id, home, page, words, language in db.execute(
+        statement = (
             select(AttachmentRef.note_id, Attachment.id, Attachment.kind, Attachment.name, Attachment.owner_id,
-                   Attachment.note_id, AttachmentText.page, AttachmentText.text, AttachmentText.language)
+                   Attachment.note_id.label("home"), *columns)
             .join(Attachment, Attachment.id == AttachmentRef.attachment_id)
             .join(AttachmentText, AttachmentText.attachment_id == Attachment.id)
             .where(AttachmentRef.note_id.in_(ids[start:start + 500]), AttachmentText.state == PAGE_DONE)
-            .order_by(AttachmentRef.note_id, AttachmentRef.position, Attachment.id, AttachmentText.page)
-        ):
-            if owner_id != notes.get(note_id) or (home != note_id and (note_id, attachment_id) in unvouched):
+        )
+        if not words:
+            statement = statement.group_by(AttachmentRef.note_id, Attachment.id)
+        for row in db.execute(statement.order_by(AttachmentRef.note_id, AttachmentRef.position, Attachment.id,
+                                                 *order)):
+            owner = notes.get(row.note_id)
+            if row.owner_id != owner:
                 continue
-            entry = found.setdefault(note_id, {}).setdefault(
-                attachment_id, {"id": attachment_id, "kind": kind, "name": name, "pages": []})
-            entry["pages"].append({"page": page, "text": words, "language": language or ""})
+            if row.home != row.note_id and owner != account_id and (row.note_id, row.id) not in vouched:
+                continue
+            yield row
+
+
+def attachment_texts(db: Session, account_id: int, notes: dict[str, int]) -> dict[str, list[dict[str, Any]]]:
+    """The recognised text of the attachments each note names, the pages that hold text: what the search reads
+    (``ocr.texts_of``), for the app's search offline (``_text_rows``)."""
+    found: dict[str, dict[str, dict[str, Any]]] = {}
+    for row in _text_rows(db, account_id, notes, words=True):
+        entry = found.setdefault(row.note_id, {}).setdefault(
+            row.id, {"id": row.id, "kind": row.kind, "name": row.name, "pages": []})
+        entry["pages"].append({"page": row.page, "text": row.body, "language": row.language or ""})
     return {note_id: list(held.values()) for note_id, held in found.items()}
 
 
-def text_stamp(entries: list[dict[str, Any]]) -> str:
-    """A short stamp of the recognised text of a note's attachments: changes whenever any of it does."""
-    if not entries:
-        return ""
+def _stamp(parts: list[str]) -> str:
     import hashlib
 
-    digest = hashlib.sha256(json.dumps(entries, sort_keys=True, ensure_ascii=False).encode("utf-8"))
-    return digest.hexdigest()[:16]
+    return hashlib.sha256("\n".join(parts).encode("utf-8")).hexdigest()[:16] if parts else ""
 
 
 def texts_of(db: Session, account_id: int, rows: Iterable[Note]) -> dict[str, str]:
-    """``texts`` of each note (``text_stamp``); locked notes have none."""
-    notes = {row.id: row.owner_id for row in rows if not row.locked}
-    return {note_id: text_stamp(entries) for note_id, entries in attachment_texts(db, account_id, notes).items()}
+    """``texts`` of each note: a stamp over which attachments hold text on how many pages and since when, without
+    reading the text itself; locked notes have none."""
+    return text_stamps(db, account_id, {row.id: row.owner_id for row in rows if not row.locked})
+
+
+def text_stamps(db: Session, account_id: int, notes: dict[str, int]) -> dict[str, str]:
+    parts: dict[str, list[str]] = {}
+    for row in _text_rows(db, account_id, notes, words=False):
+        parts.setdefault(row.note_id, []).append(f"{row.id}|{row.kind}|{row.name}|{row.pages}|{row.changed}")
+    return {note_id: _stamp(found) for note_id, found in parts.items()}
 
 
 def view_of(db: Session, account_id: int, note_ids: Iterable[str] = (), rows: Iterable[Note] = ()) -> View:

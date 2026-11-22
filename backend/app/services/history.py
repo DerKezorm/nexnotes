@@ -570,6 +570,7 @@ def copy(db: Session, account: Account, note_id: str, version_id: int, when: str
                 updated_by_id=account.id)
     if new_id:
         note.id = new_id
+        note.copied_from = f"{source.id}/{version.id}"
     db.add(note)
     db.flush()
     # The copy is found by the search like any note made by hand (NOTES-9).
