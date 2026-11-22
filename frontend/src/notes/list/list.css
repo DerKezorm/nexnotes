@@ -13,3 +13,15 @@
     opacity: 1;
   }
 }
+
+/* The bottom line of a narrow tile keeps the width of its "…" free. A button there is 28 px, but on a phone and a
+   touch screen every button is at least 44 px (index.css), and the attachments beside it lay under it (22.11.2026). */
+.nn-tile-foot-more {
+  padding-right: 28px;
+}
+
+@media (max-width: 767px), (pointer: coarse) {
+  .nn-tile-foot-more {
+    padding-right: 48px;
+  }
+}

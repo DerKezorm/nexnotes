@@ -437,6 +437,79 @@ describe('NOTES-6 list and tiles', () => {
     expect($('note-folder')).toBeNull()
   })
 
+  it('NOTES-6 AC-3 a narrow tile has its "…" at the end of the bottom line, a wide one beside the title; both open the menu', async () => {
+    // Review of 22.11.2026: on a phone two tiles stand side by side and the "…" took width from the title.
+    let width = 358
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(private readonly told: ResizeObserverCallback) {}
+        observe() {
+          this.told([{ contentRect: { width } } as ResizeObserverEntry], this as unknown as ResizeObserver)
+        }
+        disconnect() {}
+        unobserve() {}
+      },
+    )
+    lookIs('tiles')
+    items = [
+      item('a', { title: 'Urlaubsplanung', pinned: true, attachments: 2, tags: ['reise'], tasks: { done: 0, total: 5 } }),
+      item('b', { title: 'Willkommen' }),
+    ]
+    const tile = (id: string) => box.querySelector<HTMLElement>(`[data-note="${id}"]`)!
+    const more = () => byText('Actions for “Urlaubsplanung”', tile('a'))
+    const titleRow = () => tile('a').querySelector<HTMLElement>('[data-testid="note-tile-title"]')!.closest<HTMLElement>('[style]')!
+    const foot = () => tile('a').querySelector<HTMLElement>('[data-testid="note-tile-foot"]')!
+    const menuOpens = async () => {
+      expect(document.querySelector('[data-testid="note-item-menu"]')).toBeNull()
+      await click(more())
+      const menu = document.querySelector<HTMLElement>('[data-testid="note-item-menu"]')!
+      expect(menu.textContent).toContain('Unpin')
+      await act(async () => void menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
+      await settle()
+      expect(document.querySelector('[data-testid="note-item-menu"]')).toBeNull()
+    }
+
+    await render('h')
+    expect($$('list-grid')[0].style.gridTemplateColumns).toBe('repeat(2, minmax(0, 1fr))')
+    // Narrow: the "…" stands at the end of the bottom line, which keeps its width free; the title row keeps none.
+    const place = tile('a').querySelector<HTMLElement>('[data-testid="note-tile-more-foot"]')!
+    expect(place.contains(more())).toBe(true)
+    expect(place.className).toMatch(/(^| )bottom-/)
+    expect(place.className).not.toMatch(/(^| )top-/)
+    expect(tile('a').querySelector('[data-testid="note-tile-buttons"]')).toBeNull()
+    expect(titleRow().contains(more())).toBe(false)
+    expect(titleRow().style.paddingRight).toBe('0px')
+    // The bottom line keeps the "…" free: 28 px, on a phone or touch screen 48 px, where every button is 44 px.
+    expect(foot().className).toContain('nn-tile-foot-more')
+    const fs = (await import(/* @vite-ignore */ 'node:fs'.toString())) as { readFileSync: (f: string, e: string) => string }
+    const css = fs.readFileSync('src/notes/list/list.css', 'utf-8')
+    expect(css).toMatch(/\.nn-tile-foot-more\s*\{\s*padding-right:\s*28px;/)
+    expect(css).toMatch(/@media \(max-width: 767px\), \(pointer: coarse\) \{\s*\.nn-tile-foot-more\s*\{\s*padding-right:\s*48px;/)
+    expect(tile('a').querySelectorAll('button[aria-label^="Actions for"]')).toHaveLength(1)
+    // After the tile's link: the Tab key reaches it right after the tile, as before.
+    expect(tile('a').querySelector('[data-testid="note-tile"]')!.compareDocumentPosition(more()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // The pin stays with the title; in the bottom line the date gets cut first, the attachments stay.
+    expect(titleRow().querySelector('[aria-label="pinned"]')).not.toBeNull()
+    const line = tile('a').querySelector<HTMLElement>('[data-testid="hint-attachments"]')!
+    expect(line.className).toContain('shrink-0')
+    expect(line.parentElement!.firstElementChild!.className).toContain('truncate')
+    await menuOpens()
+
+    // Wide: as before, beside the title at the top.
+    width = 1024
+    act(() => root.unmount())
+    root = createRoot(box)
+    await render('h')
+    expect($$('list-grid')[0].style.gridTemplateColumns).not.toBe('repeat(2, minmax(0, 1fr))')
+    expect(tile('a').querySelector('[data-testid="note-tile-more-foot"]')).toBeNull()
+    expect(tile('a').querySelector('[data-testid="note-tile-buttons"]')!.contains(more())).toBe(true)
+    expect(titleRow().style.paddingRight).toBe('24px')
+    expect(foot().className).not.toContain('nn-tile-foot-more')
+    expect(titleRow().querySelector('[aria-label="pinned"]')).not.toBeNull()
+    await menuOpens()
+  })
+
   it('NOTES-6 AC-2 rows and tiles show the date of the last change, also when sorted by creation', async () => {
     const created = new Date(2025, 2, 3, 10, 0).toISOString()
     items = [item('a', { title: 'Alt angelegt', created_at: created, updated_at: new Date(Date.now() - 60_000).toISOString() })]
