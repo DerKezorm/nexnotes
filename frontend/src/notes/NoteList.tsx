@@ -206,7 +206,7 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
         style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: 'minmax(0, 1fr)', gap, paddingBottom: gap }}
         data-testid="list-grid"
       >
-        {entry.items.map((item) => (cards ? <NoteCard key={item.id} {...propsOf(item)} /> : <NoteTile key={item.id} {...propsOf(item)} />))}
+        {entry.items.map((item) => (cards ? <NoteCard key={item.id} {...propsOf(item)} /> : <NoteTile key={item.id} {...propsOf(item)} narrow={narrow} />))}
       </div>
     )
   }

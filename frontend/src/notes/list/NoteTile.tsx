@@ -4,6 +4,10 @@
  * the time of its last change and the shared mark; with the hints on also the progress of its checklists ("3 von 8"
  * with a bar), its attachments and tags. A locked note shows its title and the lock only (EC-3); everything is cut
  * to the tile (EC-4). Two side by side on a phone (`layout.ts`).
+ *
+ * In a narrow list (`narrow`, the phone and the column beside an open note: the tiles of `SIZES.smallTile`) the "…"
+ * stands at the right end of the bottom line instead of beside the title, so that the title has the tile's width
+ * beside its symbol (review of 22.11.2026). The list's own buttons and the pin and lock stay at the top.
  */
 import { NoteIcon } from '../../components/NoteIcon'
 import { Lock, Pin } from 'lucide-react'
@@ -14,8 +18,11 @@ import { AttachmentsHint } from './Hints'
 import { boxProps, ItemActions, MediaIcon, MoreButton, type ItemProps } from './ItemParts'
 import { mediaText, noteColor, sharedText, tagsText, tasksText } from './marks'
 
-export function NoteTile(props: ItemProps) {
-  const { item, href, chosen, date, hints = true, onOpen, onMenu, mark, actions } = props
+/** The "…" beside the title or at the right end of the bottom line; its width is kept free there. */
+const MORE = 24
+
+export function NoteTile(props: ItemProps & { narrow?: boolean }) {
+  const { item, href, chosen, date, hints = true, onOpen, onMenu, mark, actions, narrow = false } = props
   const { t } = useTranslation()
   const locked = Boolean(item.locked)
   const band = noteColor(item)
@@ -26,6 +33,8 @@ export function NoteTile(props: ItemProps) {
   const title = item.title || t('notes.untitled')
   const foot = [date, tasks, shared].filter(Boolean).join(' · ')
   const progress = !locked && hints && item.tasks && item.tasks.total > 0 ? Math.round((item.tasks.done / item.tasks.total) * 100) : null
+  const buttons = 28 * (actions?.length ?? 0)
+  const more = <MoreButton item={item} onMenu={onMenu} className="h-7 w-7" />
   return (
     <div {...boxProps(props)} className="group relative h-full min-w-0">
       <Link
@@ -40,7 +49,7 @@ export function NoteTile(props: ItemProps) {
         }
       >
         {band && <span aria-label={t('noteList.colorMark')} role="img" className="absolute top-0 left-3 h-[3px] w-9 rounded-b-[3px]" style={{ background: band }} data-testid="note-color" />}
-        <span className="flex min-w-0 items-start justify-between gap-2" style={{ paddingRight: 24 + 28 * (actions?.length ?? 0) }}>
+        <span className="flex min-w-0 items-start justify-between gap-2" style={{ paddingRight: narrow ? Math.max(0, buttons - 4) : MORE + buttons }}>
           <span className="flex min-w-0 items-start gap-1.5">
             <NoteIcon icon={item.icon} color={item.color} className="mt-[3px]" />
             {!item.icon && mark && <span className="mt-[2px] shrink-0">{mark}</span>}
@@ -79,7 +88,7 @@ export function NoteTile(props: ItemProps) {
             {item.preview}
           </span>
         )}
-        <span className="mt-auto flex min-w-0 flex-col gap-1.5">
+        <span className="mt-auto flex min-w-0 flex-col gap-1.5" style={narrow && onMenu ? { paddingRight: MORE + 4 } : undefined} data-testid="note-tile-foot">
           {progress !== null && (
             <span className="flex h-[4px] rounded-[3px] bg-ink-700" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={tasks}>
               <span className="rounded-[3px] bg-accent-500" style={{ width: `${progress}%` }} />
@@ -92,10 +101,18 @@ export function NoteTile(props: ItemProps) {
           </span>
         </span>
       </Link>
-      <span className="absolute top-2 right-2 flex items-center gap-0.5 rounded-lg bg-ink-850">
-        <ItemActions item={item} actions={actions} small />
-        <MoreButton item={item} onMenu={onMenu} className="h-7 w-7" />
-      </span>
+      {(!narrow || buttons > 0) && (
+        <span className="absolute top-2 right-2 flex items-center gap-0.5 rounded-lg bg-ink-850" data-testid="note-tile-buttons">
+          <ItemActions item={item} actions={actions} small />
+          {!narrow && more}
+        </span>
+      )}
+      {narrow && onMenu && (
+        // After the tile's link and its buttons at the top: the Tab key reaches it last, as before.
+        <span className="absolute right-2 bottom-1.5 flex items-center rounded-lg bg-ink-850" data-testid="note-tile-more-foot">
+          {more}
+        </span>
+      )}
     </div>
   )
 }
