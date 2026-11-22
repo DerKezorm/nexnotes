@@ -1875,6 +1875,8 @@ describe('the one toolbar over two notes', () => {
   it('NOTES-8 AC-1 a click in the bar keeps the selection in the editor and the side used last', async () => {
     await twoNotes()
     await act(async () => void editorOf('right')!.commands.focus())
+    // The editor takes the focus in the next frame; on a slow machine that frame had not come before the check below.
+    await until(() => pane('right')!.contains(document.activeElement))
     await chooseWord('right')
     // The press itself takes no focus from the text (the selection stays where it is).
     const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
