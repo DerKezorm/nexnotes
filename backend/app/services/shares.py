@@ -18,9 +18,9 @@ with 4403 or 4409 (AC-5). Only the owner shares; whoever a thing is shared with 
 
 **Read links** (AC-9 to AC-13, EC-5 to EC-7, EC-11): a token of 32 random bytes, kept only as its SHA-256. Opening one
 that is not there counts as a miss for the sender's address (``LINK_BRAKE``); after ``LINK_FREE_MISSES`` the page
-answers 429 to unknown tokens for a while; a link that exists always gets its page. A link ends with its day in the member's time zone, when it is revoked,
-when the note goes to the trash or is locked, when its owner's account goes, and while the operator has switched
-read links off (``share_links``). The page itself is ``services/share_page.py``.
+answers 429 to unknown tokens for a while; a link that exists always gets its page. A link ends with its day in the
+member's time zone, when it is revoked, when the note goes to the trash or is locked, when its owner's account goes,
+and while the operator has switched read links off (``share_links``). The page itself is ``services/share_page.py``.
 """
 
 from __future__ import annotations

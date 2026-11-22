@@ -49,10 +49,10 @@ from ..models import Account, Note, NoteUpdate, utcnow
 from ..models_history import NoteEdit, NoteVersion
 from ..notedoc import doc as notedoc
 from ..notedoc.doc import _read_element, body_of, write_blocks
+from ..notedoc.markdown import to_plain
 from ..notedoc.rescue import Rescuer, _words
 from ..notedoc.schema import PARAGRAPH
 from ..notedoc.yupdate import IdRanges, decode_update
-from ..notedoc.markdown import to_plain
 from . import content, notes, settings_service
 
 logger = logging.getLogger("nexnotes.history")

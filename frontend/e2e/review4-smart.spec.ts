@@ -2,7 +2,7 @@
  * Fourth review, NOTES-7 with NOTES-10 and NOTES-13: "Shared with me" and "Attachments" are no fixed entries of the
  * sidebar any more but smart folders every account gets. "Shared with me" shows the notes others shared and leads to
  * the page of shares; "Attachments" opens as the gallery of its notes' attachments, beside list and tiles. Deleted,
- * they are gone; the old addresses stay. Run centrally, never by an agent.
+ * they are gone; the old addresses stay. Runs with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 

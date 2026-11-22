@@ -2,7 +2,7 @@
  * NOTES-2 AC-12 in real browsers: "Sign out" stands in Settings › Profile only, not in the sidebar nor in the settings'
  * navigation; it ends the session and leads to the sign-in page, on a wide screen and on a phone. Each case signs out
  * an account of its own (invited here), never the operator whose session the other files share. The question for
- * changes that still wait is covered by `signOut.test.tsx`. Run centrally, never by an agent.
+ * changes that still wait is covered by `signOut.test.tsx`. Runs with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 

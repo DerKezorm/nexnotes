@@ -22,12 +22,21 @@ from sqlalchemy import select
 from app.db import SessionLocal
 from app.models_attachments import Attachment
 from app.notedoc import doc as notedoc
-from app.services import attachments, export, media_worker, search, sketches
+from app.services import attachments, media_worker, search, sketches
 
-from .test_notes10 import add_blocks, needs_ffmpeg, png_with_text, refs_of, row_of, run, setup  # noqa: F401
-from .test_notes10 import close_connections, video_of  # noqa: F401
 from .conftest import make_account
 from .test_notes3 import new_note
+from .test_notes10 import (  # noqa: F401  # noqa: F401
+    add_blocks,
+    close_connections,
+    needs_ffmpeg,
+    png_with_text,
+    refs_of,
+    row_of,
+    run,
+    setup,
+    video_of,
+)
 
 FFMPEG = shutil.which("ffmpeg")
 
@@ -36,8 +45,7 @@ TRANSCRIPT = {
     "language": "de-DE",
     "text": "Der erste Termin wäre die Woche nach dem Jahreswechsel, der zweite Ende Januar.",
     "words": [{"text": word, "start": index * 400, "end": index * 400 + 350}
-              for index, word in enumerate("Der erste Termin wäre die Woche nach dem Jahreswechsel der zweite Ende "
-                                           "Januar".split())],
+              for index, word in enumerate(["Der", "erste", "Termin", "wäre", "die", "Woche", "nach", "dem", "Jahreswechsel", "der", "zweite", "Ende", "Januar"])],
 }
 
 

@@ -1,8 +1,8 @@
 /**
  * Fifth review: a smart folder in the sidebar has the menu a folder has ("…" on hover, a right click, Shift+F10) with
  * edit, up, down and delete, and on the phone's page "Folders" a "…" on every row. A smart folder carries a symbol
- * and a color chosen as a folder's. "About nexnotes" is an area of the settings (`settings-nav.spec.ts`). Run
- * centrally, never by an agent.
+ * and a color chosen as a folder's. "About nexnotes" is an area of the settings (`settings-nav.spec.ts`). Runs
+ * with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 

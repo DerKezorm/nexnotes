@@ -218,7 +218,7 @@ class _Gone(Exception):
 async def _send(peer: Peer, data: bytes) -> None:
     try:
         await peer.socket.send_bytes(data)
-    except Exception as error:  # noqa: BLE001 - a connection that broke off fails in its server's own way
+    except Exception as error:
         raise _Gone() from error
 
 
@@ -516,7 +516,7 @@ class Rooms:
         kind = message[0]
         try:
             payload = read_message(message[1:])
-        except Exception as error:  # noqa: BLE001 - whatever pycrdt raises on a broken message
+        except Exception as error:
             raise _Close(CLOSE_BAD) from error
         if kind == YSyncMessageType.SYNC_STEP1:
             peer.asked = payload
@@ -548,7 +548,7 @@ class Rooms:
         async with room.lock:
             try:
                 update = room.doc.get_update(asked)
-            except Exception as error:  # noqa: BLE001 - not a state vector pycrdt can read
+            except Exception as error:
                 raise _Close(CLOSE_BAD) from error
         await _send(peer, _step2(update))
 
@@ -569,7 +569,7 @@ class Rooms:
                 applied = apply(room.doc, payload)
                 if not applied.changed and redundant(payload, state_before):
                     return
-            except Exception as error:  # noqa: BLE001 - not an update pycrdt can read
+            except Exception as error:
                 await self._reload(room)
                 raise _Close(CLOSE_BAD) from error
             whole = room.doc.get_update()

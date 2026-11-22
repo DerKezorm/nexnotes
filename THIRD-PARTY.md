@@ -18,6 +18,23 @@ fetched by the package managers alone: files that lie in this repository or go i
 |---|---|---|
 | typst 0.15.0 | sets the PDF of a note (Python binding of Typst, which it bundles) | Apache-2.0 |
 | pypdf (tests only, not in the image) | reads the text of the PDFs in the tests | BSD-3-Clause |
+| pypdfium2 | draws the pages of an attached PDF as pictures (bundles PDFium) | Apache-2.0 or BSD-3-Clause; PDFium BSD-3-Clause |
+| pycrdt | the server side of a note edited together (Rust binding of Yrs) | MIT |
+| Pillow | reads and makes pictures | MIT-CMU |
+| pillow-heif | reads HEIC photos from iPhones; BSD-3-Clause for its own code, the binary wheels are **GPLv2** as a whole, see below | BSD-3-Clause / GPL-2.0 |
+
+### HEIC photos: pillow-heif and the libraries it brings
+
+Its binary wheels, and so the container image, contain:
+
+| Library | Licence |
+|---|---|
+| libheif | LGPL-3.0 |
+| libde265 | LGPL-3.0 |
+| x265 | GPL-2.0-or-later |
+
+The wheel ships these notices in `pillow_heif-*.dist-info/licenses/`. GPL-2.0-or-later and LGPL-3.0 may be combined
+with an AGPL-3.0 work, and the source of every part is public.
 
 ## Python packages added by features
 
@@ -32,6 +49,7 @@ fetched by the package managers alone: files that lie in this repository or go i
 |---|---|---|
 | Tesseract (Debian `tesseract-ocr`) with the language data `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `pol`, `tur` and `osd` (`tesseract-ocr-*`) | reads the text of attached pictures, scans and PDFs | Apache-2.0 |
 | Leptonica (Debian `libleptonica6`, through Tesseract) | reads pictures for Tesseract | BSD-2-Clause |
+| FFmpeg (Debian `ffmpeg`, with ffprobe) | the length and a still picture of an attached video | LGPL-2.1-or-later and GPL-2.0-or-later (Debian's build) |
 
 The other dependencies are listed in `backend/requirements.txt` and `frontend/package.json` and come with their own
 licence files; the About page names the main ones.

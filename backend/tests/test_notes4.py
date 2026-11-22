@@ -6,6 +6,7 @@ Notes are made straight through the model here: writing them is the note editor'
 
 from __future__ import annotations
 
+import itertools
 import json
 import re
 import threading
@@ -116,7 +117,7 @@ def test_notes4_ac1_folders_nest_at_the_top_and_fifteen_levels_deep(client: Test
         chain.append(parent)
     folders = by_id(client)
     assert len(chain) == 15
-    for upper, lower in zip(chain, chain[1:], strict=False):
+    for upper, lower in itertools.pairwise(chain):
         assert folders[lower]["parent_id"] == upper
     assert folders[top]["parent_id"] is None
     # And deeper still: there is no limit.

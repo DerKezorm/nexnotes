@@ -132,7 +132,7 @@ def test_notes12_reader_update_is_dropped_and_not_stored():
 def test_notes12_every_update_is_stored_before_it_is_passed_on():
     async def scenario():
         world = World()
-        a, b = await _pair(world)
+        a, _ = await _pair(world)
         world.events.clear()
         for letter in "abc":
             _type(a, letter)
@@ -215,7 +215,7 @@ def test_notes12_room_folds_after_n_updates_and_when_the_last_one_leaves():
 def test_notes12_text_for_search_is_refreshed_shortly_after_a_change():
     async def scenario():
         world = World(summary_delay=0.02)
-        a, b = await _pair(world)
+        a, _ = await _pair(world)
         _type(a, " world")
         await world.settle()
         await asyncio.sleep(0.1)
@@ -623,7 +623,7 @@ def test_notes12_a_state_that_does_not_encode_cleanly_is_not_folded(monkeypatch,
 
     async def scenario():
         world = World(fold_after=2)
-        a, b = await _pair(world)
+        a, _ = await _pair(world)
         monkeypatch.setattr(room_module, "well_formed", lambda data: False)
         for letter in "xyz":
             _type(a, letter)
