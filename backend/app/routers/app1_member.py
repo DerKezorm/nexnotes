@@ -89,6 +89,8 @@ class FolderPatch(BaseModel):
 
 
 def _own_folder(db: Any, account_id: int, folder_id: str) -> Folder:
+    if folder_id == "inbox":
+        raise error("inbox_fixed", "The inbox cannot be renamed, moved or deleted.")
     folder = db.get(Folder, folder_id) if len(folder_id) <= 36 else None
     if folder is None or folder.owner_id != account_id:
         raise error("not_found", "Not found.", 404)
@@ -99,13 +101,17 @@ def _own_folder(db: Any, account_id: int, folder_id: str) -> Folder:
 def change_folder(folder_id: str, found: Device, body: FolderPatch) -> dict[str, Any]:
     account = found.account
     nudge = False
+    moving = "parent_id" in body.model_fields_set
     with SessionLocal() as db:
         _own_folder(db, account.id, folder_id)
+        target = _parent(db, account.id, body.parent_id) if moving else None
+        # All or nothing: everything checked first, then written.
+        folders.check_change(db, account.id, folder_id, name=body.name, icon=body.icon, color=body.color,
+                             moving=moving, target_id=target)
         if body.name is not None or body.icon is not None or body.color is not None:
             folders.change(db, account.id, folder_id, name=body.name, icon=body.icon, color=body.color)
-        if "parent_id" in body.model_fields_set:
-            folders.move(db, account.id, target_id=_parent(db, account.id, body.parent_id), folder_ids=[folder_id],
-                         note_ids=[])
+        if moving:
+            folders.move(db, account.id, target_id=target, folder_ids=[folder_id], note_ids=[])
             nudge = shares.moves_change_rights(db, account.id)
         result = _folder_out(db, account.id, _own_folder(db, account.id, folder_id))
     if nudge:
@@ -207,7 +213,8 @@ async def remove_tag(name: str, found: Device) -> dict[str, Any]:
 
 
 class ProfileIn(BaseModel):
-    display_name: str = Field(max_length=1000)
+    #: The browser's limit (``routers/auth.py``): longer is refused, not cut.
+    display_name: str = Field(max_length=200)
 
 
 @router.put("/profile", summary="The own name (the address only in the browser)")

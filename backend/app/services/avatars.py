@@ -14,6 +14,7 @@ from __future__ import annotations
 import io
 import logging
 import struct
+import threading
 from collections.abc import Callable
 
 from sqlalchemy.orm import Session
@@ -27,6 +28,9 @@ SIZE = 256
 MAX_BYTES = 20 * 1024 * 1024
 #: Pixels of the picture that came (a 1-bit PNG can be tiny on disk and huge in memory).
 MAX_PIXELS = 50_000_000
+#: One picture at a time: a large photo takes a few hundred MB while it is read, and several at once would press the
+#: server.
+_ONE_AT_A_TIME = threading.Lock()
 #: What phones and cameras make. The decoder opens more (TIFF, PSD, EPS, which would start Ghostscript): not here.
 KINDS = {"jpeg", "png", "webp", "gif", "bmp", "heic", "avif"}
 _AVIF = {b"avif", b"avis"}
@@ -79,14 +83,18 @@ def make(data: bytes) -> bytes:
         raise AvatarError("avatar_too_large")
     if sniff(data[:64]) not in KINDS:
         raise AvatarError("avatar_not_a_picture")
-    try:
-        import pillow_heif
-        from PIL import Image, ImageOps
+    import pillow_heif
+    from PIL import Image, ImageOps
 
+    try:
         pillow_heif.register_heif_opener()
-        with Image.open(io.BytesIO(data)) as image:
+        with _ONE_AT_A_TIME, Image.open(io.BytesIO(data)) as image:
             if image.width * image.height > MAX_PIXELS:
                 raise AvatarError("avatar_too_large")
+            # Made small first, while reading where the format allows (a JPEG at an eighth), so that only one copy of
+            # the full picture is ever in memory; turned upright and cut afterwards.
+            image.draft("RGB", (SIZE * 4, SIZE * 4))
+            image.thumbnail((SIZE * 4, SIZE * 4), Image.Resampling.LANCZOS)
             upright = ImageOps.exif_transpose(image)
             square = ImageOps.fit(upright.convert("RGBA"), (SIZE, SIZE), Image.Resampling.LANCZOS)
             out = io.BytesIO()
@@ -94,6 +102,9 @@ def make(data: bytes) -> bytes:
             return out.getvalue()
     except AvatarError:
         raise
+    except Image.DecompressionBombError as exc:
+        # Over Pillow's own limit: too large, not "no picture".
+        raise AvatarError("avatar_too_large") from exc
     except Exception as exc:
         # A broken or hostile picture fails in the decoder's own way.
         logger.info("A profile picture could not be read: %s", type(exc).__name__)

@@ -325,3 +325,132 @@ def test_notes24_folge9_the_address_stays_in_the_browser(client, operator):
                                                                           "email": "else@example.com"})
     with SessionLocal() as db:
         assert db.get(Account, operator.id).email == "tester@example.com"
+
+
+# --- Nachprüfung (N1 to N8) ---------------------------------------------------------------------------------------
+
+
+def test_notes24_folge3_the_account_is_not_lost_between_pages(client, operator, monkeypatch):
+    """N1: a change of the account before many notes: the run in pages still brings it, on the page of its change."""
+    from app.services import appsync
+
+    monkeypatch.setattr(appsync, "PAGE", 3)
+    device = paired(client)
+    device.changes()
+    device.put("/views", {"key": "all", "sort": "title"})
+    for index in range(6):
+        device.new_note(f"N{index:021d}", f"Note {index}")
+    pages = [device.changes()]
+    while pages[-1]["more"]:
+        pages.append(device.changes())
+    assert len(pages) >= 2
+    accounts = [page["account"] for page in pages if "account" in page]
+    assert len(accounts) == 1 and accounts[0]["views"][0]["sort"] == "title"
+    assert "account" in pages[0] and pages[0]["more"] is True
+    assert "account" not in device.changes()
+    # A full run in pages: the account on its first page, once.
+    device.cursor = 0
+    full = [device.changes()]
+    while full[-1]["more"]:
+        full.append(device.changes())
+    assert len(full) >= 2 and all(page["full"] for page in full)
+    assert ["account" in page for page in full] == [True] + [False] * (len(full) - 1)
+
+
+def test_notes24_folge3_a_view_changed_again_comes_again(client, operator):
+    """N3: not only a new view, also one changed later gives the account a new number."""
+    device = paired(client)
+    device.put("/views", {"key": "all", "sort": "created"})
+    device.changes()
+    assert "account" not in device.changes()
+    device.put("/views", {"key": "all", "sort": "title"})
+    found = device.changes()
+    assert [(view["key"], view["sort"]) for view in found["account"]["views"]] == [("all", "title")]
+
+
+def test_notes24_folge3_smart_folder_views_stay_out_and_their_deletion_counts(client, operator):
+    """N6: views of smart folders are not in ``account.views`` until NOTESIOS-7; deleting such a folder still gives the
+    account a new number (its view went in bulk)."""
+    device = paired(client)
+    smart = client.post("/api/smart-folders", json={"name": "Open", "match": "all",
+                                                    "conditions": [{"kind": "tasks", "op": "open"}]})
+    assert smart.status_code == 201, smart.text
+    smart_id = smart.json()["id"]
+    assert client.put(f"/api/smart-folders/{smart_id}/view", json={"sort": "title"}).status_code == 200
+    device.put("/views", {"key": "all", "sort": "created"})
+    first = device.changes()
+    assert [view["key"] for view in first["account"]["views"]] == ["all"]
+    assert client.delete(f"/api/smart-folders/{smart_id}").status_code == 204
+    with SessionLocal() as db:
+        assert db.scalar(select(NoteListView).where(NoteListView.key == f"s:{smart_id}")) is None
+    assert "account" in device.changes()
+
+
+def test_notes24_folge2_notesios5_ac1_a_folder_patch_is_all_or_nothing(client, operator):
+    """N2: refused, nothing of the change is kept."""
+    device = paired(client)
+    device.post("/folders", {"id": FOLDER, "name": "Household"})
+    device.post("/folders", {"id": CHILD, "name": "Shopping", "parent_id": FOLDER})
+    device.post("/folders", {"id": "aAaAaAaAaAaAaAaAaAaAaA", "name": "Groceries"})
+    refused = device.patch(f"/folders/{FOLDER}", {"name": "Renamed", "color": "red", "parent_id": CHILD})
+    assert refused.status_code == 400 and code(refused) == "folder_into_itself"
+    row = folder_row(FOLDER)
+    assert (row.name, row.color, row.parent_id) == ("Household", "", None)
+    # The name the folder would carry in its new place is taken there: nothing moves, nothing is renamed.
+    taken = device.patch(f"/folders/{CHILD}", {"name": "groceries", "parent_id": None})
+    assert taken.status_code == 409 and code(taken) == "folder_name_taken"
+    row = folder_row(CHILD)
+    assert (row.name, row.parent_id) == ("Shopping", FOLDER)
+    unknown_symbol = device.patch(f"/folders/{CHILD}", {"name": "Fresh", "icon": "no-such-symbol"})
+    assert code(unknown_symbol) == "folder_style_unknown" and folder_row(CHILD).name == "Shopping"
+    # Both together when both are right.
+    done = device.patch(f"/folders/{CHILD}", {"name": "Fresh", "parent_id": None})
+    assert done.status_code == 200 and (done.json()["name"], done.json()["parent_id"]) == ("Fresh", None)
+
+
+def test_notes24_folge2_notesios5_ac4_the_inbox_stays_as_it_is(client, operator):
+    """N4: the inbox, by ``inbox`` or by its own id, is neither renamed, moved nor deleted."""
+    device = paired(client)
+    with SessionLocal() as db:
+        from app.services.inbox import inbox_for
+
+        inbox = inbox_for(db, operator.id).id
+        db.commit()
+    for folder_id in ("inbox", inbox):
+        for answer in (device.patch(f"/folders/{folder_id}", {"name": "Mine"}), device.delete(f"/folders/{folder_id}")):
+            assert code(answer) == "inbox_fixed", (folder_id, answer.text)
+    with SessionLocal() as db:
+        assert db.get(Folder, inbox).deleted_at is None and db.get(Folder, inbox).kind == "inbox"
+
+
+def test_notes24_folge9_notesios1_ac11_the_name_follows_the_browser_s_rule(client, operator):
+    """N5: over 200 characters refused like in the browser, never cut silently; kept at most 80 like there."""
+    device = paired(client)
+    too_long = device.put("/profile", {"display_name": "x" * 201})
+    assert too_long.status_code == 422
+    assert client.put("/api/me/profile", json={"display_name": "x" * 201}).status_code == 422
+    with SessionLocal() as db:
+        assert db.get(Account, operator.id).display_name == "Tester"
+    long = device.put("/profile", {"display_name": "y" * 150})
+    browser = client.put("/api/me/profile", json={"display_name": "y" * 150})
+    assert long.json()["name"] == browser.json()["display_name"]
+
+
+def _png_header(width: int, height: int) -> bytes:
+    """A PNG that says it is this large, without the pixels: what a decompression bomb looks like up front."""
+    import struct
+    import zlib
+
+    def chunk(kind: bytes, data: bytes) -> bytes:
+        return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
+
+    header = struct.pack(">IIBBBBB", width, height, 1, 0, 0, 0, 0)
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", header) + chunk(b"IDAT", zlib.compress(b"")) + chunk(b"IEND", b"")
+
+
+def test_notes24_folge9_notesios1_ac11_a_picture_bomb_is_too_large(client, operator):
+    """N8: over Pillow's own limit (and over ours) the answer is ``avatar_too_large``, not "no picture"."""
+    device = paired(client)
+    for size in (20_000, 8_000):
+        answer = device.client.put("/api/app/1/avatar", headers=device.headers, content=_png_header(size, size))
+        assert answer.status_code == 422 and code(answer) == "avatar_too_large", (size, answer.text)

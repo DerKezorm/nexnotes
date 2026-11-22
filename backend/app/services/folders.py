@@ -355,6 +355,30 @@ def change(db: Session, account_id: int, folder_id: str, *, name: str | None = N
     return view(folder)
 
 
+def check_change(db: Session, account_id: int, folder_id: str, *, name: str | None = None, icon: str | None = None,
+                 color: str | None = None, moving: bool = False, target_id: str | None = None) -> None:
+    """Whether ``change`` and then ``move`` of one folder would both go through, without writing anything: a device
+    sends both in one request and must not find half of it done (NOTES-24). The same refusals as the two."""
+    _check_style(icon, color)
+    clean = checked_name(name) if name is not None else None
+    folder = _alive(db, account_id, folder_id)
+    if folder.kind == FOLDER_INBOX:
+        raise error("inbox_fixed", "The inbox cannot be renamed, moved or deleted.")
+    parent = folder.parent_id
+    if moving:
+        if target_id is not None:
+            target = _alive(db, account_id, target_id)
+            if target.kind == FOLDER_INBOX:
+                raise error("folder_target_not_allowed", "Folders cannot go into the inbox.")
+            if folder.id in set(_ancestors(_alive_parents(db, account_id), target_id)):
+                raise error("folder_into_itself", "A folder cannot go into itself or one of its subfolders.")
+        parent = target_id
+    final = clean if clean is not None else folder.name
+    if (parent != folder.parent_id or final != folder.name) and _name_taken(
+            _siblings(db, account_id, parent, leaving=[folder.id]), final):
+        raise _refuse_taken(final)
+
+
 def move(db: Session, account_id: int, *, target_id: str | None, folder_ids: list[str],
          note_ids: list[str]) -> dict[str, int]:
     """Folders with everything inside them (AC-2) and notes (AC-3, AC-14) into a folder; folders also to the top

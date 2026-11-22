@@ -238,6 +238,17 @@ def _number_bulk(state: ORMExecuteState) -> Any:
         return None
     mapper = state.bind_mapper
     model = mapper.class_ if mapper is not None else None
+    if model is NoteListView:
+        # A view gone or changed in bulk (a smart folder deleted): its account gets a new number.
+        where = state.statement.whereclause
+        query = select(NoteListView.account_id).distinct()
+        owners = set(state.session.connection().execute(query.where(where) if where is not None else query)
+                     .scalars())
+        if owners:
+            flush = _Flush(state.session)
+            flush.accounts.update(owners)
+            _write(flush)
+        return None
     if model not in (Note, Folder):
         return None
     session = state.session
@@ -498,7 +509,9 @@ def account_out(db: Session, account: Account) -> dict[str, Any]:
     views = [{"key": "inbox" if view.key == inbox else view.key, "sort": view.sort, "direction": view.direction,
               "grouped": bool(view.grouped)}
              for view in db.scalars(select(NoteListView).where(NoteListView.account_id == row.id)
-                                    .order_by(NoteListView.key))]
+                                    .order_by(NoteListView.key))
+             # Views of smart folders (``s:<id>``) come with them (NOTESIOS-7).
+             if not view.key.startswith("s:")]
     return {"name": row.display_name or row.name, "avatar": _iso(row.avatar_at) or "",
             "paper": notes.default_paper(row), "list_look": notes_list.list_look(row), "views": views,
             "seq": int(row.sync_seq or 0)}
@@ -588,7 +601,11 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
         "folders": [view.folder(row) for row in folder_rows],
         "removed": _removed(db, account.id, stones),
     }
-    if not more and (full or _account_seq(db, account.id) > start):
+    # The account comes on the page whose range holds its last change (``start`` < its number <= the page's end), on
+    # the first page of a full list whatever its number, and on the last page when it changed after the end of the
+    # range read: never lost between pages of one run.
+    seq = _account_seq(db, account.id)
+    if (full and not going_on) or (start < seq and (not more or seq <= bound)):
         out["account"] = account_out(db, account)
     return out
 
