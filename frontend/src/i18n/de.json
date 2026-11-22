@@ -619,6 +619,7 @@
     "pairing_gone": "Der Code ist abgelaufen, schon benutzt oder nicht gültig.",
     "push_ticket_invalid": "Mitteilungen ließen sich für dieses Gerät nicht einrichten.",
     "too_many_notes": "Zu viele Notizen auf einmal.",
+    "too_many_folders": "Zu viele Ordner auf einmal.",
     "invalid_update": "Die Änderung ließ sich nicht lesen.",
     "no_right": "Hier darfst du nur lesen.",
     "second_factor_required": "Richte zuerst im Browser deinen zweiten Faktor ein, dann verbinde das Gerät neu.",
