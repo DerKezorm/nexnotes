@@ -133,6 +133,9 @@ class Account(Base):
     #: password, a block or unblock, "sign out everywhere" and a reset second factor, so no browser from before counts
     #: as known any more.
     device_key: Mapped[str] = mapped_column(String(64), default="")
+    #: The number of the last change of what the app keeps of the account (name, picture, preferences, the views of
+    #: its lists) for ``changes`` (NOTES-24, ``services/appsync.py``).
+    sync_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     #: Not stored. True on the account of a session that came through a provider which checks the second factor.
     provider_checked: ClassVar[bool] = False
 

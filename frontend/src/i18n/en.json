@@ -621,7 +621,8 @@
     "too_many_notes": "Too many notes at once.",
     "invalid_update": "The change could not be read.",
     "no_right": "You may only read here.",
-    "second_factor_required": "Set up your second factor in the browser first, then connect the device again."
+    "second_factor_required": "Set up your second factor in the browser first, then connect the device again.",
+    "folder_id_taken": "A folder with this id belongs to another account."
   },
   "folders": {
     "section": "Folders",

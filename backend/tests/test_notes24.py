@@ -73,6 +73,9 @@ class App:
     def post(self, path: str, body: object = None):
         return self.client.post(f"/api/app/1{path}", headers=self.headers, json=body)
 
+    def put(self, path: str, body: object):
+        return self.client.put(f"/api/app/1{path}", headers=self.headers, json=body)
+
     def patch(self, path: str, body: object):
         return self.client.patch(f"/api/app/1{path}", headers=self.headers, json=body)
 

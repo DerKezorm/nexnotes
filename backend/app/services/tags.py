@@ -190,11 +190,17 @@ def tags_of_note(db: Session, note: Note) -> Counter[str]:
 
 def write_tags(db: Session, note_id: str, found: Counter[str]) -> None:
     connection = db.connection()
+    before = set(connection.execute(select(NoteTag.label).where(NoteTag.note_id == note_id)).scalars())
     connection.execute(delete(NoteTag).where(NoteTag.note_id == note_id))
     rows = [{"note_id": note_id, "label": label, "key": key_of(label), "count": count}
             for label, count in found.items() if count > 0]
     if rows:
         connection.execute(insert(NoteTag), rows)
+    if before != {row["label"] for row in rows}:
+        # The app keeps the tags of each note (NOTES-24): other tags are a change of the note.
+        from .appsync import bump_notes
+
+        bump_notes(db, [note_id])
 
 
 _STALE = "_nexnotes_tags_stale"

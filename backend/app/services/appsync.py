@@ -35,7 +35,7 @@ from sqlalchemy import and_, event, func, inspect, or_, select, text
 from sqlalchemy.orm import ORMExecuteState, Session
 
 from ..db import SessionLocal
-from ..models import FOLDER_INBOX, Account, Folder, Note, NoteUpdate, utcnow
+from ..models import FOLDER_INBOX, Account, Folder, Note, NoteListView, NoteUpdate, utcnow
 from ..models_app import AppCounter, AppTombstone
 from ..models_shares import READ, WRITE, Share, SharePin
 
@@ -50,6 +50,8 @@ KEEP_DAYS = 400
 NOTE_COLUMNS = ("title", "title_check", "folder_id", "paper", "icon", "color", "pinned_at", "deleted_at", "locked",
                 "owner_id", "updated_at", "created_at")
 FOLDER_COLUMNS = ("name", "parent_id", "icon", "color", "position", "deleted_at", "owner_id", "kind")
+#: Columns of an account the app keeps (``account`` in ``changes``).
+ACCOUNT_COLUMNS = ("display_name", "avatar_at", "preferences")
 
 _NEXT = text("INSERT INTO app_counter (id, value, floor) VALUES (1, 1, 0) "
              "ON CONFLICT (id) DO UPDATE SET value = value + 1 RETURNING value")
@@ -101,6 +103,7 @@ class _Flush:
     session: Session
     seq: int | None = None
     notes: set[str] = field(default_factory=set)
+    accounts: set[int] = field(default_factory=set)
     trees: set[str] = field(default_factory=set)
     #: (kind, id, account)
     gone: list[tuple[str, str, int | None]] = field(default_factory=list)
@@ -138,6 +141,8 @@ def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
             flush.notes.add(obj.note_id)
         elif isinstance(obj, Share):
             _shared(flush, obj)
+        elif isinstance(obj, NoteListView):
+            flush.accounts.add(obj.account_id)
     for obj in session.dirty:
         if isinstance(obj, Note):
             changed = _changed(obj, NOTE_COLUMNS)
@@ -159,6 +164,10 @@ def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
                 flush.gone_trees += [(obj.id, account_id) for account_id in people]
         elif isinstance(obj, Share) and _changed(obj, ("level", "note_id", "folder_id", "account_id")):
             _shared(flush, obj)
+        elif isinstance(obj, Account) and _changed(obj, ACCOUNT_COLUMNS):
+            obj.sync_seq = flush.number()
+        elif isinstance(obj, NoteListView) and _changed(obj, ("sort", "direction", "grouped", "mode", "key")):
+            flush.accounts.add(obj.account_id)
     for obj in session.deleted:
         if isinstance(obj, Note):
             flush.went("note", obj.id, obj.owner_id)
@@ -166,12 +175,21 @@ def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
             flush.went("folder", obj.id, obj.owner_id)
         elif isinstance(obj, SharePin):
             flush.notes.add(obj.note_id)
+        elif isinstance(obj, NoteListView):
+            flush.accounts.add(obj.account_id)
         elif isinstance(obj, Share):
             _shared(flush, obj)
             if obj.note_id:
                 flush.gone.append(("note", obj.note_id, obj.account_id))
             elif obj.folder_id:
                 flush.gone_trees.append((obj.folder_id, obj.account_id))
+    _write(flush)
+
+
+def bump_notes(session: Session, note_ids: Iterable[str]) -> None:
+    """Notes whose change the ORM does not see (their tags, written straight into ``note_tags``) get a new number."""
+    flush = _Flush(session)
+    flush.notes.update(note_ids)
     _write(flush)
 
 
@@ -185,10 +203,13 @@ def _shared(flush: _Flush, share: Share) -> None:
 
 
 def _write(flush: _Flush) -> None:
-    if not (flush.notes or flush.trees or flush.gone or flush.gone_trees):
+    if not (flush.notes or flush.accounts or flush.trees or flush.gone or flush.gone_trees):
         return
     seq = flush.number()
     connection = flush.session.connection()
+    if flush.accounts:
+        connection.execute(text("UPDATE accounts SET sync_seq = :seq WHERE id IN (SELECT value FROM json_each(:ids))"),
+                           {"seq": seq, "ids": json.dumps(sorted(flush.accounts))})
     if flush.notes:
         connection.execute(text("UPDATE notes SET sync_seq = :seq WHERE id IN (SELECT value FROM json_each(:ids))"),
                            {"seq": seq, "ids": json.dumps(sorted(flush.notes))})
@@ -411,6 +432,7 @@ class View:
     inbox: str | None
     rights: Rights
     pins: set[str]
+    tags: dict[str, list[str]] = field(default_factory=dict)
 
     def folder_ref(self, folder_id: str | None, owner_id: int) -> str | None:
         """``inbox`` for the own inbox; a folder of somebody else only when it is shared too, else none (the note
@@ -431,6 +453,7 @@ class View:
             "pinned": row.pinned_at is not None if own else row.id in self.pins,
             "title_check": bool(row.title_check), "locked": bool(row.locked),
             "right": "owner" if own else self.rights.note(row),
+            "tags": [] if row.locked else self.tags.get(row.id, []),
             "created_at": _iso(row.created_at), "updated_at": _iso(row.updated_at), "deleted_at": _iso(row.deleted_at),
             "seq": int(row.sync_seq or 0),
         }
@@ -444,11 +467,41 @@ class View:
         }
 
 
+def tags_of(db: Session, note_ids: list[str]) -> dict[str, list[str]]:
+    """The tags of the notes as written, without ``#``, each spelling once."""
+    from ..models_tags import NoteTag
+
+    found: dict[str, list[str]] = {}
+    for start in range(0, len(note_ids), 500):
+        for note_id, label in db.execute(select(NoteTag.note_id, NoteTag.label)
+                                         .where(NoteTag.note_id.in_(note_ids[start:start + 500]))
+                                         .order_by(NoteTag.note_id, NoteTag.label)):
+            found.setdefault(note_id, []).append(label)
+    return found
+
+
 def view_of(db: Session, account_id: int, note_ids: Iterable[str] = ()) -> View:
     wanted = list(note_ids)
     pins = set(db.scalars(select(SharePin.note_id).where(SharePin.account_id == account_id,
                                                          SharePin.note_id.in_(wanted)))) if wanted else set()
-    return View(account_id=account_id, inbox=inbox_id(db, account_id), rights=rights_of(db, account_id), pins=pins)
+    return View(account_id=account_id, inbox=inbox_id(db, account_id), rights=rights_of(db, account_id), pins=pins,
+                tags=tags_of(db, wanted) if wanted else {})
+
+
+def account_out(db: Session, account: Account) -> dict[str, Any]:
+    """What the app keeps of the account (``account`` in ``changes``): name, picture, default paper, how its lists
+    look, and every list's view (all of them, each time)."""
+    from . import notes, notes_list
+
+    row = db.get(Account, account.id) or account
+    inbox = inbox_id(db, row.id)
+    views = [{"key": "inbox" if view.key == inbox else view.key, "sort": view.sort, "direction": view.direction,
+              "grouped": bool(view.grouped)}
+             for view in db.scalars(select(NoteListView).where(NoteListView.account_id == row.id)
+                                    .order_by(NoteListView.key))]
+    return {"name": row.display_name or row.name, "avatar": _iso(row.avatar_at) or "",
+            "paper": notes.default_paper(row), "list_look": notes_list.list_look(row), "views": views,
+            "seq": int(row.sync_seq or 0)}
 
 
 def note_out(db: Session, account_id: int, note: Note) -> dict[str, Any]:
@@ -527,7 +580,7 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
         stones = list(db.scalars(select(AppTombstone).where(
             _stones(account.id), AppTombstone.seq > since, AppTombstone.seq <= value).order_by(AppTombstone.seq)))
     view = view_of(db, account.id, [row.id for row in note_rows])
-    return {
+    out: dict[str, Any] = {
         "cursor": bound if more else value,
         "full": full,
         "more": more,
@@ -535,6 +588,13 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
         "folders": [view.folder(row) for row in folder_rows],
         "removed": _removed(db, account.id, stones),
     }
+    if not more and (full or _account_seq(db, account.id) > start):
+        out["account"] = account_out(db, account)
+    return out
+
+
+def _account_seq(db: Session, account_id: int) -> int:
+    return int(db.scalar(select(Account.sync_seq).where(Account.id == account_id)) or 0)
 
 
 def _beyond(db: Session, account: Account, bound: int, value: int, full: bool) -> bool:
@@ -555,7 +615,7 @@ def changed_since(db: Session, account: Account, cursor: int) -> int | None:
         return None
     if _needs_full(cursor, value, floor):
         return value
-    if _beyond(db, account, cursor, value, full=True):
+    if _beyond(db, account, cursor, value, full=True) or _account_seq(db, account.id) > cursor:
         return value
     stones = list(db.scalars(select(AppTombstone).where(_stones(account.id), AppTombstone.seq > cursor,
                                                         AppTombstone.seq <= value).limit(PAGE)))
