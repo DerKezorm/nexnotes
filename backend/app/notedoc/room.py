@@ -646,7 +646,7 @@ def _take_in(doc: Doc, update: bytes, rescuer: Rescuer, whole_before: bytes) -> 
     state_before = doc.get_state()
     try:
         applied = apply(doc, update)
-    except Exception as error:  # noqa: BLE001 - not an update pycrdt can read
+    except Exception as error:  # not an update pycrdt can read
         raise Refused("invalid_update") from error
     if not applied.changed and redundant(update, state_before):
         return False, None, whole_before
@@ -666,7 +666,7 @@ def _take_in(doc: Doc, update: bytes, rescuer: Rescuer, whole_before: bytes) -> 
 def _answer_for(doc: Doc, state_vector: bytes) -> tuple[bytes, bytes, str]:
     try:
         lacking = doc.get_update(state_vector) if state_vector else doc.get_update()
-    except Exception as error:  # noqa: BLE001 - not a state vector pycrdt can read
+    except Exception as error:  # not a state vector pycrdt can read
         raise Refused("invalid_state_vector") from error
     return doc.get_state(), lacking, title_of(doc)
 
