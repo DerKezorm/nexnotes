@@ -383,6 +383,57 @@ describe('the looks of the lists', () => {
     }
   })
 
+  it('NOTES-6 AC-3 a group heading stands on its own line above its tiles and cards, no row grows past its place', async () => {
+    // A pinned tile with a picture, two lines of title and every hint: taller than a tile is, if its row could grow.
+    items = [
+      item('p', {
+        title: 'Ein sehr langer Titel, der auf einer Kachel zwei Zeilen braucht',
+        title_check: true,
+        pinned: true,
+        preview: 'Erste Zeile\nZweite Zeile\nDritte Zeile',
+        media: { kind: 'image', count: 3, url: '/api/attachments/x/thumb' },
+        tasks: { done: 1, total: 4 },
+        attachments: 2,
+        tags: ['haus'],
+      } as Partial<ListItem>),
+      ...['t1', 't2', 't3', 't4', 't5'].map((id) => item(id, { preview: 'Text' })),
+      item('o', { updated_at: new Date(Date.now() - 3 * 86_400_000).toISOString() }),
+    ]
+    for (const style of ['tiles', 'cards'] as const) {
+      lookIs(style)
+      await again()
+      const placed = [...$('note-window')!.children] as HTMLElement[]
+      const top = (one: HTMLElement) => parseFloat(one.style.top)
+      const bottom = (one: HTMLElement) => top(one) + parseFloat(one.style.height)
+      expect(placed.map((one) => one.querySelector('[data-testid="list-group-toggle"]')?.getAttribute('data-section') ?? 'grid'), style).toEqual([
+        'pinned',
+        'grid',
+        'today',
+        'grid',
+        'grid',
+        'week',
+        'grid',
+      ])
+      // Each entry begins where the one before ends: a heading never lies in the place of a row of notes.
+      placed.slice(1).forEach((one, index) => expect(top(one), `${style} ${index}`).toBe(bottom(placed[index])))
+      // And a row of tiles or cards stays in its place: one row exactly as high as the place (less the gap below it),
+      // not an auto row that grows with a picture or long text into the heading of the next group.
+      for (const grid of $$('list-grid')) {
+        expect(grid.className, style).toContain('h-full')
+        expect(grid.style.gridTemplateRows, style).toBe('minmax(0, 1fr)')
+        for (const tile of grid.children) expect(tile.className, style).toContain('h-full')
+      }
+      expect(note('p').querySelector('[data-testid="note-media"]') !== null, style).toBe(style === 'tiles')
+    }
+    // The same in a narrow list (two small tiles side by side) and with several groups.
+    const sections = arrange(items, DEFAULT_VIEW, new Date())
+    for (const width of [390, 1024]) {
+      const { entries } = layout(sections, 'tiles', width)
+      entries.slice(1).forEach((entry, index) => expect(entry.top, `${width} ${index}`).toBe(entries[index].top + entries[index].height))
+      expect(entries.filter((entry) => entry.kind === 'header').map((entry) => entry.height)).toEqual([SIZES.header, SIZES.header, SIZES.header])
+    }
+  })
+
   it('compact rows and group headings are a finger high on a touch screen; cards stand in a grid when wide', () => {
     const sections = arrange(items, DEFAULT_VIEW, new Date())
     const touch = layout(sections, 'compact', 390, { touch: true })
