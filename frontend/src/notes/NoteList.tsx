@@ -75,6 +75,9 @@ export type NoteListProps = {
   gallery?: ReactNode
   /** The count in the head instead of "12 Notizen" (the page of a tag: "3 Notizen, davon 1 von Lena"). */
   count?: string
+  /** The notes in the folder's subfolders, at every depth: the head then counts as the sidebar does, „3 (12) Notizen“.
+   * Left out for a folder without subfolders. */
+  below?: number
   /** What stands between the head and the notes: a sentence about the list, a shared folder's folders. */
   intro?: ReactNode
   /** What the list adds to each note: a sign, another place than its folder, buttons (`ItemDecor`). */
@@ -97,7 +100,7 @@ function useWidth(box: React.RefObject<HTMLElement | null>): number {
   return width
 }
 
-export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, crumb, icon, actions, source, empty, modes, gallery, count, intro, decorate }: NoteListProps) {
+export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, heading, crumb, icon, actions, source, empty, modes, gallery, count, below, intro, decorate }: NoteListProps) {
   const href = hrefFor ?? ((id: string) => noteHref(id, folderId))
   const location = useLocation()
   const selectedId = chosenId ?? noteOf(location.pathname, location.search) ?? undefined
@@ -222,7 +225,9 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
         ? counts.shared > 0
           ? t('noteList.countsShared', { own: counts.own, shared: counts.shared })
           : t('noteList.count', { count: counts.own })
-        : t('noteList.count', { count: counts.own + counts.shared }))
+        : below !== undefined
+          ? t('folders.count.notesTree', { own: counts.own + counts.shared, count: counts.own + counts.shared + below })
+          : t('noteList.count', { count: counts.own + counts.shared }))
 
   const viewMenu = <ViewMenu view={view} onChange={setView} look={look} onLook={(change) => void saveListLook(change)} modes={modes} />
   const summary = viewSummary(view, look, t, showsGallery)

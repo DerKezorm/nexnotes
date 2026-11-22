@@ -640,6 +640,9 @@
     "count": {
       "notes_one": "{{count}} Notiz",
       "notes_other": "{{count}} Notizen",
+      "notesTree_one": "{{own}} ({{count}}) Notiz",
+      "notesTree_other": "{{own}} ({{count}}) Notizen",
+      "inTree": "{{count}} samt Unterordnern",
       "subfolders_one": "{{count}} Unterordner",
       "subfolders_other": "{{count}} Unterordnern"
     },
@@ -713,6 +716,7 @@
       "emptyTitle": "Noch keine Notizen in „{{name}}“",
       "emptyText": "Leg die erste an, oder zieh Notizen aus einem anderen Ordner hierher.",
       "newNote": "Neue Notiz in „{{name}}“",
+      "noNotesHere": "Keine Notizen direkt in „{{name}}“",
       "gone": "Diesen Ordner gibt es nicht, oder er liegt im Papierkorb."
     },
     "inbox": {

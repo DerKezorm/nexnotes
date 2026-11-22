@@ -1,6 +1,7 @@
 /**
- * The pages of the folders (NOTES-4): a folder with its path at the top (every step a link, AC-13) and its notes below,
- * or the empty state of NOTES-6 EC-1 (EC-5); the inbox, a list like the folders, with where each note came from
+ * The pages of the folders (NOTES-4): a folder with its path at the top (every step a link, AC-13), its subfolders and
+ * its notes below (as in the iPhone app, change after the contract of 22.11.2026), or the empty state of NOTES-6 EC-1
+ * (EC-5) when it holds neither; the inbox, a list like the folders, with where each note came from
  * (AC-7), "File" (AC-14) and its own empty state (EC-6); and on the phone the list of all folders (drawing
  * "Handy-Ordner").
  */
@@ -28,7 +29,8 @@ import { FolderMark } from './FolderMark'
 import { FolderMenu } from './FolderMenu'
 import { colorOf } from './palette'
 import { originText } from './origin'
-import { flatten, pathOf, revealFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { countLabel, flatten, hasSubfolders, notesBelow, pathOf, revealFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { Subfolders } from './Subfolders'
 
 // The open folder for "New note" (AC-9) follows the list on show: the notes' workspace sets it (`NotesPage`), whether
 // the list has room beside the notes or not.
@@ -61,6 +63,8 @@ export function FolderPage() {
     )
 
   const path = pathOf(tree, id)
+  // A folder with subfolders shows them above its notes; the big empty state only when it holds neither.
+  const nested = hasSubfolders(tree, id)
   // On a phone: back to the folder above, or to all folders (NOTES-23 AC-1).
   const parent = path.length > 1 ? path[path.length - 2] : null
   const takeNotes = (event: DragEvent) => {
@@ -111,8 +115,8 @@ export function FolderPage() {
   return (
     <div className={'flex min-h-full flex-col gap-3 ' + padding} data-testid="folder-page">
       <PhoneBack to={parent ? `/folder/${parent.id}` : '/folders'} label={parent ? parent.name : t('folders.section')} />
-      {folder.count === 0 && <ListHead heading={folder.name} crumb={crumb} icon={icon} count={t('folders.count.notes', { count: 0 })} actions={more} />}
-      {folder.count === 0 ? (
+      {folder.count === 0 && !nested && <ListHead heading={folder.name} crumb={crumb} icon={icon} count={t('folders.count.notes', { count: 0 })} actions={more} />}
+      {folder.count === 0 && !nested ? (
         <div
           data-testid="folder-empty"
           onDragOver={takeNotes}
@@ -137,7 +141,22 @@ export function FolderPage() {
           )}
         </div>
       ) : (
-        <NoteList folderId={folder.id} heading={folder.name} crumb={crumb} icon={icon} actions={more} />
+        <NoteList
+          folderId={folder.id}
+          heading={folder.name}
+          crumb={crumb}
+          icon={icon}
+          actions={more}
+          below={nested ? notesBelow(tree, folder.id) : undefined}
+          intro={<Subfolders parentId={folder.id} onAction={actions.act} />}
+          empty={
+            nested ? (
+              <p className="px-1 text-[13px] text-mist-500" data-testid="folder-no-notes">
+                {t('folders.page.noNotesHere', { name: folder.name })}
+              </p>
+            ) : undefined
+          }
+        />
       )}
       {newNote && <PhoneNewNote onClick={() => newNote(folder.id)} label={t('folders.page.newNote', { name: folder.name })} />}
       {menu && <FolderMenu folder={folder} anchor={menu} onClose={() => setMenu(null)} onAction={(action) => actions.act(action, folder)} />}
@@ -305,7 +324,7 @@ export function FoldersPage() {
                         {folder.name}
                       </span>
                     </span>
-                    <span className="shrink-0 text-[15px] text-mist-500">{folder.count} ›</span>
+                    <span className="shrink-0 text-[15px] text-mist-500 tabular-nums">{countLabel(tree, folder)} ›</span>
                   </Link>
                   <button type="button" aria-label={t('folders.menu.label', { name: folder.name })} onClick={(event) => setMenu({ folder, anchor: event.currentTarget })} className="flex h-11 w-10 shrink-0 items-center justify-center text-mist-500">
                     <MoreHorizontal aria-hidden className="h-4 w-4" />

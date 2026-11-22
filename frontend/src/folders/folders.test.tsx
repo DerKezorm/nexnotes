@@ -263,9 +263,29 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
   it('NOTES-4 AC-8 beside every folder stands the number of its own notes, and the inbox has its own', async () => {
     inboxNotes = [{ id: 'n1', title: 'Kompost', preview: '', origin: 'share:Safari', title_check: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString() }]
     await render()
-    expect(row('Arbeit').getAttribute('aria-label')).toBe('Arbeit, 57 notes')
+    expect(row('Haushalt').getAttribute('aria-label')).toBe('Haushalt, 12 notes')
     expect(row('Haushalt').textContent).toContain('12')
     expect(box.querySelector('[data-testid="sidebar-inbox"]')!.textContent).toBe('Inbox1')
+  })
+
+  it('NOTES-4 AC-8 zwei Zahlen: a folder with subfolders shows its own notes and all below in brackets, „3 (12)“', async () => {
+    // Arbeit 57, in it Projekte 21, in that 2026 14, in that Entwürfe 2; Haushalt 12 without subfolders.
+    folders.push(folder('d', 'Entwürfe', 'y', { count: 2 }))
+    await render()
+    const number = (name: string) => row(name).querySelector('span[aria-hidden].tabular-nums')!.textContent
+    expect(number('Arbeit')).toBe('57 (94)')
+    expect(row('Arbeit').getAttribute('aria-label')).toBe('Arbeit, 57 notes, 94 including subfolders')
+    expect(number('Haushalt')).toBe('12')
+    click(row('Arbeit').querySelector('button[aria-label="Expand"]')!)
+    click(row('Projekte').querySelector('button[aria-label="Expand"]')!)
+    click(row('2026').querySelector('button[aria-label="Expand"]')!)
+    expect(number('Projekte')).toBe('21 (37)')
+    expect(number('2026')).toBe('14 (16)')
+    expect(number('Entwürfe')).toBe('2')
+    // A folder whose subfolders hold nothing still shows both numbers, as on the iPhone.
+    folders.push(folder('e', 'Leer', 'h'))
+    await act(async () => await refreshFolders())
+    expect(number('Haushalt')).toBe('12 (12)')
   })
 
   it('NOTES-4 EC-3 fifteen levels stay readable: names cut short with the whole name as a tooltip', async () => {
@@ -602,6 +622,71 @@ describe('the pages (NOTES-4 AC-7, AC-9, AC-13, AC-14, EC-5, EC-6)', () => {
     root = createRoot(box)
     await render('/folder/h')
     expect(box.querySelector('[data-testid="note-list"]')!.getAttribute('data-folder')).toBe('h')
+  })
+
+  it('NOTES-6 Unterordner über den Notizen: the direct subfolders stand above the notes with both numbers, open and have their menu', async () => {
+    const now = new Date().toISOString()
+    folders = folders.map((f) => (f.id === 'a' ? { ...f, count: 2 } : f))
+    folders.push(folder('q', 'Quartal', 'a', { color: 'blue', count: 3 }))
+    const notes = ['n1', 'n2'].map((id) => ({ id, title: `Note ${id}`, preview: '', origin: '', title_check: false, created_at: now, updated_at: now, icon: '', color: '', folder_id: 'a', pinned: false, tasks: null }))
+    refuse = ({ method, path }) =>
+      method === 'GET' && path.startsWith('/api/note-list?folder_id=a')
+        ? { status: 200, body: { key: 'a', view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: false }, counts: { own: 2, shared: 0 }, items: notes } }
+        : undefined
+    await render('/folder/a')
+    const section = box.querySelector<HTMLElement>('[data-testid="subfolders"]')!
+    expect(section.querySelector('h2')!.textContent).toBe('Folders')
+    const subfolders = [...section.querySelectorAll<HTMLElement>('[data-testid="subfolder"]')]
+    // Only the direct ones (not 2026 inside Projekte), in the sidebar's order, with symbol, name and both numbers.
+    expect(subfolders.map((item) => [item.querySelector('span[title]')!.textContent, item.querySelector('[data-testid="subfolder-count"]')!.textContent])).toEqual([
+      ['Projekte', '21 (35)'],
+      ['Quartal', '3'],
+    ])
+    expect(subfolders[0].querySelector('a')!.getAttribute('aria-label')).toBe('Projekte, 21 notes, 35 including subfolders')
+    expect((subfolders[1].querySelector('svg[data-symbol]') as SVGElement).style.color).not.toBe('')
+    // Under the head and above the notes; the head counts the same way.
+    const firstNote = box.querySelector('[data-testid="note-list"] a[href*="n1"]')!
+    expect(section.compareDocumentPosition(firstNote) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(box.querySelector('[data-testid="list-head"]')!.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(box.querySelector('[data-testid="list-counts"]')!.textContent).toBe('2 (40) notes')
+    // "…" brings the folder's menu, as in the sidebar.
+    click(button('Menu of Quartal', section))
+    const menu = document.querySelector('[role="menu"]')!
+    expect(menu.textContent).toContain('Rename')
+    key(menu.querySelector('[role="menuitem"]') ?? menu, 'Escape')
+    expect(document.querySelector('[role="menu"]')).toBeNull()
+    // A click opens the subfolder.
+    click(subfolders[0].querySelector('a')!)
+    await settle()
+    expect(where().path).toBe('/folder/p')
+  })
+
+  it('NOTES-6 Unterordner über den Notizen: only subfolders give a small line instead of the empty state; neither keeps it', async () => {
+    folders.push(folder('e', 'Leer', null), folder('k', 'Kind', 'e', { count: 3 }))
+    refuse = ({ method, path }) =>
+      method === 'GET' && path.startsWith('/api/note-list?folder_id=e')
+        ? { status: 200, body: { key: 'e', view: { mode: 'list', sort: 'updated', direction: 'desc', grouped: false }, counts: { own: 0, shared: 0 }, items: [] } }
+        : undefined
+    await render('/folder/e')
+    expect(box.querySelector('[data-testid="folder-empty"]')).toBeNull()
+    expect(box.querySelector('[data-testid="list-empty"]')).toBeNull()
+    expect(box.querySelector('[data-testid="subfolder-count"]')!.textContent).toBe('3')
+    expect(box.querySelector('[data-testid="folder-no-notes"]')!.textContent).toBe('No notes directly in “Leer”')
+    expect(box.querySelector('[data-testid="list-counts"]')!.textContent).toBe('0 (3) notes')
+    // A folder with neither subfolders nor notes keeps the empty state of NOTES-6 EC-1, without the section.
+    folders = folders.map((f) => (f.id === 'k' ? { ...f, count: 0 } : f))
+    act(() => root.unmount())
+    forgetFolders()
+    root = createRoot(box)
+    await render('/folder/k')
+    expect(box.querySelector('[data-testid="folder-empty"]')!.textContent).toContain('No notes in “Kind” yet')
+    expect(box.querySelector('[data-testid="subfolders"]')).toBeNull()
+    // The inbox has no section of subfolders.
+    act(() => root.unmount())
+    root = createRoot(box)
+    await render('/inbox')
+    expect(box.querySelector('[data-testid="inbox-page"]')).not.toBeNull()
+    expect(box.querySelector('[data-testid="subfolders"]')).toBeNull()
   })
 
   it('NOTES-4 AC-7 AC-14 the inbox says where each note came from and files it into a folder', async () => {

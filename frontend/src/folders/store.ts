@@ -20,6 +20,32 @@ export type TreeState = {
   byId: Map<string, Folder>
   /** The children of each folder (`null`: the top), in the sidebar's order. */
   children: Map<string | null, string[]>
+  /** The notes of each folder together with those of all its subfolders, at every depth (the number in brackets). */
+  totals: Map<string, number>
+}
+
+/** Adds up every folder's notes with those below it: the tree from the server holds every living folder of the account
+ * with its own number, so the sums are exact (no trash, locked notes count, as the server counts them). */
+function totalsOf(byId: Map<string, Folder>, children: Map<string | null, string[]>): Map<string, number> {
+  const order: string[] = []
+  const seen = new Set<string>()
+  const stack = [...(children.get(null) ?? [])]
+  while (stack.length) {
+    const id = stack.pop()!
+    if (seen.has(id)) continue
+    seen.add(id)
+    order.push(id)
+    stack.push(...(children.get(id) ?? []))
+  }
+  const totals = new Map<string, number>()
+  // A folder comes before everything below it in `order`: backwards, the children are summed before their parent.
+  for (let index = order.length - 1; index >= 0; index--) {
+    const id = order[index]
+    let sum = byId.get(id)?.count ?? 0
+    for (const child of children.get(id) ?? []) sum += totals.get(child) ?? 0
+    totals.set(id, sum)
+  }
+  return totals
 }
 
 function build(tree: FolderTree | null, status: TreeState['status']): TreeState {
@@ -32,7 +58,7 @@ function build(tree: FolderTree | null, status: TreeState['status']): TreeState 
     list.push(folder.id)
     children.set(parent, list)
   }
-  return { status, inbox: tree?.inbox ?? null, folders, byId, children }
+  return { status, inbox: tree?.inbox ?? null, folders, byId, children, totals: totalsOf(byId, children) }
 }
 
 let state: TreeState = build(null, 'idle')
@@ -105,6 +131,25 @@ export function pathOf(tree: TreeState, id: string): Folder[] {
     current = current.parent_id ? tree.byId.get(current.parent_id) : undefined
   }
   return path
+}
+
+/** Whether the folder has folders in it. */
+export function hasSubfolders(tree: TreeState, id: string): boolean {
+  return (tree.children.get(id) ?? []).length > 0
+}
+
+/** The notes in the folder's subfolders, at every depth (without its own). */
+export function notesBelow(tree: TreeState, id: string): number {
+  const own = tree.byId.get(id)?.count ?? 0
+  return Math.max(0, (tree.totals.get(id) ?? own) - own)
+}
+
+/**
+ * The number beside a folder, as in the iPhone app: its own notes, and for a folder with subfolders all of them in
+ * brackets, „3 (12)“ (NOTES-4, change after the contract of 22.11.2026); without subfolders only „3“.
+ */
+export function countLabel(tree: TreeState, folder: Folder): string {
+  return hasSubfolders(tree, folder.id) ? `${folder.count} (${folder.count + notesBelow(tree, folder.id)})` : String(folder.count)
 }
 
 /** The folder and every folder below it. */

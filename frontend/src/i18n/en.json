@@ -640,6 +640,9 @@
     "count": {
       "notes_one": "{{count}} note",
       "notes_other": "{{count}} notes",
+      "notesTree_one": "{{own}} ({{count}}) note",
+      "notesTree_other": "{{own}} ({{count}}) notes",
+      "inTree": "{{count}} including subfolders",
       "subfolders_one": "{{count}} subfolder",
       "subfolders_other": "{{count}} subfolders"
     },
@@ -713,6 +716,7 @@
       "emptyTitle": "No notes in “{{name}}” yet",
       "emptyText": "Create the first one, or drag notes here from another folder.",
       "newNote": "New note in “{{name}}”",
+      "noNotesHere": "No notes directly in “{{name}}”",
       "gone": "This folder does not exist or is in the trash."
     },
     "inbox": {

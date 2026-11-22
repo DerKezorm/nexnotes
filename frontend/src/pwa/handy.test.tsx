@@ -253,6 +253,23 @@ describe('NOTES-23 AC-1 on a phone one view after the other', () => {
     expect(find('folder-page')).not.toBeNull()
   })
 
+  it('NOTES-4 zwei Zahlen NOTES-6 Unterordner über den Notizen at 390 px: „12 (16)“ in the folders, the subfolders above the notes', async () => {
+    await render('/folders')
+    const home = find('folders-page')!.querySelector('a[href="/folder/f-home"]')!
+    expect(home.textContent).toContain('12 (16) ›')
+    await click(home)
+    expect(where()).toBe('/folder/f-home')
+    const section = find('subfolders')!
+    expect(section.querySelector('h2')?.textContent).toBe(t('folders.section'))
+    expect(section.querySelector('a[href="/folder/f-shop"]')?.textContent).toContain('Einkauf')
+    expect(find('subfolder-count')?.textContent).toBe('4')
+    expect(find('list-counts')?.textContent).toBe('0 (4) Notizen')
+    // The list answered no notes of its own: a small line, not the big empty state.
+    expect(find('folder-no-notes')?.textContent).toBe('Keine Notizen direkt in „Haushalt“')
+    expect(find('folder-empty')).toBeNull()
+    expect(find('list-empty')).toBeNull()
+  })
+
   it('NOTES-23 AC-1 a folder inside another goes back to that one; the inbox back to all folders', async () => {
     await render('/folder/f-shop')
     expect(find('phone-back')?.getAttribute('href')).toBe('/folder/f-home')

@@ -1,7 +1,8 @@
 /**
  * The folders in the sidebar, after the drawing "Seitenleiste" (NOTES-4): the inbox with its count, then the folders
  * as a tree, each with its symbol or color, its name (cut short, whole in the tooltip, EC-3) and the number of its own
- * notes (AC-8). Open and closed are remembered per device (AC-6).
+ * notes (AC-8), with subfolders also all notes below in brackets, „3 (12)“ (as in the iPhone app, 22.11.2026). Open
+ * and closed are remembered per device (AC-6).
  *
  * Mouse: a click opens, the arrow beside it opens and closes, "…" or a right click opens the menu (AC-12); folders and
  * notes are dragged onto a folder (AC-3), folders also between two others (AC-11) or onto the heading (to the top).
@@ -19,7 +20,8 @@ import { useFolderActions } from './useFolderActions'
 import { accepts, drop, zoneAt, type Zone } from './drop'
 import { FolderMark } from './FolderMark'
 import { FolderMenu } from './FolderMenu'
-import { flatten, indent, refreshFolders, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { countLabel, flatten, indent, refreshFolders, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { useFolderCountWords } from './countWords'
 
 function rowId(id: string): string {
   return `folder-row-${id}`
@@ -77,6 +79,7 @@ export function FolderTree({ onNavigate }: { onNavigate?: () => void }) {
   const [menu, setMenu] = useState<{ folder: Folder; anchor: HTMLElement } | null>(null)
   const [target, setTarget] = useState<{ id: string | null; zone: Zone } | null>(null)
   const moveFocus = useRef(false)
+  const countWords = useFolderCountWords()
 
   // The row that can be reached with Tab: the one last used, else the open folder, else the first.
   const tabStop = rows.some((row) => row.folder.id === focused) ? focused : rows.some((row) => row.folder.id === shownId) ? shownId : (rows[0]?.folder.id ?? null)
@@ -214,7 +217,7 @@ export function FolderTree({ onNavigate }: { onNavigate?: () => void }) {
               aria-level={depth + 1}
               aria-expanded={hasChildren ? isOpen : undefined}
               aria-selected={chosen}
-              aria-label={`${folder.name}, ${t('folders.count.notes', { count: folder.count })}`}
+              aria-label={`${folder.name}, ${countWords(folder)}`}
               tabIndex={folder.id === tabStop ? 0 : -1}
               draggable
               data-folder={folder.id}
@@ -265,7 +268,7 @@ export function FolderTree({ onNavigate }: { onNavigate?: () => void }) {
                 {folder.name}
               </span>
               <span aria-hidden className={'shrink-0 text-xs tabular-nums group-hover:hidden group-focus:hidden pointer-coarse:hidden ' + (chosen ? 'text-accent-400' : 'text-mist-500')}>
-                {folder.count}
+                {countLabel(tree, folder)}
               </span>
               <button
                 type="button"
