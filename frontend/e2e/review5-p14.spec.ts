@@ -5,7 +5,7 @@
  * too, in a smart folder and in the drawer's section "Intelligent" (AC-7); the title of the share form takes 120
  * characters, as the server keeps them. And NOTES-7: "Hat Anhänge" and the gallery give the same notes.
  *
- * Run by the orchestrator only (`npm run e2e`), never by an agent: the machine has 16 GB.
+ * Runs with `npm run e2e`, one worker at a time.
  */
 import { expect, test, type Page } from '@playwright/test'
 

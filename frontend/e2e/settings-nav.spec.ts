@@ -1,7 +1,7 @@
 /**
  * NOTES-2 AC-9 in real browsers: the settings in areas. The operator sees both groups of the navigation, a member only
  * "My account" (and lands on the profile from a server address), the addresses of the tabs before lead to their area,
- * and a narrow page has a choice instead of the navigation. Run centrally, never by an agent.
+ * and a narrow page has a choice instead of the navigation. Runs with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 

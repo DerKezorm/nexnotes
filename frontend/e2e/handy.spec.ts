@@ -5,7 +5,7 @@
  * a file over the limit (EC-4), and the share target's form without a service worker. The page is the operator of
  * global-setup.ts.
  *
- * Run by the orchestrator only (`npm run e2e`), never by an agent: the machine has 16 GB.
+ * Runs with `npm run e2e`, one worker at a time.
  */
 import { expect, test, type Page } from '@playwright/test'
 

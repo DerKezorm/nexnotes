@@ -2,7 +2,7 @@
  * The field "With people on this server" of the share dialog, note and folder alike: a name nobody on the server goes
  * by is said right below the field (the operator gets "Invite a person", which opens the invitation under Settings ›
  * Accounts), "Done" with a name typed and nobody chosen stays open once, and the field clears with an ✕ of the app's
- * own instead of the browser's. Run centrally, never by an agent.
+ * own instead of the browser's. Runs with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 

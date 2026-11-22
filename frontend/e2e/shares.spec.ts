@@ -1,7 +1,7 @@
 /**
  * NOTES-13 Teilen in real browsers against the real server: the operator shares a note with a member (who reads it
  * without a toolbar, finds it under "Shared with me", sees the right taken away while it is open), and a read link
- * opened by somebody without an account (light page, no script, gone once revoked). Run centrally, never by an agent.
+ * opened by somebody without an account (light page, no script, gone once revoked). Runs with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 

@@ -2,7 +2,7 @@
  * NOTES-14 Mitteilungen in a real browser against the real server: the bell of a shared note with its panel (switch,
  * devices, preview), a browser that refuses notifications told where to allow them, a folder's switch from its menu,
  * and a tapped notification's address opening the note at the changed line. Real pushes (a push service, the relay)
- * are the run against the real thing, not this. Run centrally, never by an agent.
+ * are the run against the real thing, not this. Runs with `npm run e2e`.
  */
 import { expect, test, type Page } from '@playwright/test'
 
