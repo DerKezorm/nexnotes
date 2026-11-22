@@ -448,3 +448,39 @@ def test_notes25_ac26_me_names_account_right_access_folders_run_out_version_and_
             "trash"} <= set(me["features"])
     plain = get(token_of(client, name="plain", days=None), "/api/v1/me").json()
     assert plain["folders"] is None and plain["expires_at"] is None and plain["access"] == ["api"]
+
+
+def test_notes25_ac24_making_a_token_logs_its_number_never_a_piece_of_it(client, operator, caplog):
+    caplog.set_level(logging.INFO, logger="nexnotes.api")
+    made = make(client, name="Skript")
+    token = made["token"]
+    lines = [record.getMessage() for record in caplog.records if record.name == "nexnotes.api"]
+    assert any(f"token_id={made['made']['id']}" in line for line in lines if "Token made" in line)
+    # Not even the first characters after the kind: nothing of the secret goes into the log.
+    assert token[:len("nn_api_") + 4] not in caplog.text
+    assert "prefix=" not in caplog.text
+
+
+def test_notes25_ac25_the_description_takes_the_browser_s_sign_in_only_not_a_device_token(client, operator):
+    with SessionLocal() as db:
+        _row, device = apitokens.make(db, db.get(Account, operator.id), "iPhone")
+    # The device token opens the account's own routes ...
+    assert program().get("/api/auth/me", headers={"Authorization": f"Bearer {device}"}).status_code == 200
+    # ... but not the description: that is for a member signed in in the browser (F5).
+    for path in ("/api/v1/docs", "/api/v1/openapi.json"):
+        answer = program().get(path, headers={"Authorization": f"Bearer {device}"})
+        assert answer.status_code == 401, path
+        assert client.get(path).status_code == 200, path
+
+
+def test_notes25_ac27_a_blocked_connector_gets_no_new_token_by_refresh(client, operator):
+    from .test_notes20 import _connect, _program, _refresh
+
+    tokens, client_id = _connect(client, "write")
+    assert rpc(tokens["access_token"]).status_code == 200
+    row = next(row for row in client.get("/api/admin/tokens").json()["tokens"] if row["name"] == "Chat program")
+    assert client.post(f"/api/admin/tokens/{row['id']}/block").status_code == 204
+    assert rpc(tokens["access_token"]).status_code == 401
+    refreshed = _refresh(_program(), client_id, tokens["refresh_token"])
+    assert refreshed.status_code == 400 and refreshed.json()["error"] == "invalid_grant", refreshed.text
+    assert "access_token" not in refreshed.text

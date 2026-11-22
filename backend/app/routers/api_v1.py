@@ -34,8 +34,10 @@ from pydantic import BaseModel, Field
 
 from .. import __version__
 from ..db import SessionLocal
-from ..deps import Account, client_ip
+from ..deps import client_ip, require_account
+from ..errors import error
 from ..models import TOKEN_API, TOKEN_DASHBOARD
+from ..models import Account as AccountRow
 from ..notedoc import doc as notedoc
 from ..notedoc import edit
 from ..notedoc.markdown import to_markdown, to_plain
@@ -221,8 +223,7 @@ async def _note_answer(caller: Caller, note_id: str, request: Request, with_mark
     out.update(head)
     out["etag"] = etag
     if markdown is not None:
-        out["markdown"] = markdown[:apiv1.MAX_MARKDOWN]
-        out["truncated"] = len(markdown) > apiv1.MAX_MARKDOWN
+        out["markdown"], out["truncated"] = apiv1.cut_markdown(markdown)
     return JSONResponse(out, headers={"ETag": f'"{etag}"'})
 
 
@@ -393,13 +394,24 @@ def openapi(base: str) -> dict[str, Any]:
     return schema
 
 
+def _browser_member(request: Request) -> AccountRow:
+    """A member signed in in the browser (AC-25, F5): its session, never a token. A paired device's token (``nnd_``)
+    opens the iOS app's routes, not this description (NOTES-24 does not use it); an API token none of it."""
+    if request.headers.get("authorization"):
+        raise error("sign_in_required", "Sign in first.", 401)
+    return require_account(request)
+
+
+BrowserMember = Annotated[AccountRow, Depends(_browser_member)]
+
+
 @docs_router.get("/openapi.json")
-def openapi_json(_account: Account, request: Request) -> JSONResponse:
+def openapi_json(_account: BrowserMember, request: Request) -> JSONResponse:
     return JSONResponse(openapi(_base(request)))
 
 
 @docs_router.get("/docs")
-def docs(_account: Account) -> HTMLResponse:
+def docs(_account: BrowserMember) -> HTMLResponse:
     with SessionLocal() as db:
         off = not apiaccess.enabled(db)
     notice = ('<p class="nn-api-off">The operator has switched the API off. Existing tokens work again once it is '

@@ -516,10 +516,8 @@ async def duplicate(account: Account, note_id: str) -> Note:
 # --- Titles from outside the editor -------------------------------------------------------------------------------
 
 
-async def set_title(account: Account, note_id: str, title: str) -> Note:
-    """A title the member gave (a client without a live connection): the document and the column; "Titel prüfen"
-    goes."""
-    clean = notedoc.clean_title(title)
+def title_column(account: Account, note_id: str, clean: str) -> bool:
+    """A cleaned title the member gave into the column ("Titel prüfen" goes); returns whether the note is locked."""
     with SessionLocal() as db:
         note = note_for(db, account, note_id, write=True)
         note.title = clean
@@ -527,8 +525,14 @@ async def set_title(account: Account, note_id: str, title: str) -> Note:
             note.title_check = False
         _written(db, note)
         db.commit()
-        locked = note.locked
-    if locked:
+        return bool(note.locked)
+
+
+async def set_title(account: Account, note_id: str, title: str) -> Note:
+    """A title the member gave (a client without a live connection): the document and the column; "Titel prüfen"
+    goes."""
+    clean = notedoc.clean_title(title)
+    if title_column(account, note_id, clean):
         # The title of a locked note stays readable (NOTES-16 AC-6): the column only; the device writes the rest.
         return _fresh(note_id)
     await change(note_id, lambda doc: notedoc.set_title(doc, clean), account_id=account.id)

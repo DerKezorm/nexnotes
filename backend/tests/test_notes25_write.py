@@ -289,7 +289,8 @@ def test_notes25_ac19_folders_made_renamed_styled_moved_deleted_and_the_inbox_st
     for method, body in (("PATCH", {"name": "Posteingang"}), ("PATCH", {"parent_id": home["id"]}), ("DELETE", None)):
         answer = call(token, method, "/api/v1/folders/inbox", json=body)
         assert answer.status_code == 400 and code(answer) == "inbox_fixed", method
-    assert call(token, "POST", "/api/v1/folders", json={"name": "x", "parent_id": "inbox"}).status_code == 400
+    assert call(token, "POST", "/api/v1/folders", json={"name": "x", "parent_id": "inbox"}).json()["detail"][
+        "fields"] == ["parent_id"]
     trashed = ok(call(token, "DELETE", f"/api/v1/folders/{home['id']}"))
     assert trashed
     with SessionLocal() as db:
@@ -424,3 +425,155 @@ def test_notes25_ec12_html_scripts_and_foreign_attachments_open_nothing(client, 
     assert code(call(token, "GET", f"/api/v1/attachments/{foreign['id']}/file")) == "not_found"
     assert foreign["id"] not in {item["id"] for item in ok(call(token, "GET", f"/api/v1/notes/{made['id']}/attachments"))[
         "attachments"]}
+
+
+# --- AC-15, AC-17: PATCH with If-Match, pinning a note shared to read --------------------------------------------
+
+
+def test_notes25_ac15_ac17_patch_with_if_match_compares_and_writes_the_title_in_one_step(client, operator,
+                                                                                       monkeypatch):
+    import asyncio
+
+    from app.services import notes
+
+    from .test_notes3 import wait_for
+
+    token = token_of(client)
+    note = new_note(client, title="Alt", markdown="Erste Zeile")
+    etag = ok(call(token, "GET", f"/api/v1/notes/{note['id']}"))["etag"]
+    # An older state: 412 with the state of now, and nothing changes, not even the fields beside the title.
+    stale = call(token, "PATCH", f"/api/v1/notes/{note['id']}", json={"title": "Neu", "color": "red"},
+                 headers={"If-Match": '"0000"'})
+    assert stale.status_code == 412 and code(stale) == "note_changed" and stale.json()["detail"]["etag"] == etag
+    assert (stored(note["id"]).title, stored(note["id"]).color) == ("Alt", "")
+    # Somebody types the moment the state has been compared: the typing waits for the room and goes in as soon as the
+    # room is free, and every later change of the server waits until it is in (``_refuse_locked`` is the first step
+    # of each). The title is still written on exactly the state named in If-Match, and what was typed is kept.
+    real_state, real_title, real_refuse = notedoc.state_tag, notedoc.set_title, notes._refuse_locked
+    armed = [True]
+    typed = threading.Event()
+    written_on: list[str] = []
+
+    def typing(doc) -> None:
+        edit.append_paragraph(doc, "gleichzeitig getippt")
+        typed.set()
+
+    def state_tag(doc) -> str:
+        tag = real_state(doc)
+        if armed[0]:
+            armed[0] = False
+            asyncio.get_running_loop().create_task(notes.rooms().change(note["id"], typing, account_id=operator.id))
+        return tag
+
+    def refuse_locked(note_id: str) -> None:
+        if not armed[0]:
+            typed.wait(5)
+        real_refuse(note_id)
+
+    def set_title(doc, title: str) -> str:
+        written_on.append(real_state(doc))
+        return real_title(doc, title)
+
+    monkeypatch.setattr(notedoc, "state_tag", state_tag)
+    monkeypatch.setattr(notedoc, "set_title", set_title)
+    monkeypatch.setattr(notes, "_refuse_locked", refuse_locked)
+    answer = call(token, "PATCH", f"/api/v1/notes/{note['id']}", via=client, json={"title": "Neu", "pinned": True},
+                  headers={"If-Match": f'"{etag}"'})
+    assert answer.status_code == 200, answer.text
+    assert written_on == [etag]
+    monkeypatch.undo()
+    assert wait_for(lambda: "gleichzeitig getippt" in markdown_of(token, note["id"]))
+    row = stored(note["id"])
+    assert row.title == "Neu" and row.pinned_at is not None
+    assert ok(call(token, "GET", f"/api/v1/notes/{note['id']}"))["title"] == "Neu"
+
+
+def test_notes25_ec8_pinning_a_note_shared_to_read_also_with_if_match(client, operator):
+    token = token_of(client)
+    anna = make_account("anna")
+    with new_client(anna) as as_anna:
+        reading = new_note(as_anna, title="Zum Lesen", markdown="x")
+        share(as_anna, "note", reading["id"], operator, "read")
+    path = f"/api/v1/notes/{reading['id']}"
+    etag = ok(call(token, "GET", path))["etag"]
+    pinned = call(token, "PATCH", path, json={"pinned": True}, headers={"If-Match": f'"{etag}"'})
+    assert pinned.status_code == 200, pinned.text
+    assert pinned.json()["pinned"] is True and stored(reading["id"]).pinned_at is None
+    # The state is still compared, and anything beyond pinning still needs the right to write.
+    assert code(call(token, "PATCH", path, json={"pinned": False}, headers={"If-Match": '"0000"'})) == "note_changed"
+    refused = call(token, "PATCH", path, json={"pinned": False, "title": "Meins"}, headers={"If-Match": f'"{etag}"'})
+    assert refused.status_code == 403 and code(refused) == "not_allowed"
+    assert ok(call(token, "GET", path))["pinned"] is True and stored(reading["id"]).title == "Zum Lesen"
+
+
+# --- AC-19, EC-1: what the folder service refuses, the API's way ----------------------------------------------------
+
+
+def test_notes25_ac19_ec1_folder_input_errors_answer_invalid_input_with_fields(client, operator):
+    token = token_of(client)
+
+    def fields_of(answer) -> list[str]:
+        assert answer.status_code == 422 and code(answer) == "invalid_input", answer.text
+        return answer.json()["detail"]["fields"]
+
+    home = ok(call(token, "POST", "/api/v1/folders", json={"name": "Haushalt"}), 201)
+    child = ok(call(token, "POST", "/api/v1/folders", json={"name": "Einkauf", "parent_id": home["id"]}), 201)
+    for body, field in (({"name": "   "}, "name"), ({"name": ""}, "name"), ({"name": "x" * 61}, "name"),
+                        ({"name": "Neu", "icon": "no-such-symbol"}, "icon"), ({"name": "Neu", "color": "red-ish"}, "color"),
+                        ({"name": "Neu", "parent_id": "inbox"}, "parent_id")):
+        assert fields_of(call(token, "POST", "/api/v1/folders", json=body)) == [field], body
+    for body, field in (({"name": " "}, "name"), ({"color": "#fff"}, "color"), ({"icon": "nope"}, "icon"),
+                        ({"parent_id": child["id"]}, "parent_id")):
+        assert fields_of(call(token, "PATCH", f"/api/v1/folders/{home['id']}", json=body)) == [field], body
+    # Other answers keep their code: a name that is there already, the inbox.
+    taken = call(token, "POST", "/api/v1/folders", json={"name": "haushalt"})
+    assert taken.status_code == 409 and code(taken) == "folder_name_taken"
+    assert code(call(token, "DELETE", "/api/v1/folders/inbox")) == "inbox_fixed"
+    with SessionLocal() as db:
+        assert db.get(Folder, home["id"]).name == "Haushalt" and db.get(Folder, home["id"]).parent_id is None
+    assert fields_of(call(token, "PATCH", "/api/v1/tags/backen", json={"name": " "})) == ["name"]
+
+
+# --- AC-20, AC-7: renaming a tag tells nothing of tags outside the token's folders ---------------------------------
+
+
+def test_notes25_ac20_ac7_renaming_a_tag_limited_to_folders_tells_nothing_of_tags_outside(client, operator):
+    home = make_folder(client, "Haushalt")
+    inside = new_note(client, markdown="drin #liste", folder_id=home)
+    new_note(client, markdown="draußen #geheimprojekt")
+    anna = make_account("anna")
+    with new_client(anna) as as_anna:
+        theirs = new_note(as_anna, markdown="Annas #liste")
+        share(as_anna, "note", theirs["id"], operator, "write")
+    every = token_of(client)
+    limited = token_of(client, name="limited", folders=[home])
+    # Without a limit the account sees both tags and is asked.
+    taken = call(every, "PATCH", "/api/v1/tags/liste", json={"name": "geheimprojekt"})
+    assert taken.status_code == 409 and code(taken) == "tag_exists"
+    # Within the folders the other tag is not there: renamed, and no note of somebody else counted.
+    done = ok(call(limited, "PATCH", "/api/v1/tags/liste", json={"name": "geheimprojekt"}))
+    assert done == {"name": "geheimprojekt", "changed": 1, "kept": 0}
+    assert "#geheimprojekt" in markdown_of(every, inside["id"]) and "#liste" in markdown_of(every, theirs["id"])
+
+
+# --- EC-1: an answer past 1 MB is cut in bytes ----------------------------------------------------------------------
+
+
+def test_notes25_ec1_markdown_past_the_limit_is_cut_in_bytes_and_says_truncated(client, operator, monkeypatch):
+    from app.services import apiv1
+
+    # The limit itself: bytes of UTF-8, never half a character.
+    text, cut = apiv1.cut_markdown("ä" * 600_000)
+    assert cut is True and len(text.encode("utf-8")) == apiv1.MAX_MARKDOWN == 1_000_000 and set(text) == {"ä"}
+    assert apiv1.cut_markdown("a" * 1_000_000) == ("a" * 1_000_000, False)
+    text, cut = apiv1.cut_markdown("a" * 999_999 + "ä")
+    assert cut is True and text == "a" * 999_999
+    # Through the API, with a smaller limit: 120 umlauts are 240 bytes.
+    token = token_of(client)
+    note = new_note(client, title="U", markdown="ü" * 120)
+    full = ok(call(token, "GET", f"/api/v1/notes/{note['id']}"))
+    assert full["truncated"] is False and "ü" * 120 in full["markdown"]
+    monkeypatch.setattr(apiv1, "MAX_MARKDOWN", 200)
+    short = ok(call(token, "GET", f"/api/v1/notes/{note['id']}"))
+    assert short["truncated"] is True and len(short["markdown"].encode("utf-8")) <= 200
+    assert full["markdown"].startswith(short["markdown"]) and len(short["markdown"]) < len(full["markdown"])

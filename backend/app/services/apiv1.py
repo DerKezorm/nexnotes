@@ -31,7 +31,7 @@ PAGE_MAX = 500
 #: A page of search hits.
 SEARCH_PAGE = 20
 SEARCH_PAGE_MAX = 100
-#: The longest Markdown one answer holds; a longer one is cut and says ``truncated`` (EC-1).
+#: The longest Markdown one answer holds, in bytes of UTF-8; a longer one is cut and says ``truncated`` (EC-1).
 MAX_MARKDOWN = 1_000_000
 #: The cursor's offset never goes past this.
 MAX_OFFSET = 10_000_000
@@ -41,6 +41,15 @@ def iso(value: datetime | None) -> str | None:
     if value is None:
         return None
     return (value if value.tzinfo else value.replace(tzinfo=UTC)).isoformat()
+
+
+def cut_markdown(markdown: str) -> tuple[str, bool]:
+    """The Markdown an answer holds and whether it was cut (EC-1): at most ``MAX_MARKDOWN`` bytes of UTF-8, cut
+    before a character that would not fit whole."""
+    data = markdown.encode("utf-8")
+    if len(data) <= MAX_MARKDOWN:
+        return markdown, False
+    return data[:MAX_MARKDOWN].decode("utf-8", errors="ignore"), True
 
 
 def cursor_out(offset: int) -> str:

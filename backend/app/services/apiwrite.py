@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from fastapi import HTTPException
@@ -17,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
+from ..models import Folder, Note
 from ..models_api import ApiRef
 from ..notedoc import doc as notedoc
 from ..notedoc import schema as s
@@ -60,11 +63,46 @@ def checked_style(icon: str | None, color: str | None, paper: str | None) -> Non
         raise invalid("paper")
 
 
+#: What the folder and tag services answer to input they cannot take, and the field it lies in: the API says these
+#: its own way, 422 ``invalid_input`` with ``fields`` (EC-1). Every other answer of a service keeps its code
+#: (``folder_name_taken`` 409, ``inbox_fixed`` 400, ``tag_exists`` 409, ``not_found`` 404; ``docs/api.md``).
+_INPUT_CODES = {
+    "folder_name_missing": "name",
+    "folder_name_too_long": "name",
+    "folder_target_not_allowed": "parent_id",
+    "folder_into_itself": "parent_id",
+    "tag_name_invalid": "name",
+}
+
+
+@contextmanager
+def service_errors(target: str = "parent_id") -> Iterator[None]:
+    """The input errors of a service as ``invalid_input``; ``target``: the field that names where something goes."""
+    try:
+        yield
+    except HTTPException as exc:
+        detail = exc.detail if isinstance(exc.detail, dict) else {}
+        field = _INPUT_CODES.get(str(detail.get("code")))
+        if field is None:
+            raise
+        raise invalid(target if field == "parent_id" else field) from None
+
+
 def checked_folder_name(name: str) -> str:
-    clean = folders.clean_name(name)
-    if len(clean) > folders.NAME_MAX:
-        raise invalid("name")
+    """A folder name as the interface takes it (at least one visible character, at most 60), else ``invalid_input``."""
+    with service_errors():
+        folders.checked_name(name)
     return name
+
+
+def checked_folder_style(icon: str | None, color: str | None) -> None:
+    if icon is not None and icon not in ("", *folders.FOLDER_ICONS):
+        raise invalid("icon")
+    if color is not None:
+        try:
+            folders.folder_color(color)
+        except HTTPException:
+            raise invalid("color") from None
 
 
 # --- New notes (AC-14, EC-13) ---------------------------------------------------------------------------------------
@@ -123,25 +161,37 @@ def create(caller: Caller, body: Any) -> tuple[str, bool]:
 # --- The head of a note (AC-15) -------------------------------------------------------------------------------------
 
 
+def _head_plan(db: Session, caller: Caller, note_id: str, body: Any, fields: set[str]) -> tuple[Note, Folder | None]:
+    """The note and the folder it goes to, every check of ``change_head`` done, nothing changed."""
+    checked_style(body.icon if "icon" in fields else None, body.color if "color" in fields else None,
+                  body.paper if "paper" in fields else None)
+    writes = bool(fields - {"pinned"})
+    note, _access = apiaccess.note(db, caller, note_id, write=writes)
+    if not writes and not caller.writes:
+        raise Refused("token_reads_only")
+    target = None
+    if "folder_id" in fields:
+        if note.owner_id != caller.account.id:
+            raise Refused("not_owner")
+        if not body.folder_id:
+            raise invalid("folder_id")
+        target = apiaccess.folder(db, caller, body.folder_id, write=True, own=True)
+    return note, target
+
+
+def check_head(caller: Caller, note_id: str, body: Any, fields: set[str]) -> None:
+    """Whether ``change_head`` would take these fields, without changing anything."""
+    with SessionLocal() as db:
+        _head_plan(db, caller, note_id, body, fields)
+
+
 def change_head(caller: Caller, note_id: str, body: Any, fields: set[str]) -> bool:
     """Symbol, color, paper, pinning and folder of a note, all checked before anything changes. Pinning is each
     person's own and needs only the right to read (EC-8); moving is the owner's (``not_owner``). Returns whether
     rights may have changed (moved into or out of a shared folder)."""
     account = caller.account
-    checked_style(body.icon if "icon" in fields else None, body.color if "color" in fields else None,
-                  body.paper if "paper" in fields else None)
     with SessionLocal() as db:
-        writes = bool(fields - {"pinned"})
-        note, _access = apiaccess.note(db, caller, note_id, write=writes)
-        if not writes and not caller.writes:
-            raise Refused("token_reads_only")
-        target = None
-        if "folder_id" in fields:
-            if note.owner_id != account.id:
-                raise Refused("not_owner")
-            if not body.folder_id:
-                raise invalid("folder_id")
-            target = apiaccess.folder(db, caller, body.folder_id, write=True, own=True)
+        note, target = _head_plan(db, caller, note_id, body, fields)
         if "icon" in fields and body.icon is not None:
             note.icon = body.icon
         if "color" in fields and body.color is not None:
@@ -153,7 +203,8 @@ def change_head(caller: Caller, note_id: str, body: Any, fields: set[str]) -> bo
             notes_list.set_pinned(db, account, note.id, bool(body.pinned))
         moved = False
         if target is not None and target.id != note.folder_id:
-            folders.move(db, account.id, target_id=target.id, folder_ids=[], note_ids=[note.id])
+            with service_errors(target="folder_id"):
+                folders.move(db, account.id, target_id=target.id, folder_ids=[], note_ids=[note.id])
             moved = shares.moves_change_rights(db, account.id)
         logger.info("API note changed note=%s fields=%s token_id=%s", note.id, ",".join(sorted(fields)),
                     caller.token_id)
@@ -165,6 +216,7 @@ def change_head(caller: Caller, note_id: str, body: Any, fields: set[str]) -> bo
 
 def make_folder(caller: Caller, body: Any) -> dict[str, Any]:
     checked_folder_name(body.name)
+    checked_folder_style(body.icon, body.color)
     with SessionLocal() as db:
         parent = None
         if body.parent_id:
@@ -172,8 +224,9 @@ def make_folder(caller: Caller, body: Any) -> dict[str, Any]:
         elif caller.limited:
             # At the top it would lie outside the token's folders.
             raise invalid("parent_id")
-        made = folders.create(db, caller.account.id, name=body.name, parent_id=parent, icon=body.icon or "",
-                              color=body.color or "")
+        with service_errors():
+            made = folders.create(db, caller.account.id, name=body.name, parent_id=parent, icon=body.icon or "",
+                                  color=body.color or "")
         logger.info("API folder made folder=%s token_id=%s", made["id"], caller.token_id)
         return made
 
@@ -181,6 +234,7 @@ def make_folder(caller: Caller, body: Any) -> dict[str, Any]:
 def change_folder(caller: Caller, folder_id: str, body: Any, fields: set[str]) -> tuple[dict[str, Any], bool]:
     if "name" in fields and body.name is not None:
         checked_folder_name(body.name)
+    checked_folder_style(body.icon if "icon" in fields else None, body.color if "color" in fields else None)
     with SessionLocal() as db:
         found = apiaccess.folder(db, caller, folder_id, write=True, own=True)
         moved = False
@@ -194,11 +248,13 @@ def change_folder(caller: Caller, folder_id: str, body: Any, fields: set[str]) -
             if found.kind == "inbox":
                 raise HTTPException(status_code=400, detail={
                     "code": "inbox_fixed", "message": "The inbox cannot be renamed, moved or deleted."})
-            folders.move(db, caller.account.id, target_id=target, folder_ids=[found.id], note_ids=[])
+            with service_errors():
+                folders.move(db, caller.account.id, target_id=target, folder_ids=[found.id], note_ids=[])
             moved = shares.moves_change_rights(db, caller.account.id)
-        out = folders.change(db, caller.account.id, found.id, name=body.name if "name" in fields else None,
-                             icon=body.icon if "icon" in fields else None,
-                             color=body.color if "color" in fields else None)
+        with service_errors():
+            out = folders.change(db, caller.account.id, found.id, name=body.name if "name" in fields else None,
+                                 icon=body.icon if "icon" in fields else None,
+                                 color=body.color if "color" in fields else None)
         logger.info("API folder changed folder=%s fields=%s token_id=%s", found.id, ",".join(sorted(fields)),
                     caller.token_id)
         return out, moved

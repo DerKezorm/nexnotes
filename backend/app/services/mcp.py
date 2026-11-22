@@ -140,7 +140,8 @@ def authenticate(db: Session, token: str | None) -> Caller | None:
     if totp.setup_required(db, account):
         return None
     level = row.level if row.level in LEVELS else "read"
-    folders = [str(chosen) for chosen in row.folder_ids] if row.kind == TOKEN_API and row.folder_ids else None
+    limited = row.kind == TOKEN_API and row.folder_ids is not None
+    folders = [str(chosen) for chosen in row.folder_ids] if limited else None
     db.expunge(account)
     return Caller(account=account, key_id=row.id, key_name=row.name, level=level, folders=folders)
 

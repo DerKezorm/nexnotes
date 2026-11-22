@@ -56,7 +56,7 @@ import os
 import re
 import secrets
 import threading
-from collections.abc import AsyncIterator, Callable, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from datetime import timedelta
 from pathlib import Path
@@ -420,16 +420,24 @@ def _can_read(db: Session, account: Account, note: Note | None) -> bool:
     return note is not None and notes.access_to(db, account, note) in (Access.WRITE, Access.READ)
 
 
-def readable(db: Session, account: Account, attachment: Attachment) -> bool:
-    """Whether the account may open the attachment: it may read the note it belongs to, or a note of the same owner
-    that names it or named it (its history shows it)."""
-    if _can_read(db, account, db.get(Note, attachment.note_id)):
-        return True
+def doors(db: Session, account: Account, attachment: Attachment) -> Iterator[Note]:
+    """The notes through which the account may open the attachment, the one it belongs to first: those it may read
+    that are the attachment's own or a note of the same owner that names it or named it (its history shows it).
+    Through another note only what its owner put there counts for a member it is shared with (NOTES-13)."""
+    home = db.get(Note, attachment.note_id)
+    if _can_read(db, account, home):
+        assert home is not None
+        yield home
     others = db.scalars(select(Note).where(Note.id.in_(_naming(attachment.id)), Note.owner_id == attachment.owner_id,
-                                           Note.id != attachment.note_id))
-    # Through another note only what its owner put there counts for a member it is shared with (NOTES-13).
-    return any(_can_read(db, account, note) and (note.owner_id == account.id or _vouched(db, note.id, attachment.id))
-               for note in others)
+                                           Note.id != attachment.note_id).order_by(Note.id))
+    for note in others:
+        if _can_read(db, account, note) and (note.owner_id == account.id or _vouched(db, note.id, attachment.id)):
+            yield note
+
+
+def readable(db: Session, account: Account, attachment: Attachment) -> bool:
+    """Whether the account may open the attachment (``doors``)."""
+    return next(doors(db, account, attachment), None) is not None
 
 
 def _naming(attachment_id: str) -> Any:

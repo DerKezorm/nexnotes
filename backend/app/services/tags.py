@@ -514,17 +514,21 @@ def _own_notes(db: Session, account: Account, key: str, folders: set[str] | None
     """Every note of the account's own with the tag, those in the trash too (AC-4, AC-5 say "all of its own notes"):
     a note that comes back from the trash carries the new name. Locked notes stay as they are (EC-6). ``folders``:
     only notes in these (an API token limited to folders, NOTES-25 AC-7)."""
-    within = [Note.folder_id.in_(sorted(folders))] if folders is not None else []
     return list(db.scalars(select(Note.id).join(NoteTag, NoteTag.note_id == Note.id)
-                           .where(Note.owner_id == account.id, NoteTag.key == key, *within,
+                           .where(Note.owner_id == account.id, NoteTag.key == key, *_within(folders),
                                   *(not_(hidden()) for hidden in HIDDEN_NOTES))
                            .group_by(Note.id)))
 
 
-def _kept(db: Session, account: Account, key: str) -> int:
-    """Notes of others with the tag, which renaming and deleting leave alone."""
+def _within(folders: set[str] | None) -> list[ColumnElement[bool]]:
+    return [Note.folder_id.in_(sorted(folders))] if folders is not None else []
+
+
+def _kept(db: Session, account: Account, key: str, folders: set[str] | None = None) -> int:
+    """Notes of others with the tag, which renaming and deleting leave alone (``folders``: only those in these)."""
     return int(db.scalar(select(func.count(distinct(Note.id))).join(NoteTag, NoteTag.note_id == Note.id)
-                         .where(visible(account.id), Note.owner_id != account.id, NoteTag.key == key)) or 0)
+                         .where(visible(account.id), Note.owner_id != account.id, NoteTag.key == key,
+                                *_within(folders))) or 0)
 
 
 async def _apply(account: Account, note_ids: list[str], key: str, new_label: str | None) -> int:
@@ -547,7 +551,9 @@ async def _apply(account: Account, note_ids: list[str], key: str, new_label: str
 async def rename(account: Account, name: str, new_name: str, *, merge: bool = False,
                  folders: set[str] | None = None) -> dict[str, Any]:
     """Renames a tag in all of the account's own notes (AC-4). Onto a tag that exists already only with ``merge``
-    (AC-7); without it ``tag_exists`` says which, so that the page can ask."""
+    (AC-7); without it ``tag_exists`` says which, so that the page can ask. ``folders`` (an API token limited to
+    folders, NOTES-25 AC-7): only notes in these are renamed, counted and asked whether the new name is there, so that
+    nothing tells of a tag outside them."""
     label = clean_name(name)
     new_label = clean_name(new_name)
     if not label or not new_label:
@@ -555,9 +561,10 @@ async def rename(account: Account, name: str, new_name: str, *, merge: bool = Fa
     key, new_key = key_of(label), key_of(new_label)
     with SessionLocal() as db:
         own = _own_notes(db, account, key, folders)
-        kept = _kept(db, account, key)
+        kept = _kept(db, account, key, folders)
         if new_key != key and not merge:
-            there = summary(db, account, [new_key]).get(new_key)
+            limit = _within(folders)
+            there = summary(db, account, [new_key], within=limit[0] if limit else None).get(new_key)
             if there is not None:
                 raise error("tag_exists", "This tag exists already.", 409, label=there["label"], count=there["count"])
     changed = await _apply(account, own, key, new_label)

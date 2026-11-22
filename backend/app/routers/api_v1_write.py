@@ -53,13 +53,9 @@ def _expected(request: Request, base: str | None = None) -> str | None:
     return header or (base.strip() if base else None) or None
 
 
-def _check(caller: Caller, note_id: str) -> str:
+def _check(caller: Caller, note_id: str, write: bool = True) -> str:
     with SessionLocal() as db:
-        return apiaccess.note(db, caller, note_id, write=True)[0].id
-
-
-async def _state(note_id: str) -> str:
-    return await _in_room(note_id, notedoc.state_tag)
+        return apiaccess.note(db, caller, note_id, write=write)[0].id
 
 
 def _changed(current: str) -> Refused:
@@ -110,13 +106,11 @@ async def change_note(note_id: NoteId, body: NoteChange, caller: Writer, request
         raise apiwrite.invalid("title")
     if "title" in fields:
         apiwrite.checked_title(body.title)
+    head = fields - {"title"}
     expected = _expected(request)
     if expected:
-        found = await asyncio.to_thread(_check, caller, note_id)
-        current = await _state(found)
-        if current != expected:
-            raise _changed(current)
-    head = fields - {"title"}
+        await _change_if_unchanged(caller, note_id, body, fields, expected)
+        return await _note_answer(caller, note_id, request, True)
     if head:
         moved = await asyncio.to_thread(apiwrite.change_head, caller, note_id, body, head)
         if moved:
@@ -127,6 +121,35 @@ async def change_note(note_id: NoteId, body: NoteChange, caller: Writer, request
             await notes.set_title(caller.account, found, body.title or "")
         logger.info("API note changed note=%s fields=title token_id=%s", found, caller.token_id)
     return await _note_answer(caller, note_id, request, True)
+
+
+async def _change_if_unchanged(caller: Caller, note_id: str, body: NoteChange, fields: set[str], expected: str) -> None:
+    """``PATCH`` with ``If-Match``: every field checked first, then the state compared and the title written in one
+    step under the room's lock (as ``PUT …/content``), so no change comes between; the other fields (which are not
+    part of the text and leave the ``etag`` alone) follow. Pinning alone needs only the right to read (EC-8)."""
+    head = fields - {"title"}
+    if head:
+        await asyncio.to_thread(apiwrite.check_head, caller, note_id, body, head)
+    found = await asyncio.to_thread(_check, caller, note_id, fields != {"pinned"})
+    title = notedoc.clean_title(body.title or "") if "title" in fields else None
+
+    def run(doc: Any) -> str | None:
+        current = notedoc.state_tag(doc)
+        if current != expected:
+            return current
+        if title is not None:
+            notedoc.set_title(doc, title)
+        return None
+
+    with history.acting_via(caller.label):
+        stale = await _in_room(found, run, caller.account.id)
+    if stale is not None:
+        raise _changed(stale)
+    if title is not None:
+        await asyncio.to_thread(notes.title_column, caller.account, found, title)
+        logger.info("API note changed note=%s fields=title token_id=%s", found, caller.token_id)
+    if head and await asyncio.to_thread(apiwrite.change_head, caller, found, body, head):
+        notes.nudge_all()
 
 
 # --- The text (AC-16, AC-17, EC-4) ----------------------------------------------------------------------------------
@@ -289,7 +312,7 @@ async def rename_tag(name: Annotated[str, Path(min_length=1, max_length=200)], b
                      caller: Writer) -> dict[str, Any]:
     with SessionLocal() as db:
         scope = caller.scope(db)
-    with history.acting_via(caller.label):
+    with history.acting_via(caller.label), apiwrite.service_errors():
         done = await tags.rename(caller.account, name, body.name, merge=body.merge, folders=scope)
     logger.info("API tag renamed notes=%s token_id=%s", done["changed"], caller.token_id)
     return {"name": done["label"], "changed": done["changed"], "kept": done["kept"]}

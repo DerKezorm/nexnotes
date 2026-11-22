@@ -390,3 +390,180 @@ def test_notes25_ec7_a_locked_note_shows_its_title_only_and_answers_409(client, 
 
     card = legacy(operator, "dashboard")
     assert "Tresor" not in titles(ok(card, "/api/v1/notes", locked="true"))
+
+
+# --- AC-7: an empty limit, shared folders, the trash ----------------------------------------------------------------
+
+
+def test_notes25_ac7_a_limit_with_no_folder_left_sees_nothing_never_everything(client, operator):
+    home = make_folder(client, "Haushalt")
+    new_note(client, title="Drin", markdown="Milch #drin", folder_id=home)
+    outside = new_note(client, title="Im Eingang", markdown="Milch #draussen")
+    assert client.put(f"/api/notes/{outside['id']}/pin", json={"pinned": True}).status_code == 200
+    smart = client.post("/api/smart-folders", json={"name": "Milch", "conditions": [{"kind": "text", "value": "Milch"}]})
+    assert smart.status_code == 201, smart.text
+    reads = token_of(client, folders=[home])
+    writes = token_of(client, name="writes", level="write", folders=[home])
+    assert titles(ok(reads, "/api/v1/notes")) == ["Drin"]
+    # The only chosen folder goes into the trash: the limit holds no folder any more, and that means nothing to see.
+    assert client.delete(f"/api/folders/{home}").status_code == 200
+
+    def sees_nothing(token: str) -> None:
+        assert ok(token, "/api/v1/notes")["notes"] == []
+        assert ok(token, "/api/v1/notes", locked="true")["notes"] == []
+        assert ok(token, "/api/v1/notes", pinned="true")["notes"] == []
+        assert ok(token, "/api/v1/search", q="Milch")["total"] == 0
+        assert ok(token, "/api/v1/tags")["tags"] == []
+        smart_folders = ok(token, "/api/v1/smart-folders")["smart_folders"]
+        assert smart_folders and all(folder["count"] == 0 for folder in smart_folders)
+        assert ok(token, f"/api/v1/smart-folders/{smart.json()['id']}/notes")["notes"] == []
+        assert ok(token, "/api/v1/folders") == {"inbox": None, "folders": [], "shared_with_me": []}
+        assert ok(token, "/api/v1/dashboard")["pinned"] == []
+        assert code(get(token, f"/api/v1/notes/{outside['id']}")) == "not_found"
+
+    sees_nothing(reads)
+    made = program().post("/api/v1/notes", json={"markdown": "Neu"}, headers={"Authorization": f"Bearer {writes}"})
+    assert made.status_code == 404 and code(made) == "not_found"
+    # A limit stored without any folder (never made so) is no "every note" either.
+    from app.models import ApiToken
+
+    with SessionLocal() as db:
+        for row in db.query(ApiToken).all():
+            row.folder_ids = []
+        db.commit()
+    assert client.post(f"/api/folders/{home}/restore").status_code == 200
+    sees_nothing(reads)
+
+
+def test_notes25_ac7_shared_folders_the_trash_and_restore_stay_within_the_limit(client, operator):
+    home = make_folder(client, "Haushalt")
+    sub = make_folder(client, "Alte Liste", home)
+    old = make_folder(client, "Altes Projekt")
+    inside = new_note(client, title="Drin weg", markdown="x", folder_id=home)
+    outside = new_note(client, title="Draussen weg", markdown="y")
+    for note in (inside, outside):
+        assert client.delete(f"/api/notes/{note['id']}").status_code == 204
+    for folder in (sub, old):
+        assert client.delete(f"/api/folders/{folder}").status_code == 200
+    anna = make_account("anna")
+    with new_client(anna) as as_anna:
+        theirs = make_folder(as_anna, "Annas Rezepte")
+        share(as_anna, "folder", theirs, operator, "write")
+    every = token_of(client)
+    reads = token_of(client, name="limited", folders=[home])
+    writes = token_of(client, name="limited-w", level="write", folders=[home])
+    # A folder shared with the account lies in none of its folders.
+    assert [folder["name"] for folder in ok(every, "/api/v1/folders")["shared_with_me"]] == ["Annas Rezepte"]
+    assert ok(reads, "/api/v1/folders")["shared_with_me"] == []
+    assert ok(reads, "/api/v1/shares/with-me")["groups"] == []
+    assert code(get(reads, "/api/v1/notes", folder=theirs)) == "not_found"
+    # The trash: only what lay within the token's folders.
+    assert {(item["kind"], item["title"]) for item in ok(every, "/api/v1/trash")["items"]} == {
+        ("note", "Drin weg"), ("note", "Draussen weg"), ("folder", "Alte Liste"), ("folder", "Altes Projekt")}
+    assert {(item["kind"], item["title"]) for item in ok(reads, "/api/v1/trash")["items"]} == {
+        ("note", "Drin weg"), ("folder", "Alte Liste")}
+
+    def restore(kind: str, item_id: str):
+        return program().post(f"/api/v1/{kind}/{item_id}/restore", headers={"Authorization": f"Bearer {writes}"})
+
+    # Bringing back: only within, and what lies outside stays in the trash.
+    for kind, item_id in (("notes", outside["id"]), ("folders", old)):
+        refused = restore(kind, item_id)
+        assert refused.status_code == 404 and code(refused) == "not_found", kind
+    with SessionLocal() as db:
+        assert db.get(Note, outside["id"]).deleted_at is not None
+    assert restore("notes", inside["id"]).status_code == 200
+    assert restore("folders", sub).status_code == 200
+    with SessionLocal() as db:
+        assert db.get(Note, inside["id"]).deleted_at is None
+
+
+# --- AC-12: a file another note shows -------------------------------------------------------------------------------
+
+
+def test_notes25_ac12_a_file_loads_through_the_note_that_shows_it_by_the_rules_of_the_interface(client, operator):
+    from .test_notes3 import wait_for
+    from .test_notes10 import add_blocks, block, refs_of
+
+    work = make_folder(client, "Arbeit")
+    home = make_folder(client, "Haushalt")
+    elsewhere = make_folder(client, "Anderswo")
+    origin = new_note(client, title="Ursprung", markdown="x", folder_id=work)
+    row = attached(client, origin["id"], b"copied file", "kopie.txt")
+    shows = new_note(client, title="Zeigt es", markdown="y", folder_id=home)
+    # A block copied from one note into another (the interface loads the file through either).
+    add_blocks(shows["id"], operator.id, block("attachment", row))
+    assert wait_for(lambda: refs_of(shows["id"]) == [row["id"]])
+    assert client.get(f"/api/attachments/{row['id']}/file").status_code == 200
+    limited = token_of(client, name="home", folders=[home])
+    listed = ok(limited, f"/api/v1/notes/{shows['id']}/attachments")["attachments"]
+    assert [item["id"] for item in listed] == [row["id"]]
+    loaded = get(limited, listed[0]["file"])
+    assert loaded.status_code == 200 and loaded.content == b"copied file"
+    # A token that may read neither note does not load it.
+    other = token_of(client, name="elsewhere", folders=[elsewhere])
+    assert code(get(other, f"/api/v1/attachments/{row['id']}/file")) == "not_found"
+    # The first note in the trash: the note that still shows it opens it.
+    every = token_of(client)
+    assert client.delete(f"/api/notes/{origin['id']}").status_code == 204
+    assert get(every, f"/api/v1/attachments/{row['id']}/file").status_code == 200
+    assert client.get(f"/api/attachments/{row['id']}/file").status_code == 200
+    # Shared with the account: what the owner put into the shared note opens, what a member wrote into it does not.
+    anna = make_account("anna")
+    with new_client(anna) as as_anna:
+        hers = new_note(as_anna, title="Annas Fotos", markdown="x")
+        put_by_owner = attached(as_anna, hers["id"], b"put there by anna", "anna.txt")
+        hidden = new_note(as_anna, title="Annas Geheimes", markdown="x")
+        not_put = attached(as_anna, hidden["id"], b"never shared", "geheim.txt")
+        shared = new_note(as_anna, title="Gemeinsam", markdown="z")
+        share(as_anna, "note", shared["id"], operator, "write")
+    add_blocks(shared["id"], anna.id, block("attachment", put_by_owner))
+    add_blocks(shared["id"], operator.id, block("attachment", not_put))
+    assert wait_for(lambda: set(refs_of(shared["id"])) == {put_by_owner["id"], not_put["id"]})
+    assert client.get(f"/api/attachments/{put_by_owner['id']}/file").status_code == 200
+    assert client.get(f"/api/attachments/{not_put['id']}/file").status_code == 404
+    assert [item["id"] for item in ok(every, f"/api/v1/notes/{shared['id']}/attachments")["attachments"]] == [
+        put_by_owner["id"]]
+    shown = get(every, f"/api/v1/attachments/{put_by_owner['id']}/file")
+    assert shown.status_code == 200 and shown.content == b"put there by anna"
+    assert code(get(every, f"/api/v1/attachments/{not_put['id']}/file")) == "not_found"
+    # Limited to own folders: the shared note lies in none of them.
+    assert code(get(limited, f"/api/v1/attachments/{put_by_owner['id']}/file")) == "not_found"
+
+
+# --- EC-7: tags and excerpts of locked notes ------------------------------------------------------------------------
+
+
+def test_notes25_ec7_a_locked_note_gives_no_tags_and_no_excerpt_anywhere(client, operator):
+    note = new_note(client, title="Tresor", markdown="Geheimnis im Tresor #privat")
+    new_note(client, title="Offen", markdown="Geheimnis offen #offen")
+    lock(note["id"])
+    token = token_of(client)
+    assert [tag["name"] for tag in ok(token, "/api/v1/tags")["tags"]] == ["offen"]
+    listed = ok(token, "/api/v1/notes", locked="true")["notes"]
+    assert next(item for item in listed if item["id"] == note["id"])["tags"] == []
+    assert note["id"] not in {item["id"] for item in ok(token, "/api/v1/notes", tag="privat", locked="true")["notes"]}
+    for query in ("Geheimnis", "Tresor"):
+        for hit in ok(token, "/api/v1/search", q=query)["notes"]:
+            if hit["id"] == note["id"]:
+                assert hit["locked"] is True and hit["excerpt"] == [] and hit["snippet"] == "", query
+                assert hit["attachment"] is None
+    found = get(token, "/api/v1/search", q="Geheimnis")
+    assert "im Tresor" not in found.text and "privat" not in found.text
+
+
+def test_notes25_ec7_the_api_holds_back_tags_and_excerpts_of_locked_notes_on_its_own(client, operator, monkeypatch):
+    """The second line: should the tag table or the search ever give something of a locked note, the API still says
+    nothing of it."""
+    from app.services import apiv1, search
+
+    note = new_note(client, title="Tresor", markdown="Geheimnis im Tresor #privat")
+    lock(note["id"])
+    token = token_of(client)
+    real_labels = apiv1._labels
+    monkeypatch.setattr(apiv1, "_labels", lambda db, note_ids: real_labels(db, [*note_ids, note["id"]]))
+    monkeypatch.setattr(search, "_hidden", lambda db, found: False)
+    listed = ok(token, "/api/v1/notes", locked="true")["notes"]
+    assert next(item for item in listed if item["id"] == note["id"])["tags"] == []
+    hit = next(hit for hit in ok(token, "/api/v1/search", q="Geheimnis")["notes"] if hit["id"] == note["id"])
+    assert hit["locked"] is True and hit["excerpt"] == [] and hit["snippet"] == "" and hit["attachment"] is None

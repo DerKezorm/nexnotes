@@ -122,7 +122,8 @@ class Caller:
 
 
 def caller_of(account: Account, row: ApiToken) -> Caller:
-    folders = row.folder_ids if row.kind == TOKEN_API and row.folder_ids else None
+    # A limit that holds no folder (never made so) means nothing to see, never "every note".
+    folders = row.folder_ids if row.kind == TOKEN_API and row.folder_ids is not None else None
     return Caller(account=account, token_id=row.id, token_name=row.name, kind=row.kind,
                   level=row.level if row.level in LEVELS else "read", allow_mcp=bool(row.allow_mcp),
                   folder_ids=[str(found) for found in folders] if folders is not None else None,
@@ -186,7 +187,8 @@ def valid_folders(db: Session, account: Account, wanted: list[str]) -> list[str]
 
 
 def scope_clause(db: Session, caller: Caller) -> ColumnElement[bool]:
-    """Notes in the token's folders, or every note for a token without a limit."""
+    """Notes in the token's folders, or every note for a token without a limit. A limit with no folder left (every
+    chosen one in the trash or gone) holds no note: an empty limit is never "everything"."""
     found = caller.scope(db)
     if found is None:
         return true()
@@ -286,14 +288,25 @@ def first_folder(db: Session, caller: Caller) -> str | None:
 
 
 def attachment(db: Session, caller: Caller, attachment_id: str) -> Attachment:
-    """An attachment the token may load: the account may open it (``attachments.readable``), and the note it belongs
-    to is one the token may read (in its folders, not locked, not in the trash)."""
+    """An attachment the token may load (AC-12): by the same rule as the interface (``attachments.doors``: the note it
+    belongs to, or a note of the same owner that names it, for a member only what the owner put there), through a
+    note the token may read (in its folders, not locked, not in the trash). A copied block, a picture whose first note
+    lies in the trash or outside the token's folders opens through the note that shows it. When none opens it, the
+    answer is what the note it belongs to answers (``note_locked`` to its owner), else ``not_found``."""
     try:
         found = attachments.get_for(db, caller.account, attachment_id)
     except HTTPException as exc:
         raise Refused("not_found") from exc
-    note(db, caller, found.note_id)
-    return found
+    first: Refused | None = None
+    for door in attachments.doors(db, caller.account, found):
+        try:
+            note(db, caller, door.id)
+        except Refused as exc:
+            if door.id == found.note_id:
+                first = exc
+            continue
+        return found
+    raise first or Refused("not_found")
 
 
 def is_inbox(folder_row: Folder | None) -> bool:

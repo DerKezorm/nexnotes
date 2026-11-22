@@ -65,7 +65,8 @@ def make(db: Session, account: Account, name: str, *, kind: str = TOKEN_DEVICE, 
     )
     db.add(row)
     db.commit()
-    logger.info("Token made account=%s kind=%s prefix=%s", account.name, kind, row.prefix)
+    # The token's number only: never a piece of the secret (NOTES-25 AC-24).
+    logger.info("Token made account=%s kind=%s token_id=%s", account.name, kind, row.id)
     return row, token
 
 

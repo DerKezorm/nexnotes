@@ -2,7 +2,8 @@
 
 Programs (n8n, Home Assistant, your own scripts, the nexdeck card) read the notes of one account over `/api/v1/`.
 A browser with nexnotes open shows the same description, with every route and a `curl` example, at
-`/api/v1/docs` (signed in); the machine-readable form is `/api/v1/openapi.json`.
+`/api/v1/docs` (signed in in that browser; a token, an API token or a paired device's, is no sign-in there); the
+machine-readable form is `/api/v1/openapi.json`.
 
 ## The promise
 
@@ -21,7 +22,10 @@ no meaning changes. Something that would break comes under `/api/v2/` beside it.
   access, folders, run-out and last use; *Revoke* ends it at once. An account holds at most 20 tokens.
 - A token never may more than its account: the account's own notes and those shared with it, by the same rules as
   the interface. It never sees the content of a locked note. *Only these folders* limits it to those folders and
-  everything below them, also folders made later; notes shared with the account lie in none of them.
+  everything below them, also folders made later; notes and folders shared with the account lie in none of them.
+  When none of the chosen folders is left (all in the trash or gone), the token sees nothing at all until one comes
+  back: a limit never turns into "all notes". Its trash shows only what lay in its folders, and it brings back only
+  that.
 - The operator sees every token (account, name, right, access, number of folders, run-out, last use; never the token,
   never a title or a text) under **Settings › Server › Accounts › API tokens of all accounts** and can block one.
 
@@ -51,6 +55,9 @@ Every error is `{"detail": {"code": "...", "message": "..."}}`; a `422` also nam
 
 | Status | Code | Meaning |
 |---|---|---|
+| 400 | `inbox_fixed` | The inbox cannot be renamed, moved or deleted. |
+| 400 | `attachment_empty` | An upload without a byte. |
+| 400 | `upload_broken` | The upload broke off before the file was whole; send it again. |
 | 401 | `token_invalid` | No token, or one unknown, revoked, run out or blocked; or its account is blocked, deleted or owes its second factor. |
 | 403 | `api_off` | The operator switched the API off. |
 | 403 | `origin_refused` | The request came from a web page. |
@@ -60,16 +67,24 @@ Every error is `{"detail": {"code": "...", "message": "..."}}`; a `422` also nam
 | 403 | `not_owner` | Only the note's owner may move it. |
 | 404 | `not_found` | Not there, or not to be seen with this token (another account's, outside the token's folders). |
 | 409 | `note_locked` | The note is locked in the vault; nothing of it goes out. |
+| 409 | `note_format` | The note is in a format of a newer nexnotes; this server leaves it alone. |
 | 409 | `item_changed` | The checklist item is not there any more, or says something else now. |
-| 409 | `tag_exists` | Renaming onto a tag that exists already; send `merge: true` to join them. |
-| 400 | `inbox_fixed` | The inbox cannot be renamed, moved or deleted. |
+| 409 | `folder_name_taken` | A folder of that name (case does not count) is there already at that place; `name` names it. |
+| 409 | `tag_exists` | Renaming onto a tag that exists already (within the token's folders); send `merge: true` to join them. |
 | 410 | `note_trashed` | The note is in the trash. |
-| 412 | `note_changed` | Replacing the text: the note changed since it was read; `etag` names its state now. |
+| 412 | `note_changed` | The note changed since the state in `If-Match` or `base`; `etag` names its state now. |
 | 413 | `too_large`, `attachment_too_large` | Markdown over 512 KB; a file over the operator's limit per file. |
-| 422 | `invalid_input` | A parameter cannot be read (`fields` names it), e.g. a title over 120 or a folder name over 60 characters. |
+| 422 | `invalid_input` | Input that cannot be taken; `fields` names where: see below. |
+| 422 | `attachment_wrong_kind` | A file that is not what it was sent as. |
 | 428 | `precondition_required` | Replacing the text without `If-Match` or `base`. |
-| 507 | `storage_limit_reached` | The storage of the account is full. |
 | 429 | `slow_down`, `too_many_attempts` | See above. |
+| 507 | `storage_limit_reached` | The storage of the account is full. |
+
+`invalid_input` (422) with `fields` stands for every input the API cannot take, also where nexnotes' own services say
+it in their words: a query parameter it cannot read (`cursor`, `tag`, `limit`); a `title` over 120 characters; a note
+without text and title (`markdown`, `title`); a folder `name` empty or over 60 characters; an `icon`, `color` or
+`paper` not in the lists; a folder's `parent_id` that is the inbox, the folder itself or one below it, or (for a token
+limited to folders) missing; a note's `folder_id` that is empty; a tag `name` that is no tag.
 
 ## Routes
 
@@ -90,8 +105,8 @@ name, only for notes of others), `created_at`, `updated_at`.
 
 ### `GET /api/v1/notes/{id}`
 
-One note: the fields above, its text as `markdown` (without the title; `truncated: true` past 1 MB; `markdown=false`
-leaves it out), its checklist items as `items` (`index` from 0, `text`, `checked`, `depth`), `lines` (the first lines
+One note: the fields above, its text as `markdown` (without the title; past 1,000,000 bytes of UTF-8 it is cut
+before the character that would not fit whole and `truncated` is `true`; `markdown=false` leaves it out), its checklist items as `items` (`index` from 0, `text`, `checked`, `depth`), `lines` (the first lines
 of a note without a checklist, for the card), `can_check`, and its state as `etag` (also in the `ETag` header). The
 `etag` changes with every change of title or text, deletions included; symbol, color, paper and pinning do not
 change it.
@@ -110,7 +125,16 @@ note the account may write. Whoever has the note open sees it at once; nothing t
 Full text search as the search page: words match as prefixes, `"a phrase"`, `-word`, `#tag`; it finds text, tags and
 the text read from pictures and PDFs. `q` (required), `folder` (an own folder with its subfolders), `tag`, `limit`
 (20, at most 100), `cursor`. Each hit has an `excerpt` (parts, the hits marked `hit: true`) and the same as a
-`snippet` with the hits in «guillemets». A locked note is found by its title only.
+`snippet` with the hits in «guillemets». A locked note is found by its title only, with `locked: true` and an empty
+`excerpt` and `snippet`.
+
+#### Locked notes
+
+A locked note never gives its content, tags or attachments. `GET /api/v1/notes` leaves locked notes out unless asked
+with `locked=true`; then they come with their title, `locked: true`, `tags: []` and `tasks: null`. The list is also
+the nexdeck card's route, and the card never shows a locked note (an older card key never gets them, also not with
+`locked=true`). The search shows them always, by their title only. Reading, writing or loading the attachments of a
+locked note answers `409 note_locked` to its owner and `404 not_found` to everybody else.
 
 ### `GET /api/v1/folders`
 
@@ -135,7 +159,10 @@ nexnotes.
 ### `GET /api/v1/notes/{id}/attachments`, `GET /api/v1/attachments/{id}/file`
 
 The attachments of a note (`id`, `name`, `kind`, `mime`, `size`, `file`), and the file of one as a download (ranges
-work). Only when the token may read the note.
+work). Only when the token may read the note. A file opens through any note the token may read that shows it, by the
+rules of the interface: the note it was uploaded to, or another note of the same owner that names it (a copied block,
+also when the first note lies in the trash or outside the token's folders); in a note shared with the account only
+what its owner put there.
 
 ### `GET /api/v1/trash`
 
@@ -165,13 +192,18 @@ All fields are optional, but a note needs a text or a title. Without `folder_id`
 limited to folders: in the first of them), marked "Via the API from <token name>". Without a title the first words
 become one and the owner is asked to check it. `201` with the note; with an `external_ref` that made a note before,
 `200` with that note and nothing new, also when the same request arrives twice at the same moment. A note gone for
-good frees its reference.
+good frees its reference. While that note lies in the trash the reference still names it: the request answers
+`410 note_trashed` and makes no new note; bring it back (`POST /api/v1/notes/{id}/restore`), or wait until it is gone
+for good, then the same `external_ref` makes a new one.
 
 ### `PATCH /api/v1/notes/{id}`
 
 Any of `title`, `icon`, `color`, `paper`, `pinned`, `folder_id`. Pinning is the account's own (also for a note shared
-to read only); moving to another folder is the owner's (`403 not_owner`). With `If-Match` it changes only the state
-read (`412 note_changed`).
+to read only, with or without `If-Match`); moving to another folder is the owner's (`403 not_owner`). Every field is
+checked before anything changes. With `If-Match` (an `etag`) the state is compared and the title written in one step,
+as `PUT …/content` does: if anything changed since, nothing changes and the answer is `412 note_changed` with the
+current `etag`. Symbol, color, paper, pinning and folder are not part of the text and do not change the `etag`; they
+follow right after.
 
 ### `POST /api/v1/notes/{id}/append`
 
@@ -204,7 +236,9 @@ moves it to the top), delete puts it into the trash with everything in it. The i
 
 ### `PATCH /api/v1/tags/{name}`
 
-`{"name": "new", "merge": false}` renames a tag in the account's own notes; notes of others keep theirs (`kept`).
+`{"name": "new", "merge": false}` renames a tag in the account's own notes; notes of others keep theirs (`kept`). A
+token limited to folders renames it only in notes in them, counts only those, and asks only there whether the new
+name is a tag already: nothing tells of a tag outside its folders.
 
 ## Not over the API
 
