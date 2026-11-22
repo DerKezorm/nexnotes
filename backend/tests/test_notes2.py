@@ -652,11 +652,11 @@ def test_notes2_ac7_an_operator_from_a_provider_confirms_operator_acts_with_a_fr
     assert "prompt" not in parse_qs(urlsplit(oidc_helpers.start(fresh_browser())).query)
     assert location(oidc_helpers.come_back(boss, provider, target)) == "/settings/accounts"
     assert boss.post(f"/api/accounts/{anna.id}/unblock", json={}).status_code == 204
-    # A token of the operator is never enough, fresh or not.
+    # A token of the operator is never enough, fresh or not: a paired device reaches no operator act at all (NOTES-24).
     with SessionLocal() as db:
         row = db.get(Account, boss_id)
         assert row is not None
         _device, token = apitokens.make(db, row, "iPhone")
     device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {token}", **TAB})
     refused = device.post(f"/api/accounts/{anna.id}/block", json={})
-    assert refused.status_code == 403 and _code(refused) == "fresh_sign_in_required"
+    assert refused.status_code == 403 and _code(refused) == "browser_only"

@@ -18,6 +18,7 @@ from ..deps import (
     Account,
     DbSession,
     behind_unknown_proxy,
+    browser_only,
     client_ip,
     reauth_failed,
     reauth_guard,
@@ -357,9 +358,13 @@ def change_password(payload: PasswordChangeIn, request: Request, response: Respo
 
 
 @router.put("/me/profile", summary="The own name and address")
-def set_profile(payload: ProfileIn, account: Account, db: DbSession) -> dict[str, Any]:
+def set_profile(payload: ProfileIn, request: Request, account: Account, db: DbSession) -> dict[str, Any]:
     row = db.get(AccountRow, account.id)
     assert row is not None
+    device = request.headers.get("authorization", "")[:7].lower() == "bearer "
+    if device and payload.email is not None and payload.email.strip().lower() != (row.email or "").lower():
+        # The address resets the password: a paired device changes the name, never the address (NOTES-24).
+        raise browser_only()
     try:
         if payload.display_name is not None:
             shown = accounts.clean_display_name(payload.display_name)

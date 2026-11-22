@@ -366,16 +366,15 @@ class Synced:
 
 
 def _sync_check(account: Account, note_id: str, writing: bool) -> str:
-    """Why the device may not take part in the note's text, or "": an unknown note, no right (read only and an
-    update, or the share withdrawn: NOTES-12 EC-5), or locked (NOTES-16). A note in the trash is still the writer's:
-    what the device wrote offline meanwhile comes back with it."""
+    """Why the device may not take part in the note's text, or "": ``not_found`` for a note it does not see (unknown,
+    somebody else's, or the share withdrawn: NOTES-12 EC-5; an id of somebody else is not told apart from none),
+    ``no_right`` for an update to a note it may only read, ``note_locked`` (NOTES-16). A note in the trash is still
+    the writer's: what the device wrote offline meanwhile comes back with it."""
     with SessionLocal() as db:
         note = db.get(Note, note_id) if len(note_id) <= 36 else None
-        if note is None:
-            return "not_found"
         right = right_to(db, account, note)
-        if right == Access.NONE:
-            return "no_right"
+        if note is None or right == Access.NONE:
+            return "not_found"
         if busy(db, note_id):
             return "note_locked"
         if writing and right != Access.WRITE:

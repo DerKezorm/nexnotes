@@ -127,6 +127,22 @@ def client_ip(request: Request) -> str:
 SETUP_ONLY_PATHS = {"/api/auth/me", "/api/auth/logout", "/api/auth/totp/begin", "/api/auth/totp/confirm"}
 
 
+#: What a paired device's token never reaches (NOTES-24): tokens and connected programs, the second factor, the
+#: sign-in providers, the password, a connection's key, and everything of the operator. A lost or stolen device must
+#: not leave anything behind that outlives disconnecting it, nor take the account. Its name and picture it may change.
+DEVICE_REFUSED_PREFIXES = ("/api/tokens", "/api/admin/", "/api/oauth/", "/api/auth/totp", "/api/oidc/")
+DEVICE_REFUSED = frozenset({("PUT", "/api/auth/password"), ("PUT", "/api/nextasks"), ("DELETE", "/api/nextasks")})
+
+
+def device_refused(request: Request) -> bool:
+    path = request.url.path
+    return path.startswith(DEVICE_REFUSED_PREFIXES) or (request.method, path) in DEVICE_REFUSED
+
+
+def browser_only() -> HTTPException:
+    return error("browser_only", "Only in the browser.", 403)
+
+
 def _bearer(request: Request) -> str:
     header = request.headers.get("authorization", "")
     return header[7:].strip() if header[:7].lower() == "bearer " else ""
@@ -146,6 +162,11 @@ def require_account(request: Request) -> AccountRow:
             if found is None:
                 raise error("sign_in_required", "Sign in first.", 401)
             account = found[0]
+            if device_refused(request):
+                raise browser_only()
+            if totp.setup_required(db, account):
+                # The operator requires a second factor this account has not set up: the app signs in anew.
+                raise error("second_factor_required", "Set up your second factor in the browser first.", 401)
             db.expunge(account)
             logs.set_actor(account.name)
             return account
@@ -164,6 +185,9 @@ def require_account(request: Request) -> AccountRow:
 
 
 def require_operator(request: Request, account: Annotated[AccountRow, Depends(require_account)]) -> AccountRow:
+    if _bearer(request):
+        # The operator's settings only from a browser, never with a paired device's token.
+        raise browser_only()
     if account.role != OPERATOR:
         raise error("operator_only", "Only the operator may do this.", 403)
     networks = _trusted_networks(get_settings().operator_networks)

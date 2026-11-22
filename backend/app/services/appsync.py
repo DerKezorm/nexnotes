@@ -8,11 +8,12 @@ the counter row is written first, so numbers are committed in their order: a rea
 everything up to ``n``.
 
 **What went** (``removed``): a note or folder deleted for good, or one somebody may no longer see (a share withdrawn,
-a note moved out of a shared folder, a note locked), leaves a tombstone with the number of that change. A tombstone
-names its account or none; one without an account reaches every account that does not see the thing (any more). Who
-still sees it never hears of it. Tombstones stay 400 days (``KEEP_DAYS``); a cursor older than the oldest one kept
-gets the full list (``full``), and the app drops what is not in it (EC-4). The cleanup that drops them gives
-everything older a new number, so a full list read in pages never falls behind the floor again.
+a note moved out of a shared folder, a note locked), leaves a tombstone with the number of that change, one for each
+account it can concern: its owner, and whoever the owner shares anything with (never an account that never could have
+seen it). Who still sees it never hears of it. Tombstones stay 400 days (``KEEP_DAYS``); a cursor older than the oldest
+one kept gets the full list (``full``), and the app drops what none of its pages held (EC-4). The last page of a full
+list read in pages brings the tombstones since it started (what went between the pages). The cleanup that drops old
+tombstones gives everything older a new number, so a full list read in pages never falls behind the floor again.
 
 **Waiting** (``wait``): every commit that took a number wakes the waiting requests of this process, which look
 whether something their account sees changed. Nothing holds a thread or a database connection while it waits.
@@ -24,6 +25,7 @@ import asyncio
 import json
 import logging
 import threading
+import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import timedelta
@@ -78,11 +80,13 @@ def current(db: Session) -> tuple[int, int]:
     return (int(row.value), int(row.floor)) if row is not None else (0, 0)
 
 
-def _has_shares(session: Session, owner_id: int | None) -> bool:
+def _recipients(session: Session, owner_id: int | None) -> list[int]:
+    """The accounts the owner shares anything with: the only ones besides the owner a tombstone of its things can
+    concern."""
     if owner_id is None:
-        return False
-    return session.connection().execute(
-        select(Share.id).where(Share.owner_id == owner_id).limit(1)).first() is not None
+        return []
+    return list(session.connection().execute(
+        select(Share.account_id).where(Share.owner_id == owner_id).distinct()).scalars())
 
 
 def _changed(obj: Any, columns: Iterable[str]) -> list[str]:
@@ -98,12 +102,12 @@ class _Flush:
     seq: int | None = None
     notes: set[str] = field(default_factory=set)
     trees: set[str] = field(default_factory=set)
-    #: (kind, id, account or None)
+    #: (kind, id, account)
     gone: list[tuple[str, str, int | None]] = field(default_factory=list)
-    #: (folder whose tree goes, account or None)
+    #: (folder whose tree goes, account)
     gone_trees: list[tuple[str, int | None]] = field(default_factory=list)
     #: Whether an owner shares anything at all, asked once per flush.
-    owners: dict[int, bool] = field(default_factory=dict)
+    owners: dict[int, list[int]] = field(default_factory=dict)
 
     def number(self) -> int:
         if self.seq is None:
@@ -115,10 +119,13 @@ class _Flush:
         if object_id is None or owner_id is None:
             return
         self.gone.append((kind, object_id, owner_id))
+        for account_id in self.recipients(owner_id):
+            self.gone.append((kind, object_id, account_id))
+
+    def recipients(self, owner_id: int) -> list[int]:
         if owner_id not in self.owners:
-            self.owners[owner_id] = _has_shares(self.session, owner_id)
-        if self.owners[owner_id]:
-            self.gone.append((kind, object_id, None))
+            self.owners[owner_id] = _recipients(self.session, owner_id)
+        return self.owners[owner_id]
 
 
 @event.listens_for(Session, "before_flush")
@@ -137,17 +144,19 @@ def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
             if not changed:
                 continue
             obj.sync_seq = flush.number()
-            if ("folder_id" in changed or ("locked" in changed and obj.locked)) and _has_shares(session, obj.owner_id):
-                flush.gone.append(("note", obj.id, None))
+            if "folder_id" in changed or ("locked" in changed and obj.locked):
+                # Who it was shared with through its folder, or at all, may not see it any more.
+                flush.gone += [("note", obj.id, account_id) for account_id in flush.recipients(obj.owner_id)]
         elif isinstance(obj, Folder):
             changed = _changed(obj, FOLDER_COLUMNS)
             if not changed:
                 continue
             obj.sync_seq = flush.number()
-            if "parent_id" in changed and _has_shares(session, obj.owner_id):
+            people = flush.recipients(obj.owner_id) if "parent_id" in changed else []
+            if people:
                 # Who sees the folder can change with its parent: the whole tree anew, and gone for who lost it.
                 flush.trees.add(obj.id)
-                flush.gone_trees.append((obj.id, None))
+                flush.gone_trees += [(obj.id, account_id) for account_id in people]
         elif isinstance(obj, Share) and _changed(obj, ("level", "note_id", "folder_id", "account_id")):
             _shared(flush, obj)
     for obj in session.deleted:
@@ -230,6 +239,14 @@ def _number_bulk(state: ORMExecuteState) -> Any:
 
 _waiting_lock = threading.Lock()
 _waiting: set[tuple[asyncio.AbstractEventLoop, asyncio.Event]] = set()
+#: The waiting request of each device: a device waits once; a second ``wait`` of it ends the first.
+_by_device: dict[int, Waiter] = {}
+#: Commits closer together than this wake the waiting once: typing in a browser commits many times a second, and each
+#: wake costs every waiting device a look into the database.
+WAKE_EVERY = 0.2
+_wake_lock = threading.Lock()
+_last_wake = 0.0
+_wake_pending = False
 
 
 @event.listens_for(Session, "after_commit")
@@ -244,7 +261,33 @@ def _rolled_back(session: Session, _previous: Any) -> None:
 
 
 def wake() -> None:
-    """Every waiting request of this process looks again (from any thread)."""
+    """Every waiting request of this process looks again (from any thread), at most every ``WAKE_EVERY`` seconds:
+    commits in between are gathered into one wake at the end of that time."""
+    global _last_wake, _wake_pending
+    with _wake_lock:
+        if _wake_pending:
+            return
+        now = time.monotonic()
+        later = _last_wake + WAKE_EVERY - now
+        if later > 0:
+            _wake_pending = True
+            timer = threading.Timer(later, _wake_later)
+            timer.daemon = True
+            timer.start()
+            return
+        _last_wake = now
+    _wake_now()
+
+
+def _wake_later() -> None:
+    global _last_wake, _wake_pending
+    with _wake_lock:
+        _wake_pending = False
+        _last_wake = time.monotonic()
+    _wake_now()
+
+
+def _wake_now() -> None:
     with _waiting_lock:
         waiting = list(_waiting)
     for loop, flag in waiting:
@@ -255,20 +298,34 @@ def wake() -> None:
 
 
 class Waiter:
-    """One waiting request: ``armed`` before it looks, ``wait`` until something was committed or the time ran out."""
+    """One waiting request of a device: ``armed`` before it looks, ``wait`` until something was committed or the time
+    ran out. ``replaced`` once the same device waits anew (its connection broke and the app asked again)."""
 
-    def __init__(self) -> None:
+    def __init__(self, device_id: int) -> None:
+        self.device_id = device_id
         self.flag = asyncio.Event()
-        self.entry = (asyncio.get_running_loop(), self.flag)
+        self.loop = asyncio.get_running_loop()
+        self.entry = (self.loop, self.flag)
+        self.replaced = False
 
     def __enter__(self) -> Self:
         with _waiting_lock:
+            before = _by_device.get(self.device_id)
+            _by_device[self.device_id] = self
             _waiting.add(self.entry)
+        if before is not None:
+            before.replaced = True
+            try:
+                before.loop.call_soon_threadsafe(before.flag.set)
+            except RuntimeError:
+                pass
         return self
 
     def __exit__(self, *_exc: object) -> None:
         with _waiting_lock:
             _waiting.discard(self.entry)
+            if _by_device.get(self.device_id) is self:
+                del _by_device[self.device_id]
 
     def arm(self) -> None:
         self.flag.clear()
@@ -425,19 +482,21 @@ def _removed(db: Session, account_id: int, stones: list[AppTombstone]) -> list[d
 
 
 def _stones(account_id: int) -> Any:
-    return or_(AppTombstone.account_id == account_id, AppTombstone.account_id.is_(None))
+    return AppTombstone.account_id == account_id
 
 
 def _needs_full(cursor: int, value: int, floor: int) -> bool:
     return cursor <= 0 or cursor < floor or cursor > value
 
 
-def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, going_on: bool = False
-            ) -> dict[str, Any]:
+def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, going_on: bool = False,
+            since: int | None = None) -> dict[str, Any]:
     """Everything the account sees that changed after ``cursor``, at most ``page`` objects (more when several carry
     the last number of the page: a page never ends in the middle of one change). ``going_on``: ``cursor`` is the one
     the device got with the last page of a full list; this page belongs to it and says ``full`` too (every page of a
-    full list does, and the app drops what none of them held once ``more`` is false)."""
+    full list does, and the app drops what none of them held once ``more`` is false). ``since``: the number the full
+    list started at; its last page brings what went for good meanwhile, between the pages (the app had it from an
+    earlier page)."""
     value, floor = current(db)
     full = going_on and 0 < cursor <= value
     if full:
@@ -464,6 +523,9 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
                                   .order_by(Folder.sync_seq)))
     stones = [] if full else list(db.scalars(select(AppTombstone).where(stones_where, AppTombstone.seq <= bound)
                                              .order_by(AppTombstone.seq)))
+    if full and not more and since is not None:
+        stones = list(db.scalars(select(AppTombstone).where(
+            _stones(account.id), AppTombstone.seq > since, AppTombstone.seq <= value).order_by(AppTombstone.seq)))
     view = view_of(db, account.id, [row.id for row in note_rows])
     return {
         "cursor": bound if more else value,

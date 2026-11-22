@@ -3,7 +3,8 @@
 **A device is a token** of ``api_tokens`` (kind ``device``, ``nnd_…``) with its name, its kind (``ios``, ``ipados``,
 ``mac``) and, for one that came through iCloud, the device that brought it (``via_token_id``, AC-7). It acts as its
 account in ``/api/app/1`` and on the browser's routes, never with more rights. It does not run out; it goes when its
-owner disconnects it (here or in the app), with a new password, a block or a deletion of the account.
+owner disconnects it (here or in the app), with "sign out everywhere", a new password (changed or set through a reset
+link), a reset second factor, a block or a deletion of the account (``security.end_all_sessions``).
 
 **Three ways in, one result** (``{token, account, device}``):
 
@@ -15,7 +16,8 @@ owner disconnects it (here or in the app), with a new password, a block or a del
 * another device of the same account (AC-7): its token asks for one of its own for the new device.
 
 A token gone with a block or deletion of its account leaves its hash behind (``app_gone_devices``): such a device hears
-``account_blocked``, every other unknown token ``device_disconnected`` (EC-1, EC-5).
+``account_blocked``, every other unknown token ``device_disconnected`` (EC-1, EC-5). While the operator requires a
+second factor the account has not set up, a device hears ``second_factor_required`` and signs in anew.
 """
 
 from __future__ import annotations
@@ -37,7 +39,7 @@ from sqlalchemy.orm import Session
 from ..models import TOKEN_DEVICE, Account, ApiToken, utcnow
 from ..models_app import AppCode, AppGoneDevice, AppPairing
 from ..security import account_out
-from . import apitokens
+from . import apitokens, totp
 
 logger = logging.getLogger("nexnotes.app")
 
@@ -280,8 +282,8 @@ class Refusal(Exception):
 
 
 def authenticate(db: Session, token: str | None) -> Caller:
-    """The device behind a token; else ``Refusal`` with ``account_blocked`` (its account blocked or deleted) or
-    ``device_disconnected`` (no such device: disconnected, or never one)."""
+    """The device behind a token; else ``Refusal`` with ``account_blocked`` (its account blocked or deleted),
+    ``device_disconnected`` (no such device: disconnected, or never one) or ``second_factor_required``."""
     if not token or len(token) > 200 or not token.startswith(apitokens.PREFIXES[TOKEN_DEVICE]):
         raise Refusal("device_disconnected")
     hashed = apitokens.digest(token)
@@ -295,6 +297,8 @@ def authenticate(db: Session, token: str | None) -> Caller:
         raise Refusal("account_blocked")
     if row.blocked_at is not None:
         raise Refusal("device_disconnected")
+    if totp.setup_required(db, account):
+        raise Refusal("second_factor_required")
     now = utcnow()
     if row.last_used_at is None or now - row.last_used_at > apitokens.USED_EVERY:
         row.last_used_at = now

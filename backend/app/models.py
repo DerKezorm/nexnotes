@@ -312,6 +312,8 @@ class ApiToken(Base):
     #: A device in the middle of a full list of ``changes`` (NOTES-24 EC-4): the cursor of the page it was given last,
     #: so that the next page says ``full`` too and goes on from there.
     full_cursor: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: The number that full list started at: its last page brings what went for good since.
+    full_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 #: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.

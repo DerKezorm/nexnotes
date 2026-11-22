@@ -392,7 +392,8 @@ def test_notes24_ac3_a_share_withdrawn_takes_nothing_more(client, operator):
         unshare(other, "note", theirs["id"], operator)
     before = note_updates(theirs["id"])
     answer = device.sync(theirs["id"], updates={theirs["id"]: pending})[theirs["id"]]
-    assert answer["error"] == "no_right"
+    # Not seen any more: not told apart from a note that is not there.
+    assert answer["error"] == "not_found"
     assert note_updates(theirs["id"]) == before
 
 

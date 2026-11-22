@@ -28,7 +28,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 router = APIRouter(prefix="/api/search", tags=["search"], lifespan=lifespan)
 
-FolderId = Annotated[str | None, Query(max_length=36, pattern=r"^[0-9a-fA-F-]+$")]
+FolderId = Annotated[str | None, Query(max_length=36, pattern=r"^[A-Za-z0-9_-]+$")]
 
 
 @router.get("")

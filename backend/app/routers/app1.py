@@ -80,6 +80,7 @@ def _refused(code: str, text: str, status: int, retry: int | None = None) -> HTT
 _REFUSALS = {
     "device_disconnected": "This device was disconnected. Connect it again.",
     "account_blocked": "This account is blocked or deleted.",
+    "second_factor_required": "Set up your second factor in the browser first, then connect again.",
 }
 
 
@@ -266,12 +267,15 @@ Cursor = Annotated[int, Query(ge=0, le=2**62)]
 @router.get("/changes", summary="Everything the account sees that changed after the cursor")
 def changes(found: Device, cursor: Cursor = 0) -> dict[str, Any]:
     """Every page of a full list says ``full``: the device's token remembers the cursor of the last such page."""
+    device = found.device
     with SessionLocal() as db:
-        going_on = found.device.full_cursor is not None and found.device.full_cursor == cursor
-        answer = appsync.changes(db, found.account, cursor, appsync.PAGE, going_on=going_on)
-        mark = answer["cursor"] if answer["full"] and answer["more"] else None
-        if mark != found.device.full_cursor:
-            db.execute(update(ApiToken).where(ApiToken.id == found.device.id).values(full_cursor=mark))
+        going_on = device.full_cursor is not None and device.full_cursor == cursor
+        started = device.full_start if going_on else appsync.current(db)[0]
+        answer = appsync.changes(db, found.account, cursor, appsync.PAGE, going_on=going_on,
+                                 since=started if going_on else None)
+        mark, start = (answer["cursor"], started) if answer["full"] and answer["more"] else (None, None)
+        if (mark, start) != (device.full_cursor, device.full_start):
+            db.execute(update(ApiToken).where(ApiToken.id == device.id).values(full_cursor=mark, full_start=start))
             db.commit()
         return answer
 
@@ -284,18 +288,19 @@ def _changed_since(token: str | None, cursor: int) -> int | None:
 
 @router.get("/wait", summary="Answers as soon as something changed after the cursor, at the latest after 25 s")
 async def wait(found: Device, request: Request, cursor: Cursor = 0) -> dict[str, int]:
-    """Nothing is held while waiting: neither a thread nor a database connection. Every commit that numbered a change
-    wakes the waiting, which look again; a device disconnected meanwhile hears so within a few seconds."""
+    """Nothing is held while waiting: neither a thread nor a database connection. Commits that numbered a change wake
+    the waiting (at most every ``appsync.WAKE_EVERY`` seconds), which look again; a device disconnected meanwhile hears
+    so within a few seconds. A device waits once: asking again ends its waiting request before."""
     token = _bearer(request)
     deadline = time.monotonic() + WAIT_SECONDS
-    with appsync.Waiter() as waiter:
+    with appsync.Waiter(found.device.id) as waiter:
         while True:
             waiter.arm()
             found_cursor = await asyncio.to_thread(_changed_since, token, cursor)
             if found_cursor is not None:
                 return {"cursor": found_cursor}
             left = deadline - time.monotonic()
-            if left <= 0 or await request.is_disconnected():
+            if left <= 0 or waiter.replaced or await request.is_disconnected():
                 return {"cursor": cursor}
             await waiter.wait(min(left, WAIT_RECHECK))
 

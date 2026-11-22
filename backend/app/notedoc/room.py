@@ -76,7 +76,8 @@ import enum
 import json
 import logging
 import time
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TypeVar
 
@@ -245,7 +246,10 @@ class Rooms:
         #: writes under it (its own changes, text it puts back), so two documents alive at once must not share one.
         self.client_ids = client_ids
         self.rooms: dict[str, Room] = {}
-        self.guard = asyncio.Lock()
+        #: One lock per note while its room is opened or closed, or its stored document changed without a room:
+        #: loading and storing one note never holds up another (NOTES-24, ``apply`` of up to 50 notes), and no room
+        #: opens on a document that a change is still storing. ``[lock, users]``, dropped when nobody holds it.
+        self.note_locks: dict[str, list[Any]] = {}
         self.epoch = 0
 
     # --- outside calls --------------------------------------------------------------------------------------------
@@ -275,7 +279,7 @@ class Rooms:
         rescuer, under the same lock, where text typed into what the change deleted should go."""
         room = self.rooms.get(note_id)
         if room is None:
-            async with self.guard:
+            async with self._held(note_id):
                 room = self.rooms.get(note_id)
                 if room is None:
                     state, updates = await self.store.load(note_id)
@@ -305,7 +309,7 @@ class Rooms:
         Raises ``Refused`` (``invalid_update``, ``too_large``); a note locked meanwhile fails in the store."""
         room = self.rooms.get(note_id)
         if room is None:
-            async with self.guard:
+            async with self._held(note_id):
                 room = self.rooms.get(note_id)
                 if room is None:
                     state, updates = await self.store.load(note_id)
@@ -392,8 +396,20 @@ class Rooms:
 
     # --- the room's life ------------------------------------------------------------------------------------------
 
+    @asynccontextmanager
+    async def _held(self, note_id: str) -> AsyncIterator[None]:
+        entry = self.note_locks.setdefault(note_id, [asyncio.Lock(), 0])
+        entry[1] += 1
+        try:
+            async with entry[0]:
+                yield
+        finally:
+            entry[1] -= 1
+            if entry[1] == 0 and self.note_locks.get(note_id) is entry:
+                del self.note_locks[note_id]
+
     async def _open(self, note_id: str) -> Room:
-        async with self.guard:
+        async with self._held(note_id):
             room = self.rooms.get(note_id)
             if room is None:
                 state, updates = await self.store.load(note_id)
@@ -410,7 +426,7 @@ class Rooms:
             await room.send(_awareness_gone(client, clock + 1))
         if room.peers:
             return
-        async with self.guard:
+        async with self._held(room.note_id):
             if room.peers or self.rooms.get(room.note_id) is not room:
                 return
             async with room.lock:

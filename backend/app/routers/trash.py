@@ -23,7 +23,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 router = APIRouter(prefix="/api/trash", tags=["trash"], lifespan=lifespan)
 
-Id = Annotated[str, PathParam(min_length=1, max_length=36, pattern=r"^[0-9a-fA-F-]+$")]
+Id = Annotated[str, PathParam(min_length=1, max_length=36, pattern=r"^[A-Za-z0-9_-]+$")]
 
 
 class EmptyIn(BaseModel):

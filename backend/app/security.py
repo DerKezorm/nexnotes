@@ -21,7 +21,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from .config import get_settings
-from .models import Account, AuthSession, new_device_key, utcnow
+from .models import TOKEN_DEVICE, Account, ApiToken, AuthSession, new_device_key, utcnow
 
 SESSION_COOKIE = "nexnotes_session" + get_settings().cookie_name_suffix()
 MIN_PASSWORD = 12
@@ -159,12 +159,14 @@ _sessions_ended = sessions_ended
 
 
 def end_all_sessions(db: Session, account_id: int, except_token: str | None = None) -> None:
-    """Every browser session of the account but ``except_token``: a new password or "sign out everywhere" is what
-    one does when the account was taken. Tokens made by hand in the interface stay; they are revoked there."""
+    """Every browser session of the account but ``except_token``, and every paired device (NOTES-24): a new password
+    or "sign out everywhere" is what one does when the account was taken, and a device acts with a session's rights
+    as well. Tokens made by hand in the interface stay; they are revoked there."""
     statement = delete(AuthSession).where(AuthSession.account_id == account_id)
     if except_token:
         statement = statement.where(AuthSession.token_hash != hash_token(except_token))
     db.execute(statement)
+    db.execute(delete(ApiToken).where(ApiToken.account_id == account_id, ApiToken.kind == TOKEN_DEVICE))
     # The browsers known from before are forgotten too (their device cookies); the one that stays gets a new one.
     db.execute(update(Account).where(Account.id == account_id).values(device_key=new_device_key()))
     db.commit()

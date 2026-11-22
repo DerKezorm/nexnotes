@@ -620,7 +620,8 @@
     "push_ticket_invalid": "Mitteilungen ließen sich für dieses Gerät nicht einrichten.",
     "too_many_notes": "Zu viele Notizen auf einmal.",
     "invalid_update": "Die Änderung ließ sich nicht lesen.",
-    "no_right": "Hier darfst du nur lesen."
+    "no_right": "Hier darfst du nur lesen.",
+    "second_factor_required": "Richte zuerst im Browser deinen zweiten Faktor ein, dann verbinde das Gerät neu."
   },
   "folders": {
     "section": "Ordner",
@@ -795,7 +796,7 @@
       "change": "Ändern",
       "changedAt": "zuletzt geändert am {{day}}",
       "current": "Jetziges Passwort",
-      "done": "Passwort geändert. Andere Browser müssen sich neu anmelden.",
+      "done": "Passwort geändert. Andere Browser und verbundene Geräte müssen sich neu anmelden.",
       "new": "Neues Passwort",
       "submit": "Passwort ändern"
     },
@@ -808,9 +809,9 @@
       "title": "Anmeldung und Sicherheit"
     },
     "sessions": {
-      "done": "Alle anderen Browser sind abgemeldet.",
+      "done": "Alle anderen Browser und verbundenen Geräte sind abgemeldet.",
       "submit": "Überall sonst abmelden",
-      "text": "Meldet dich überall ab außer hier, etwa nach einem verlorenen Handy."
+      "text": "Meldet dich überall ab außer hier, auch auf verbundenen iPhones und iPads, etwa nach einem verlorenen Handy."
     },
     "setupFirst": "Der Betreiber verlangt einen zweiten Faktor. Richte ihn hier ein, dann geht es weiter.",
     "signOut": {

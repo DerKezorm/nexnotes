@@ -28,8 +28,8 @@ class AppCounter(Base):
 
 class AppTombstone(Base):
     """A note or folder that went for good, or that somebody may no longer see (a share withdrawn, a note moved out
-    of a shared folder, a note locked): ``removed`` in ``changes``. ``account_id`` names whom it concerns; empty: any
-    account that does not see the thing any more (who still sees it never hears of it). Kept 400 days."""
+    of a shared folder, a note locked): ``removed`` in ``changes``. ``account_id`` names whom it concerns: the owner, or
+    an account the owner shares with (who still sees the thing never hears of it). Kept 400 days."""
 
     __tablename__ = "app_tombstones"
     __table_args__ = (Index("ix_app_tombstones_seq", "seq"),)

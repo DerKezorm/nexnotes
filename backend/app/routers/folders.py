@@ -16,9 +16,9 @@ from ..services import shares as shares_service
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
-FolderId = Annotated[str, PathParam(min_length=1, max_length=36, pattern=r"^[0-9a-fA-F-]+$")]
+FolderId = Annotated[str, PathParam(min_length=1, max_length=36, pattern=r"^[A-Za-z0-9_-]+$")]
 #: An id in a body: the same shape as in the address.
-Id = Annotated[str, Field(min_length=1, max_length=36, pattern=r"^[0-9a-fA-F-]+$")]
+Id = Annotated[str, Field(min_length=1, max_length=36, pattern=r"^[A-Za-z0-9_-]+$")]
 #: The most folders or notes one move carries.
 MOVE_MAX = 1000
 
