@@ -804,6 +804,12 @@
       "text": "Signs you out everywhere except here, for example after losing a phone."
     },
     "setupFirst": "The operator requires a second factor. Set it up here, then you can go on.",
+    "signOut": {
+      "button": "Sign out",
+      "provider": "You stay signed in with your sign-in provider; only nexnotes signs you out.",
+      "text": "Ends your session in this browser. Your notes stay as they are.",
+      "title": "Sign out"
+    },
     "unlinked": "No longer linked to {{name}}.",
     "picture": {
       "add": "Upload a profile picture",

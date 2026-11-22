@@ -222,7 +222,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   const cards = () => [...box.querySelectorAll('section[id]')].map((card) => card.id)
 
   it.each([
-    ['profile', ['profile']],
+    ['profile', ['profile', 'sign-out']],
     ['security', ['security']],
     ['appearance', ['looks', 'lists']],
     ['general', ['limits', 'features', 'languages']],

@@ -804,6 +804,12 @@
       "text": "Meldet dich überall ab außer hier, etwa nach einem verlorenen Handy."
     },
     "setupFirst": "Der Betreiber verlangt einen zweiten Faktor. Richte ihn hier ein, dann geht es weiter.",
+    "signOut": {
+      "button": "Abmelden",
+      "provider": "Bei deinem Anmeldeanbieter bleibst du angemeldet; nur nexnotes meldet dich ab.",
+      "text": "Beendet deine Sitzung in diesem Browser. Deine Notizen bleiben, wie sie sind.",
+      "title": "Abmelden"
+    },
     "unlinked": "Nicht mehr mit {{name}} verknüpft.",
     "picture": {
       "add": "Profilbild hochladen",

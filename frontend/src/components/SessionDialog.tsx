@@ -5,29 +5,30 @@
  *   and the editors save what waited (`SIGNED_IN_AGAIN_EVENT`).
  * - **blocked** (NOTES-2 EC-4): "Your account is blocked". Nothing more is saved; the only way is out.
  *
- * Signing out while changes typed here still wait (offline, say) asks first: they are lost with the session. "Warten"
- * keeps the page, to save what is needed some other way first.
+ * Signing out while changes typed here still wait (offline, say) asks first (`SignOut.tsx`, the same question as the
+ * button in the profile): they are lost with the session. "Warten" keeps the page, to save what is needed some other
+ * way first.
  */
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { authApi, type Methods } from '../api/client'
-import { waitingChanges } from '../state/account'
 import { AuthField, Problem, troubleOf, waysIn, type Trouble } from '../pages/AuthPages'
 import { useAuth } from '../state/auth'
 import { Dialog } from './Dialog'
 import { ProviderButtons } from './ProviderButtons'
+import { SignOutWaiting, useSignOut } from './SignOut'
 
 export function SessionDialog() {
   const { t } = useTranslation()
-  const { interrupted, me, resume, signOut } = useAuth()
+  const { interrupted, me, resume } = useAuth()
+  const leaving = useSignOut()
   const [methods, setMethods] = useState<Methods | null>(null)
   const [password, setPassword] = useState('')
   const [code, setCode] = useState('')
   const [step, setStep] = useState<'password' | 'code'>('password')
   const [problem, setProblem] = useState<Trouble>(null)
   const [busy, setBusy] = useState(false)
-  const [waiting, setWaiting] = useState(0)
 
   useEffect(() => {
     if (interrupted === 'expired') void waysIn().then(setMethods)
@@ -40,30 +41,11 @@ export function SessionDialog() {
       <Dialog title={t('session.blockedTitle')} onClose={() => undefined}>
         <div className="space-y-4" data-testid="session-blocked">
           <p className="text-sm text-mist-300">{t('session.blockedText')}</p>
-          {waiting > 0 ? (
-            <div role="alert" className="space-y-3 rounded-[10px] border border-warn-500/40 px-3.5 py-3" data-testid="sign-out-waiting">
-              <p className="text-sm font-medium text-warn-500">{t('session.waitingText', { count: waiting })}</p>
-              <div className="flex flex-wrap justify-end gap-2">
-                <button type="button" className="nn-btn nn-btn-ghost" data-testid="sign-out-anyway" onClick={() => void signOut()}>
-                  {t('session.signOutAnyway')}
-                </button>
-                <button type="button" className="nn-btn nn-btn-accent" data-testid="sign-out-wait" onClick={() => setWaiting(0)}>
-                  {t('session.wait')}
-                </button>
-              </div>
-            </div>
+          {leaving.waiting > 0 ? (
+            <SignOutWaiting count={leaving.waiting} onAnyway={leaving.anyway} onWait={leaving.wait} />
           ) : (
             <div className="flex justify-end">
-              <button
-                type="button"
-                className="nn-btn nn-btn-ghost"
-                data-testid="session-leave"
-                onClick={() => {
-                  const now = waitingChanges()
-                  if (now > 0) setWaiting(now)
-                  else void signOut()
-                }}
-              >
+              <button type="button" className="nn-btn nn-btn-ghost" data-testid="session-leave" onClick={leaving.ask}>
                 {t('session.leave')}
               </button>
             </div>

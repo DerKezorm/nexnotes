@@ -1,10 +1,10 @@
 /**
  * Settings, "My account" (drawing N2-Mein-Konto): Profile (picture, name, address, the language, which travels to every
- * device of the account), Sign-in and security (the providers, the password, the second factor, signing out
+ * device of the account; at its end "Sign out" of this browser, NOTES-2 AC-12), Sign-in and security (the providers, the password, the second factor, signing out
  * everywhere, then the cards of the features in `ACCOUNT_SECTIONS`), Appearance (stays on this device, and the paper of
  * new notes; NOTES-22 AC-2 and AC-7). Each area of the settings shows its `part`; without one, all of it.
  */
-import { KeyRound, LayoutList, Lock, Palette, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, LayoutList, Lock, LogOut, Palette, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -14,6 +14,7 @@ import { ACCOUNT_SECTIONS } from '../../extensions'
 import { Avatar } from '../../components/Avatar'
 import { Field, Problem } from '../../components/Field'
 import { PasswordConfirmField } from '../../components/PasswordConfirm'
+import { SignOutWaiting, useSignOut } from '../../components/SignOut'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
 import { paperOf } from '../../editor/paper'
 import { PaperPicker } from '../../editor/PaperPicker'
@@ -172,6 +173,8 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
           </label>
         </Card>
       )}
+
+      {shows('profile') && <SignOutCard viaProvider={me.sign_in === 'oidc'} />}
 
       {shows('security') && (
         <Card id="security" icon={ShieldCheck} title={t('me.security.title')}>
@@ -491,5 +494,28 @@ function SecondFactor({ me }: { me: Me }) {
         </p>
       )}
     </div>
+  )
+}
+
+/**
+ * "Sign out" (NOTES-2 AC-12), the one button for it, here in the profile; on a phone the settings are the same page.
+ * Changes that still wait ask first, as in the session's dialog. A provider's own session stays: only nexnotes ends.
+ */
+function SignOutCard({ viaProvider }: { viaProvider: boolean }) {
+  const { t } = useTranslation()
+  const leaving = useSignOut()
+  return (
+    <Card id="sign-out" icon={LogOut} title={t('me.signOut.title')} text={t('me.signOut.text')}>
+      <div data-testid="sign-out-card" className="space-y-3">
+        {viaProvider && <p className="text-xs text-mist-500">{t('me.signOut.provider')}</p>}
+        {leaving.waiting > 0 ? (
+          <SignOutWaiting count={leaving.waiting} onAnyway={leaving.anyway} onWait={leaving.wait} />
+        ) : (
+          <button type="button" className={PLAIN} data-testid="sign-out" onClick={leaving.ask}>
+            {t('me.signOut.button')}
+          </button>
+        )}
+      </div>
+    </Card>
   )
 }
