@@ -660,10 +660,11 @@ def catch_up() -> int:
     return queued
 
 
-def _queue_missing(db: Session, available: bool) -> int:
+def _queue_missing(db: Session, unavailable_too: bool) -> int:
     """Attachments waiting to be read whose job is not in the queue (refused for a full account, lost), into it as far
-    as there is room."""
-    waiting = [OCR_QUEUED, OCR_WORKING, OCR_DEVICE] + ([OCR_UNAVAILABLE] if available else [])
+    as there is room. ``unavailable_too`` (at the start, Tesseract is there now): those that met no Tesseract wait to
+    be read again, in the queue or for room in it."""
+    waiting = [OCR_QUEUED, OCR_WORKING, OCR_DEVICE] + ([OCR_UNAVAILABLE] if unavailable_too else [])
     queued = 0
     for row, owner in db.execute(select(AttachmentOcr, Attachment.owner_id)
                                  .join(Attachment, Attachment.id == AttachmentOcr.attachment_id)
@@ -671,20 +672,22 @@ def _queue_missing(db: Session, available: bool) -> int:
                                  .order_by(AttachmentOcr.updated_at)).all():
         if row.state == OCR_DEVICE and row.source == "device":
             continue
+        if row.state == OCR_UNAVAILABLE:
+            row.state = OCR_QUEUED
         if not workqueue.pending(db, JOB, row.attachment_id) and workqueue.enqueue(db, JOB, row.attachment_id,
                                                                                   account=owner):
-            if row.state == OCR_UNAVAILABLE:
-                row.state = OCR_QUEUED
             queued += 1
     return queued
 
 
 def refill() -> int:
-    """``workqueue.REFILL_HOOKS``: attachments refused for a full account, now that there may be room."""
+    """``workqueue.REFILL_HOOKS``: attachments refused for a full account, now that there may be room. Never those
+    that met no Tesseract: the queue runs dry after every one of them, and a worker that cannot start Tesseract while
+    the server finds it would read the same file again and again. They come again at the next start (``catch_up``)."""
     from ..db import SessionLocal
 
     with SessionLocal() as db:
-        queued = _queue_missing(db, engine_info().available)
+        queued = _queue_missing(db, False)
         db.commit()
     return queued
 
