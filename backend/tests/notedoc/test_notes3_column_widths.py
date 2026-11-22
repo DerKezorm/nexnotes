@@ -15,14 +15,14 @@ def _table(widths: list[list[int] | None]) -> dict:
         return {"type": kind, "attrs": attrs, "content": [P(T(text))]}
 
     return D({"type": "table", "content": [
-        {"type": "tableRow", "content": [cell("tableHeader", h, w) for h, w in zip(["Name", "Qty"], widths)]},
-        {"type": "tableRow", "content": [cell("tableCell", c, w) for c, w in zip(["Apples", "3"], widths)]},
+        {"type": "tableRow", "content": [cell("tableHeader", h, w) for h, w in zip(["Name", "Qty"], widths, strict=True)]},
+        {"type": "tableRow", "content": [cell("tableCell", c, w) for c, w in zip(["Apples", "3"], widths, strict=True)]},
     ]})
 
 
 def _widths(document: dict) -> list[list[int] | None]:
-    rows = document["content"][0]["content"]
-    return [[cell["attrs"]["colwidth"] for cell in row["content"]] for row in rows][0]
+    header = document["content"][0]["content"][0]
+    return [cell["attrs"]["colwidth"] for cell in header["content"]]
 
 
 def test_notes3_ac19_column_widths_survive_clean_doc_and_the_yjs_document():

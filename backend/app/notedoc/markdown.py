@@ -345,9 +345,7 @@ def _blocks_plain(blocks: list[dict[str, Any]]) -> list[str]:
     for block in blocks:
         kind = block["type"]
         content = block.get("content") or []
-        if kind in s.TEXTBLOCKS:
-            out.extend(_inline_plain(content).split("\n"))
-        elif kind == s.CODE_BLOCK:
+        if kind in s.TEXTBLOCKS or kind == s.CODE_BLOCK:
             out.extend(_inline_plain(content).split("\n"))
         elif kind in (s.BLOCKQUOTE,):
             out.extend(_blocks_plain(content))
@@ -376,7 +374,7 @@ _HEADING = re.compile(r"^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$")
 _RULE = re.compile(r"^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$")
 _QUOTE = re.compile(r"^ {0,3}> ?(.*)$")
 _ITEM = re.compile(r"^( *)([-*+]|\d{1,9}[.)])(?:( +)(.*))?$")
-_TASK = re.compile(r"^\[([ xX])\](?: +|$)(.*)$", re.S)
+_TASK = re.compile(r"^\[([ xX])\](?: +|$)(.*)$", re.DOTALL)
 _TABLE_RULE = re.compile(r"^ *\|? *:?-{1,}:? *(\| *:?-{1,}:? *)*\|? *$")
 #: A picture or file of the note on a line of its own (what ``to_markdown`` writes without ``attachment_href``); a
 #: sketch or a recording (NOTES-18) says so in the link's title.
@@ -498,8 +496,7 @@ def _paragraph_inline(lines: list[str]) -> list[dict[str, Any]]:
 
 def _split_row(line: str) -> list[str]:
     line = line.strip()
-    if line.startswith("|"):
-        line = line[1:]
+    line = line.removeprefix("|")
     if line.endswith("|") and not line.endswith("\\|"):
         line = line[:-1]
     cells, current, escaped = [], "", False
@@ -532,7 +529,7 @@ def _table(rows: list[str], _lines: list[str]) -> dict[str, Any]:
 
 
 def _cell_inline(cell: str) -> list[dict[str, Any]]:
-    parts = re.split(r"<br\s*/?>", cell, flags=re.I)
+    parts = re.split(r"<br\s*/?>", cell, flags=re.IGNORECASE)
     out: list[dict[str, Any]] = []
     for index, part in enumerate(parts):
         if index:
@@ -603,9 +600,9 @@ def _parse_list(lines: list[str], i: int, depth: int) -> tuple[int, list[dict[st
 # --- Inline Markdown ----------------------------------------------------------------------------------------------
 
 _PUNCT = set("!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~")
-_TAG = re.compile(r"<(/?)(u|mark|br)(\s[^<>]*)?\s*/?>", re.I)
-_AUTOLINK = re.compile(r"<((?:https?|mailto):[^\s<>]+)>", re.I)
-_COLOR = re.compile(r"""data-color\s*=\s*["']?([a-z]+)""", re.I)
+_TAG = re.compile(r"<(/?)(u|mark|br)(\s[^<>]*)?\s*/?>", re.IGNORECASE)
+_AUTOLINK = re.compile(r"<((?:https?|mailto):[^\s<>]+)>", re.IGNORECASE)
+_COLOR = re.compile(r"""data-color\s*=\s*["']?([a-z]+)""", re.IGNORECASE)
 _DELIMS = {"*": (s.ITALIC, s.BOLD), "_": (s.ITALIC, s.BOLD), "~": (None, s.STRIKE), "=": (None, s.HIGHLIGHT)}
 
 

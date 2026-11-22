@@ -9,18 +9,18 @@ from app.notedoc import doc as notedoc
 from app.notedoc import schema as s
 
 
-def T(text, *marks):  # noqa: N802 - short builders keep the documents readable
+def T(text, *marks):
     node = {"type": "text", "text": text}
     if marks:
         node["marks"] = [m if isinstance(m, dict) else {"type": m} for m in marks]
     return node
 
 
-def P(*content):  # noqa: N802
+def P(*content):
     return {"type": "paragraph", "content": list(content)} if content else {"type": "paragraph"}
 
 
-def D(*blocks):  # noqa: N802
+def D(*blocks):
     return {"type": "doc", "content": list(blocks)}
 
 
@@ -169,7 +169,7 @@ def test_notes3_ec7_title_is_cut_at_120_characters():
 
 
 def test_notes3_ec10_umlauts_emoji_and_right_to_left_stay():
-    title = "Grüße 😀 مرحبا‏"
+    title = "Grüße 😀 مرحبا\u200f"
     doc = notedoc.new_doc(title, D(P(T("Äpfel 🍎 שלום"))))
     again = notedoc.load(doc.get_update())
     assert notedoc.title_of(again) == title
@@ -193,7 +193,7 @@ def test_notes12_set_title_changes_only_the_differing_part():
 @pytest.mark.parametrize("href", [
     "javascript:alert(1)", "JaVaScRiPt:alert(1)", " javascript:alert(1)", "data:text/html,<b>x</b>",
     "vbscript:x", "file:///etc/passwd", "//evil.example", "https://", "http:/x", "https://exa mple.com",
-    "https://x.org/‮", "mailto:", "", None, 3, "ftp://x.org",
+    "https://x.org/\u202e", "mailto:", "", None, 3, "ftp://x.org",
 ])
 def test_notes3_ec8_dangerous_links_are_not_links(href):
     assert notedoc.safe_href(href) is None

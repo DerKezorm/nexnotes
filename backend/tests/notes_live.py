@@ -7,11 +7,12 @@ is read in a thread (it blocks); the document is only touched in the test's own 
 
 from __future__ import annotations
 
+import contextlib
 import queue
 import threading
 import time
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 from fastapi.testclient import TestClient
 from pycrdt import (
@@ -36,7 +37,7 @@ _CLOSED = "closed"
 class Live:
     #: Every connection a test opened; closed after the test even when it failed half way (``close_all``), or the
     #: test client would wait for them for ever.
-    opened: list[Live] = []
+    opened: ClassVar[list[Live]] = []
 
     @classmethod
     def close_all(cls) -> None:
@@ -122,10 +123,8 @@ class Live:
 
     def _send(self, data: bytes) -> None:
         if self._ws is not None and self.closed is None:
-            try:
+            with contextlib.suppress(Exception):  # the server closed meanwhile
                 self._ws.send_bytes(data)
-            except Exception:  # noqa: BLE001 - the server closed meanwhile
-                pass
 
     # --- messages -----------------------------------------------------------------------------------------------
 

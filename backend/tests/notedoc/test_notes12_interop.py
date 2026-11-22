@@ -93,7 +93,7 @@ def _browser_reads(tmp_path: Path, *updates: bytes) -> dict:
         path.write_bytes(update)
         files.append(str(path))
     result = subprocess.run([node, str(INTEROP / "check-update.mjs"), *files], capture_output=True, text=True,
-                            timeout=120, cwd=INTEROP, encoding="utf-8")
+                            timeout=120, cwd=INTEROP, encoding="utf-8", check=False)
     assert result.returncode == 0, result.stderr
     return json.loads(result.stdout)
 
@@ -114,7 +114,7 @@ def test_notes12_interop_browser_reads_every_node_the_server_wrote(tmp_path):
 @needs_node
 @pytest.mark.parametrize("name", CASES)
 def test_notes12_interop_server_changes_on_a_browser_document_read_back_in_the_browser(name, tmp_path):
-    update, expected = _fixture(name)
+    update, _ = _fixture(name)
     doc = notedoc.load(update)
 
     def change(d):
@@ -155,7 +155,7 @@ def test_notes12_interop_node_check_refuses_a_document_the_browser_cannot_read(t
     path = tmp_path / "bad.bin"
     path.write_bytes(doc.get_update())
     result = subprocess.run([node, str(INTEROP / "check-update.mjs"), str(path)], capture_output=True, text=True,
-                            timeout=120, cwd=INTEROP)
+                            timeout=120, cwd=INTEROP, check=False)
     assert result.returncode == 1
     # The room mends such a shape before anyone reads it.
     notedoc.repair(doc)

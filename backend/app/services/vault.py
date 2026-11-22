@@ -742,7 +742,8 @@ def _place_plain(attachment_id: str, staged: Path) -> None:
         stored = 0
         if prepared is not None and prepared.redrawn is not None:
             attachments._write(target, prepared.redrawn)
-        elif prepared is not None and prepared.redrawn_file                 and Path(prepared.redrawn_file).parent == attachments.root():
+        elif (prepared is not None and prepared.redrawn_file
+              and Path(prepared.redrawn_file).parent == attachments.root()):
             os.replace(prepared.redrawn_file, target)
         else:
             os.replace(work, target)
