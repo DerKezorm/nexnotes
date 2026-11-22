@@ -430,6 +430,101 @@ def test_notes1_ac11_the_server_settings_show_used_and_free_space_of_the_data_fo
     assert settings["data_used"] + settings["data_free"] <= settings["data_total"]
 
 
+def _parts(client: TestClient) -> tuple[int, dict[str, int]]:
+    answer = client.get("/api/settings").json()
+    return answer["nexnotes_used"], answer["nexnotes_parts"]
+
+
+def test_notes1_ac11_the_server_settings_show_what_nexnotes_itself_takes_by_part(
+    client: TestClient, operator: Account
+) -> None:
+    data = Path(DATA_DIR)
+    used, before = _parts(client)
+    assert set(before) == {"database", "attachments", "backups", "exports", "other"}
+    assert used == sum(before.values())
+    database = sum((data / name).stat().st_size for name in ("nexnotes.db", "nexnotes.db-wal", "nexnotes.db-shm")
+                   if (data / name).exists())
+    # The request itself may write to the WAL meanwhile.
+    assert before["database"] > 0 and abs(before["database"] - database) < 1024**2
+    assert before["backups"] == 0
+
+    (MEDIA / "fp-attachment-0001").write_bytes(b"a" * 1000)
+    (data / "exports").mkdir(exist_ok=True)
+    export = data / "exports" / "fp-export.zip"
+    export.write_bytes(b"e" * 2000)
+    (data / "logs").mkdir(exist_ok=True)
+    log = data / "logs" / "fp-extra.log"
+    log.write_bytes(b"l" * 3000)
+    try:
+        storage.forget_footprint()
+        used, after = _parts(client)
+        assert after["attachments"] - before["attachments"] == 1000
+        assert after["exports"] - before["exports"] == 2000
+        assert after["other"] - before["other"] >= 3000
+        assert used == sum(after.values())
+        settings = client.get("/api/settings").json()
+        assert used <= settings["data_used"]
+
+        # A backup made here is in the numbers at once, not a minute later.
+        made = client.post("/api/backups", json={})
+        assert made.status_code == 201, made.text
+        _, with_backup = _parts(client)
+        archives = list((data / "backups").glob("nexnotes-*.zip"))
+        assert with_backup["backups"] == sum(path.stat().st_size for path in archives) > 0
+    finally:
+        export.unlink(missing_ok=True)
+        log.unlink(missing_ok=True)
+
+
+def test_notes1_ac11_the_footprint_is_measured_at_most_once_a_minute(
+    client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, first = _parts(client)
+    (MEDIA / "fp-attachment-0002").write_bytes(b"b" * 4096)
+    _, cached = _parts(client)
+    assert cached == first
+    # Once the minute is over, it is measured again.
+    monkeypatch.setattr(storage, "FOOTPRINT_SECONDS", 0.0)
+    _, fresh = _parts(client)
+    assert fresh["attachments"] - first["attachments"] == 4096
+
+
+def test_notes1_ac14_a_backup_holds_what_the_page_says_and_nothing_it_leaves_out(
+    client: TestClient, operator: Account
+) -> None:
+    data = Path(DATA_DIR)
+    (MEDIA / "fp-attachment-0003").write_bytes(b"c" * 10)
+    for folder, name in (("logs", "fp.log"), ("locales", "es.json"), ("exports", "fp.zip"), ("cache", "fp.bin")):
+        (data / folder).mkdir(exist_ok=True)
+        (data / folder / name).write_bytes(b"{}")
+    key = data / "secret.key"
+    had_key = key.exists()
+    if not had_key:
+        key.write_text("fp-key", encoding="utf-8")
+    try:
+        path = backups.create()
+        with zipfile.ZipFile(path) as archive:
+            names = archive.namelist()
+            database = archive.read(backups.DATABASE_ENTRY)
+        assert backups.SECRET_ENTRY in names
+        assert backups.MEDIA_PREFIX + "fp-attachment-0003" in names
+        assert not [name for name in names if name.split("/")[0] in {"logs", "locales", "exports", "cache"}]
+        copy = data / "fp-check.db"
+        copy.write_bytes(database)
+        try:
+            connection = sqlite3.connect(copy)
+            tables = {row[0] for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+            connection.close()
+        finally:
+            copy.unlink(missing_ok=True)
+        # Notes with history and trash, accounts with shares, smart folders and API tokens, settings, locked notes.
+        assert {"notes", "note_versions", "accounts", "shares", "smart_folders", "api_tokens", "settings",
+                "sealed_notes", "attachments"} <= tables
+    finally:
+        if not had_key:
+            key.unlink(missing_ok=True)
+
+
 def test_notes1_ac6_7_8_11_only_the_operator_reaches_the_server_settings(client: TestClient,
                                                                         operator: Account) -> None:
     with new_client(make_account("anna")) as member:

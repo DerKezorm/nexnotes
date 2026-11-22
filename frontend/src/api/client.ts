@@ -251,12 +251,15 @@ export type ServerSettings = {
   data_total: number
   data_used: number
   data_free: number
+  /** What nexnotes itself takes in the data folder, and its parts (NOTES-1 AC-11). */
+  nexnotes_used?: number
+  nexnotes_parts?: Partial<Record<'database' | 'attachments' | 'backups' | 'exports' | 'other', number>>
   data_on_share: boolean
   proxy_unknown?: boolean
 }
 
 export type SettingsChange = Partial<
-  Omit<ServerSettings, 'smtp_password_set' | 'data_total' | 'data_used' | 'data_free' | 'data_on_share' | 'proxy_unknown'>
+  Omit<ServerSettings, 'smtp_password_set' | 'data_total' | 'data_used' | 'data_free' | 'nexnotes_used' | 'nexnotes_parts' | 'data_on_share' | 'proxy_unknown'>
 > & {
   smtp_password?: string
   confirm_address?: boolean

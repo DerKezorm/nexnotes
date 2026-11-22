@@ -38,7 +38,7 @@ from app.main import app  # noqa: E402
 from app.models import MEMBER, OPERATOR, Account, Base, Setting  # noqa: E402
 from app.routers import health  # noqa: E402
 from app.security import SESSION_COOKIE, brake, hash_password, start_session  # noqa: E402
-from app.services import totp, updates  # noqa: E402
+from app.services import storage, totp, updates  # noqa: E402
 
 DATA_DIR = _DATA
 #: The attachments folder (``services/backups.media_root``).
@@ -109,6 +109,7 @@ def clean_db(schema: None) -> Iterator[None]:
     totp.forget()
     updates.forget()
     health.forget()
+    storage.forget_footprint()
     yield
     app.dependency_overrides.clear()
 

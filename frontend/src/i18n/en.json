@@ -1024,7 +1024,6 @@
     "countNotes_one": "{{count}} note",
     "countNotes_other": "{{count}} notes",
     "daily": "every night",
-    "dataFolder": "Data folder",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
     "deleteBackup": "Delete",
@@ -1032,7 +1031,6 @@
     "download": "Download",
     "features": "Features for every account",
     "forBackup": "{{action}}: backup of {{name}}",
-    "free": "{{size}} free",
     "history": "Keep the version history",
     "keep": "Keep",
     "kinds": {
@@ -1121,7 +1119,6 @@
     "uploadMaxHint": "100 MB from the start. Counts at once.",
     "uploaded": "uploaded",
     "uploadedHint": "Uploaded. It is in the list now: check it first, then restore.",
-    "usedOf": "{{used}} of {{total}}",
     "weekly": "every week",
     "years_one": "{{count}} year",
     "years_other": "{{count}} years",
@@ -1142,7 +1139,19 @@
     "localNetwork": "Connections into the local network",
     "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there.",
     "api": "API for members",
-    "apiHint": "Members make API tokens; programs and the nexdeck card read with them. Off: every request under /api/v1/ is refused, the tokens stay."
+    "apiHint": "Members make API tokens; programs and the nexdeck card read with them. Off: every request under /api/v1/ is refused, the tokens stay.",
+    "backupHolds": "A backup contains all notes with their history and trash, all attachments, the accounts with their shares, smart folders and API tokens, the settings and the server’s key. Locked notes stay encrypted in it. Not included: the log, exports, caches and your own language files, nor a key set through NEXNOTES_SECRET_KEY.",
+    "nexnotesUses": "nexnotes uses",
+    "part": "{{name}} {{size}}",
+    "parts": {
+      "database": "Database",
+      "attachments": "Attachments",
+      "backups": "Backups",
+      "exports": "Exports",
+      "other": "Log and other"
+    },
+    "diskBar": "nexnotes uses {{own}}; {{used}} of {{total}} on the disk are in use",
+    "diskFree": "{{free}} of {{total}} still free on the disk"
   },
   "session": {
     "again": "Sign in again",

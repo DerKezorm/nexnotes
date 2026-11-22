@@ -8,6 +8,7 @@ import { MemoryRouter } from 'react-router-dom'
 
 import type { BackupBrief } from './api/client'
 import i18n from './i18n'
+import { bytes } from './lib/format'
 import { AuthProvider } from './state/auth'
 
 type Answer = { status: number; body: unknown }
@@ -24,6 +25,7 @@ const SETTINGS = {
   smtp_host: '', smtp_port: 587, smtp_security: 'starttls', smtp_user: '', smtp_password_set: false, smtp_from: '',
   upload_max_mb: 100, history_days: 365, trash_days: 90, link_previews: true, share_links: true, mcp_enabled: true,
   ocr_languages: [], update_check: true, data_total: 1e12, data_used: 1e11, data_free: 9e11, data_on_share: false,
+  nexnotes_used: 3_500_000, nexnotes_parts: { database: 1_000_000, attachments: 2_000_000, backups: 500_000, exports: 0, other: 0 },
 }
 const ENTRY = { name: 'nexnotes-backup-1.zip', size: 2048, created: '2026-11-20T03:00:00Z', kind: 'scheduled', note: '', notes: 4, files: 1, version: '0.1.0', uploaded: false }
 const BRIEF: BackupBrief = {
@@ -63,6 +65,7 @@ async function backupsCard(list: unknown[]) {
     if (path === '/api/setup') return { status: 200, body: { needs_setup: false, signed_in: true, code_required: true, version: '0.1.0', min_password: 12 } }
     if (path === '/api/auth/me') return { status: 200, body: ME }
     if (path === '/api/settings') return { status: 200, body: SETTINGS }
+    if (path === '/api/backups' && method === 'POST') return { status: 201, body: ENTRY }
     if (path === '/api/backups') return { status: 200, body: list }
     if (path.endsWith('/check') && method === 'POST') return { status: 200, body: BRIEF }
     return undefined
@@ -91,6 +94,44 @@ describe.each(['en', 'de'])('the server tab (%s)', (language) => {
     expect(dialog.textContent).toContain(i18n.t('server.restoreTitles.change', { titles: 'Shopping list' }))
     expect(dialog.textContent).toContain(i18n.t('server.restoreTitles.remove', { titles: 'Written later' }))
     expect(dialog.textContent).toContain(i18n.t('server.restoreTitles.own'))
+  })
+
+  it('NOTES-1 AC-11 the card shows what nexnotes takes, by part, and what is still free on the disk', async () => {
+    await backupsCard([ENTRY])
+    const lang = i18n.language
+    const card = box.querySelector('[data-testid="data-folder"]')!
+    expect(card.textContent).toContain(i18n.t('server.nexnotesUses'))
+    expect(box.querySelector('[data-testid="nexnotes-used"]')!.textContent).toBe(bytes(3_500_000, lang))
+    const parts = box.querySelector('[data-testid="nexnotes-parts"]')!.textContent!
+    expect(parts).toContain(i18n.t('server.part', { name: i18n.t('server.parts.database'), size: bytes(1_000_000, lang) }))
+    expect(parts).toContain(i18n.t('server.part', { name: i18n.t('server.parts.attachments'), size: bytes(2_000_000, lang) }))
+    expect(parts).toContain(i18n.t('server.parts.backups'))
+    // Parts that take nothing are left out.
+    expect(parts).not.toContain(i18n.t('server.parts.exports'))
+    expect(box.querySelector('[data-testid="disk-free"]')!.textContent).toBe(i18n.t('server.diskFree', { free: bytes(9e11, lang), total: bytes(1e12, lang) }))
+    // The whole disk's use is no longer the headline of the card.
+    expect(card.textContent).not.toContain(bytes(1e11, lang) + ' ')
+    // The bar: nexnotes' share of the disk, then what else lies there.
+    const bar = card.querySelector('[role="img"]')!
+    const [own, other] = [...bar.children] as HTMLElement[]
+    expect(parseFloat(own.style.width)).toBeCloseTo((3_500_000 / 1e12) * 100)
+    expect(parseFloat(other.style.width)).toBeCloseTo(((1e11 - 3_500_000) / 1e12) * 100)
+  })
+
+  it('NOTES-1 AC-14 the card says what a backup holds and what it leaves out', async () => {
+    await backupsCard([ENTRY])
+    expect(box.textContent).toContain(i18n.t('server.backupHolds'))
+    expect(i18n.t('server.backupHolds')).toMatch(/NEXNOTES_SECRET_KEY/)
+  })
+
+  it('NOTES-1 AC-11 a backup made here brings the numbers up to date at once', async () => {
+    await backupsCard([ENTRY])
+    const fetches = () => (fetch as unknown as { mock: { calls: [RequestInfo | URL, RequestInit?][] } }).mock.calls.filter(([url, init]) => String(url) === '/api/settings' && (init?.method ?? 'GET') === 'GET').length
+    const before = fetches()
+    const now = [...box.querySelectorAll('button')].find((button) => button.textContent === i18n.t('server.backupNow'))!
+    await act(async () => now.click())
+    await settle()
+    expect(fetches()).toBe(before + 1)
   })
 
   it('NOTES-1 AC-4 without backups "No backups yet." stands there once', async () => {
