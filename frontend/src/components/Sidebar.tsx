@@ -34,14 +34,15 @@ export function Sidebar({ onNavigate, width = 260 }: { onNavigate?: () => void; 
         <NavLink
           to="/settings"
           onClick={onNavigate}
+          aria-label={`${shown} · ${t('nav.settings')}`}
+          title={`${shown} · ${t('nav.settings')}`}
           className={({ isActive }) =>
             'flex items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-sm transition-colors ' + (isActive ? 'nn-chosen' : 'text-mist-300 hover:bg-ink-800 hover:text-mist-100')
           }
         >
           <Avatar accountId={me?.id ?? 0} name={shown} stamp={me?.avatar} />
-          <span className="min-w-0 flex-1 truncate" title={`${shown} · ${t('nav.settings')}`}>
-            {shown} · {t('nav.settings')}
-          </span>
+          {/* The gear says "settings"; the word stays only for screen readers and the tooltip. */}
+          <span className="min-w-0 flex-1 truncate">{shown}</span>
           <Settings className="h-4 w-4 shrink-0" strokeWidth={1.8} aria-hidden />
         </NavLink>
       </div>
