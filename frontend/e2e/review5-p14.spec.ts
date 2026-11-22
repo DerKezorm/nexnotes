@@ -102,7 +102,8 @@ test.describe('fourteenth review on a phone', () => {
     }
     // The sidebar as the drawer of a phone.
     await page.locator('header button').first().click()
-    const plus = page.getByTestId('sidebar-smart-new')
+    // The desktop sidebar stays in the page (hidden below md): only the drawer's "+" is meant.
+    const plus = page.locator('[role="presentation"]').getByTestId('sidebar-smart-new')
     await expect(plus).toBeVisible()
     const box = (await plus.boundingBox())!
     expect(box.width).toBeGreaterThanOrEqual(44)
