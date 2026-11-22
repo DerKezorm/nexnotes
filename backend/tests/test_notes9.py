@@ -594,7 +594,15 @@ def test_notes9_index_a_long_note_saved_often_and_then_deleted_leaves_the_index_
 
 
 def break_index_like_before(client) -> None:
-    """The index as versions before this one left it: FTS5 ``secure-delete`` on, and broken by it."""
+    """The index as versions before this one left it: FTS5 ``secure-delete`` on, and broken by it.
+
+    Whether the option breaks the index depends on the index's segments. The tests of one worker share it, and what an
+    earlier test left in it (a rebuild, the option set and unset, rows of deleted notes) kept it whole: the index is
+    made anew first, as on a fresh data folder."""
+    with engine.begin() as connection:
+        connection.execute(search._sql("DROP TABLE IF EXISTS @index"))
+        connection.execute(search._sql("DROP TABLE IF EXISTS @rows"))
+    search.ensure_schema()
     with engine.begin() as connection:
         connection.execute(search._sql("INSERT INTO @index(@index, rank) VALUES('secure-delete', 1)"))
     rewrite_long_note_and_delete(client)
