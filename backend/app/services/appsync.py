@@ -432,12 +432,19 @@ def _needs_full(cursor: int, value: int, floor: int) -> bool:
     return cursor <= 0 or cursor < floor or cursor > value
 
 
-def changes(db: Session, account: Account, cursor: int, page: int = PAGE) -> dict[str, Any]:
+def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, going_on: bool = False
+            ) -> dict[str, Any]:
     """Everything the account sees that changed after ``cursor``, at most ``page`` objects (more when several carry
-    the last number of the page: a page never ends in the middle of one change)."""
+    the last number of the page: a page never ends in the middle of one change). ``going_on``: ``cursor`` is the one
+    the device got with the last page of a full list; this page belongs to it and says ``full`` too (every page of a
+    full list does, and the app drops what none of them held once ``more`` is false)."""
     value, floor = current(db)
-    full = _needs_full(cursor, value, floor)
-    start = 0 if full else cursor
+    full = going_on and 0 < cursor <= value
+    if full:
+        start = cursor
+    else:
+        full = _needs_full(cursor, value, floor)
+        start = 0 if full else cursor
     notes_where = and_(_visible_notes(account.id), Note.sync_seq > start, Note.sync_seq <= value)
     folders_where = and_(_listed_folders(account.id), Folder.sync_seq > start, Folder.sync_seq <= value)
     stones_where = and_(_stones(account.id), AppTombstone.seq > start, AppTombstone.seq <= value)

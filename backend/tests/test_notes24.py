@@ -410,6 +410,7 @@ def test_notes24_ec6_the_same_update_twice_changes_nothing(client, operator):
     # The same id again is the same note, nothing doubles.
     same = device.post("/notes", {"id": NOTE_A, "folder_id": "inbox", "update": b64(device.docs[NOTE_A].get_update())})
     assert same.status_code == 200 and same.json()["id"] == NOTE_A
+    assert unb64(same.json()["sv"]) == device.docs[NOTE_A].get_state()
     with SessionLocal() as db:
         assert db.scalar(select(func.count()).select_from(Note)) == 1
     assert stored_text(NOTE_A).count("bread") == 1
@@ -457,6 +458,9 @@ def test_notes24_ac3_notes_made_moved_trashed_and_restored_by_the_app(client, op
     assert device.post("/notes", {"id": NOTE_C, "folder_id": "inbox", "update": "@@"}).status_code == 422
     assert stored(NOTE_A).folder_id == folder
 
+    flagged = device.patch(f"/notes/{NOTE_A}", {"title_check": True})
+    assert flagged.json()["title_check"] is True and stored(NOTE_A).title_check is True
+    assert device.patch(f"/notes/{NOTE_A}", {"title_ok": True}).json()["title_check"] is False
     moved = device.patch(f"/notes/{NOTE_A}", {"folder_id": "inbox", "pinned": True, "color": "red"})
     assert moved.status_code == 200, moved.text
     assert moved.json()["folder_id"] == "inbox" and moved.json()["pinned"] is True
@@ -513,6 +517,14 @@ def test_notes24_ac4_after_a_long_pause_only_what_changed_comes(client, operator
     assert "error" not in device.sync(NOTE_B)[NOTE_B]
     assert "seeds" in device.text(NOTE_B)
     assert device.changes()["notes"] == []
+    # A change of the server's own (text put back, a shape mended: no account, no "changed by") counts as well.
+    extra = notedoc.load(None, [device.docs[NOTE_A].get_update()])
+    before = extra.get_state()
+    edit.append_paragraph(extra, "put back")
+    with SessionLocal() as db:
+        db.add(NoteUpdate(note_id=NOTE_A, update=extra.get_update(before), account_id=None))
+        db.commit()
+    assert [note["id"] for note in device.changes()["notes"]] == [NOTE_A]
 
 
 def test_notes24_ac4_pages_of_at_most_500_never_end_inside_one_change(client, operator, monkeypatch):
@@ -598,6 +610,22 @@ def test_notes24_ec4_a_cursor_older_than_the_tombstones_gets_the_full_list(clien
     assert device.changes()["full"] is False
 
 
+def test_notes24_ec4_every_page_of_a_full_list_says_full(client, operator, monkeypatch):
+    monkeypatch.setattr(appsync, "PAGE", 3)
+    device = paired(client)
+    ids = [f"N{index:021d}" for index in range(7)]
+    for note_id in ids:
+        device.new_note(note_id, note_id)
+    pages = [device.changes()]
+    while pages[-1]["more"]:
+        pages.append(device.changes())
+    assert len(pages) == 3 and all(page["full"] for page in pages)
+    assert sorted(note["id"] for page in pages for note in page["notes"]) == sorted(ids)
+    # The full list is over: the next answer is an ordinary one.
+    after = device.changes()
+    assert after["full"] is False and after["notes"] == []
+
+
 def test_notes24_ec4_a_cursor_from_a_server_restored_from_a_backup_gets_the_full_list(client, operator):
     device = paired(client)
     device.new_note(NOTE_A, "One")
@@ -620,6 +648,7 @@ def test_notes24_ac4_notes_from_before_get_numbers_of_their_own(client, operator
 # --- wait -------------------------------------------------------------------------------------------------------------
 
 
+@pytest.mark.timing
 def test_notes24_ac4_wait_answers_at_once_when_something_changed(client, operator, monkeypatch):
     device = paired(client)
     device.changes()
@@ -633,13 +662,14 @@ def test_notes24_ac4_wait_answers_at_once_when_something_changed(client, operato
 
     thread = threading.Thread(target=waiting)
     thread.start()
-    time.sleep(0.5)
+    assert wait_for(lambda: bool(appsync._waiting))
     device.new_note(NOTE_A, "Wake up")
     thread.join(timeout=20)
     assert not thread.is_alive()
     assert result["answer"].status_code == 200
     assert result["answer"].json()["cursor"] > device.cursor
-    assert result["took"] < 10
+    # Woken by the commit, not found by the look every few seconds (``WAIT_RECHECK``).
+    assert result["took"] < app1_router.WAIT_RECHECK - 1
 
 
 def test_notes24_ac4_wait_gives_the_same_cursor_after_its_time(client, operator, monkeypatch):
@@ -667,7 +697,8 @@ def test_notes24_ec1_wait_ends_for_a_device_disconnected_meanwhile(client, opera
 
     thread = threading.Thread(target=waiting)
     thread.start()
-    time.sleep(0.3)
+    # The request waits before the device goes.
+    assert wait_for(lambda: bool(appsync._waiting))
     with SessionLocal() as db:
         token_id = db.scalar(select(ApiToken.id).where(ApiToken.kind == "device"))
     assert client.delete(f"/api/app-devices/{token_id}").status_code == 204

@@ -25,7 +25,8 @@ class BrowserClockIn(BaseModel):
 
 @router.get("", summary="Is nexnotes running?")
 def health() -> dict[str, str]:
-    return {"status": "ok", "version": __version__}
+    # ``app`` tells the iOS app that nexnotes answers at this address (NOTES-24).
+    return {"status": "ok", "app": "nexnotes", "version": __version__}
 
 
 @router.get("/clock", summary="The server's time in milliseconds")

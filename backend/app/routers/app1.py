@@ -32,7 +32,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete
+from sqlalchemy import delete, update
 
 from .. import __version__
 from ..db import SessionLocal
@@ -265,8 +265,15 @@ Cursor = Annotated[int, Query(ge=0, le=2**62)]
 
 @router.get("/changes", summary="Everything the account sees that changed after the cursor")
 def changes(found: Device, cursor: Cursor = 0) -> dict[str, Any]:
+    """Every page of a full list says ``full``: the device's token remembers the cursor of the last such page."""
     with SessionLocal() as db:
-        return appsync.changes(db, found.account, cursor)
+        going_on = found.device.full_cursor is not None and found.device.full_cursor == cursor
+        answer = appsync.changes(db, found.account, cursor, appsync.PAGE, going_on=going_on)
+        mark = answer["cursor"] if answer["full"] and answer["more"] else None
+        if mark != found.device.full_cursor:
+            db.execute(update(ApiToken).where(ApiToken.id == found.device.id).values(full_cursor=mark))
+            db.commit()
+        return answer
 
 
 def _changed_since(token: str | None, cursor: int) -> int | None:
@@ -401,6 +408,8 @@ class NotePatch(BaseModel):
     folder_id: str | None = Field(default=None, max_length=64)
     pinned: bool | None = None
     title_ok: bool | None = None
+    #: ``true`` sets "Titel prüfen" (a title the app suggested); ``title_ok: true`` takes it away.
+    title_check: bool | None = None
 
 
 def _right(db: Any, account: AccountRow, note_id: str) -> Access:
@@ -423,7 +432,7 @@ def patch(note_id: str, body: NotePatch, found: Device) -> dict[str, Any]:
     with SessionLocal() as db:
         right = _right(db, account, note_id)
         writing = any(value is not None for value in (body.paper, body.icon, body.color, body.folder_id)) \
-            or bool(body.title_ok)
+            or bool(body.title_ok) or bool(body.title_check)
         if writing and right != Access.WRITE:
             raise _no_right()
         if body.paper is not None:
@@ -434,6 +443,11 @@ def patch(note_id: str, body: NotePatch, found: Device) -> dict[str, Any]:
             notes_list.set_color(db, account, note_id, body.color)
         if body.title_ok:
             notes.title_ok(db, account, note_id)
+        elif body.title_check:
+            note = db.get(Note, note_id)
+            assert note is not None
+            note.title_check = True
+            db.commit()
         if body.pinned is not None:
             notes_list.set_pinned(db, account, note_id, body.pinned)
         if body.folder_id is not None:

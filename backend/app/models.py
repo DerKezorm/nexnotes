@@ -309,6 +309,9 @@ class ApiToken(Base):
     device_kind: Mapped[str] = mapped_column(String(8), default="", server_default="")
     #: The device whose token brought this one in (the app's connection handed on through iCloud, NOTES-24 AC-7).
     via_token_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: A device in the middle of a full list of ``changes`` (NOTES-24 EC-4): the cursor of the page it was given last,
+    #: so that the next page says ``full`` too and goes on from there.
+    full_cursor: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 #: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.
