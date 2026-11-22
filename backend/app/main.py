@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -142,7 +143,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         tasks.append(asyncio.create_task(backups.run_forever(stop)))
         tasks.append(asyncio.create_task(cleanup.run_forever(stop)))
         tasks.append(asyncio.create_task(_sweep_forever(stop)))
-    logger.info("nexnotes %s started", __version__)
+    logger.info("nexnotes %s started sqlite=%s", __version__, sqlite3.sqlite_version)
     with SessionLocal() as db:
         accounts.announce_setup_code(db)
     try:

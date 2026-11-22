@@ -415,8 +415,9 @@ def _compare_notes(archived: dict[str, _NoteRow], current: dict[str, _NoteRow],
 
 #: What ``PRAGMA integrity_check`` says of the search index alone (``services/search.py``): FTS5 "secure-delete", which
 #: versions before set, left it malformed in some databases. The index is built from the notes, so a backup holding
-#: such a one is whole all the same; ``_end_restored_sessions`` builds it anew.
-SEARCH_INDEX_PROBLEM = re.compile(r"FTS5 table main\.search_index_v\d+")
+#: such a one is whole all the same; ``_end_restored_sessions`` builds it anew. SQLite up to 3.50 names the table as
+#: ``FTS5 table main.search_index_v3``, later versions as ``fts5: checksum mismatch for table "search_index_v3"``.
+SEARCH_INDEX_PROBLEM = re.compile(r'FTS5 table main\.search_index_v\d+|^fts5: .*\btable "search_index_v\d+"')
 
 #: How often the check reads the archive's database when the system does not let it for a moment, and the pause between.
 DATABASE_TRIES = 3
