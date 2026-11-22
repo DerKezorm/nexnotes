@@ -131,6 +131,13 @@ def test_notes24_notesios7_ac5_presets_come_and_come_back(client, operator):
     twice = device.post("/smart-folders", {"id": SMART_2, "preset": "attachments"})
     assert twice.status_code == 409 and code(twice) == "smart_folder_exists"
     assert code(device.post("/smart-folders", {"id": SMART_2, "preset": "moon"})) == "smart_condition_invalid"
+    # A folder of one's own by a preset's name stands in its way.
+    recent = presets["recent"]["id"]
+    assert device.delete(f"/smart-folders/{recent}").status_code == 204
+    own = device.post("/smart-folders", {"id": SMART_2, "name": "Recently edited", "conditions": OPEN})
+    assert own.status_code == 201, own.text
+    clash = device.post("/smart-folders", {"id": "rE_cent-again0000000000", "preset": "recent"})
+    assert clash.status_code == 409 and clash.json()["detail"]["name"] == "Recently edited"
 
 
 def test_notes24_notesios7_ac3_changed_ordered_deleted_on_every_device_with_numbers(client, operator):
@@ -580,6 +587,15 @@ def test_notes24_notesios10_text_the_server_reads_gives_a_new_number(client, ope
     assert entry is not None and entry["texts"] != ""
     pages = device.post("/texts", {"notes": [NOTE]}).json()["notes"][0]["attachments"][0]["pages"]
     assert pages == [{"page": 1, "text": "Bakery 4,20", "language": pages[0]["language"]}]
+    # Read over several turns (a long PDF): every turn that reads a page gives the note a new number.
+    longer = _upload(device, NOTE, png((10, 200, 10)), "Long.png").json()
+    add_blocks(NOTE, operator.id, block("image", longer))
+    engine.pages[longer["id"]] = [f"page {number}" for number in range(1, ocr.PAGES_PER_TURN + 1)] + ["the last"]
+    ocr.turn(longer["id"])
+    stamp = {item["id"]: item for item in device.changes()["notes"]}[NOTE]["texts"]
+    ocr.turn(longer["id"])
+    later = {item["id"]: item for item in device.changes()["notes"]}.get(NOTE)
+    assert later is not None and later["texts"] not in ("", stamp)
 
 
 def test_notes24_notesios10_folge10_the_device_s_text_of_a_sketch_is_found(client, operator):
