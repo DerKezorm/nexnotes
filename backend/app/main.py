@@ -31,6 +31,7 @@ from .routers import app1_member as app1_member_router
 from .routers import app1_share as app1_share_router
 from .routers import app1_smart as app1_smart_router
 from .routers import app1_trash as app1_trash_router
+from .routers import app_links as app_links_router
 from .routers import app_pairing as app_pairing_router
 from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
@@ -70,7 +71,7 @@ FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, searc
                          notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
                          mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router,
                          app_pairing_router, app1_router, app1_member_router, app1_smart_router, app1_trash_router,
-                         app1_files_router, app1_share_router, app1_import_router]
+                         app1_files_router, app1_share_router, app1_import_router, app_links_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:

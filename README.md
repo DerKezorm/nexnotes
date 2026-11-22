@@ -198,6 +198,7 @@ Make a backup first (see above). What changed is in the release notes.
 | `NEXNOTES_COOKIE_SUFFIX` | none | Appended to the cookie names when two instances share a host: letters, digits and `_` |
 | `NEXNOTES_LOG_LEVEL` | stored setting | `quiet`, `normal`, `detailed` or `trace`; overrides the setting |
 | `NEXNOTES_PUSH_RELAY` | `https://push.nexapps.dev` | The relay that hands notifications to Apple for the iOS app. It sees only what is encrypted for the device. Empty: nothing goes out |
+| `NEXNOTES_APPLE_APP_IDS` | `6KQSFL9GA3.dev.nexapps.nexnotes` | Apps whose links to notes open in the app instead of the browser (`/.well-known/apple-app-site-association`), comma separated. Only for an address the app was built with. Empty: no file |
 | `NEXNOTES_GUIDE` | `true` | Every account gets the folder "Guide". `false`: only who asks for it under **Settings › Appearance** |
 | `NEXNOTES_LOCALES_DIR` | `<data>/locales` | Where your own language files lie |
 | `NEXNOTES_API_DOCS` | `false` | Also serves FastAPI's own `/api/docs` and `/api/openapi.json` (the API for programs has its description at `/api/v1/docs` either way) |
