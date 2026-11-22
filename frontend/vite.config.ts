@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { availableParallelism } from 'node:os'
 import { defineConfig, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -103,11 +104,13 @@ export default defineConfig({
     css: false,
     // e2e/ is Playwright's (`npm run e2e`), not vitest's.
     exclude: ['node_modules/**', 'dist/**', 'e2e/**'],
-    // Four files at a time. The run takes as long as its longest file (tabs.test.tsx, about 30 s) however many run
-    // beside it; on a machine with ten threads the default of nine workers made every jsdom start slower, ran into the
-    // 5 s limit of single tests (9 to 33 of them failed) and took longer (61 s instead of 53 s). Four keep the run
-    // short, green and light on memory.
-    maxWorkers: 4,
+    // One file per two threads, at most four. The run takes as long as its longest file (tabs.test.tsx, about 30 s)
+    // however many run beside it; on a machine with ten threads the default of nine workers made every jsdom start
+    // slower, ran into the 5 s limit of single tests (9 to 33 of them failed) and took longer (61 s instead of 53 s).
+    // A fixed four did the same on the two threads of a GitHub runner: tabs.test.tsx took 134 s instead of 30 s, single
+    // tests ran past 5 s, and after the first of smart.test.tsx had timed out, 27 more of its 30 failed with it.
+    // Half the threads keep the run green on small machines too (1 thread, 1 worker: slowest test 2.7 s).
+    maxWorkers: Math.min(4, Math.max(1, Math.floor(availableParallelism() / 2))),
   },
   server: {
     // Fixed port: if it is taken, Vite aborts instead of silently falling back to another one.
