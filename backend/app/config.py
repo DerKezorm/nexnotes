@@ -106,6 +106,9 @@ class Settings(BaseSettings):
     #: The push relay the iOS app's notifications go through (NOTES-14 AC-6): it sees only what is encrypted for the
     #: device. Empty: nothing goes to iPhones and iPads.
     push_relay: str = "https://push.nexapps.dev"
+    #: Every new account gets the folder "Anleitung" ("Guide") explaining nexnotes, and the accounts from before get it
+    #: once (NOTES-26). Off: only who asks for it in Settings > Appearance gets one.
+    guide: bool = True
 
     @field_validator("data_dir", "frontend_dist", "locales_dir")
     @classmethod

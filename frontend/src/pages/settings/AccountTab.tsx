@@ -18,6 +18,7 @@ import { SignOutWaiting, useSignOut } from '../../components/SignOut'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
 import { paperOf } from '../../editor/paper'
 import { PaperPicker } from '../../editor/PaperPicker'
+import { GuideCard } from '../../guide/GuideCard'
 import { browserLanguage, changeLanguage, languageOptions, type LanguageOption } from '../../i18n'
 import { LookSettings } from '../../notes/list/LookSettings'
 import { copyText } from '../../lib/copy'
@@ -321,6 +322,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
           <LookSettings />
         </Card>
       )}
+      {shows('appearance') && <GuideCard />}
       {shows('security') &&
         ACCOUNT_SECTIONS.map((section) => (
           <div key={section.key}>{section.render()}</div>

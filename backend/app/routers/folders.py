@@ -10,7 +10,7 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel, Field
 
 from ..deps import Account, DbSession
-from ..services import folders
+from ..services import folders, guide
 from ..services import notes as notes_service
 from ..services import shares as shares_service
 
@@ -51,6 +51,8 @@ class OrderIn(BaseModel):
 
 @router.get("")
 def tree(account: Account, db: DbSession) -> dict[str, Any]:
+    # A new account's guide (NOTES-26) still in the queue is there before the folders are shown.
+    guide.catch_up(db, account.id)
     return folders.tree(db, account.id)
 
 

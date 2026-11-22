@@ -26,6 +26,7 @@ from .routers import accounts as accounts_router
 from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
 from .routers import backups as backups_router
+from .routers import guide as guide_router
 from .routers import locales as locales_router
 from .routers import logs as logs_router
 from .routers import mcp as mcp_router
@@ -58,7 +59,7 @@ ROUTERS = [
 #: The vault comes early: its start puts the locked notes into the hooks the others read at their own start.
 FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, search_router, history, trash,
                          notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
-                         mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router]
+                         mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:

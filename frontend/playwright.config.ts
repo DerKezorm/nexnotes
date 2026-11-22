@@ -65,6 +65,8 @@ export default defineConfig({
         NEXNOTES_UPDATE_URL: 'http://127.0.0.1:9/releases/latest',
         // The code the first account brings; global-setup.ts sends it.
         NEXNOTES_SETUP_TOKEN: 'e2e-setup-code',
+        // Accounts start empty, as the tests expect; guide.spec.ts makes the guide by hand (NOTES-26).
+        NEXNOTES_GUIDE: '0',
       },
     },
     // A stand-in sign-in provider (nexoidc.spec.ts): signs in at once whoever POST /oidc/next named.

@@ -723,7 +723,8 @@
         "here": "Created here",
         "other": "Captured quickly",
         "api": "Via the API from “{{name}}”",
-        "apiAny": "Via the API"
+        "apiAny": "Via the API",
+        "guide": "From the nexnotes guide"
       }
     },
     "create": "Create"
@@ -758,7 +759,8 @@
     "weekOf": "Week of {{date}}",
     "sealed": "This version is encrypted. Unlock the note to see it here.",
     "viaDeck": "nexdeck · {{key}}",
-    "viaApi": "{{account}} via API token “{{name}}”"
+    "viaApi": "{{account}} via API token “{{name}}”",
+    "viaGuide": "nexnotes · Guide"
   },
   "home": {
     "empty": "Your notes appear here. New notes, folders and search come with the next steps.",
@@ -2198,5 +2200,13 @@
       "blockTitle": "Block “{{name}}”?",
       "blockText": "The token stops working at once. The account sees it as “Blocked by the operator”."
     }
+  },
+  "guide": {
+    "title": "Guide",
+    "text": "A folder of notes that explain nexnotes, with pictures. Made again, it comes next to your folders; your own changes stay as they are.",
+    "make": "Make the guide again",
+    "making": "Making it …",
+    "made": "“{{name}}” is ready.",
+    "open": "Open"
   }
 }

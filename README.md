@@ -44,6 +44,7 @@ about a data folder on a network share.
 | `NEXNOTES_SESSION_DAYS` | Days a browser stays signed in, 1 to 3650 (default 30). |
 | `NEXNOTES_COOKIE_SUFFIX` | Appended to the cookie names when two instances share a host: letters, digits and `_`. |
 | `NEXNOTES_PUSH_RELAY` | Where notifications for the iOS app go (default `https://push.nexapps.dev`; it sees only what is encrypted for the device). Empty: none to iPhones and iPads. |
+| `NEXNOTES_GUIDE` | `true` (default): every account gets a folder "Guide" ("Anleitung" in German) that explains nexnotes. `false`: only who asks for it under Settings › Appearance. |
 | `NEXNOTES_PORT` | Port inside the container, 1 to 65535 (default 8000), for host networking. |
 
 A variable with a value nexnotes cannot use stops the start with a line in the log that names the variable and the

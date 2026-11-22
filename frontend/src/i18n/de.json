@@ -723,7 +723,8 @@
         "here": "Hier angelegt",
         "other": "Schnell festgehalten",
         "api": "Über die API von „{{name}}“",
-        "apiAny": "Über die API"
+        "apiAny": "Über die API",
+        "guide": "Aus der Anleitung von nexnotes"
       }
     },
     "create": "Anlegen"
@@ -758,7 +759,8 @@
     "weekOf": "Woche ab {{date}}",
     "sealed": "Diese Fassung ist verschlüsselt. Entsperre die Notiz, dann lässt sie sich hier ansehen.",
     "viaDeck": "nexdeck · {{key}}",
-    "viaApi": "{{account}} über API-Token „{{name}}“"
+    "viaApi": "{{account}} über API-Token „{{name}}“",
+    "viaGuide": "nexnotes · Anleitung"
   },
   "home": {
     "empty": "Hier erscheinen deine Notizen. Neue Notizen, Ordner und Suche kommen mit den nächsten Schritten.",
@@ -2198,5 +2200,13 @@
       "blockTitle": "„{{name}}“ sperren?",
       "blockText": "Der Token funktioniert sofort nicht mehr. Das Konto sieht ihn als „Vom Betreiber gesperrt“."
     }
+  },
+  "guide": {
+    "title": "Anleitung",
+    "text": "Ein Ordner mit Notizen, die nexnotes erklären, mit Bildern. Neu angelegt kommt er neben deine bisherigen Ordner; deine eigenen Änderungen bleiben, wie sie sind.",
+    "make": "Anleitung neu anlegen",
+    "making": "Wird angelegt …",
+    "made": "„{{name}}“ ist angelegt.",
+    "open": "Öffnen"
   }
 }
