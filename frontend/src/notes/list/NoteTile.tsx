@@ -44,14 +44,17 @@ export function NoteTile(props: ItemProps) {
           <span className="flex min-w-0 items-start gap-1.5">
             <NoteIcon icon={item.icon} color={item.color} className="mt-[3px]" />
             {!item.icon && mark && <span className="mt-[2px] shrink-0">{mark}</span>}
-            <span className="line-clamp-2 min-w-0 text-[14px] leading-[1.3] font-semibold break-words text-mist-100" title={item.title || undefined}>
+            <span className="nn-wrap line-clamp-2 min-w-0 text-[14px] leading-[1.3] font-semibold text-mist-100" title={item.title || undefined} data-testid="note-tile-title">
               {title}
             </span>
           </span>
-          <span className="flex shrink-0 items-center gap-1 pt-0.5">
-            {item.pinned && <Pin role="img" aria-label={t('noteList.pinned')} className="h-3.5 w-3.5 text-accent-400" strokeWidth={2.2} />}
-            {locked && <Lock role="img" aria-label={t('noteList.locked')} className="h-3.5 w-3.5 text-mist-500" strokeWidth={2.2} />}
-          </span>
+          {(item.pinned || locked) && (
+            // Only when there is a mark: an empty one would still take the gap from the title.
+            <span className="flex shrink-0 items-center gap-1 pt-0.5">
+              {item.pinned && <Pin role="img" aria-label={t('noteList.pinned')} className="h-3.5 w-3.5 text-accent-400" strokeWidth={2.2} />}
+              {locked && <Lock role="img" aria-label={t('noteList.locked')} className="h-3.5 w-3.5 text-mist-500" strokeWidth={2.2} />}
+            </span>
+          )}
         </span>
         {item.title_check && !locked && (
           <span className="self-start rounded-md bg-warn-500/15 px-[7px] py-0.5 text-[11px] font-semibold text-warn-500">{t('notes.titleCheck')}</span>
@@ -72,7 +75,7 @@ export function NoteTile(props: ItemProps) {
           </span>
         )}
         {!locked && item.preview && (
-          <span className={'min-w-0 overflow-hidden text-[12.5px] leading-normal break-words text-mist-500 ' + (media ? 'line-clamp-1' : 'line-clamp-3')} data-testid="note-preview">
+          <span className={'nn-wrap min-w-0 overflow-hidden text-[12.5px] leading-normal text-mist-500 ' + (media ? 'line-clamp-1' : 'line-clamp-3')} data-testid="note-preview">
             {item.preview}
           </span>
         )}

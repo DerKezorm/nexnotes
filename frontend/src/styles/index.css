@@ -119,6 +119,15 @@
   :root[data-theme='light'] .nn-wordmark-accent {
     color: var(--color-accent-400);
   }
+  /* Text over a few lines in a narrow box (a tile's title, the first lines of a note): it breaks between words, a word
+     too long for its line with a hyphen by the rules of the page's language (`<html lang>`, which follows the UI), and
+     only as the last way out anywhere in the word. Never `anywhere`/`break-all`: those cut words that would fit. */
+  .nn-wrap {
+    overflow-wrap: break-word;
+    word-break: normal;
+    -webkit-hyphens: auto;
+    hyphens: auto;
+  }
   .nn-scroll {
     scrollbar-width: thin;
     scrollbar-color: var(--color-ink-600) transparent;

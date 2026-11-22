@@ -42,7 +42,7 @@ export function NoteCard(props: ItemProps) {
           </span>
           <TitleMarks item={item} />
         </span>
-        <span className="line-clamp-2 min-w-0 text-[13px] leading-[1.4] break-words text-mist-500" data-testid={locked ? undefined : 'note-preview'}>
+        <span className="nn-wrap line-clamp-2 min-w-0 text-[13px] leading-[1.4] text-mist-500" data-testid={locked ? undefined : 'note-preview'}>
           {folder?.name && (
             <>
               <span className="text-mist-300" data-testid="note-folder">
