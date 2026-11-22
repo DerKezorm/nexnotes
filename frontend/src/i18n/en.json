@@ -1058,7 +1058,7 @@
     "logSearch": "Search in the text …",
     "logUntil": "Back to normal at {{time}}.",
     "mail": "Mail",
-    "mailHint": "Only for invitations. Without a server, the link to copy is enough.",
+    "mailHint": "For invitations and reset links. Without a server, the link to copy is enough.",
     "mailSent": "The test mail went out.",
     "mailTest": "Test mail to",
     "mcp": "MCP access",
@@ -1185,7 +1185,7 @@
         "title": "Log"
       },
       "mail": {
-        "text": "The mail server nexnotes sends invitations through.",
+        "text": "The mail server nexnotes sends invitations and reset links through.",
         "title": "Mail"
       },
       "ocr": {
