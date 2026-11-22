@@ -55,6 +55,10 @@ class SettingsOut(BaseModel):
     data_total: int = 0
     data_used: int = 0
     data_free: int = 0
+    #: What nexnotes itself takes in the data folder, in bytes: the sum and its parts (NOTES-1 AC-11). The disk above
+    #: may hold much else besides.
+    nexnotes_used: int = 0
+    nexnotes_parts: dict[str, int] = Field(default_factory=dict)
     #: The data folder lies on a network share (NOTES-1 EC-2).
     data_on_share: bool = False
     #: Requests come with proxy headers, but no trusted proxy is configured (only in the answer of GET).
@@ -99,6 +103,7 @@ def _view(db: DbSession) -> SettingsOut:
     values = settings_service.get_all(db)
     folder = get_settings().data_dir
     used = storage.usage(folder)
+    own = storage.footprint(folder)
     return SettingsOut(
         public_url=values["public_url"],
         password_login=values["password_login"],
@@ -124,6 +129,9 @@ def _view(db: DbSession) -> SettingsOut:
         data_total=used.total,
         data_used=used.used,
         data_free=used.free,
+        nexnotes_used=own.total,
+        nexnotes_parts={"database": own.database, "attachments": own.attachments, "backups": own.backups,
+                        "exports": own.exports, "other": own.other},
         data_on_share=mounts.locate(folder).network,
     )
 

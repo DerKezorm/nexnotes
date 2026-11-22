@@ -178,6 +178,9 @@ export function OcrCard({ server }: { server: Server }) {
   )
 }
 
+/** The parts of what nexnotes takes in its data folder, in the order the page names them. */
+const STORAGE_PARTS = ['database', 'attachments', 'backups', 'exports', 'other'] as const
+
 /** Storage and backups (NOTES-1 AC-4, AC-5, AC-11): the data folder, the schedule, the list, check before restore. */
 export function BackupsCard({ server }: { server: Server }) {
   const { t, i18n } = useTranslation()
@@ -194,11 +197,23 @@ export function BackupsCard({ server }: { server: Server }) {
     backupsApi.list().then(setList, () => undefined)
   }, [])
   useEffect(load, [load])
+  // A backup made, deleted or brought in changes what nexnotes takes: the list and the numbers above it.
+  const refresh = () => {
+    load()
+    void server.reload()
+  }
   const s = server.settings
   if (!s) return null
   const lang = i18n.language
   const forBackup = (entry: BackupEntry, verb: string) => t('server.forBackup', { name: moment(entry.created, lang), action: verb })
-  const usedShare = s.data_total ? Math.round((s.data_used / s.data_total) * 100) : 0
+  // What nexnotes takes, not the whole disk (NOTES-1 AC-11): the bar shows its share of the disk next to what else
+  // lies there, so a nearly full disk shows even when nexnotes is small on it.
+  const own = s.nexnotes_used ?? 0
+  const share = (part: number) => (s.data_total ? Math.min(100, (part / s.data_total) * 100) : 0)
+  const ownShare = share(own)
+  const otherShare = Math.min(100 - ownShare, share(Math.max(0, s.data_used - own)))
+  const nearlyFull = s.data_total > 0 && s.data_used / s.data_total > 0.9
+  const parts = STORAGE_PARTS.filter((part) => part === 'database' || (s.nexnotes_parts?.[part] ?? 0) > 0)
   const last = list[0]
   const changes = (b: BackupBrief) =>
     t('server.restoreChanges', { add: t('server.countFiles', { count: b.would_add }), change: t('server.countFiles', { count: b.would_change }), remove: t('server.countFiles', { count: b.would_remove }) })
@@ -218,16 +233,22 @@ export function BackupsCard({ server }: { server: Server }) {
     )
   }
   return (
-    <Card id="backups" icon={HardDrive} title={t('server.storage')}>
+    <Card id="backups" icon={HardDrive} title={t('server.storage')} text={t('server.backupHolds')}>
       <div className="space-y-1.5" data-testid="data-folder">
         <div className="flex flex-wrap justify-between gap-2 text-sm">
-          <span className="text-mist-300">{t('server.dataFolder')}</span>
-          <span className="text-mist-100">{t('server.usedOf', { used: bytes(s.data_used, lang), total: bytes(s.data_total, lang) })}</span>
+          <span className="text-mist-300">{t('server.nexnotesUses')}</span>
+          <span className="text-mist-100" data-testid="nexnotes-used">{bytes(own, lang)}</span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-ink-700" role="progressbar" aria-valuenow={usedShare} aria-valuemin={0} aria-valuemax={100} aria-label={t('server.dataFolder')}>
-          <div className="h-full rounded-full" style={{ width: `${usedShare}%`, background: usedShare > 90 ? 'var(--color-warn-500)' : 'var(--color-progress)' }} />
+        <p className="text-xs text-mist-500" data-testid="nexnotes-parts">
+          {parts.map((part) => t('server.part', { name: t(`server.parts.${part}`), size: bytes(s.nexnotes_parts?.[part] ?? 0, lang) })).join(' · ')}
+        </p>
+        <div className="flex h-2 overflow-hidden rounded-full bg-ink-700" role="img" aria-label={t('server.diskBar', { own: bytes(own, lang), used: bytes(s.data_used, lang), total: bytes(s.data_total, lang) })}>
+          <div className="h-full" style={{ width: `${ownShare}%`, minWidth: own > 0 ? 3 : 0, background: 'var(--color-progress)' }} />
+          <div className="h-full" style={{ width: `${otherShare}%`, background: nearlyFull ? 'var(--color-warn-500)' : 'var(--color-mist-500)', opacity: nearlyFull ? 1 : 0.35 }} />
         </div>
-        <p className="text-xs text-mist-500">{t('server.free', { size: bytes(s.data_free, lang) })}</p>
+        <p className={'text-xs ' + (nearlyFull ? 'text-warn-500' : 'text-mist-500')} data-testid="disk-free">
+          {t('server.diskFree', { free: bytes(s.data_free, lang), total: bytes(s.data_total, lang) })}
+        </p>
         {s.data_on_share && <p className="rounded-[9px] border border-warn-500/30 bg-warn-500/10 px-3 py-2 text-xs text-warn-500">{t('setup.share')}</p>}
       </div>
       <p className="text-sm text-mist-300">{last ? t('server.lastBackup', { time: dayTime(last.created, lang) }) : t('server.noBackups')}</p>
@@ -277,7 +298,7 @@ export function BackupsCard({ server }: { server: Server }) {
             onClick={() =>
               void action.run(async () => {
                 await backupsApi.make()
-                load()
+                refresh()
               }, t('server.backupMade'))
             }
           >
@@ -358,11 +379,11 @@ export function BackupsCard({ server }: { server: Server }) {
             if (asking.kind === 'download') saveAsFile(asking.name, await backupsApi.download(asking.name, password))
             if (asking.kind === 'delete') {
               await backupsApi.remove(asking.name, password)
-              load()
+              refresh()
             }
             if (asking.kind === 'upload' && asking.file) {
               await api('/api/backups/upload', { method: 'POST', raw: asking.file, headers: { 'X-Nexnotes-Password': passwordHeader(password) } })
-              load()
+              refresh()
               setUploaded(true)
             }
             if (asking.kind === 'restore') {

@@ -1026,7 +1026,6 @@
     "countNotes_one": "{{count}} Notiz",
     "countNotes_other": "{{count}} Notizen",
     "daily": "jede Nacht",
-    "dataFolder": "Datenordner",
     "days_one": "{{count}} Tag",
     "days_other": "{{count}} Tagen",
     "deleteBackup": "Löschen",
@@ -1034,7 +1033,6 @@
     "download": "Herunterladen",
     "features": "Funktionen für alle Konten",
     "forBackup": "{{action}}: Backup vom {{name}}",
-    "free": "{{size}} frei",
     "history": "Versionsverlauf aufbewahren",
     "keep": "Behalten",
     "kinds": {
@@ -1123,7 +1121,6 @@
     "uploadMaxHint": "Ab Werk 100 MB. Gilt sofort.",
     "uploaded": "hochgeladen",
     "uploadedHint": "Hochgeladen. Sie steht jetzt in der Liste: erst prüfen, dann wiederherstellen.",
-    "usedOf": "{{used}} von {{total}}",
     "weekly": "jede Woche",
     "years_one": "{{count}} Jahr",
     "years_other": "{{count}} Jahren",
@@ -1144,7 +1141,19 @@
     "localNetwork": "Verbindungen ins eigene Netz",
     "localNetworkHint": "Mitglieder dürfen ihr nextasks auch unter einer Adresse im eigenen Netz (LAN, VPN) verbinden. Dann kann jedes Mitglied nexnotes Adressen dort ansprechen lassen.",
     "api": "Programmschnittstelle (API) für Mitglieder",
-    "apiHint": "Mitglieder legen API-Token an, Programme und die nexdeck-Karte lesen damit. Aus: jede Anfrage unter /api/v1/ wird abgewiesen, die Tokens bleiben."
+    "apiHint": "Mitglieder legen API-Token an, Programme und die nexdeck-Karte lesen damit. Aus: jede Anfrage unter /api/v1/ wird abgewiesen, die Tokens bleiben.",
+    "backupHolds": "Eine Sicherung enthält alle Notizen samt Verlauf und Papierkorb, alle Anhänge, die Konten mit ihren Freigaben, intelligenten Ordnern und API-Token, die Einstellungen und den Schlüssel des Servers. Gesperrte Notizen bleiben darin verschlüsselt. Nicht dabei: Log, Exporte, Zwischenspeicher und eigene Sprachdateien, auch kein über NEXNOTES_SECRET_KEY gesetzter Schlüssel.",
+    "nexnotesUses": "nexnotes belegt",
+    "part": "{{name}} {{size}}",
+    "parts": {
+      "database": "Datenbank",
+      "attachments": "Anhänge",
+      "backups": "Sicherungen",
+      "exports": "Exporte",
+      "other": "Log und Sonstiges"
+    },
+    "diskBar": "nexnotes belegt {{own}}, auf dem Datenträger sind {{used}} von {{total}} belegt",
+    "diskFree": "Auf dem Datenträger noch {{free}} von {{total}} frei"
   },
   "session": {
     "again": "Wieder anmelden",

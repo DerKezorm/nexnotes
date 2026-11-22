@@ -42,7 +42,7 @@ from typing import Any
 
 from .. import __version__, private
 from ..config import get_settings
-from . import settings_service
+from . import settings_service, storage
 
 logger = logging.getLogger("nexnotes.backups")
 
@@ -256,6 +256,8 @@ def create(*, kind: str = MANUAL, note: str = "") -> Path:
     finally:
         partial.unlink(missing_ok=True)
         database.unlink(missing_ok=True)
+        # The page shows what nexnotes takes; a new archive should be in it at once, not a minute later.
+        storage.forget_footprint()
     logger.info("Backup made kind=%s notes=%s files=%s bytes=%s", kind, manifest.notes, manifest.files,
                 manifest.bytes)
     return base / name
@@ -292,6 +294,7 @@ def entries() -> list[Entry]:
 
 def remove(name: str) -> None:
     path_of(name).unlink()
+    storage.forget_footprint()
     logger.info("Backup deleted")
 
 
@@ -302,6 +305,7 @@ def prune(keep: int) -> int:
         (folder() / entry.name).unlink(missing_ok=True)
         removed += 1
     if removed:
+        storage.forget_footprint()
         logger.info("Old automatic backups removed count=%s", removed)
     return removed
 
@@ -340,6 +344,7 @@ def receive(received: Path) -> str:
         name = f"nexnotes-{stamp}-{number}{UPLOADED}"
         number += 1
     os.replace(received, base / name)
+    storage.forget_footprint()
     logger.info("Backup received name=%s version=%s notes=%s files=%s", name, manifest.version, manifest.notes,
                 manifest.files)
     return name
