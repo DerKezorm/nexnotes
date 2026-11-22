@@ -480,7 +480,12 @@ describe('NOTES-6 list and tiles', () => {
     expect(tile('a').querySelector('[data-testid="note-tile-buttons"]')).toBeNull()
     expect(titleRow().contains(more())).toBe(false)
     expect(titleRow().style.paddingRight).toBe('0px')
-    expect(foot().style.paddingRight).toBe('28px')
+    // The bottom line keeps the "…" free: 28 px, on a phone or touch screen 48 px, where every button is 44 px.
+    expect(foot().className).toContain('nn-tile-foot-more')
+    const fs = (await import(/* @vite-ignore */ 'node:fs'.toString())) as { readFileSync: (f: string, e: string) => string }
+    const css = fs.readFileSync('src/notes/list/list.css', 'utf-8')
+    expect(css).toMatch(/\.nn-tile-foot-more\s*\{\s*padding-right:\s*28px;/)
+    expect(css).toMatch(/@media \(max-width: 767px\), \(pointer: coarse\) \{\s*\.nn-tile-foot-more\s*\{\s*padding-right:\s*48px;/)
     expect(tile('a').querySelectorAll('button[aria-label^="Actions for"]')).toHaveLength(1)
     // After the tile's link: the Tab key reaches it right after the tile, as before.
     expect(tile('a').querySelector('[data-testid="note-tile"]')!.compareDocumentPosition(more()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
@@ -500,7 +505,7 @@ describe('NOTES-6 list and tiles', () => {
     expect(tile('a').querySelector('[data-testid="note-tile-more-foot"]')).toBeNull()
     expect(tile('a').querySelector('[data-testid="note-tile-buttons"]')!.contains(more())).toBe(true)
     expect(titleRow().style.paddingRight).toBe('24px')
-    expect(foot().style.paddingRight).toBe('')
+    expect(foot().className).not.toContain('nn-tile-foot-more')
     expect(titleRow().querySelector('[aria-label="pinned"]')).not.toBeNull()
     await menuOpens()
   })

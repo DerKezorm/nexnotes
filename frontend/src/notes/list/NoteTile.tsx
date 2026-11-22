@@ -88,7 +88,7 @@ export function NoteTile(props: ItemProps & { narrow?: boolean }) {
             {item.preview}
           </span>
         )}
-        <span className="mt-auto flex min-w-0 flex-col gap-1.5" style={narrow && onMenu ? { paddingRight: MORE + 4 } : undefined} data-testid="note-tile-foot">
+        <span className={`mt-auto flex min-w-0 flex-col gap-1.5${narrow && onMenu ? ' nn-tile-foot-more' : ''}`} data-testid="note-tile-foot">
           {progress !== null && (
             <span className="flex h-[4px] rounded-[3px] bg-ink-700" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-label={tasks}>
               <span className="rounded-[3px] bg-accent-500" style={{ width: `${progress}%` }} />
