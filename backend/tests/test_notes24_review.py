@@ -25,7 +25,7 @@ from .notes_live import Live
 from .test_notes3 import stored, token_for, wait_for
 from .test_notes11 import picture
 from .test_notes13 import make_folder, share
-from .test_notes24 import b64, note_updates, paired
+from .test_notes24 import b64, note_updates, paired, without_presets
 
 #: An id as the app makes it: base64url with ``_``, ``-`` and letters past ``f``, no hex at all.
 APP_ID = "q3_Zk-9xYbWvTu8sRp7oNm"
@@ -182,6 +182,7 @@ def test_notes24_ec5_a_required_second_factor_sends_the_device_to_sign_in_again(
 def test_notes24_ec4_what_goes_for_good_between_the_pages_of_a_full_list_comes_as_removed(client, operator,
                                                                                          monkeypatch):
     monkeypatch.setattr(appsync, "PAGE", 3)
+    without_presets(operator.id)
     device = paired(client)
     ids = [f"N{index:021d}" for index in range(7)]
     for note_id in ids:

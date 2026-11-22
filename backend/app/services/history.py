@@ -550,9 +550,11 @@ def _when_label(account: Account, at: datetime) -> str:
     return f"{at:%b} {at.day}, {at.year}"
 
 
-def copy(db: Session, account: Account, note_id: str, version_id: int, when: str | None = None) -> Note:
+def copy(db: Session, account: Account, note_id: str, version_id: int, when: str | None = None,
+         new_id: str | None = None) -> Note:
     """A new note with the version's content in the same folder, its title with "(Fassung vom …)" (AC-5). ``when`` is
-    the date as the person's device shows it; without it the server's date."""
+    the date as the person's device shows it; without it the server's date. ``new_id``: the id the iOS app made for
+    the copy (NOTES-24); without it the server makes one."""
     source = notes.note_for(db, account, note_id, write=True)
     version = _version(db, source.id, version_id)
     if version.sealed or source.locked:
@@ -566,6 +568,8 @@ def copy(db: Session, account: Account, note_id: str, version_id: int, when: str
     note = Note(owner_id=source.owner_id, folder_id=source.folder_id, title=new_title, origin=source.origin,
                 ydoc=document.get_update(), text=to_plain(document), created_at=now, updated_at=now,
                 updated_by_id=account.id)
+    if new_id:
+        note.id = new_id
     db.add(note)
     db.flush()
     # The copy is found by the search like any note made by hand (NOTES-9).

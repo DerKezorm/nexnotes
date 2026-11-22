@@ -76,6 +76,9 @@ logger = logging.getLogger("nexnotes.ocr")
 JOB = "ocr"
 #: Kinds of attachments whose text is read.
 KINDS = ("image", "scan", "pdf")
+#: What may carry text the iOS app recognised itself (AC-5): what the server reads, and sketches, whose handwriting
+#: only the device reads (NOTES-24, follow-up 10). The server never reads a sketch itself.
+DEVICE_KINDS = (*KINDS, "drawing")
 #: Pages read in one turn before the job goes to the back of the line (EC-6).
 PAGES_PER_TURN = 4
 #: Pages of a PDF read at most; the rest of a longer one stays without text.
@@ -600,11 +603,14 @@ def take_device_text(db: Session, attachment: Attachment, pages: list[tuple[str,
 
 def text_out(db: Session, attachment: Attachment) -> dict[str, Any]:
     """The state of an attachment's recognition and the text of each page, as the page shows it."""
-    if attachment.kind not in KINDS:
+    if attachment.kind not in DEVICE_KINDS:
         return {"id": attachment.id, "state": "none", "pages": 0, "items": []}
     if note_locked(db, attachment.note_id):
         return {"id": attachment.id, "state": OCR_LOCKED, "pages": attachment.pages or 1, "items": []}
     row = db.get(AttachmentOcr, attachment.id)
+    if row is None and attachment.kind not in KINDS:
+        # A sketch the app brought no text for: nothing waits to be read.
+        return {"id": attachment.id, "state": "none", "pages": 0, "items": []}
     items = [{"page": page.page, "state": page.state, "text": page.text, "language": page.language,
               "source": page.source}
              for page in db.scalars(select(AttachmentText).where(AttachmentText.attachment_id == attachment.id)

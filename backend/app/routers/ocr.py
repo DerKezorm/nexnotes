@@ -58,7 +58,7 @@ class DeviceText(BaseModel):
 def device_text(attachment_id: AttachmentId, body: DeviceText, account: Account, db: DbSession) -> dict[str, Any]:
     row = attachments.get_for(db, account, attachment_id)
     notes.note_for(db, account, row.note_id, write=True)
-    if row.kind not in ocr.KINDS:
+    if row.kind not in ocr.DEVICE_KINDS:
         raise error("text_not_possible", "This attachment carries no text.", 422)
     if ocr.note_locked(db, row.note_id):
         raise error("note_locked", "The note is locked.", 409)

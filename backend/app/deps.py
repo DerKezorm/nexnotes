@@ -148,6 +148,17 @@ def _bearer(request: Request) -> str:
     return header[7:].strip() if header[:7].lower() == "bearer " else ""
 
 
+def _device_refusal(db: Session, token: str) -> str:
+    """``device_disconnected`` or ``account_blocked`` for a device's token that opens nothing (``devices``)."""
+    from .services import devices
+
+    try:
+        devices.authenticate(db, token)
+    except devices.Refusal as refusal:
+        return refusal.code if refusal.code != "second_factor_required" else "device_disconnected"
+    return "device_disconnected"
+
+
 def require_account(request: Request) -> AccountRow:
     """The signed-in account, detached from the database session (routes open their own). A browser brings its
     session cookie; a paired device or a program its token (``Authorization: Bearer``).
@@ -160,6 +171,11 @@ def require_account(request: Request) -> AccountRow:
             # MCP keys only at /api/mcp (routers/mcp.py): here a paired device's token.
             found = apitokens.authenticate(db, token, (TOKEN_DEVICE,))
             if found is None:
+                if token.startswith(apitokens.PREFIXES[TOKEN_DEVICE]):
+                    # A paired device hears why, as under ``/api/app/1`` (NOTES-24 EC-1, EC-5): disconnected, or its
+                    # account blocked or deleted.
+                    raise error(_device_refusal(db, token), "This device was disconnected or its account blocked.",
+                                401)
                 raise error("sign_in_required", "Sign in first.", 401)
             account = found[0]
             if device_refused(request):

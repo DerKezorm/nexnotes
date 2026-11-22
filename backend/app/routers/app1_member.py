@@ -176,13 +176,19 @@ class ViewIn(BaseModel):
     sort: str | None = Field(default=None, pattern="^(updated|created|title)$")
     direction: str | None = Field(default=None, pattern="^(asc|desc)$")
     grouped: bool | None = None
+    #: Only for a smart folder (``s:<id>``, interface 0.5): its notes or the gallery of their attachments.
+    mode: str | None = Field(default=None, pattern="^(list|gallery)$")
 
 
 @router.put("/views", summary="Sort and grouping of one list")
 def set_view(found: Device, body: ViewIn) -> dict[str, Any]:
+    from .app1_smart import save_view as save_smart_view
+
     account = found.account
     wanted = {"sort": body.sort, "direction": body.direction, "grouped": body.grouped}
     with SessionLocal() as db:
+        if body.key.startswith("s:"):
+            return save_smart_view(db, account, body.key, {**wanted, "mode": body.mode})
         if body.key.startswith("tag:"):
             saved = tags.save_tag_view(db, account, body.key[4:], wanted)
         else:

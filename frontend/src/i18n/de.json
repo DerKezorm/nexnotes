@@ -622,7 +622,8 @@
     "invalid_update": "Die Änderung ließ sich nicht lesen.",
     "no_right": "Hier darfst du nur lesen.",
     "second_factor_required": "Richte zuerst im Browser deinen zweiten Faktor ein, dann verbinde das Gerät neu.",
-    "folder_id_taken": "Diesen Ordner gibt es schon unter einem anderen Konto."
+    "folder_id_taken": "Diesen Ordner gibt es schon unter einem anderen Konto.",
+    "smart_folder_id_taken": "Diesen intelligenten Ordner gibt es schon unter einem anderen Konto."
   },
   "folders": {
     "section": "Ordner",

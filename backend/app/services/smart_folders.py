@@ -175,9 +175,10 @@ def _icon(icon: str) -> str:
 
 
 def create(db: Session, account: Account, name: str, match: str, conditions: Any, *, icon: str | None = None,
-           color: str | None = None) -> SmartFolder:
+           color: str | None = None, folder_id: str | None = None) -> SmartFolder:
     """A new smart folder at the end of the list (AC-1, AC-2, AC-5), with the filter as its symbol unless another
-    is given, and a colour by the folders' rules (``folders.folder_color``)."""
+    is given, and a colour by the folders' rules (``folders.folder_color``). ``folder_id``: the id the iOS app made
+    (NOTES-24); without it the server makes one."""
     clean = _clean_name(name)
     checked = search.read_conditions(conditions)
     look_icon = _icon(DEFAULT_ICON if icon is None else icon)
@@ -187,8 +188,32 @@ def create(db: Session, account: Account, name: str, match: str, conditions: Any
     folder = SmartFolder(owner_id=account.id, name=clean, name_key=name_key(clean), match=_match(match),
                          conditions=checked, icon=look_icon, color=look_color,
                          position=(last + 1) if last is not None else 0)
+    if folder_id:
+        folder.id = folder_id
     db.add(folder)
     _commit_named(db, clean)
+    return folder
+
+
+def create_preset(db: Session, account: Account, preset: str, *, icon: str | None = None, color: str | None = None,
+                  folder_id: str | None = None) -> SmartFolder:
+    """One of the folders every account gets (AC-7) made anew, at the end of the list, its name in the interface's
+    language: ``smart_folder_exists`` when the account has it, or a folder of its own by one of its names."""
+    if preset not in PRESETS:
+        raise error("smart_condition_invalid", "A condition of the smart folder is not valid.", 422, reason="preset")
+    have = db.scalar(select(SmartFolder.id).where(SmartFolder.owner_id == account.id, SmartFolder.preset == preset))
+    for name in PRESET_NAMES[preset]:
+        if have is not None or _taken(db, account, name_key(name), None) is not None:
+            raise error("smart_folder_exists", f"There is already a smart folder named {name}.", 409, name=name)
+    last = db.scalar(select(func.max(SmartFolder.position)).where(SmartFolder.owner_id == account.id))
+    folder = SmartFolder(owner_id=account.id, name="", name_key=_preset_key(preset), preset=preset,
+                         match=PRESETS[preset]["match"], conditions=PRESETS[preset]["conditions"],
+                         icon=_icon(PRESET_ICONS[preset] if icon is None else icon), color=folder_color(color or ""),
+                         position=(last + 1) if last is not None else 0)
+    if folder_id:
+        folder.id = folder_id
+    db.add(folder)
+    _commit_named(db, PRESET_NAMES[preset][0])
     return folder
 
 
@@ -348,11 +373,13 @@ def gallery(db: Session, account: Account, folder_id: str, tz: str | None, kind:
 # --- The ones every account gets (AC-7) ---------------------------------------------------------------------------
 
 
-def _preset_rows(account_id: int, presets: tuple[str, ...] = tuple(PRESETS), start: int = 0) -> list[dict[str, Any]]:
+def _preset_rows(account_id: int, presets: tuple[str, ...] = tuple(PRESETS), start: int = 0,
+                 seq: int = 0) -> list[dict[str, Any]]:
+    """``seq``: their number for the app's ``changes`` (NOTES-24): rows written without the ORM take it here."""
     made = utcnow()
     return [{"id": new_uuid(), "owner_id": account_id, "name": "", "name_key": _preset_key(preset), "preset": preset,
              "match": PRESETS[preset]["match"], "conditions": PRESETS[preset]["conditions"], "position": position,
-             "icon": PRESET_ICONS[preset], "color": "",
+             "icon": PRESET_ICONS[preset], "color": "", "sync_seq": seq,
              "created_at": made, "updated_at": made}
             for position, preset in enumerate(presets, start)]
 
@@ -360,7 +387,9 @@ def _preset_rows(account_id: int, presets: tuple[str, ...] = tuple(PRESETS), sta
 @event.listens_for(Account, "after_insert")
 def _account_made(_mapper: Any, connection: Any, target: Account) -> None:
     """A new account, whichever way it came: its smart folders, in the same transaction."""
-    connection.execute(insert(SmartFolder), _preset_rows(target.id))
+    from . import appsync
+
+    connection.execute(insert(SmartFolder), _preset_rows(target.id, seq=appsync.take_on(connection)))
 
 
 def _missing_places(db: Session, account_id: int) -> list[str]:
@@ -372,6 +401,12 @@ def _missing_places(db: Session, account_id: int) -> list[str]:
             if preset not in presets and not any(name_key(name) in names for name in PRESET_NAMES[preset])]
 
 
+def _number(db: Session) -> int:
+    from . import appsync
+
+    return appsync._take(db)
+
+
 def seed_existing(db: Session) -> int:
     """Accounts from before smart folders get them once; accounts from before "Mit mir geteilt" and "Anhänge" were
     presets get those two once, at the end of their list. Whoever deleted one later does not get it again. Gives how
@@ -381,7 +416,7 @@ def seed_existing(db: Session) -> int:
         have = select(SmartFolder.owner_id)
         ids = list(db.scalars(select(Account.id).where(Account.id.not_in(have))))
         for account_id in ids:
-            db.execute(insert(SmartFolder), _preset_rows(account_id))
+            db.execute(insert(SmartFolder), _preset_rows(account_id, seq=_number(db)))
         given.update(ids)
         db.add(Setting(key=SEEDED, value=True))
     if db.get(Setting, SEEDED_PLACES) is None:
@@ -392,7 +427,7 @@ def seed_existing(db: Session) -> int:
                 continue
             last = db.scalar(select(func.max(SmartFolder.position)).where(SmartFolder.owner_id == account_id))
             start = (last + 1) if last is not None else 0
-            db.execute(insert(SmartFolder), _preset_rows(account_id, tuple(missing), start))
+            db.execute(insert(SmartFolder), _preset_rows(account_id, tuple(missing), start, seq=_number(db)))
             given.add(account_id)
         db.add(Setting(key=SEEDED_PLACES, value=True))
     if db.get(Setting, SEEDED_ICONS) is None:

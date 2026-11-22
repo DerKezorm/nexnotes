@@ -152,6 +152,18 @@ def paired(client: TestClient, name: str = "Mila's iPhone", kind: str = "ios") -
     return App(client, answer.json()["token"])
 
 
+def without_presets(account_id: int) -> None:
+    """The smart folders every account gets (NOTES-7) are numbered too (NOTESIOS-7): tests that count the objects of
+    a page of ``changes`` start without them."""
+    from sqlalchemy import delete
+
+    from app.models_smart import SmartFolder
+
+    with SessionLocal() as db:
+        db.execute(delete(SmartFolder).where(SmartFolder.owner_id == account_id))
+        db.commit()
+
+
 def note_updates(note_id: str) -> int:
     with SessionLocal() as db:
         return int(db.scalar(select(func.count()).select_from(NoteUpdate).where(NoteUpdate.note_id == note_id)) or 0)
@@ -532,6 +544,7 @@ def test_notes24_ac4_after_a_long_pause_only_what_changed_comes(client, operator
 
 
 def test_notes24_ac4_pages_of_at_most_500_never_end_inside_one_change(client, operator, monkeypatch):
+    without_presets(operator.id)
     device = paired(client)
     ids = [f"N{index:021d}" for index in range(7)]
     for note_id in ids:
@@ -615,6 +628,7 @@ def test_notes24_ec4_a_cursor_older_than_the_tombstones_gets_the_full_list(clien
 
 
 def test_notes24_ec4_every_page_of_a_full_list_says_full(client, operator, monkeypatch):
+    without_presets(operator.id)
     monkeypatch.setattr(appsync, "PAGE", 3)
     device = paired(client)
     ids = [f"N{index:021d}" for index in range(7)]

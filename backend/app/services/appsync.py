@@ -15,6 +15,11 @@ one kept gets the full list (``full``), and the app drops what none of its pages
 list read in pages brings the tombstones since it started (what went between the pages). The cleanup that drops old
 tombstones gives everything older a new number, so a full list read in pages never falls behind the floor again.
 
+**Smart folders** (NOTESIOS-7) are numbered like folders and are only ever their owner's: a deleted one leaves a
+tombstone of the kind ``smart`` for its owner alone. **Recognised text** of attachments (NOTESIOS-10): when the text of
+an attachment changes (the server read it, or the app brought it), every note that names it gets a new number, and
+each note in ``changes`` carries ``texts``, a stamp of that text (``texts_of``), so the app knows whose text to fetch.
+
 **Waiting** (``wait``): every commit that took a number wakes the waiting requests of this process, which look
 whether something their account sees changed. Nothing holds a thread or a database connection while it waits.
 """
@@ -37,7 +42,10 @@ from sqlalchemy.orm import ORMExecuteState, Session
 from ..db import SessionLocal
 from ..models import FOLDER_INBOX, Account, Folder, Note, NoteListView, NoteUpdate, utcnow
 from ..models_app import AppCounter, AppTombstone
+from ..models_attachments import Attachment, AttachmentRef
+from ..models_ocr import PAGE_DONE, AttachmentText
 from ..models_shares import READ, WRITE, Share, SharePin
+from ..models_smart import SmartFolder
 
 logger = logging.getLogger("nexnotes.app")
 
@@ -50,6 +58,9 @@ KEEP_DAYS = 400
 NOTE_COLUMNS = ("title", "title_check", "folder_id", "paper", "icon", "color", "pinned_at", "deleted_at", "locked",
                 "owner_id", "updated_at", "created_at")
 FOLDER_COLUMNS = ("name", "parent_id", "icon", "color", "position", "deleted_at", "owner_id", "kind")
+SMART_COLUMNS = ("name", "preset", "match", "conditions", "icon", "color", "position", "owner_id")
+#: Columns of an attachment's text whose change the notes naming it have to bring (``texts``).
+TEXT_COLUMNS = ("text", "state", "page")
 #: Columns of an account the app keeps (``account`` in ``changes``).
 ACCOUNT_COLUMNS = ("display_name", "avatar_at", "preferences")
 
@@ -74,6 +85,12 @@ _TREE_NOTES = ("WITH RECURSIVE tree(id) AS (SELECT :root UNION SELECT folders.id
 def _take(session: Session) -> int:
     session.info[_TOOK] = True
     return int(session.connection().execute(_NEXT).scalar_one())
+
+
+def take_on(connection: Any) -> int:
+    """The next number on a bare connection (rows written without the ORM, like the smart folders every new account
+    gets in its own insert)."""
+    return int(connection.execute(_NEXT).scalar_one())
 
 
 def current(db: Session) -> tuple[int, int]:
@@ -105,6 +122,8 @@ class _Flush:
     notes: set[str] = field(default_factory=set)
     accounts: set[int] = field(default_factory=set)
     trees: set[str] = field(default_factory=set)
+    #: Attachments whose recognised text changed: the notes naming them get the number.
+    attachments: set[str] = field(default_factory=set)
     #: (kind, id, account)
     gone: list[tuple[str, str, int | None]] = field(default_factory=list)
     #: (folder whose tree goes, account)
@@ -135,8 +154,10 @@ class _Flush:
 def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
     flush = _Flush(session)
     for obj in session.new:
-        if isinstance(obj, (Note, Folder)):
+        if isinstance(obj, (Note, Folder, SmartFolder)):
             obj.sync_seq = flush.number()
+        elif isinstance(obj, AttachmentText):
+            flush.attachments.add(obj.attachment_id)
         elif isinstance(obj, (NoteUpdate, SharePin)):
             flush.notes.add(obj.note_id)
         elif isinstance(obj, Share):
@@ -164,8 +185,11 @@ def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
                 flush.gone_trees += [(obj.id, account_id) for account_id in people]
         elif isinstance(obj, Share) and _changed(obj, ("level", "note_id", "folder_id", "account_id")):
             _shared(flush, obj)
-        elif isinstance(obj, Account) and _changed(obj, ACCOUNT_COLUMNS):
+        elif (isinstance(obj, Account) and _changed(obj, ACCOUNT_COLUMNS)) or (
+                isinstance(obj, SmartFolder) and _changed(obj, SMART_COLUMNS)):
             obj.sync_seq = flush.number()
+        elif isinstance(obj, AttachmentText) and _changed(obj, TEXT_COLUMNS):
+            flush.attachments.add(obj.attachment_id)
         elif isinstance(obj, NoteListView) and _changed(obj, ("sort", "direction", "grouped", "mode", "key")):
             flush.accounts.add(obj.account_id)
     for obj in session.deleted:
@@ -173,6 +197,11 @@ def _number_changes(session: Session, _context: Any, _instances: Any) -> None:
             flush.went("note", obj.id, obj.owner_id)
         elif isinstance(obj, Folder):
             flush.went("folder", obj.id, obj.owner_id)
+        elif isinstance(obj, SmartFolder):
+            # Never shared: its owner's devices alone hear of it.
+            flush.gone.append(("smart", obj.id, obj.owner_id))
+        elif isinstance(obj, AttachmentText):
+            flush.attachments.add(obj.attachment_id)
         elif isinstance(obj, SharePin):
             flush.notes.add(obj.note_id)
         elif isinstance(obj, NoteListView):
@@ -203,7 +232,7 @@ def _shared(flush: _Flush, share: Share) -> None:
 
 
 def _write(flush: _Flush) -> None:
-    if not (flush.notes or flush.accounts or flush.trees or flush.gone or flush.gone_trees):
+    if not (flush.notes or flush.accounts or flush.trees or flush.gone or flush.gone_trees or flush.attachments):
         return
     seq = flush.number()
     connection = flush.session.connection()
@@ -213,6 +242,11 @@ def _write(flush: _Flush) -> None:
     if flush.notes:
         connection.execute(text("UPDATE notes SET sync_seq = :seq WHERE id IN (SELECT value FROM json_each(:ids))"),
                            {"seq": seq, "ids": json.dumps(sorted(flush.notes))})
+    if flush.attachments:
+        connection.execute(text("UPDATE notes SET sync_seq = :seq WHERE id IN (SELECT note_id FROM attachment_refs "
+                                "WHERE attachment_id IN (SELECT value FROM json_each(:ids))) OR id IN (SELECT note_id "
+                                "FROM attachments WHERE id IN (SELECT value FROM json_each(:ids)))"),
+                           {"seq": seq, "ids": json.dumps(sorted(flush.attachments))})
     for root in flush.trees:
         connection.execute(text(_TREE_FOLDERS), {"seq": seq, "root": root})
         connection.execute(text(_TREE_NOTES), {"seq": seq, "root": root})
@@ -249,20 +283,32 @@ def _number_bulk(state: ORMExecuteState) -> Any:
             flush.accounts.update(owners)
             _write(flush)
         return None
-    if model not in (Note, Folder):
+    if model is AttachmentText:
+        # Text replaced or forgotten in bulk (the app's text, a locked note): the notes naming it get a new number.
+        where = state.statement.whereclause
+        query = select(AttachmentText.attachment_id).distinct()
+        ids = set(state.session.connection().execute(query.where(where) if where is not None else query).scalars())
+        if ids:
+            flush = _Flush(state.session)
+            flush.attachments.update(ids)
+            _write(flush)
+        return None
+    if model not in (Note, Folder, SmartFolder):
         return None
     session = state.session
     if state.is_update:
         seq = _take(session)
         return state.invoke_statement(statement=state.statement.values(sync_seq=seq))
-    kind = "note" if model is Note else "folder"
     where = state.statement.whereclause
     query = select(model.id, model.owner_id)
     rows = session.connection().execute(query.where(where) if where is not None else query).all()
     if rows:
         flush = _Flush(session)
         for row in rows:
-            flush.went(kind, row.id, row.owner_id)
+            if model is SmartFolder:
+                flush.gone.append(("smart", row.id, row.owner_id))
+            else:
+                flush.went("note" if model is Note else "folder", row.id, row.owner_id)
         _write(flush)
     return None
 
@@ -444,6 +490,7 @@ class View:
     rights: Rights
     pins: set[str]
     tags: dict[str, list[str]] = field(default_factory=dict)
+    texts: dict[str, str] = field(default_factory=dict)
 
     def folder_ref(self, folder_id: str | None, owner_id: int) -> str | None:
         """``inbox`` for the own inbox; a folder of somebody else only when it is shared too, else none (the note
@@ -465,9 +512,13 @@ class View:
             "title_check": bool(row.title_check), "locked": bool(row.locked),
             "right": "owner" if own else self.rights.note(row),
             "tags": [] if row.locked else self.tags.get(row.id, []),
+            "texts": "" if row.locked else self.texts.get(row.id, ""),
             "created_at": _iso(row.created_at), "updated_at": _iso(row.updated_at), "deleted_at": _iso(row.deleted_at),
             "seq": int(row.sync_seq or 0),
         }
+
+    def smart(self, row: SmartFolder) -> dict[str, Any]:
+        return smart_out(row, self.inbox)
 
     def folder(self, row: Folder) -> dict[str, Any]:
         own = row.owner_id == self.account_id
@@ -491,12 +542,68 @@ def tags_of(db: Session, note_ids: list[str]) -> dict[str, list[str]]:
     return found
 
 
-def view_of(db: Session, account_id: int, note_ids: Iterable[str] = ()) -> View:
+def _vouched_pairs(db: Session, account_id: int, owners: dict[str, int]) -> set[tuple[str, str]]:
+    """In notes of somebody else: the (note, attachment) pairs its owner did not put there (NOTES-13, as
+    ``attachments.readable``)."""
+    from ..models_attachments import AttachmentMention
+
+    theirs = [note_id for note_id, owner_id in owners.items() if owner_id != account_id]
+    unvouched: set[tuple[str, str]] = set()
+    for start in range(0, len(theirs), 500):
+        unvouched.update((row.note_id, row.attachment_id) for row in db.execute(
+            select(AttachmentMention.note_id, AttachmentMention.attachment_id)
+            .where(AttachmentMention.note_id.in_(theirs[start:start + 500]), AttachmentMention.vouched.is_(False))))
+    return unvouched
+
+
+def attachment_texts(db: Session, account_id: int, notes: dict[str, int]) -> dict[str, list[dict[str, Any]]]:
+    """The recognised text of the attachments each note names (``notes``: id to owner), the pages that hold text, in
+    the order the note names them: what the search reads (``ocr.texts_of``), for the app's search offline. Only
+    attachments of the note's owner; in a note of somebody else only what its owner put there."""
+    if not notes:
+        return {}
+    unvouched = _vouched_pairs(db, account_id, notes)
+    found: dict[str, dict[str, dict[str, Any]]] = {}
+    ids = list(notes)
+    for start in range(0, len(ids), 500):
+        for note_id, attachment_id, kind, name, owner_id, home, page, words, language in db.execute(
+            select(AttachmentRef.note_id, Attachment.id, Attachment.kind, Attachment.name, Attachment.owner_id,
+                   Attachment.note_id, AttachmentText.page, AttachmentText.text, AttachmentText.language)
+            .join(Attachment, Attachment.id == AttachmentRef.attachment_id)
+            .join(AttachmentText, AttachmentText.attachment_id == Attachment.id)
+            .where(AttachmentRef.note_id.in_(ids[start:start + 500]), AttachmentText.state == PAGE_DONE)
+            .order_by(AttachmentRef.note_id, AttachmentRef.position, Attachment.id, AttachmentText.page)
+        ):
+            if owner_id != notes.get(note_id) or (home != note_id and (note_id, attachment_id) in unvouched):
+                continue
+            entry = found.setdefault(note_id, {}).setdefault(
+                attachment_id, {"id": attachment_id, "kind": kind, "name": name, "pages": []})
+            entry["pages"].append({"page": page, "text": words, "language": language or ""})
+    return {note_id: list(held.values()) for note_id, held in found.items()}
+
+
+def text_stamp(entries: list[dict[str, Any]]) -> str:
+    """A short stamp of the recognised text of a note's attachments: changes whenever any of it does."""
+    if not entries:
+        return ""
+    import hashlib
+
+    digest = hashlib.sha256(json.dumps(entries, sort_keys=True, ensure_ascii=False).encode("utf-8"))
+    return digest.hexdigest()[:16]
+
+
+def texts_of(db: Session, account_id: int, rows: Iterable[Note]) -> dict[str, str]:
+    """``texts`` of each note (``text_stamp``); locked notes have none."""
+    notes = {row.id: row.owner_id for row in rows if not row.locked}
+    return {note_id: text_stamp(entries) for note_id, entries in attachment_texts(db, account_id, notes).items()}
+
+
+def view_of(db: Session, account_id: int, note_ids: Iterable[str] = (), rows: Iterable[Note] = ()) -> View:
     wanted = list(note_ids)
     pins = set(db.scalars(select(SharePin.note_id).where(SharePin.account_id == account_id,
                                                          SharePin.note_id.in_(wanted)))) if wanted else set()
     return View(account_id=account_id, inbox=inbox_id(db, account_id), rights=rights_of(db, account_id), pins=pins,
-                tags=tags_of(db, wanted) if wanted else {})
+                tags=tags_of(db, wanted) if wanted else {}, texts=texts_of(db, account_id, rows))
 
 
 def account_out(db: Session, account: Account) -> dict[str, Any]:
@@ -506,12 +613,14 @@ def account_out(db: Session, account: Account) -> dict[str, Any]:
 
     row = db.get(Account, account.id) or account
     inbox = inbox_id(db, row.id)
-    views = [{"key": "inbox" if view.key == inbox else view.key, "sort": view.sort, "direction": view.direction,
-              "grouped": bool(view.grouped)}
-             for view in db.scalars(select(NoteListView).where(NoteListView.account_id == row.id)
-                                    .order_by(NoteListView.key))
-             # Views of smart folders (``s:<id>``) come with them (NOTESIOS-7).
-             if not view.key.startswith("s:")]
+    views = []
+    for view in db.scalars(select(NoteListView).where(NoteListView.account_id == row.id).order_by(NoteListView.key)):
+        entry: dict[str, Any] = {"key": "inbox" if view.key == inbox else view.key, "sort": view.sort,
+                                 "direction": view.direction, "grouped": bool(view.grouped)}
+        if view.key.startswith("s:"):
+            # A smart folder's view says whether it shows its notes or the gallery (NOTESIOS-7 AC-7).
+            entry["mode"] = "gallery" if view.mode == "gallery" else "list"
+        views.append(entry)
     return {"name": row.display_name or row.name, "avatar": _iso(row.avatar_at) or "",
             "paper": notes.default_paper(row), "list_look": notes_list.list_look(row), "views": views,
             "seq": int(row.sync_seq or 0)}
@@ -519,7 +628,41 @@ def account_out(db: Session, account: Account) -> dict[str, Any]:
 
 def note_out(db: Session, account_id: int, note: Note) -> dict[str, Any]:
     """One note as ``changes`` gives it."""
-    return view_of(db, account_id, [note.id]).note(note)
+    return view_of(db, account_id, [note.id], [note]).note(note)
+
+
+def _inbox_condition(conditions: Any, inbox: str | None, *, to_app: bool) -> list[Any]:
+    """The condition "Ordner" names the own inbox as ``inbox`` in the app, by its id on the server."""
+    out = []
+    for condition in conditions or []:
+        if isinstance(condition, dict) and condition.get("kind") == "folder" and inbox:
+            if to_app and condition.get("id") == inbox:
+                condition = {**condition, "id": "inbox"}
+            elif not to_app and condition.get("id") == "inbox":
+                condition = {**condition, "id": inbox}
+        out.append(condition)
+    return out
+
+
+def conditions_in(db: Session, account_id: int, conditions: Any) -> Any:
+    """The conditions of a smart folder as the app sends them, for the server."""
+    from .inbox import inbox_for
+
+    if not isinstance(conditions, list):
+        return conditions
+    named = any(isinstance(item, dict) and item.get("kind") == "folder" and item.get("id") == "inbox"
+                for item in conditions)
+    return _inbox_condition(conditions, inbox_for(db, account_id).id if named else None, to_app=False)
+
+
+def smart_out(row: SmartFolder, inbox: str | None) -> dict[str, Any]:
+    """One smart folder as ``changes`` gives it."""
+    return {
+        "id": row.id, "name": row.name, "preset": row.preset or "", "match": row.match,
+        "conditions": _inbox_condition(row.conditions, inbox, to_app=True), "icon": row.icon or "",
+        "color": row.color or "", "position": row.position, "created_at": _iso(row.created_at),
+        "updated_at": _iso(row.updated_at), "seq": int(row.sync_seq or 0),
+    }
 
 
 def visible(db: Session, account_id: int, kind: str, ids: Iterable[str]) -> set[str]:
@@ -529,6 +672,9 @@ def visible(db: Session, account_id: int, kind: str, ids: Iterable[str]) -> set[
         return set()
     if kind == "note":
         return set(db.scalars(select(Note.id).where(Note.id.in_(wanted), _visible_notes(account_id))))
+    if kind == "smart":
+        return set(db.scalars(select(SmartFolder.id).where(SmartFolder.id.in_(wanted),
+                                                           SmartFolder.owner_id == account_id)))
     return set(db.scalars(select(Folder.id).where(Folder.id.in_(wanted), _visible_folders(account_id))))
 
 
@@ -536,7 +682,7 @@ def _removed(db: Session, account_id: int, stones: list[AppTombstone]) -> list[d
     """The tombstones of things the account does not see (any more), each once."""
     out: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
-    for kind in ("note", "folder"):
+    for kind in ("note", "folder", "smart"):
         ids = [stone.object_id for stone in stones if stone.kind == kind]
         still = visible(db, account_id, kind, ids)
         for object_id in ids:
@@ -572,10 +718,12 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
         start = 0 if full else cursor
     notes_where = and_(_visible_notes(account.id), Note.sync_seq > start, Note.sync_seq <= value)
     folders_where = and_(_listed_folders(account.id), Folder.sync_seq > start, Folder.sync_seq <= value)
+    smart_where = and_(SmartFolder.owner_id == account.id, SmartFolder.sync_seq > start, SmartFolder.sync_seq <= value)
     stones_where = and_(_stones(account.id), AppTombstone.seq > start, AppTombstone.seq <= value)
     seqs = sorted([
         *db.scalars(select(Note.sync_seq).where(notes_where).order_by(Note.sync_seq).limit(page + 1)),
         *db.scalars(select(Folder.sync_seq).where(folders_where).order_by(Folder.sync_seq).limit(page + 1)),
+        *db.scalars(select(SmartFolder.sync_seq).where(smart_where).order_by(SmartFolder.sync_seq).limit(page + 1)),
         *([] if full else db.scalars(select(AppTombstone.seq).where(stones_where).order_by(AppTombstone.seq)
                                      .limit(page + 1))),
     ])
@@ -587,18 +735,21 @@ def changes(db: Session, account: Account, cursor: int, page: int = PAGE, *, goi
     note_rows = list(db.scalars(select(Note).where(notes_where, Note.sync_seq <= bound).order_by(Note.sync_seq)))
     folder_rows = list(db.scalars(select(Folder).where(folders_where, Folder.sync_seq <= bound)
                                   .order_by(Folder.sync_seq)))
+    smart_rows = list(db.scalars(select(SmartFolder).where(smart_where, SmartFolder.sync_seq <= bound)
+                                 .order_by(SmartFolder.sync_seq)))
     stones = [] if full else list(db.scalars(select(AppTombstone).where(stones_where, AppTombstone.seq <= bound)
                                              .order_by(AppTombstone.seq)))
     if full and not more and since is not None:
         stones = list(db.scalars(select(AppTombstone).where(
             _stones(account.id), AppTombstone.seq > since, AppTombstone.seq <= value).order_by(AppTombstone.seq)))
-    view = view_of(db, account.id, [row.id for row in note_rows])
+    view = view_of(db, account.id, [row.id for row in note_rows], note_rows)
     out: dict[str, Any] = {
         "cursor": bound if more else value,
         "full": full,
         "more": more,
         "notes": [view.note(row) for row in note_rows],
         "folders": [view.folder(row) for row in folder_rows],
+        "smart_folders": [view.smart(row) for row in smart_rows],
         "removed": _removed(db, account.id, stones),
     }
     # The account comes on the page whose range holds its last change (``start`` < its number <= the page's end), on
@@ -620,6 +771,9 @@ def _beyond(db: Session, account: Account, bound: int, value: int, full: bool) -
         return True
     if db.scalar(select(Folder.id).where(_listed_folders(account.id), Folder.sync_seq > bound,
                                          Folder.sync_seq <= value).limit(1)) is not None:
+        return True
+    if db.scalar(select(SmartFolder.id).where(SmartFolder.owner_id == account.id, SmartFolder.sync_seq > bound,
+                                              SmartFolder.sync_seq <= value).limit(1)) is not None:
         return True
     return not full and db.scalar(select(AppTombstone.id).where(
         _stones(account.id), AppTombstone.seq > bound, AppTombstone.seq <= value).limit(1)) is not None
@@ -662,7 +816,7 @@ def stamp_unnumbered() -> None:
         # The counter starts at 1: a cursor of 0 always means "everything", never "nothing changed yet".
         db.execute(text("INSERT INTO app_counter (id, value, floor) VALUES (1, 1, 0) ON CONFLICT (id) DO NOTHING"))
         db.commit()
-        for table in ("notes", "folders"):
+        for table in ("notes", "folders", "smart_folders"):
             if db.execute(text(f"SELECT 1 FROM {table} WHERE sync_seq = 0 LIMIT 1")).first() is None:  # noqa: S608
                 continue
             _renumber(db, table, 0)
@@ -683,7 +837,7 @@ def drop_old_tombstones(now: Any = None) -> int:
                         "ON CONFLICT (id) DO UPDATE SET floor = MAX(floor, :top)"), {"top": int(top)})
         db.commit()
         _, floor = current(db)
-        for table in ("notes", "folders"):
+        for table in ("notes", "folders", "smart_folders"):
             _renumber(db, table, floor)
         logger.info("Old tombstones dropped count=%s floor=%s", gone, floor)
     wake()

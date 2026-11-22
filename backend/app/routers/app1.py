@@ -70,6 +70,8 @@ WAIT_SECONDS = 25.0
 WAIT_RECHECK = 5.0
 #: Notes one ``sync`` takes at most.
 SYNC_NOTES = 50
+#: The parts of the interface beyond 0.4 this server has (``hello``): an app tells an older server by their absence.
+FEATURES = ("smart_folders", "history", "trash", "gallery", "texts")
 
 
 def _refused(code: str, text: str, status: int, retry: int | None = None) -> HTTPException:
@@ -140,7 +142,8 @@ def hello() -> dict[str, Any]:
             ways.append("password")
         if providers.public_list(SqlStore(db)):
             ways.append("oidc")
-    return {"app": "nexnotes", "api": API, "min_api": MIN_API, "version": __version__, "sign_in": ways}
+    return {"app": "nexnotes", "api": API, "min_api": MIN_API, "version": __version__, "sign_in": ways,
+            "features": list(FEATURES)}
 
 
 # --- Pairing (no token; behind the sign-in brake) ------------------------------------------------------------------
@@ -212,18 +215,29 @@ def bring_in(found: Device, body: DeviceIn) -> JSONResponse:
 
 @router.get("/me", summary="The account, this device, what the server offers")
 def me(found: Device) -> dict[str, Any]:
+    """What the server can (NOTES-24, follow-up 6): its limits, the operator's switches, the account's storage."""
+    from ..services import attachments, ocr
+
     account = found.account
     with SessionLocal() as db:
         upload = settings_service.upload_max_mb(db)
         share_links = bool(settings_service.get(db, "share_links"))
+        link_previews = bool(settings_service.get(db, "link_previews"))
+        trash_days = settings_service.trash_days(db)
+        history_days = settings_service.history_days(db)
+        row = db.get(AccountRow, account.id)
+        stored = attachments.limits(db, row or account)
     return {
         "account": account_out(account),
         "device": devices.device_out(found.device),
         "paper": notes.default_paper(account),
         "list_look": notes_list.list_look(account),
         "limits": {"sync_notes": SYNC_NOTES, "changes_page": appsync.PAGE, "wait_seconds": int(WAIT_SECONDS),
-                   "update_bytes": s.MAX_UPDATE, "note_bytes": s.MAX_DOC, "upload_mb": upload},
-        "offers": {"push": bool(apppush.relay_url()), "share_links": share_links},
+                   "update_bytes": s.MAX_UPDATE, "note_bytes": s.MAX_DOC, "upload_mb": upload,
+                   "trash_days": trash_days, "history_days": history_days},
+        "offers": {"push": bool(apppush.relay_url()), "share_links": share_links, "link_previews": link_previews,
+                   "ocr": bool(ocr.engine_info().available)},
+        "storage": {"used": stored["used"], "limit": stored["limit"], "full": stored["full"]},
     }
 
 

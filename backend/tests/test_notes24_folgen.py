@@ -19,7 +19,7 @@ from .notes_live import Live
 from .test_notes3 import stored, wait_for
 from .test_notes13 import make_folder
 from .test_notes13_link import make_link, png, switch_links
-from .test_notes24 import paired
+from .test_notes24 import paired, without_presets
 
 #: Ids as the app makes them: base64url with ``_``, ``-`` and letters past ``f``.
 FOLDER = "fZ_household-Box9xQwErT"
@@ -335,6 +335,7 @@ def test_notes24_folge3_the_account_is_not_lost_between_pages(client, operator, 
     from app.services import appsync
 
     monkeypatch.setattr(appsync, "PAGE", 3)
+    without_presets(operator.id)
     device = paired(client)
     device.changes()
     device.put("/views", {"key": "all", "sort": "title"})
@@ -368,9 +369,9 @@ def test_notes24_folge3_a_view_changed_again_comes_again(client, operator):
     assert [(view["key"], view["sort"]) for view in found["account"]["views"]] == [("all", "title")]
 
 
-def test_notes24_folge3_smart_folder_views_stay_out_and_their_deletion_counts(client, operator):
-    """N6: views of smart folders are not in ``account.views`` until NOTESIOS-7; deleting such a folder still gives the
-    account a new number (its view went in bulk)."""
+def test_notes24_folge3_smart_folder_views_come_and_their_deletion_counts(client, operator):
+    """N6: views of smart folders are in ``account.views`` (since NOTESIOS-7, with ``mode``); deleting such a folder
+    gives the account a new number (its view went in bulk)."""
     device = paired(client)
     smart = client.post("/api/smart-folders", json={"name": "Open", "match": "all",
                                                     "conditions": [{"kind": "tasks", "op": "open"}]})
@@ -379,11 +380,12 @@ def test_notes24_folge3_smart_folder_views_stay_out_and_their_deletion_counts(cl
     assert client.put(f"/api/smart-folders/{smart_id}/view", json={"sort": "title"}).status_code == 200
     device.put("/views", {"key": "all", "sort": "created"})
     first = device.changes()
-    assert [view["key"] for view in first["account"]["views"]] == ["all"]
+    assert [(view["key"], view.get("mode")) for view in first["account"]["views"]] == [
+        ("all", None), (f"s:{smart_id}", "list")]
     assert client.delete(f"/api/smart-folders/{smart_id}").status_code == 204
     with SessionLocal() as db:
         assert db.scalar(select(NoteListView).where(NoteListView.key == f"s:{smart_id}")) is None
-    assert "account" in device.changes()
+    assert [view["key"] for view in device.changes()["account"]["views"]] == ["all"]
 
 
 def test_notes24_folge2_notesios5_ac1_a_folder_patch_is_all_or_nothing(client, operator):

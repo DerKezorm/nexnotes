@@ -44,3 +44,5 @@ class SmartFolder(Base):
     position: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow, onupdate=utcnow)
+    #: The number of its last change for the app (``services/appsync.py``, NOTES-24): every new one, every change.
+    sync_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0", index=True)
