@@ -129,6 +129,10 @@ export function browserLanguage(): string {
 
 // The shipped languages at once, so the first picture is never raw keys; an added one follows from the server.
 const first = storedLanguage() ?? browserLanguage()
+// `<html lang>` follows every switch, however it comes: hyphenation (`.nn-wrap`) and the screen reader go by it.
+i18n.on('languageChanged', (code: string) => {
+  document.documentElement.lang = code
+})
 i18n.use(initReactI18next).init({
   resources: { en: { translation: en }, de: { translation: de } },
   lng: first in SHIPPED ? first : FALLBACK,
@@ -150,7 +154,6 @@ export async function changeLanguage(code: string, remember = true): Promise<boo
       // Then the choice only holds until the next reload.
     }
   }
-  document.documentElement.lang = code
   await i18n.changeLanguage(code)
   return true
 }

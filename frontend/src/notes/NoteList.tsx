@@ -198,8 +198,14 @@ export function NoteList({ folderId, selectedId: chosenId, onOpen, hrefFor, head
     }
     const cards = look.style === 'cards'
     const gap = cards ? SIZES.cardGap : narrow ? SIZES.smallGap : SIZES.gap
+    // The row is exactly as high as the layout gave it: an auto row grew with what a tile holds (a picture at its own
+    // height, two lines of title, the hints), the tile ran out of its place and the next group's heading stood in it.
     return (
-      <div className="grid h-full" style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap, paddingBottom: gap }}>
+      <div
+        className="grid h-full"
+        style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gridTemplateRows: 'minmax(0, 1fr)', gap, paddingBottom: gap }}
+        data-testid="list-grid"
+      >
         {entry.items.map((item) => (cards ? <NoteCard key={item.id} {...propsOf(item)} /> : <NoteTile key={item.id} {...propsOf(item)} />))}
       </div>
     )
