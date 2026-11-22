@@ -305,6 +305,10 @@ class ApiToken(Base):
     folder_ids: Mapped[Any] = mapped_column(JSON, nullable=True)
     #: The operator blocked the token (NOTES-25 AC-27): it answers like none from then on.
     blocked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: A paired device (NOTES-24): ``ios``, ``ipados`` or ``mac``; empty for every other kind.
+    device_kind: Mapped[str] = mapped_column(String(8), default="", server_default="")
+    #: The device whose token brought this one in (the app's connection handed on through iCloud, NOTES-24 AC-7).
+    via_token_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 #: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.
@@ -347,6 +351,8 @@ class Folder(Base):
     #: The mark of the deletion that took it (NOTES-4 AC-5): a folder goes with its subfolders and notes under one
     #: mark, and bringing it back brings back exactly what carries the mark.
     deleted_batch: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    #: The number of its last change for the app's ``changes`` (NOTES-24, ``services/appsync.py``).
+    sync_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0", index=True)
 
 
 class Note(Base):
@@ -397,6 +403,9 @@ class Note(Base):
     #: Locked in the vault (NOTES-16): the content lies encrypted in ``sealed_notes`` (``models_vault.py``); ``ydoc``
     #: and ``text`` are empty, only the title stays readable.
     locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false(), index=True)
+    #: The number of its last change for the app's ``changes`` (NOTES-24, ``services/appsync.py``): text, title,
+    #: folder, paper, symbol, color, pin, trash, sharing.
+    sync_seq: Mapped[int] = mapped_column(Integer, default=0, server_default="0", index=True)
 
 
 class NoteUpdate(Base):

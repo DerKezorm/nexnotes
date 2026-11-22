@@ -23,6 +23,8 @@ from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
 from .routers import about, api_v1, api_v1_write, auth, export, folders, health, history, invites, oidc, trash
 from .routers import accounts as accounts_router
+from .routers import app1 as app1_router
+from .routers import app_pairing as app_pairing_router
 from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
 from .routers import backups as backups_router
@@ -59,7 +61,8 @@ ROUTERS = [
 #: The vault comes early: its start puts the locked notes into the hooks the others read at their own start.
 FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, search_router, history, trash,
                          notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
-                         mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router]
+                         mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router,
+                         app_pairing_router, app1_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:

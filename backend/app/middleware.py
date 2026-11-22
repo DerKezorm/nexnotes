@@ -160,6 +160,9 @@ CLIENT_HEADER = b"x-nexnotes-client"
 CLIENT_PATTERN = re.compile(rb"^[A-Za-z0-9_-]{8,64}$")
 #: The API for programs: a token in ``Authorization``, no tab.
 API_PREFIX = "/api/v1/"
+#: Prefixes of routes for programs: the API (NOTES-25) and the own app (NOTES-24), which signs in with a token in
+#: ``Authorization`` and picks its token up without a cookie, so no other site can make a browser act there.
+API_PREFIXES = (API_PREFIX, "/api/app/1/")
 #: Routes programs call without a tab and, at first, without a token: MCP (it refuses every request with an
 #: ``Origin`` itself, NOTES-20 EC-4) and a connector registering and trading its code (OAuth, NOTES-20 AC-7).
 PROGRAM_PATHS = frozenset({"/api/mcp", "/api/oauth/register", "/api/oauth/token"})
@@ -229,7 +232,7 @@ class GuardMiddleware:
         # Programs and paired devices bring a token in ``Authorization`` instead: no other site can make a browser send
         # that header either.
         bearer = headers.get(b"authorization", b"")[:7].lower() == b"bearer "
-        exempt = scope["path"].startswith(API_PREFIX) or bearer or scope["path"] in PROGRAM_PATHS
+        exempt = scope["path"].startswith(API_PREFIXES) or bearer or scope["path"] in PROGRAM_PATHS
         if scope.get("method") in CHANGING and not exempt and not CLIENT_PATTERN.match(headers.get(CLIENT_HEADER, b"")):
             for message in _refuse(400, "client_required", "Changes need the header X-Nexnotes-Client."):
                 await send(message)

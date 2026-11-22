@@ -353,6 +353,102 @@ async def change(note_id: str, edit: Callable[[Any], Any], account_id: int | Non
     return await rooms().change(note_id, edit, account_id=account_id, rescue=rescue)
 
 
+@dataclass
+class Synced:
+    """A note after the app's ``sync``: the server's state vector, what the device lacks, the title, the number of
+    its last change; or the code of why not."""
+
+    error: str = ""
+    state_vector: bytes = b""
+    lacking: bytes = b""
+    title: str = ""
+    seq: int = 0
+
+
+def _sync_check(account: Account, note_id: str, writing: bool) -> str:
+    """Why the device may not take part in the note's text, or "": an unknown note, no right (read only and an
+    update, or the share withdrawn: NOTES-12 EC-5), or locked (NOTES-16). A note in the trash is still the writer's:
+    what the device wrote offline meanwhile comes back with it."""
+    with SessionLocal() as db:
+        note = db.get(Note, note_id) if len(note_id) <= 36 else None
+        if note is None:
+            return "not_found"
+        right = right_to(db, account, note)
+        if right == Access.NONE:
+            return "no_right"
+        if busy(db, note_id):
+            return "note_locked"
+        if writing and right != Access.WRITE:
+            return "no_right"
+    return ""
+
+
+def _seq_of(note_id: str) -> int:
+    with SessionLocal() as db:
+        return int(db.scalar(select(Note.sync_seq).where(Note.id == note_id)) or 0)
+
+
+async def sync_from_device(account: Account, note_id: str, state_vector: bytes, update: bytes | None) -> Synced:
+    """The app brings what it wrote and its state vector, and gets what it lacks (NOTES-24 AC-3). The update goes the
+    way a browser's goes in the live room: stored before the answer, at once in every open browser."""
+    from ..notedoc.room import Refused
+
+    problem = await asyncio.to_thread(_sync_check, account, note_id, bool(update))
+    if problem:
+        return Synced(error=problem)
+    try:
+        vector, lacking, title = await rooms().apply(note_id, update or None, account_id=account.id,
+                                                     state_vector=state_vector)
+    except Refused as refused:
+        return Synced(error=refused.code)
+    except RuntimeError:
+        # Locked between the check and the store (``SqlNoteStore._save_update``).
+        return Synced(error="note_locked")
+    return Synced(state_vector=vector, lacking=lacking, title=title, seq=await asyncio.to_thread(_seq_of, note_id))
+
+
+#: Ids the app makes for new notes: 16 to 32 characters of base64url (22 from 16 random bytes), or a UUID.
+DEVICE_ID = re.compile(r"[A-Za-z0-9_-]{16,32}|[0-9a-fA-F-]{36}")
+
+
+def create_from_device(db: Session, account: Account, *, note_id: str, folder_id: str | None, paper: str | None,
+                       icon: str | None, created_at: Any = None, origin: str = "") -> tuple[Note, bool]:
+    """A note the app made with its own id (NOTES-24): an empty document, its text comes as the app's update (the
+    server writes nothing of its own into it, or a paragraph of the server and one of the app would stand side by
+    side). The same id again is the same note."""
+    from .symbols import SYMBOLS
+
+    if not DEVICE_ID.fullmatch(note_id or ""):
+        raise error("invalid_input", "The input is not valid.", 422, fields=["id"])
+    existing = db.get(Note, note_id)
+    if existing is not None:
+        if right_to(db, account, existing) != Access.WRITE:
+            raise error("note_id_taken", "This note id is taken.", 409)
+        return existing, False
+    if paper is not None:
+        check_paper(paper)
+    if icon and icon not in SYMBOLS:
+        raise error("note_icon_unknown", "Choose a symbol from the list.", 422)
+    folder = _folder_for(db, account, folder_id)
+    now = utcnow()
+    made = created_at if created_at is not None and created_at <= now else now
+    note = Note(id=note_id, owner_id=folder.owner_id, folder_id=folder.id, title="", origin=(origin or "")[:100],
+                ydoc=b"", text="", created_at=made, updated_at=now, updated_by_id=account.id,
+                paper=paper or default_paper(account), icon=icon or "")
+    db.add(note)
+    _written(db, note)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        existing = db.get(Note, note_id)
+        if existing is None or right_to(db, account, existing) != Access.WRITE:
+            raise error("note_id_taken", "This note id is taken.", 409) from None
+        return existing, False
+    logger.info("Note created by a device note=%s", note.id)
+    return note, True
+
+
 async def read_live(note_id: str) -> tuple[str, str]:
     """The title and plain text as they are now: from the open room, or the stored document."""
     return await change(note_id, lambda doc: (notedoc.title_of(doc), to_plain(doc)))

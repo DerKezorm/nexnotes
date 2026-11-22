@@ -92,7 +92,11 @@ def authenticate(db: Session, token: str | None, kinds: tuple[str, ...] = KINDS)
 
 
 def revoke_all(db: Session, account_id: int) -> int:
-    """Every token of the account goes (a block or a delete)."""
+    """Every token of the account goes (a block or a delete). Its paired devices are told why when they call next
+    (``account_blocked``, NOTES-24 EC-5)."""
+    from .devices import remember_blocked
+
+    remember_blocked(db, account_id)
     result = db.execute(delete(ApiToken).where(ApiToken.account_id == account_id))
     db.commit()
     return int(getattr(result, "rowcount", 0) or 0)

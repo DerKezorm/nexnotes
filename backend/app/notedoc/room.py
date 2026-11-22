@@ -296,6 +296,55 @@ class Rooms:
             await room.send(create_update_message(update), ready_only=True)
         return result
 
+    async def apply(self, note_id: str, update: bytes | None, *, account_id: int,
+                    state_vector: bytes) -> tuple[bytes, bytes, str]:
+        """An update of a device without a live connection (the app's ``sync``, NOTES-24 AC-3), taken as if a writer
+        had sent it in the room: stored before anyone gets it, text put back and shapes mended the same way, passed
+        to every open browser. The same update twice changes nothing and is stored once (EC-6). Returns the state
+        vector after it, what the device lacks against ``state_vector``, and the title. ``update`` None only reads.
+        Raises ``Refused`` (``invalid_update``, ``too_large``); a note locked meanwhile fails in the store."""
+        room = self.rooms.get(note_id)
+        if room is None:
+            async with self.guard:
+                room = self.rooms.get(note_id)
+                if room is None:
+                    state, updates = await self.store.load(note_id)
+                    doc = load(state, updates, client_id=self._client_id())
+                    rescue: bytes | None = None
+                    taken = False
+                    if update:
+                        taken, rescue, _whole = _take_in(doc, update, Rescuer(), doc.get_update())
+                    if taken:
+                        waiting = await self.store.save_update(note_id, update, account_id)
+                        if rescue is not None:
+                            waiting = await self.store.save_update(note_id, rescue, None)
+                        if waiting < self.fold_after or not await self._fold_doc(note_id, doc):
+                            await self.store.summary(note_id, title_of(doc), to_plain(doc))
+                    return _answer_for(doc, state_vector)
+        rescue = None
+        taken = False
+        async with room.lock:
+            if update:
+                try:
+                    taken, rescue, whole = _take_in(room.doc, update, room.rescuer, room.whole)
+                except Refused:
+                    await self._reload(room)
+                    raise
+                if taken:
+                    try:
+                        await self._keep(room, update, account_id, also=rescue, whole=whole if rescue is None else None)
+                    except Exception:
+                        logger.exception("Storing an update of a device failed note=%s", room.note_id)
+                        await self._reload(room)
+                        raise
+            answer = _answer_for(room.doc, state_vector)
+        if taken:
+            assert update is not None
+            await room.send(create_update_message(update), ready_only=True)
+            if rescue is not None:
+                await room.send(create_update_message(rescue), ready_only=True)
+        return answer
+
     async def shutdown(self) -> None:
         """At a server stop: every room folded, every connection closed so browsers reconnect (EC-7)."""
         for room in list(self.rooms.values()):
@@ -578,6 +627,48 @@ class Rooms:
         room.doc = load(state, updates, client_id=self._client_id())
         room.whole = room.doc.get_update()
         room.rescuer = Rescuer()
+
+
+class Refused(Exception):
+    """An update of a device the room does not take: ``invalid_update`` (not one pycrdt can read) or ``too_large``."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(code)
+        self.code = code
+
+
+def _take_in(doc: Doc, update: bytes, rescuer: Rescuer, whole_before: bytes) -> tuple[bool, bytes | None, bytes]:
+    """Applies a device's update as ``_on_update`` does a browser's: whether it is to be stored, the server's change
+    that came with it (text put back, shapes mended), and the whole document after it. Raises ``Refused``; the
+    caller loads the document again then."""
+    if len(update) > s.MAX_UPDATE:
+        raise Refused("too_large")
+    state_before = doc.get_state()
+    try:
+        applied = apply(doc, update)
+    except Exception as error:  # noqa: BLE001 - not an update pycrdt can read
+        raise Refused("invalid_update") from error
+    if not applied.changed and redundant(update, state_before):
+        return False, None, whole_before
+    whole = doc.get_update()
+    if len(whole) > s.MAX_DOC:
+        raise Refused("too_large")
+    rescue: bytes | None = None
+    if applied.changed and applied.deleted:
+        with recording(doc) as made:
+            mended = repair(doc, applied.touched) if applied.structural else 0
+            restored = rescuer.after(doc, update, applied, whole_before)
+        if restored or mended:
+            rescue = merged(made)
+    return True, rescue, whole
+
+
+def _answer_for(doc: Doc, state_vector: bytes) -> tuple[bytes, bytes, str]:
+    try:
+        lacking = doc.get_update(state_vector) if state_vector else doc.get_update()
+    except Exception as error:  # noqa: BLE001 - not a state vector pycrdt can read
+        raise Refused("invalid_state_vector") from error
+    return doc.get_state(), lacking, title_of(doc)
 
 
 def _step2(update: bytes) -> bytes:

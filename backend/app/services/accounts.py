@@ -435,6 +435,10 @@ def unblock(db: Session, account: Account) -> None:
     account.failed_logins = 0
     account.locked_until = None
     db.commit()
+    # Its devices of before were disconnected by the block; from now on they hear so (NOTES-24).
+    from .devices import forget_blocked
+
+    forget_blocked(db, account.id)
     logger.info("Account unblocked name=%s", account.name)
 
 
