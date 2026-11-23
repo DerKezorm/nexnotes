@@ -745,7 +745,10 @@
         "other": "Captured quickly",
         "api": "Via the API from “{{name}}”",
         "apiAny": "Via the API",
-        "guide": "From the nexnotes guide"
+        "guide": "From the nexnotes guide",
+        "widget": "Via the widget",
+        "lockscreen": "From the Lock Screen",
+        "control": "Via Control Center or the Action button"
       }
     },
     "create": "Create"

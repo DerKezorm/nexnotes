@@ -101,6 +101,10 @@ describe('where the guide comes from (NOTES-26 AC-8)', () => {
     const t = i18n.t.bind(i18n) as (key: string, values?: Record<string, unknown>) => string
     expect(whoText([{ id: null, name: '', via: 'guide' }], t)).toBe('nexnotes · Anleitung')
     expect(originText('guide', t)).toBe('Aus der Anleitung von nexnotes')
+    // NOTESIOS-23: the iOS app's quick ways say where they came from.
+    expect(originText('widget', t)).toBe('Über das Widget')
+    expect(originText('lockscreen', t)).toBe('Vom Sperrbildschirm')
+    expect(originText('control', t)).toBe('Über Kontrollzentrum oder Aktionstaste')
     await i18n.changeLanguage('en')
     expect(whoText([{ id: null, name: '', via: 'guide' }], t)).toBe('nexnotes · Guide')
   })

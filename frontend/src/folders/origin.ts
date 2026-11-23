@@ -11,5 +11,9 @@ export function originText(origin: string, t: (key: string, values?: Record<stri
   if (kind === 'shortcut') return t('folders.inbox.origin.shortcut')
   if (kind === 'nexdeck') return t('folders.inbox.origin.nexdeck')
   if (kind === 'guide') return t('folders.inbox.origin.guide')
+  // The iOS app's quick ways (NOTESIOS-23): the Home Screen widget, the Lock Screen, Control Center or the Action button.
+  if (kind === 'widget') return t('folders.inbox.origin.widget')
+  if (kind === 'lockscreen') return t('folders.inbox.origin.lockscreen')
+  if (kind === 'control') return t('folders.inbox.origin.control')
   return t('folders.inbox.origin.other')
 }

@@ -745,7 +745,10 @@
         "other": "Schnell festgehalten",
         "api": "Über die API von „{{name}}“",
         "apiAny": "Über die API",
-        "guide": "Aus der Anleitung von nexnotes"
+        "guide": "Aus der Anleitung von nexnotes",
+        "widget": "Über das Widget",
+        "lockscreen": "Vom Sperrbildschirm",
+        "control": "Über Kontrollzentrum oder Aktionstaste"
       }
     },
     "create": "Anlegen"
