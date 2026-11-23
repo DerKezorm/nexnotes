@@ -7,6 +7,7 @@ import { useCallback, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../../api/client'
+import { Check } from '../../components/Check'
 import { Dialog } from '../../components/Dialog'
 import { Done } from '../../components/Field'
 import { errorText, problemText } from '../../lib/errors'
@@ -43,8 +44,22 @@ export function SubHead({ title, text }: { title: string; text?: string }) {
   )
 }
 
-/** A switch with its name and a line of explanation; the whole row is the label (a checkbox). */
-export function Toggle({ label, hint, checked, onChange, disabled = false }: { label: string; hint?: string; checked: boolean; onChange: (value: boolean) => void; disabled?: boolean }) {
+/** On or off with its name and a line of explanation: the whole row is the label, the tick (`Check`) stands right. */
+export function Toggle({
+  label,
+  hint,
+  checked,
+  onChange,
+  disabled = false,
+  testId,
+}: {
+  label: string
+  hint?: string
+  checked: boolean
+  onChange: (value: boolean) => void
+  disabled?: boolean
+  testId?: string
+}) {
   const hintId = useId()
   return (
     <label className="flex items-center justify-between gap-4 rounded-[12px] border border-ink-700 bg-ink-900 px-4 py-3 text-sm">
@@ -56,16 +71,7 @@ export function Toggle({ label, hint, checked, onChange, disabled = false }: { l
           </span>
         )}
       </span>
-      <input
-        type="checkbox"
-        checked={checked}
-        disabled={disabled}
-        aria-label={label}
-        aria-describedby={hint ? hintId : undefined}
-        onChange={(event) => onChange(event.target.checked)}
-        role="switch"
-        className="h-5 w-5 shrink-0 accent-[var(--color-accent-500)]"
-      />
+      <Check checked={checked} disabled={disabled} aria-label={label} aria-describedby={hint ? hintId : undefined} data-testid={testId} onChange={onChange} />
     </label>
   )
 }

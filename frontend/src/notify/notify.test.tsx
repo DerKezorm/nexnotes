@@ -150,12 +150,12 @@ describe('NOTES-14 the bell of a shared note', () => {
     await openBell()
     const bell = box.querySelector('[data-testid="notify-bell"]')!
     expect(bell.getAttribute('aria-pressed')).toBe('false')
-    const toggle = box.querySelector('[data-testid="notify-switch"]')!
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    const toggle = box.querySelector<HTMLInputElement>('[data-testid="notify-switch"]')!
+    expect(toggle.checked).toBe(false)
     await click(toggle)
     await settle()
     expect(calls.some((call) => call.method === 'PUT' && call.path === '/api/notify/note/n1' && call.body?.on === true)).toBe(true)
-    expect(box.querySelector('[data-testid="notify-switch"]')!.getAttribute('aria-checked')).toBe('true')
+    expect(box.querySelector<HTMLInputElement>('[data-testid="notify-switch"]')!.checked).toBe(true)
     expect(bell.getAttribute('aria-pressed')).toBe('true')
     expect(box.textContent).toContain('Gebündelt: Eine Mitteilung kommt, wenn zwei Minuten lang niemand mehr schreibt.')
   })

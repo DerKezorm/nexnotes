@@ -107,7 +107,7 @@ const $$ = (testId: string) => [...box.querySelectorAll<HTMLElement>(`[data-test
 const rowTitles = () => $$('note-row').map((row) => row.querySelector('.truncate')!.textContent)
 const headings = () => $$('list-group-heading').map((heading) => heading.textContent)
 const byText = (text: string, within: ParentNode = document) =>
-  [...within.querySelectorAll<HTMLElement>('button, [role="menuitem"], [role="menuitemradio"], [role="radio"], [role="switch"]')].find(
+  [...within.querySelectorAll<HTMLElement>('button, [role="menuitem"], [role="menuitemradio"], [role="radio"]')].find(
     (element) => element.textContent?.trim() === text || element.getAttribute('aria-label') === text,
   )!
 

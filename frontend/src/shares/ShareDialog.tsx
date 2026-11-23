@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { Avatar } from '../components/Avatar'
+import { Check } from '../components/Check'
 import { Dialog } from '../components/Dialog'
 import { Problem } from '../components/Field'
 import { copyText } from '../lib/copy'
@@ -245,23 +246,18 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ShareKind; id:
 
         {sharing?.links && (
           <section className="flex flex-col gap-2.5 border-t border-ink-700 pt-3.5" data-testid="share-link">
-            <span className="flex items-center justify-between gap-3">
+            <label className="flex items-center justify-between gap-3">
               <span className="flex items-center gap-2 text-[13px] font-semibold">
                 <Link2 aria-hidden className="h-4 w-4" />
                 {t('shares.link.title')}
               </span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={Boolean(link)}
+              <Check
+                checked={Boolean(link)}
                 aria-label={t('shares.link.switch')}
                 data-testid="share-link-switch"
-                onClick={() => void (link ? revoke() : makeLink(dayFrom(LINK_DAYS)))}
-                className={'flex h-[22px] w-[38px] shrink-0 items-center rounded-full p-0.5 ' + (link ? 'justify-end bg-accent-500' : 'justify-start bg-ink-600')}
-              >
-                <span className={'h-[18px] w-[18px] rounded-full ' + (link ? 'bg-on-accent' : 'bg-mist-300')} />
-              </button>
-            </span>
+                onChange={() => void (link ? revoke() : makeLink(dayFrom(LINK_DAYS)))}
+              />
+            </label>
             {link && (
               <>
                 {url ? (

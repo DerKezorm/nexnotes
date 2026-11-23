@@ -268,11 +268,11 @@ describe('the looks of the lists', () => {
     expect($('settings-list-style-compact')!.getAttribute('aria-checked')).toBe('true')
     expect($('settings-list-style-tiles')!.getAttribute('aria-checked')).toBe('false')
     // The hints the same way, both directions.
-    expect($('settings-list-hints')!.getAttribute('aria-checked')).toBe('true')
+    expect(($('settings-list-hints') as HTMLInputElement).checked).toBe(true)
     await click($('settings-list-hints')!)
     expect($('list-hints')!.getAttribute('aria-checked')).toBe('false')
     await click($('list-hints')!)
-    expect($('settings-list-hints')!.getAttribute('aria-checked')).toBe('true')
+    expect(($('settings-list-hints') as HTMLInputElement).checked).toBe(true)
     expect(calls.filter((call) => call.path === '/api/me/list-look').map((call) => call.body)).toEqual([
       { style: 'tiles' },
       { style: 'compact' },

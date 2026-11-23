@@ -5,6 +5,7 @@
  */
 import { useTranslation } from 'react-i18next'
 
+import { Toggle } from '../../pages/settings/ui'
 import { LIST_STYLES } from './api'
 import { saveListLook, useListLook } from './look'
 import { STYLE_ICONS } from './styleIcons'
@@ -45,25 +46,13 @@ export function LookSettings() {
           })}
         </div>
       </div>
-      <div className="flex items-center gap-3 text-sm">
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="font-medium" id="list-hints-label">
-            {t('me.lists.hints')}
-          </span>
-          <span className="text-xs text-mist-500">{t('noteList.hints.text')}</span>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={look.hints}
-          aria-labelledby="list-hints-label"
-          data-testid="settings-list-hints"
-          onClick={() => void saveListLook({ hints: !look.hints })}
-          className={'flex h-[22px] w-[38px] shrink-0 items-center rounded-full p-0.5 ' + (look.hints ? 'justify-end bg-accent-500' : 'justify-start bg-ink-600')}
-        >
-          <span className={'h-[18px] w-[18px] rounded-full ' + (look.hints ? 'bg-on-accent' : 'bg-mist-300')} />
-        </button>
-      </div>
+      <Toggle
+        label={t('me.lists.hints')}
+        hint={t('noteList.hints.text')}
+        checked={look.hints}
+        testId="settings-list-hints"
+        onChange={(hints) => void saveListLook({ hints })}
+      />
     </>
   )
 }

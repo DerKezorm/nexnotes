@@ -7,6 +7,7 @@ import { Bell } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { Check } from '../components/Check'
 import { LogoMark } from '../components/Logo'
 import { problemText } from '../lib/errors'
 import { notifyApi, type NotifyKind, type NotifySettings } from './api'
@@ -89,24 +90,13 @@ export function NotifyPanel({ kind, id, onChange }: { kind: NotifyKind; id: stri
   const others = settings.devices.browsers.filter((each) => !each.this)
   return (
     <div className="flex flex-col gap-3.5" data-testid="notify-panel">
-      <span className="flex items-center justify-between gap-3">
+      <label className="flex items-center justify-between gap-3">
         <span className="flex flex-col gap-0.5">
           <span className="text-[15px] font-bold">{t(kind === 'note' ? 'notify.titleNote' : 'notify.titleFolder')}</span>
           <span className="text-[12.5px] text-mist-500">{t('notify.when')}</span>
         </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={settings.on}
-          aria-label={t('notify.switch')}
-          data-testid="notify-switch"
-          disabled={busy}
-          onClick={() => void toggle()}
-          className={'flex h-[22px] w-[38px] shrink-0 items-center rounded-full p-0.5 ' + (settings.on ? 'justify-end bg-accent-500' : 'justify-start bg-ink-600')}
-        >
-          <span className={'h-[18px] w-[18px] rounded-full ' + (settings.on ? 'bg-on-accent' : 'bg-mist-300')} />
-        </button>
-      </span>
+        <Check checked={settings.on} aria-label={t('notify.switch')} data-testid="notify-switch" disabled={busy} onChange={() => void toggle()} />
+      </label>
       {settings.via && (
         <span className="text-[12.5px] text-mist-500" data-testid="notify-via">
           {t(settings.on ? 'notify.viaOn' : 'notify.viaOff', { name: settings.via.name })}

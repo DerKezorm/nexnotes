@@ -375,10 +375,10 @@ describe('the invitation dialog (NOTES-2 AC-2)', () => {
     const dialog = await openDialog()
     expect(submit().textContent).toBe('Make the invitation')
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
-    const toggle = dialog.querySelector<HTMLInputElement>('[role="switch"]')!
+    const toggle = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!
     await act(async () => toggle.click())
     expect(submit().textContent).toBe('Send invitation')
-    // Without the address the switch no longer counts: the button only makes the invitation again.
+    // Without the address the tick no longer counts: the button only makes the invitation again.
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, '')
     expect(submit().textContent).toBe('Make the invitation')
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
@@ -400,7 +400,7 @@ describe('the invitation dialog (NOTES-2 AC-2)', () => {
     const made: unknown[] = []
     operator(false, made)
     const dialog = await openDialog()
-    expect(dialog.querySelector('[role="switch"]')).toBeNull()
+    expect(dialog.querySelector('input[type="checkbox"]')).toBeNull()
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
     expect(submit().textContent).toBe('Make the invitation')
     await act(async () => dialog.querySelector('form')!.requestSubmit())

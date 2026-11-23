@@ -303,7 +303,6 @@
       [role='tab'],
       [role='radio'],
       [role='option'],
-      [role='switch'],
       summary
     ):not(.ProseMirror *) {
     min-height: 44px;

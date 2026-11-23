@@ -284,7 +284,7 @@ describe('the share dialog', () => {
 
   it('NOTES-13 AC-9 the read link: on makes one for seven days, copied, another day, revoked', async () => {
     await render(<ShareDialog kind="note" id="n1" title="Lentil soup" onClose={() => undefined} />)
-    expect($('share-link-switch')!.getAttribute('aria-checked')).toBe('false')
+    expect(($('share-link-switch') as HTMLInputElement).checked).toBe(false)
     await act(async () => $('share-link-switch')!.click())
     await settle()
     const made = calls.find((call) => call.method === 'POST')!
@@ -300,7 +300,7 @@ describe('the share dialog', () => {
     await act(async () => $('share-link-revoke')!.click())
     await settle()
     expect(calls.at(-1)).toMatchObject({ method: 'DELETE', path: '/api/read-links/9' })
-    expect($('share-link-switch')!.getAttribute('aria-checked')).toBe('false')
+    expect(($('share-link-switch') as HTMLInputElement).checked).toBe(false)
     expect($('share-link-url')).toBeNull()
   })
 
