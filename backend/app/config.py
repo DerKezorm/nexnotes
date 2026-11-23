@@ -35,7 +35,7 @@ BOUNDS = {
     "argon2_parallelism": (1, 16),
 }
 _COOKIE_SUFFIX = re.compile(r"^[A-Za-z0-9_]{0,32}$")
-#: An app of Apple's: the team id (ten letters and digits), a dot, the bundle id.
+#: An app of Apple's: the developer's prefix (ten letters and digits), a dot, the bundle id.
 _APPLE_APP_ID = re.compile(r"^[A-Z0-9]{10}\.[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$")
 
 
@@ -109,7 +109,7 @@ class Settings(BaseSettings):
     #: device. Empty: nothing goes to iPhones and iPads.
     push_relay: str = "https://push.nexapps.dev"
     #: The apps whose links to notes open in the app instead of the browser ("Universal Links", NOTES-24): Apple's
-    #: ``<team>.<bundle id>``, comma separated, served in ``/.well-known/apple-app-site-association``. Empty: no file,
+    #: ``<prefix>.<bundle id>``, comma separated, served in ``/.well-known/apple-app-site-association``. Empty: no file,
     #: links stay in the browser.
     apple_app_ids: str = "6KQSFL9GA3.dev.nexapps.nexnotes"
     #: Every new account gets the folder "Anleitung" ("Guide") explaining nexnotes, and the accounts from before get it
@@ -184,7 +184,7 @@ class Settings(BaseSettings):
         for entry in value.split(","):
             if entry.strip() and not _APPLE_APP_ID.match(entry.strip()):
                 raise _not_allowed("empty, or Apple app ids separated by commas, such as "
-                                   "ABCDE12345.com.example.notes (team id, a dot, the bundle id)")
+                                   "ABCDE12345.com.example.notes (the developer's prefix, a dot, the bundle id)")
         return value
 
     @field_validator("cookie_suffix")
