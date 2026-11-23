@@ -934,6 +934,13 @@ describe('the tiles at the top of the sidebar (NOTES-4 AC-16)', () => {
     expect(tile('sidebar-all').getAttribute('aria-current')).toBeNull()
   })
 
+  it('NOTES-4 AC-16 "All notes" stays chosen with one of its notes open (/notes/<id>)', async () => {
+    await render('/notes/n1')
+    expect(tile('sidebar-all').getAttribute('aria-current')).toBe('page')
+    expect(tile('sidebar-all').className).toContain('ring-2')
+    expect(tile('sidebar-inbox').getAttribute('aria-current')).toBeNull()
+  })
+
   it('NOTES-4 AC-16 the writing on every tile reaches 4.5:1 (WCAG AA), the mark of the chosen one 3:1 in light and dark', () => {
     for (const [name, colors] of Object.entries(TILE_COLORS)) expect(contrast(colors.ink, colors.ground), name).toBeGreaterThanOrEqual(4.5)
     expect(contrast(TITLE_CHECK_COLORS.ink, TITLE_CHECK_COLORS.ground)).toBeGreaterThanOrEqual(4.5)

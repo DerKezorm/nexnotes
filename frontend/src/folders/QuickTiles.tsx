@@ -11,7 +11,7 @@
 import { Inbox, NotebookText, Users, type LucideIcon } from 'lucide-react'
 import { useState, type DragEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { NavLink } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 
 import { draggedNow, droppedFrom, endDrag } from './actions'
 import { accepts, drop } from './drop'
@@ -20,7 +20,8 @@ import { TILE_COLORS, TITLE_CHECK_COLORS } from './tileColors'
 
 type TileProps = {
   to: string
-  end?: boolean
+  /** Whether the place on show is this tile's ("Alle Notizen" also with a note open, `/notes/<id>`). */
+  shows: (path: string) => boolean
   testId: string
   title: string
   count: number | null
@@ -33,11 +34,12 @@ type TileProps = {
   children?: ReactNode
 }
 
-function Tile({ to, end, testId, title, count, label, Icon, colors, onNavigate, drag, children }: TileProps) {
+function Tile({ to, shows, testId, title, count, label, Icon, colors, onNavigate, drag, children }: TileProps) {
+  const active = shows(useLocation().pathname)
   return (
-    <NavLink
+    <Link
       to={to}
-      end={end}
+      aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
       data-testid={testId}
       aria-label={label}
@@ -46,9 +48,9 @@ function Tile({ to, end, testId, title, count, label, Icon, colors, onNavigate, 
       onDragLeave={drag?.leave}
       onDrop={drag?.put}
       style={{ backgroundColor: colors.ground, color: colors.ink }}
-      className={({ isActive }) =>
+      className={
         'flex min-h-12 min-w-0 flex-col justify-between gap-1.5 rounded-[14px] p-2.5 transition-[filter] hover:brightness-95 ' +
-        (isActive ? 'ring-2 ring-mist-100 ring-offset-2 ring-offset-ink-900' : '') +
+        (active ? 'ring-2 ring-mist-100 ring-offset-2 ring-offset-ink-900' : '') +
         (drag?.over ? ' outline-2 outline-offset-2 outline-accent-500' : '')
       }
     >
@@ -66,7 +68,7 @@ function Tile({ to, end, testId, title, count, label, Icon, colors, onNavigate, 
         </span>
         {children}
       </span>
-    </NavLink>
+    </Link>
   )
 }
 
@@ -96,6 +98,7 @@ export function QuickTiles({ onNavigate }: { onNavigate?: () => void }) {
     <div className="grid grid-cols-2 gap-2 pt-1 pb-3" data-testid="quick-tiles">
       <Tile
         to="/inbox"
+        shows={(path) => path === '/inbox' || path.startsWith('/inbox/')}
         testId="sidebar-inbox"
         title={t('folders.inbox.name')}
         count={inbox ? inbox.count : null}
@@ -117,7 +120,7 @@ export function QuickTiles({ onNavigate }: { onNavigate?: () => void }) {
       </Tile>
       <Tile
         to="/"
-        end
+        shows={(path) => path === '/' || path.startsWith('/notes/')}
         testId="sidebar-all"
         title={t('notes.all')}
         count={places ? places.all : null}
@@ -128,6 +131,7 @@ export function QuickTiles({ onNavigate }: { onNavigate?: () => void }) {
       />
       <Tile
         to="/shared"
+        shows={(path) => path === '/shared' || path.startsWith('/shared/')}
         testId="sidebar-shared"
         title={t('shares.page.title')}
         count={places ? places.shared : null}
