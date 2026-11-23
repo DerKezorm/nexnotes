@@ -53,6 +53,8 @@ type Options = {
   blob?: boolean
   /** Headers of its own, next to the ones every request carries (the password of an upload). */
   headers?: Record<string, string>
+  /** The browser's HTTP cache for this request (`fetch`'s `cache`); left out, the browser decides. */
+  cache?: RequestCache
 }
 
 const BUSY_TRIES = 3
@@ -83,7 +85,7 @@ async function once<T>(path: string, options: Options): Promise<T> {
     headers['Content-Type'] = 'application/json'
     body = JSON.stringify(options.body)
   }
-  const response = await fetch(url.pathname + url.search, { method: options.method ?? 'GET', headers, body })
+  const response = await fetch(url.pathname + url.search, { method: options.method ?? 'GET', headers, body, ...(options.cache ? { cache: options.cache } : {}) })
   if (response.status === 204) return undefined as T
   if (options.blob && response.ok) return (await response.blob()) as T
   const data = await response.json().catch(() => null)

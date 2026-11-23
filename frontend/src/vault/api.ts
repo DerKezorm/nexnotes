@@ -44,8 +44,10 @@ export const vaultApi = {
   /** `rev`: the revision the content is sealed for, the note's now plus one; `vault_stale` names a newer one. */
   save: (body: { note: string; content: string; base_rev: number; rev: number; epoch: number; title: string; restored_from?: number }) =>
     api<{ rev: number; conflict: boolean }>('/api/vault/save', { method: 'POST', body }),
-  /** The bytes of an attachment as the server keeps them (for a locked note: the ciphertext). */
-  file: (attachmentId: string) => api<Blob>(`/api/attachments/${encodeURIComponent(attachmentId)}/file`, { blob: true }),
+  /** The bytes of an attachment as the server keeps them (for a locked note: the ciphertext). Never from the browser's
+   * cache: the server lets it keep a file for a year (`immutable`), and the same address holds the plain file before a
+   * lock and the sealed one after it (locking read the plain one, opening it afterwards got that one back and failed). */
+  file: (attachmentId: string) => api<Blob>(`/api/attachments/${encodeURIComponent(attachmentId)}/file`, { blob: true, cache: 'no-store' }),
   info: (attachmentId: string) => api<AttachmentInfo>(`/api/attachments/${encodeURIComponent(attachmentId)}`),
 }
 

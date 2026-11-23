@@ -223,6 +223,39 @@ describe('the cryptography', () => {
     }
   })
 
+  it('NOTES-16 AC-7 a picture the iOS app sealed opens here byte for byte, and the app reads what this page seals (TestFlight 0.16.0)', async () => {
+    // Written by the app (NotesCore BrowserSealedTests, nonce 07 × 12) for the vault key 00 … 1f: the same bytes this
+    // page writes with that nonce.
+    const vault = await crypto.subtle.importKey('raw', Uint8Array.from({ length: 32 }, (_, i) => i), 'HKDF', false, ['deriveKey'])
+    const key = await noteKey(vault, 'BrowserLockedNote00001')
+    const aad = attachmentAad('BrowserLockedNote00001', 'BrowserWebPPicture0001')
+    const webp = fromB64('UklGRlYAAABXRUJQVlA4IEoAAABwAwCdASoYABAAPm0qkUWkIqGYBABABsSgCxCIAq//cAAOa+gA/vEAf/8M7f/hfv+GKf/A/qw91hjn6sPen3QJrDpX7NOLuWuYAA==')
+    const app = fromB64('AgcHBwcHBwcHBwcHB93HoB1eEvNoq2xuCDyQ899AXvbxpVyGW8MY4uMv52ORmmQ0zBsKWQidpuiUdPkracqCMIGhGyvD0lWq9U7YxEWqOsEHYaD2EjMwNl4peQrfUHmI3GyV5iX8f6KVv73Brzp1JZ/17I7XqPxh84VQIzDSPdkK+MKiMZ4vJaVC4hbTBPfz8CURj3b66KzpSJiCLqs/BKYQFXU85bBnO5RRhIsjSvbgzGhMNm79p7SxQFWTEZGqJ85plRfrffg1HuGfS1plVea9nUru6pPtEKM=')
+    const { header, data } = unpackAttachment(await unseal(key, app, aad))
+    expect(header).toEqual({ name: 'nexnotes mit Seitenleiste, Notizliste und offener Notiz.webp', mime: 'image/webp' })
+    expect(toB64(data)).toBe(toB64(webp))
+    const random = vi.spyOn(crypto, 'getRandomValues').mockImplementation((array) => {
+      new Uint8Array(array.buffer, array.byteOffset, array.byteLength).fill(7)
+      return array
+    })
+    try {
+      expect(toB64(await seal(key, packAttachment(header, webp), aad))).toBe(toB64(app))
+    } finally {
+      random.mockRestore()
+    }
+  })
+
+  it('NOTES-16 AC-2 the sealed file is read past the browser cache (the address held the plain file before the lock)', async () => {
+    const seen: RequestInit[] = []
+    vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      seen.push(init ?? {})
+      return new Response(new Blob([new Uint8Array([2, 1])]), { status: 200 })
+    }))
+    const { vaultApi } = await import('./api')
+    await vaultApi.file('a1')
+    expect(seen[0].cache).toBe('no-store')
+  })
+
   it('NOTES-16 AC-2 an attachment carries its name and type inside, encrypted', async () => {
     const made = await makeVault(PASSWORD, ACCOUNT)
     const key = await noteKey(made.key, 'n1')
