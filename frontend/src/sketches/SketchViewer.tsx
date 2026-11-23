@@ -75,8 +75,8 @@ export function SketchViewer({ info, onClose }: { info: AttachmentInfo; onClose:
   const tool = 'nn-btn nn-btn-ghost h-9 w-9 px-0'
   // Over the page, outside the editor: the editor would take a drag inside its blocks for moving the block.
   return createPortal(
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90" role="dialog" aria-modal="true" aria-label={t('sketches.drawing.viewer', { name: info.name })} data-testid="sketch-viewer" contentEditable={false}>
-      <div className="flex flex-wrap items-center gap-2 px-4 py-3 text-sm text-mist-200">
+    <div className="nn-viewer fixed inset-0 z-50 flex flex-col" role="dialog" aria-modal="true" aria-label={t('sketches.drawing.viewer', { name: info.name })} data-testid="sketch-viewer" contentEditable={false}>
+      <div className="nn-viewer-bar flex flex-wrap items-center gap-2 px-4 py-3 text-sm" data-testid="viewer-bar">
         <span className="min-w-0 flex-1 truncate">{info.name}</span>
         <button type="button" className={tool} onClick={() => zoomBy(1 / STEP)} aria-label={t('sketches.drawing.zoomOut')} data-testid="sketch-zoom-out">
           <Minus className="h-4 w-4" aria-hidden />

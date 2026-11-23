@@ -253,8 +253,8 @@ export function Lightbox({ info, onClose }: { info: AttachmentInfo; onClose: () 
     }
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-black/90" role="dialog" aria-modal="true" aria-label={info.name} data-testid="attachment-lightbox" contentEditable={false}>
-      <div className="flex items-center gap-3 px-4 py-3 text-sm text-mist-200">
+    <div className="nn-viewer fixed inset-0 z-50 flex flex-col" role="dialog" aria-modal="true" aria-label={info.name} data-testid="attachment-lightbox" contentEditable={false}>
+      <div className="nn-viewer-bar flex items-center gap-3 px-4 py-3 text-sm" data-testid="viewer-bar">
         <span className="min-w-0 flex-1 truncate">
           {info.name} · {bytes(info.size, i18n.language)}
         </span>

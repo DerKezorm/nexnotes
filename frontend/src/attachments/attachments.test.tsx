@@ -453,6 +453,10 @@ describe('NOTES-10 how attachments stand in the note', () => {
     await act(async () => (box.querySelector('[data-testid="attachment-open-large"]') as HTMLButtonElement).click())
     const large = document.querySelector('[data-testid="attachment-lightbox"]')!
     expect(large.getAttribute('role')).toBe('dialog')
+    // Covering the app, with a bar of its own in both modes (the colours are checked with the sketch's viewer, NOTES-18).
+    expect(large.classList.contains('nn-viewer')).toBe(true)
+    expect(large.querySelector('[data-testid="viewer-bar"]')!.classList.contains('nn-viewer-bar')).toBe(true)
+    expect(large.className).not.toMatch(/\/\d+|bg-black/)
     expect(large.querySelector('img')!.getAttribute('src')).toBe(`/api/attachments/${picture.id}/file`)
   })
 

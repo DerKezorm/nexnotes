@@ -21,6 +21,33 @@ import i18n from '../i18n'
 import { RATE_KEY, reloadRate } from './playback'
 import { JUMP_MS } from './RecordingBlock'
 import { activeIndex, forgetTranscripts, jumpTarget, timedIndexes, tokensOf, type Transcript } from './transcript'
+import { contrast } from '../lib/color'
+
+/** `styles/index.css` as the browser gets it. */
+async function pageCss(): Promise<string> {
+  const fsName = 'node:fs'
+  const files = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (file: string, encoding: string) => string }
+  return files.readFileSync('src/styles/index.css', 'utf-8').replace(/\r\n/g, '\n')
+}
+
+/** The colours a theme block sets (`@theme` dark, `:root[data-theme='light']` light). */
+function themeColors(css: string, selector: string): Record<string, string> {
+  const at = css.indexOf(`\n${selector} {`)
+  expect(at, selector).toBeGreaterThanOrEqual(0)
+  const body = css.slice(at, css.indexOf('}', at))
+  return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/g)].map((match) => [match[1], match[2]]))
+}
+
+/** The body of a rule in the components layer. */
+function rule(css: string, selector: string): string {
+  const at = css.indexOf(`  ${selector} {`)
+  expect(at, selector).toBeGreaterThanOrEqual(0)
+  return css.slice(at, css.indexOf('}', at))
+}
+
+function token(body: string, property: string): string {
+  return new RegExp(`(?:^|\\s)${property}: var\\((--[\\w-]+)\\)`).exec(body)?.[1] ?? ''
+}
 
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
 const NOTE = 'note-18'
@@ -295,6 +322,36 @@ describe('NOTES-18 sketches', () => {
     // Never smaller than a quarter.
     for (let step = 0; step < 12; step++) await click(byTest(viewer, 'sketch-zoom-out'))
     expect(byTest(viewer, 'sketch-zoom').textContent).toBe('25 %')
+  })
+
+  it('NOTES-18 EC-5 the viewer covers the app and its bar is readable in light and dark (WCAG AA)', async () => {
+    const { box } = await mount([sketch()])
+    await click(byTest(box, 'sketch-open'))
+    const viewer = byTest(document, 'sketch-viewer')
+    const bar = byTest(viewer, 'viewer-bar')
+    // The whole page has a ground of its own, the bar too; nothing half-transparent, no colour fixed for one mode.
+    expect(viewer.classList.contains('nn-viewer')).toBe(true)
+    expect(bar.classList.contains('nn-viewer-bar')).toBe(true)
+    expect(`${viewer.className} ${bar.className}`).not.toMatch(/\/\d+|bg-black|text-mist-\d+/)
+    const buttons = [...bar.querySelectorAll('button')]
+    expect(buttons.length).toBe(5)
+    for (const button of buttons) expect(button.className).toContain('nn-btn-ghost')
+
+    const css = await pageCss()
+    const ground = token(rule(css, '.nn-viewer'), 'background-color')
+    const barGround = token(rule(css, '.nn-viewer-bar'), 'background-color')
+    const text = token(rule(css, '.nn-viewer-bar'), 'color')
+    const ghost = /\.nn-btn-ghost \{\s*@apply ([^;]+);/.exec(css)![1]
+    const ghostText = `--color-${/(?:^| )text-([\w-]+)/.exec(ghost)![1]}`
+    const ghostEdge = `--color-${/border-([\w-]+)/.exec(ghost)![1]}`
+    for (const selector of ['@theme', ":root[data-theme='light']"]) {
+      const colors = themeColors(css, selector)
+      // Every colour a plain hex: fully covering.
+      for (const name of [ground, barGround, text, ghostText, ghostEdge]) expect(colors[name], `${selector} ${name}`).toMatch(/^#[0-9a-f]{6}$/)
+      expect(contrast(colors[text], colors[barGround]), `${selector} name`).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(colors[ghostText], colors[barGround]), `${selector} buttons`).toBeGreaterThanOrEqual(4.5)
+      expect(contrast(colors[ghostEdge], colors[barGround]), `${selector} edge of the buttons`).toBeGreaterThanOrEqual(3)
+    }
   })
 
   it('NOTES-18 AC-2 a sketch changed on the iPad shows its new version without reloading, the old one until the new is known', async () => {
