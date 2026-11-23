@@ -828,10 +828,12 @@ describe('NOTES-6 list and tiles', () => {
     )
     const pin = $('note-pin')!
     expect(pin.getAttribute('aria-label')).toBe('Pin note')
+    // The last write, not the last call: reads of other parts (the folders' stamp) may come between.
+    const lastWrite = () => calls.filter((call) => call.method !== 'GET').at(-1)!
     await click(pin)
-    expect(calls.at(-1)!.body).toEqual({ pinned: true })
+    expect(lastWrite().body).toEqual({ pinned: true })
     expect(pin.getAttribute('aria-pressed')).toBe('true')
     await click(pin)
-    expect(calls.at(-1)!.body).toEqual({ pinned: false })
+    expect(lastWrite().body).toEqual({ pinned: false })
   })
 })
