@@ -677,7 +677,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
               <History className="h-4 w-4" aria-hidden />
               {t('history.menu')}
             </Link>
-            <button type="button" role="menuitem" className="nn-menu-item text-bad-500" data-testid="note-delete" onClick={() => void remove()} disabled={!head?.can_write}>
+            <button type="button" role="menuitem" className="nn-menu-item not-disabled:text-bad-500" data-testid="note-delete" onClick={() => void remove()} disabled={!head?.can_write}>
               <Trash2 className="h-4 w-4" aria-hidden />
               {t('editor.delete')}
             </button>
