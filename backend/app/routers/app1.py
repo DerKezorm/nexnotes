@@ -39,6 +39,7 @@ from ..db import SessionLocal
 from ..deps import client_ip
 from ..errors import detail, error
 from ..models import Account as AccountRow
+from ..models import OPERATOR
 from ..models import ApiToken, Note
 from ..models_notify import PushDevice
 from ..notedoc import schema as s
@@ -113,8 +114,9 @@ def _iso(value: datetime | None) -> str | None:
 
 
 def account_out(account: AccountRow) -> dict[str, Any]:
+    """``operator``: whether the account runs the server; the app names the browser's server pages only then."""
     return {"id": account.id, "name": account.display_name or account.name, "login": account.name,
-            "email": account.email or "", "avatar": _iso(account.avatar_at) or ""}
+            "email": account.email or "", "avatar": _iso(account.avatar_at) or "", "operator": account.role == OPERATOR}
 
 
 def _b64(data: bytes) -> str:

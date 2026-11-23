@@ -199,7 +199,7 @@ def test_notes24_ac1_qr_code_pairs_one_device_for_ten_minutes(client, operator):
     assert body["token"].startswith("nnd_")
     assert answer.headers["cache-control"] == "no-store"
     assert body["account"] == {"id": operator.id, "name": "Tester", "login": "tester",
-                               "email": "tester@example.com", "avatar": ""}
+                               "email": "tester@example.com", "avatar": "", "operator": True}
     assert body["device"]["name"] == "Mila's iPhone" and body["device"]["kind"] == "ios"
     state = client.get(f"/api/app-pairing/{made['id']}").json()
     assert state["state"] == "used" and state["device"]["id"] == body["device"]["id"]
@@ -855,3 +855,16 @@ def test_notes24_the_app_needs_no_tab_header_but_a_token(client, operator):
         device = paired(client)
         device.client = bare
         assert device.post("/sync", {"notes": []}).status_code == 200
+
+
+def test_notes24_notesios1_the_app_hears_whether_the_account_runs_the_server(client: TestClient, operator) -> None:
+    """NOTESIOS-1 (23.11.2026): the app names the browser's server pages (server, accounts, log) only to the operator;
+    a member's device hears ``operator: false`` in ``/me`` and when it pairs."""
+    assert paired(client).get("/me").json()["account"]["operator"] is True
+    lena = make_account("lena")
+    with new_client(lena) as other:
+        made = pairing(other)
+        answer = pickup(other, made)
+        assert answer.status_code == 200, answer.text
+        assert answer.json()["account"]["operator"] is False
+        assert App(other, answer.json()["token"]).get("/me").json()["account"]["operator"] is False
