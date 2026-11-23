@@ -10,12 +10,16 @@
  */
 import { useEffect, useSyncExternalStore } from 'react'
 
+import { NOTES_CHANGED_EVENT } from '../notes/api'
+import { SHARES_CHANGED_EVENT } from '../shares/api'
 import { onAccountChange } from '../state/account'
-import { foldersApi, type Folder, type FolderTree } from './api'
+import { foldersApi, type Folder, type FolderTree, type Places } from './api'
 
 export type TreeState = {
   status: 'idle' | 'loading' | 'ready' | 'failed'
   inbox: { id: string; count: number } | null
+  /** The numbers of the tiles (NOTES-4 AC-16); `null` until the tree came. */
+  places: Places | null
   folders: Folder[]
   byId: Map<string, Folder>
   /** The children of each folder (`null`: the top), in the sidebar's order. */
@@ -58,7 +62,7 @@ function build(tree: FolderTree | null, status: TreeState['status']): TreeState 
     list.push(folder.id)
     children.set(parent, list)
   }
-  return { status, inbox: tree?.inbox ?? null, folders, byId, children, totals: totalsOf(byId, children) }
+  return { status, inbox: tree?.inbox ?? null, places: tree?.places ?? null, folders, byId, children, totals: totalsOf(byId, children) }
 }
 
 let state: TreeState = build(null, 'idle')
@@ -97,6 +101,9 @@ function watch(): void {
   if (watching || typeof window === 'undefined') return
   watching = true
   window.addEventListener('focus', () => void refreshFolders())
+  // The tiles count all notes and those shared with the account: a note made, moved or gone, a share made or left.
+  window.addEventListener(NOTES_CHANGED_EVENT, () => void refreshFolders())
+  window.addEventListener(SHARES_CHANGED_EVENT, () => void refreshFolders())
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void refreshFolders()
   })

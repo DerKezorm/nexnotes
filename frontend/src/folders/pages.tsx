@@ -3,9 +3,9 @@
  * its notes below (as in the iPhone app, change after the contract of 22.11.2026), or the empty state of NOTES-6 EC-1
  * (EC-5) when it holds neither; the inbox, a list like the folders, with where each note came from
  * (AC-7), "File" (AC-14) and its own empty state (EC-6); and on the phone the list of all folders (drawing
- * "Handy-Ordner").
+ * "Handy-Ordner") below the tiles of the sidebar (`QuickTiles.tsx`).
  */
-import { Braces, CheckCheck, ChevronDown, ChevronRight, FileText, FolderInput, Inbox, LayoutGrid, Mic, MoreHorizontal, NotebookText, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
+import { Braces, CheckCheck, ChevronDown, ChevronRight, FileText, FolderInput, Inbox, LayoutGrid, Mic, MoreHorizontal, PenLine, Plug, Plus, Share2, StickyNote, Zap } from 'lucide-react'
 import { useCallback, useEffect, useState, type DragEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useLocation, useParams } from 'react-router-dom'
@@ -30,6 +30,7 @@ import { FolderMenu } from './FolderMenu'
 import { colorOf } from './palette'
 import { originText } from './origin'
 import { countLabel, flatten, hasSubfolders, notesBelow, pathOf, revealFolder, setFolderOpen, useFolders, useOpenFolders } from './store'
+import { QuickTiles } from './QuickTiles'
 import { Subfolders } from './Subfolders'
 
 // The open folder for "New note" (AC-9) follows the list on show: the notes' workspace sets it (`NotesPage`), whether
@@ -284,24 +285,9 @@ export function FoldersPage() {
     <div className="flex min-h-full flex-col" data-testid="folders-page">
       <div className="flex-1 space-y-3.5 px-4 pt-5 pb-4">
         <h1 className="text-[26px] font-bold tracking-tight">{t('folders.section')}</h1>
-        <div className="nn-card overflow-hidden rounded-[14px]">
-          <Link to="/inbox" className="flex min-h-[50px] items-center justify-between border-b border-ink-800 px-3.5 text-base hover:bg-ink-800">
-            <span className="flex items-center gap-2.5">
-              <Inbox aria-hidden className="h-4 w-4 text-mist-500" />
-              {t('folders.inbox.name')}
-            </span>
-            <span className="text-[15px] text-mist-500">{tree.inbox?.count ?? ''} ›</span>
-          </Link>
-          {/* The places of the drawing "Handy-Ordner" (NOTES-23 AC-1): all notes. What others shared is a smart folder
-              now (NOTES-7 "Mit mir geteilt"), in the section "Intelligent" below the folders, as in the sidebar. */}
-          <Link to="/" className="flex min-h-[50px] items-center justify-between px-3.5 text-base hover:bg-ink-800" data-testid="folders-all">
-            <span className="flex items-center gap-2.5">
-              <NotebookText aria-hidden className="h-4 w-4 text-mist-500" />
-              {t('notes.all')}
-            </span>
-            <span className="text-[15px] text-mist-500">›</span>
-          </Link>
-        </div>
+        {/* The tiles of the sidebar (NOTES-4 AC-16, NOTES-23 AC-1): "Eingang", "Alle Notizen", "Mit mir geteilt", as in the
+            iPhone app (contract 23.11.2026). */}
+        <QuickTiles />
         <p className="px-1 text-xs font-semibold tracking-[0.06em] text-mist-500 uppercase">{t('folders.section')}</p>
         {rows.length > 0 && (
           <div className="nn-card overflow-hidden rounded-[14px]">

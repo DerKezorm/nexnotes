@@ -9,7 +9,7 @@ Ein intelligenter Ordner ist eine gespeicherte Suche, die aussieht wie ein Ordne
 
 ## Mitgeliefert
 
-Vier bekommst du gleich mit: **Offene Checklisten**, **Zuletzt bearbeitet**, **Mit mir geteilt** und **Anhänge**. Du kannst sie ändern, umbenennen oder löschen.
+Drei bekommst du gleich mit: **Offene Checklisten**, **Zuletzt bearbeitet** und **Anhänge**. Du kannst sie ändern, umbenennen oder löschen.
 
 ## Einen eigenen anlegen
 

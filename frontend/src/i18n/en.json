@@ -720,6 +720,12 @@
       "noNotesHere": "No notes directly in “{{name}}”",
       "gone": "This folder does not exist or is in the trash."
     },
+    "tiles": {
+      "label_one": "{{name}}, {{count}} note",
+      "label_other": "{{name}}, {{count}} notes",
+      "titleCheck_one": "{{count}} title to check",
+      "titleCheck_other": "{{count}} titles to check"
+    },
     "inbox": {
       "name": "Inbox",
       "text": "What you captured quickly waits here to be filed. The inbox is always there.",
@@ -2001,7 +2007,6 @@
     "preset": {
       "open_tasks": "Open checklists",
       "recent": "Recently edited",
-      "shared_with_me": "Shared with me",
       "attachments": "Attachments"
     },
     "kind": {

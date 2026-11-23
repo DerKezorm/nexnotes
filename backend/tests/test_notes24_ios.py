@@ -114,12 +114,12 @@ def test_notes24_notesios7_ac3_smart_folders_made_with_the_device_s_id_once(clie
 def test_notes24_notesios7_ac5_presets_come_and_come_back(client, operator):
     device = paired(client)
     listed = device.get("/smart-folders/presets").json()["presets"]
-    assert [entry["preset"] for entry in listed] == ["open_tasks", "recent", "shared_with_me", "attachments"]
+    assert [entry["preset"] for entry in listed] == ["open_tasks", "recent", "attachments"]
     assert listed[0]["conditions"] == OPEN
     # Every account has them from the start, numbered: the first full list brings them.
     first = device.changes()
     presets = {entry["preset"]: entry for entry in first["smart_folders"]}
-    assert set(presets) == {"open_tasks", "recent", "shared_with_me", "attachments"}
+    assert set(presets) == {"open_tasks", "recent", "attachments"}
     assert all(entry["seq"] > 0 and entry["name"] == "" for entry in presets.values())
     # Deleted and made anew from the preset, with its name in the app's language.
     gone = presets["attachments"]["id"]
@@ -203,7 +203,7 @@ def test_notes24_notesios7_another_account_s_smart_folders_are_not_there(client,
         assert lenas.put("/smart-folders/order", {"ids": [SMART]}).status_code == 200
     with SessionLocal() as db:
         mine = db.get(SmartFolder, SMART)
-        assert (mine.name, mine.position) == ("Mine", 4)
+        assert (mine.name, mine.position) == ("Mine", 3)
     # Deleting it tells only its owner's devices.
     device.delete(f"/smart-folders/{SMART}")
     with new_client(lena) as other:

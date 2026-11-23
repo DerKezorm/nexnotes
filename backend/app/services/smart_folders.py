@@ -8,11 +8,13 @@ looks at it (rows or tiles, the sort) is kept per smart folder like a folder's (
 Changing, renaming or deleting a smart folder never touches a note (AC-6). Deleting is for good: there is nothing in
 it to bring back.
 
-Every account gets four of them when it is made (AC-7), whichever way it comes (password, invitation, a provider):
-"Offene Checklisten", "Zuletzt bearbeitet", "Mit mir geteilt" and "Anhänge". They carry a ``preset`` and no name, so
-the interface names them in its own language until the member renames them; otherwise they are like any other. The
-last two took the place of the fixed entries of the sidebar: whoever deletes them makes them anew from the conditions
-"Geteilt" and "Anhang". "Anhänge" opens as the gallery of its notes' attachments (``gallery``, view mode ``gallery``).
+Every account gets three of them when it is made (AC-7), whichever way it comes (password, invitation, a provider):
+"Offene Checklisten", "Zuletzt bearbeitet" and "Anhänge". They carry a ``preset`` and no name, so the interface names
+them in its own language until the member renames them; otherwise they are like any other. "Anhänge" took the place of
+the sidebar's fixed entry: whoever deletes it makes it anew from the condition "Anhang"; it opens as the gallery of its
+notes' attachments (``gallery``, view mode ``gallery``). "Mit mir geteilt" was a preset too until 23.11.2026; it is a
+fixed place again (the tiles at the top of the sidebar), so the preset went: ``seed_existing`` takes the ones there were
+away, with a tombstone for the app, and its names stay taken (``RESERVED_NAMES``).
 """
 
 from __future__ import annotations
@@ -41,44 +43,45 @@ PREVIEW = 20
 
 OPEN_TASKS = "open_tasks"
 RECENT = "recent"
-SHARED_WITH_ME = "shared_with_me"
 ATTACHMENTS = "attachments"
+#: The preset "Mit mir geteilt" there was until 23.11.2026: no account gets it, none can make it, those there were go.
+SHARED_WITH_ME = "shared_with_me"
 #: The ones every account gets (AC-7): "Offene Checklisten", "Zuletzt bearbeitet" (changed in the last 7 days), and in
-#: the place of the sidebar's fixed entries "Mit mir geteilt" and "Anhänge".
+#: the place of the sidebar's fixed entry "Anhänge".
 PRESETS: dict[str, dict[str, Any]] = {
     OPEN_TASKS: {"match": "all", "conditions": [{"kind": "tasks", "op": "open"}]},
     RECENT: {"match": "all", "conditions": [{"kind": "date", "field": "updated", "period": "week"}]},
-    SHARED_WITH_ME: {"match": "all", "conditions": [{"kind": "shared", "op": "with_me"}]},
     ATTACHMENTS: {"match": "all", "conditions": [{"kind": "attachment", "type": "any"}]},
 }
 #: The names the interface gives them, in every language it has: a folder of one's own may not take one (EC-6).
 PRESET_NAMES: dict[str, tuple[str, ...]] = {
     OPEN_TASKS: ("Offene Checklisten", "Open checklists"),
     RECENT: ("Zuletzt bearbeitet", "Recently edited"),
-    SHARED_WITH_ME: ("Mit mir geteilt", "Shared with me"),
     ATTACHMENTS: ("Anhänge", "Attachments"),
 }
+#: The names of the fixed places beside the smart folders, in every language: no smart folder may take one (EC-6).
+RESERVED_NAMES: tuple[str, ...] = ("Mit mir geteilt", "Shared with me")
 #: The symbol of a smart folder unless its owner picks another (as a folder's ``DEFAULT_FOLDER_ICON``).
 DEFAULT_ICON = "filter"
 #: The symbols the presets come with: those of the sidebar's entries they took the place of.
 PRESET_ICONS: dict[str, str] = {
     OPEN_TASKS: DEFAULT_ICON,
     RECENT: DEFAULT_ICON,
-    SHARED_WITH_ME: "people",
     ATTACHMENTS: "paperclip",
 }
 #: How a preset is looked at as long as the account chose no view of its own: "Anhänge" as the gallery.
 PRESET_MODES: dict[str, str] = {ATTACHMENTS: "gallery"}
 #: Marks that the accounts from before smart folders got theirs, once.
 SEEDED = "smart_folders_seeded"
-#: Marks that the accounts from before got "Mit mir geteilt" and "Anhänge", once (they came later than the first two).
+#: Marks that the accounts from before got "Anhänge", once (it came later than the first two; until 23.11.2026 also
+#: "Mit mir geteilt").
 SEEDED_PLACES = "smart_folders_seeded_places"
 #: Marks that the presets from before symbols got theirs, once (the column came with the filter for every row).
 SEEDED_ICONS = "smart_folders_seeded_icons"
 #: Marks that the keys of the presets moved out of the names' reach (``PRESET_KEY_MARK``), once.
 SEEDED_KEYS = "smart_folders_seeded_keys"
 #: The presets ``SEEDED_PLACES`` gives.
-PLACES = (SHARED_WITH_ME, ATTACHMENTS)
+PLACES = (ATTACHMENTS,)
 
 
 def now() -> datetime:
@@ -149,7 +152,11 @@ def _clean_name(raw: str) -> str:
 
 
 def _taken(db: Session, account: Account, key: str, besides: str | None) -> str | None:
-    """The name of another smart folder of the account that ``key`` would repeat (EC-6), or ``None``."""
+    """The name of another smart folder of the account, or of a fixed place, that ``key`` would repeat (EC-6), or
+    ``None``."""
+    for name in RESERVED_NAMES:
+        if name_key(name) == key:
+            return name
     for folder in list_for(db, account):
         if folder.id == besides:
             continue
@@ -393,7 +400,7 @@ def _account_made(_mapper: Any, connection: Any, target: Account) -> None:
 
 
 def _missing_places(db: Session, account_id: int) -> list[str]:
-    """Of "Mit mir geteilt" and "Anhänge", those the account has neither as a preset nor by a name of its own."""
+    """Of the places (``PLACES``), those the account has neither as a preset nor by a name of its own."""
     folders = list(db.scalars(select(SmartFolder).where(SmartFolder.owner_id == account_id)))
     presets = {folder.preset for folder in folders}
     names = {name_key(folder.name) for folder in folders if folder.name}
@@ -407,11 +414,24 @@ def _number(db: Session) -> int:
     return appsync._take(db)
 
 
+def drop_shared_with_me(db: Session) -> int:
+    """The preset "Mit mir geteilt" goes from every account, with the way it was looked at; each leaves a tombstone, so
+    the app hears of it in ``changes`` (the bulk delete writes them, ``appsync._number_bulk``). Asked at every start:
+    when there is none, nothing happens. Gives how many went (not committed)."""
+    ids = list(db.scalars(select(SmartFolder.id).where(SmartFolder.preset == SHARED_WITH_ME)))
+    if not ids:
+        return 0
+    db.execute(delete(NoteListView).where(NoteListView.key.in_([view_key(folder_id) for folder_id in ids])))
+    db.execute(delete(SmartFolder).where(SmartFolder.id.in_(ids)))
+    return len(ids)
+
+
 def seed_existing(db: Session) -> int:
-    """Accounts from before smart folders get them once; accounts from before "Mit mir geteilt" and "Anhänge" were
-    presets get those two once, at the end of their list. Whoever deleted one later does not get it again. Gives how
-    many accounts got any."""
+    """Accounts from before smart folders get them once; accounts from before "Anhänge" was a preset get it once, at
+    the end of their list. Whoever deleted one later does not get it again. The preset "Mit mir geteilt" goes
+    (``drop_shared_with_me``). Gives how many accounts got any."""
     given: set[int] = set()
+    dropped = drop_shared_with_me(db)
     if db.get(Setting, SEEDED) is None:
         have = select(SmartFolder.owner_id)
         ids = list(db.scalars(select(Account.id).where(Account.id.not_in(have))))
@@ -452,4 +472,6 @@ def seed_existing(db: Session) -> int:
         return 0
     if given:
         logger.info("Smart folders given to accounts=%s", len(given))
+    if dropped:
+        logger.info("Preset shared_with_me removed smart=%s", dropped)
     return len(given)

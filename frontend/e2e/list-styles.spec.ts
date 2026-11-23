@@ -79,7 +79,7 @@ for (const [label, size] of [
       // A phone starts at "/" with the folders (NOTES-23 AC-1); "All notes" is one tap on from there.
       if (label.startsWith('phone')) {
         await expect(own).toHaveURL(/\/folders$/)
-        await own.getByTestId('folders-all').click()
+        await own.getByTestId('sidebar-all').click()
       }
       await expect(own.getByTestId('note-list')).toHaveAttribute('data-style', style)
       await own.goto(`/folder/${folder}`)

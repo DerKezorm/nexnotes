@@ -12,7 +12,11 @@ export type Folder = {
   count: number
 }
 
-export type FolderTree = { inbox: { id: string; count: number }; folders: Folder[] }
+/** The numbers of the tiles above the tree (NOTES-4 AC-16): "Alle Notizen" (own and shared), "Mit mir geteilt", and
+ * the notes in the inbox marked "Titel prüfen". */
+export type Places = { all: number; shared: number; inbox_title_check: number }
+
+export type FolderTree = { inbox: { id: string; count: number }; folders: Folder[]; places?: Places }
 
 export type InboxNote = {
   id: string

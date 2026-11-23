@@ -720,6 +720,12 @@
       "noNotesHere": "Keine Notizen direkt in „{{name}}“",
       "gone": "Diesen Ordner gibt es nicht, oder er liegt im Papierkorb."
     },
+    "tiles": {
+      "label_one": "{{name}}, {{count}} Notiz",
+      "label_other": "{{name}}, {{count}} Notizen",
+      "titleCheck_one": "{{count}} Titel prüfen",
+      "titleCheck_other": "{{count}} Titel prüfen"
+    },
     "inbox": {
       "name": "Eingang",
       "text": "Was schnell festgehalten wurde, wartet hier aufs Einsortieren. Den Eingang gibt es immer.",
@@ -2001,7 +2007,6 @@
     "preset": {
       "open_tasks": "Offene Checklisten",
       "recent": "Zuletzt bearbeitet",
-      "shared_with_me": "Mit mir geteilt",
       "attachments": "Anhänge"
     },
     "kind": {

@@ -4,7 +4,7 @@
  * the real tests of NOTES-9 AC-6 and NOTES-5 AC-6), deleting with a question (AC-6), the two that come with an account
  * (AC-7), the section "Intelligent" with its order (AC-8), conditions that point nowhere (EC-1), nothing that fits
  * (EC-2), the device's zone (EC-3), a name taken (EC-6), and "New note" going into the inbox (NOTES-4 AC-9).
- * "Mit mir geteilt" and "Anhänge" are presets in the place of the sidebar's fixed entries, "Anhänge" opening as the
+ * "Anhänge" is a preset in the place of the sidebar's fixed entry ("Mit mir geteilt" is a fixed tile again), opening as the
  * gallery of its notes' attachments.
  *
  * The real search page and the real tag page are on show, with smart folders docked on (`register.tsx`); a small
@@ -66,7 +66,6 @@ function item(id: string, extra: Partial<ListItem> = {}): ListItem {
 const PRESET_NAMES: Record<string, string[]> = {
   open_tasks: ['Offene Checklisten', 'Open checklists'],
   recent: ['Zuletzt bearbeitet', 'Recently edited'],
-  shared_with_me: ['Mit mir geteilt', 'Shared with me'],
   attachments: ['Anhänge', 'Attachments'],
 }
 
@@ -233,11 +232,10 @@ const previewed = () => settle(400)
 const PRESET_CONDITIONS: Record<Exclude<Preset, ''>, Condition[]> = {
   open_tasks: [{ kind: 'tasks', op: 'open' }],
   recent: [{ kind: 'date', field: 'updated', period: 'week' }],
-  shared_with_me: [{ kind: 'shared', op: 'with_me' }],
   attachments: [{ kind: 'attachment', type: 'any' }],
 }
 
-const PRESET_ICONS: Record<Exclude<Preset, ''>, string> = { open_tasks: 'filter', recent: 'filter', shared_with_me: 'people', attachments: 'paperclip' }
+const PRESET_ICONS: Record<Exclude<Preset, ''>, string> = { open_tasks: 'filter', recent: 'filter', attachments: 'paperclip' }
 
 function preset(id: string, kind: Exclude<Preset, ''>, position: number): SmartFolder {
   return { id, name: '', preset: kind, icon: PRESET_ICONS[kind], color: '', match: 'all', conditions: PRESET_CONDITIONS[kind], position }
@@ -490,27 +488,27 @@ describe('NOTES-7 smart folders', () => {
     expect($$('sidebar-smart-folder').map((link) => link.textContent)).toEqual(['Open checklists', 'Recently edited'])
   })
 
-  it('NOTES-7 AC-7 "Mit mir geteilt" and "Anhänge" are smart folders with their old symbols; the sidebar has no fixed entries for them', async () => {
-    smart = [...smart, preset('p3', 'shared_with_me', 2), preset('p4', 'attachments', 3)]
+  it('NOTES-7 AC-7 "Anhänge" is a smart folder with its old symbol; "Mit mir geteilt" is a fixed tile, no smart folder', async () => {
+    smart = [...smart, preset('p4', 'attachments', 2)]
     await render('/')
     const keys = SIDEBAR_SECTIONS.map((section) => section.key)
-    expect(keys).not.toContain('shared')
     expect(keys).not.toContain('attachments')
+    expect(keys).toContain('tiles')
     const links = $$('sidebar-smart-folder')
-    expect(links.map((link) => link.textContent)).toEqual(['Offene Checklisten', 'Zuletzt bearbeitet', 'Mit mir geteilt', 'Anhänge'])
-    expect(links.map((link) => link.querySelector('[data-symbol]')!.getAttribute('data-symbol'))).toEqual(['filter', 'filter', 'people', 'paperclip'])
+    expect(links.map((link) => link.textContent)).toEqual(['Offene Checklisten', 'Zuletzt bearbeitet', 'Anhänge'])
+    expect(links.map((link) => link.querySelector('[data-symbol]')!.getAttribute('data-symbol'))).toEqual(['filter', 'filter', 'paperclip'])
     // Deleted, it is gone like any other smart folder.
     act(() => root?.unmount())
     box.remove()
-    smart = smart.filter((folder) => folder.id !== 'p3')
+    smart = smart.filter((folder) => folder.id !== 'p4')
     forgetSmartFolders()
     await render('/')
-    expect($$('sidebar-smart-folder').map((link) => link.textContent)).not.toContain('Mit mir geteilt')
+    expect($$('sidebar-smart-folder').map((link) => link.textContent)).not.toContain('Anhänge')
   })
 
   it('NOTES-7 AC-7 whoever deleted them makes them anew: "Geteilt: mit mir geteilt" and "Anhang" of any kind or one kind', async () => {
     await render('/smart/new')
-    await typeInto($('smart-name'), 'Mit mir geteilt')
+    await typeInto($('smart-name'), 'Von anderen')
     await choose($('smart-kind'), 'shared')
     expect(($('smart-shared') as HTMLSelectElement).value).toBe('with_me')
     await click($('smart-add'))
@@ -523,7 +521,7 @@ describe('NOTES-7 smart folders', () => {
     await previewed()
     expect(posted('/api/smart-folders/preview').at(-1)!.body!.conditions).toEqual([{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }])
     await click($('smart-save'))
-    expect(posted('/api/smart-folders')[0].body).toEqual({ name: 'Mit mir geteilt', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }], icon: 'filter', color: '' })
+    expect(posted('/api/smart-folders')[0].body).toEqual({ name: 'Von anderen', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }, { kind: 'attachment', type: 'pdf' }], icon: 'filter', color: '' })
   })
 
   it('NOTES-7 AC-4 "Anhänge" opens as the gallery of its notes\' attachments, beside list and tiles, and an entry opens its note', async () => {
@@ -582,8 +580,8 @@ describe('NOTES-7 smart folders', () => {
     expect($('smart-shared-page')).toBeNull()
   })
 
-  it('NOTES-7 AC-7 "Mit mir geteilt" leads to the page of what others shared (owners, rights, leaving)', async () => {
-    smart = [...smart, preset('p3', 'shared_with_me', 2)]
+  it('NOTES-7 AC-1 a smart folder "Geteilt: mit mir geteilt" leads to the page of what others shared (owners, rights, leaving)', async () => {
+    smart = [...smart, { id: 'p3', name: 'Von anderen', preset: '', icon: 'people', color: '', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 2 }]
     await render('/smart/p3')
     expect($('smart-shared-page')!.getAttribute('href')).toBe('/shared')
     expect($('smart-shared-page')!.textContent).toBe('Freigaben verwalten')

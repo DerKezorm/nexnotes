@@ -6,7 +6,7 @@
  * A small stand-in for the server keeps the folders, so that two "devices" (two loads of the page with their own
  * `localStorage`) see the same order and colors.
  */
-import { readableColor } from '../lib/color'
+import { contrast, readableColor } from '../lib/color'
 import { forgetPrefs } from '../lib/devicePref'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -15,8 +15,10 @@ import { MemoryRouter, Outlet, Route, Routes, useLocation } from 'react-router-d
 import i18n from '../i18n'
 import { registerNoteActions, startNoteDrag } from './actions'
 import type { Folder, InboxNote } from './api'
-import { FolderTree, InboxEntry } from './FolderTree'
+import { FolderTree } from './FolderTree'
 import { FolderPage, InboxPage } from './pages'
+import { QuickTiles } from './QuickTiles'
+import { TILE_COLORS, TITLE_CHECK_COLORS } from './tileColors'
 import { forgetFolders, indent, refreshFolders, reloadOpenFolders, setCurrentFolder, useCurrentFolder, useShownFolder } from './store'
 import { forgetListLook, saveListLook } from '../notes/list/look'
 import { hideNotice } from './notice'
@@ -42,7 +44,10 @@ function answer(call: Call): { status: number; body: unknown } {
   const blocked = refuse?.(call)
   if (blocked) return blocked
   const { method, path, body } = call
-  if (method === 'GET' && path === '/api/folders') return { status: 200, body: { inbox: { id: INBOX, count: inboxNotes.length }, folders: ordered() } }
+  if (method === 'GET' && path === '/api/folders') {
+    const places = { all: 40, shared: 3, inbox_title_check: inboxNotes.filter((note) => note.title_check).length }
+    return { status: 200, body: { inbox: { id: INBOX, count: inboxNotes.length }, folders: ordered(), places } }
+  }
   if (method === 'GET' && path === '/api/folders/inbox') return { status: 200, body: { id: INBOX, notes: inboxNotes } }
   if (method === 'PUT' && path === '/api/me/list-look') return { status: 200, body: { list_style: body?.style ?? 'list', list_hints: body?.hints ?? true } }
   // The inbox is a list like every other (`/api/note-list` with its id).
@@ -114,7 +119,7 @@ async function render(at = '/'): Promise<void> {
   await act(async () =>
     root.render(
       <MemoryRouter initialEntries={[at]}>
-        <InboxEntry />
+        <QuickTiles />
         <FolderTree />
         <Routes>
           {/* As the notes' workspace: the folder of the list on show is the open one. */}
@@ -265,7 +270,9 @@ describe('the folder tree of the sidebar (NOTES-4)', () => {
     await render()
     expect(row('Haushalt').getAttribute('aria-label')).toBe('Haushalt, 12 notes')
     expect(row('Haushalt').textContent).toContain('12')
-    expect(box.querySelector('[data-testid="sidebar-inbox"]')!.textContent).toBe('Inbox1')
+    const inbox = box.querySelector('[data-testid="sidebar-inbox"]')!
+    expect(inbox.querySelector('[data-testid="tile-count"]')!.textContent).toBe('1')
+    expect(inbox.textContent).toContain('Inbox')
   })
 
   it('NOTES-4 AC-8 zwei Zahlen: a folder with subfolders shows its own notes and all below in brackets, „3 (12)“', async () => {
@@ -863,5 +870,91 @@ describe('the tree follows other devices', () => {
     await settle()
     expect(row('Zuhause')).toBeTruthy()
     await refreshFolders()
+  })
+})
+
+// ---- The tiles at the top (NOTES-4 AC-16) -----------------------------------------------------------------------------
+
+/** The app's style sheet as written (the test setup draws no CSS): the colours of the sidebar in both themes. */
+const fsName = 'node:fs'
+const { readFileSync } = (await import(/* @vite-ignore */ fsName)) as { readFileSync: (file: string, encoding: string) => string }
+function themeColors(selector: string): Record<string, string> {
+  const css = readFileSync('src/styles/index.css', 'utf-8').replace(/\r\n/g, '\n')
+  const at = css.indexOf(`\n${selector} {`)
+  expect(at, selector).toBeGreaterThanOrEqual(0)
+  const body = css.slice(at, css.indexOf('}', at))
+  return Object.fromEntries([...body.matchAll(/(--[\w-]+):\s*(#[0-9a-f]{6})/g)].map((match) => [match[1], match[2]]))
+}
+
+describe('the tiles at the top of the sidebar (NOTES-4 AC-16)', () => {
+  const tile = (id: string) => box.querySelector<HTMLAnchorElement>(`[data-testid="${id}"]`)!
+  const count = (id: string) => tile(id).querySelector('[data-testid="tile-count"]')!.textContent
+
+  it('NOTES-4 AC-16 three tiles, two per row: Inbox, All notes, Shared with me, each with its symbol, number and name', async () => {
+    const at = new Date().toISOString()
+    inboxNotes = [
+      { id: 'n1', title: 'Kompost', preview: '', origin: '', title_check: true, created_at: at, updated_at: at },
+      { id: 'n2', title: 'Rezept', preview: '', origin: '', title_check: true, created_at: at, updated_at: at },
+      { id: 'n3', title: 'Liste', preview: '', origin: '', title_check: false, created_at: at, updated_at: at },
+    ]
+    await render()
+    const grid = box.querySelector('[data-testid="quick-tiles"]')!
+    expect(grid.className).toContain('grid-cols-2')
+    expect([...grid.children].map((child) => child.getAttribute('data-testid'))).toEqual(['sidebar-inbox', 'sidebar-all', 'sidebar-shared'])
+    expect([tile('sidebar-inbox'), tile('sidebar-all'), tile('sidebar-shared')].map((link) => link.getAttribute('href'))).toEqual(['/inbox', '/', '/shared'])
+    expect([count('sidebar-inbox'), count('sidebar-all'), count('sidebar-shared')]).toEqual(['3', '40', '3'])
+    expect(tile('sidebar-all').textContent).toContain('All notes')
+    expect(tile('sidebar-shared').textContent).toContain('Shared with me')
+    for (const id of ['sidebar-inbox', 'sidebar-all', 'sidebar-shared']) expect(tile(id).querySelector('svg')).not.toBeNull()
+    expect(tile('sidebar-inbox').querySelector('[data-testid="tile-title-check"]')!.textContent).toBe('2 titles to check')
+    // A screen reader hears the name first, then the number and the mark.
+    expect(tile('sidebar-inbox').getAttribute('aria-label')).toBe('Inbox, 3 notes, 2 titles to check')
+    expect(tile('sidebar-all').getAttribute('aria-label')).toBe('All notes, 40 notes')
+    expect(tile('sidebar-shared').getAttribute('aria-label')).toBe('Shared with me, 3 notes')
+    await i18n.changeLanguage('de')
+    await settle()
+    expect(tile('sidebar-inbox').querySelector('[data-testid="tile-title-check"]')!.textContent).toBe('2 Titel prüfen')
+    expect(tile('sidebar-shared').textContent).toContain('Mit mir geteilt')
+    await i18n.changeLanguage('en')
+  })
+
+  it('NOTES-4 AC-16 no mark without a title to check; the tile of the place on show is chosen', async () => {
+    await render('/shared')
+    expect(tile('sidebar-inbox').querySelector('[data-testid="tile-title-check"]')).toBeNull()
+    expect(tile('sidebar-shared').getAttribute('aria-current')).toBe('page')
+    expect(tile('sidebar-shared').className).toContain('ring-2')
+    expect(tile('sidebar-inbox').getAttribute('aria-current')).toBeNull()
+    expect(tile('sidebar-inbox').className).not.toContain('ring-2')
+    click(tile('sidebar-inbox'))
+    await settle()
+    expect(where().path).toBe('/inbox')
+    expect(tile('sidebar-inbox').getAttribute('aria-current')).toBe('page')
+    expect(tile('sidebar-shared').getAttribute('aria-current')).toBeNull()
+    // "All notes" only on its own page, not on every page below it.
+    expect(tile('sidebar-all').getAttribute('aria-current')).toBeNull()
+  })
+
+  it('NOTES-4 AC-16 the writing on every tile reaches 4.5:1 (WCAG AA), the mark of the chosen one 3:1 in light and dark', () => {
+    for (const [name, colors] of Object.entries(TILE_COLORS)) expect(contrast(colors.ink, colors.ground), name).toBeGreaterThanOrEqual(4.5)
+    expect(contrast(TITLE_CHECK_COLORS.ink, TITLE_CHECK_COLORS.ground)).toBeGreaterThanOrEqual(4.5)
+    const dark = themeColors('@theme')
+    const light = { ...dark, ...themeColors(":root[data-theme='light']") }
+    for (const [mode, colors] of Object.entries({ dark, light })) {
+      expect(contrast(colors['--color-mist-100'], colors['--color-ink-900']), mode).toBeGreaterThanOrEqual(3)
+    }
+  })
+
+  it('NOTES-4 AC-3 notes dropped on the inbox tile go back into the inbox', async () => {
+    await render('/folder/h')
+    const transfer = dataTransfer()
+    const source = document.createElement('div')
+    source.draggable = true
+    source.addEventListener('dragstart', (event) => startNoteDrag(event as unknown as React.DragEvent, ['n9']))
+    box.append(source)
+    drag(source, 'dragstart', transfer)
+    expect(drag(tile('sidebar-inbox'), 'dragover', transfer).defaultPrevented).toBe(true)
+    drag(tile('sidebar-inbox'), 'drop', transfer)
+    await settle()
+    expect(calls.find((call) => call.path === '/api/folders/move')?.body).toEqual({ target_id: INBOX, folder_ids: [], note_ids: ['n9'] })
   })
 })

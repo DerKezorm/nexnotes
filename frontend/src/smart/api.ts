@@ -32,8 +32,9 @@ export type Condition =
   | ColorCondition
 
 /** The ones every account gets (AC-7); without a name of their own they are named in the language of the page.
- * `shared_with_me` and `attachments` took the place of the sidebar's fixed entries "Mit mir geteilt" and "Anhänge". */
-export type Preset = '' | 'open_tasks' | 'recent' | 'shared_with_me' | 'attachments'
+ * `attachments` took the place of the sidebar's fixed entry "Anhänge". "Mit mir geteilt" is a fixed place (the tiles
+ * at the top of the sidebar), no preset (23.11.2026). */
+export type Preset = '' | 'open_tasks' | 'recent' | 'attachments'
 
 export type SmartFolder = {
   id: string

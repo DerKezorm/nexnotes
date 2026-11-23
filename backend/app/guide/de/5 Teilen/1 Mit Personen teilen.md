@@ -17,5 +17,5 @@ Notizen und ganze Ordner teilst du mit anderen Konten auf diesem Server. Über d
 
 - Geteiltes bleibt deins. Nur du entscheidest, wer es sieht; andere können es nicht weiterteilen.
 - Ein geteilter Ordner teilt alles darin, auch Notizen, die später dazukommen.
-- Was andere mit dir teilen, findest du im intelligenten Ordner **„Mit mir geteilt“**.
+- Was andere mit dir teilen, findest du unter der Kachel **„Mit mir geteilt“** oben in der Seitenleiste.
 - Gibt es die Person noch nicht auf dem Server, kann der Betreiber sie einladen.

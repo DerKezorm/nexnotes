@@ -10,7 +10,7 @@ Good to have you here! nexnotes is for quick notes: write it down, find it again
 
 ## How nexnotes is laid out
 
-- **The sidebar on the left:** "All notes", the inbox, your folders, the smart folders and your tags.
+- **The sidebar on the left:** at the top the tiles "Inbox", "All notes" and "Shared with me", below them your folders, the smart folders and your tags.
 - **The list in the middle:** the notes of the folder you chose.
 - **The note on the right:** this is where you write. Several notes sit side by side as tabs.
 

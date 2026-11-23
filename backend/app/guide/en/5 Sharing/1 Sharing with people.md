@@ -17,5 +17,5 @@ Share notes and whole folders with other accounts on this server. In the menu of
 
 - What you share stays yours. Only you decide who sees it; others cannot share it further.
 - A shared folder shares everything in it, including notes added later.
-- What others share with you is in the smart folder **"Shared with me"**.
+- What others share with you is behind the tile **"Shared with me"** at the top of the sidebar.
 - If the person is not on the server yet, the operator can invite them.

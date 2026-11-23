@@ -54,7 +54,7 @@ function phone(width = PHONE_WIDTH) {
 let signedIn = true
 const SMART = [
   { id: 's-open', name: '', preset: 'open_tasks', icon: 'filter', color: '', match: 'all', conditions: [{ kind: 'tasks', op: 'open' }], position: 0 },
-  { id: 's-shared', name: '', preset: 'shared_with_me', icon: 'people', color: '', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
+  { id: 's-shared', name: 'Von anderen', preset: '', icon: 'people', color: '', match: 'all', conditions: [{ kind: 'shared', op: 'with_me' }], position: 1 },
   { id: 's-files', name: '', preset: 'attachments', icon: 'paperclip', color: '', match: 'all', conditions: [{ kind: 'attachment', type: 'any' }], position: 2 },
   { id: 's-own', name: 'Rezepte offen', preset: '', match: 'all', conditions: [{ kind: 'pinned' }], position: 3 },
 ]
@@ -93,6 +93,7 @@ function server() {
     if (path === '/api/folders')
       return json({
         inbox: { id: 'inbox-1', count: 3 },
+        places: { all: 20, shared: 2, inbox_title_check: 0 },
         folders: [
           { id: 'f-home', name: 'Haushalt', parent_id: null, icon: '', color: 'honey', position: null, count: 12 },
           { id: 'f-shop', name: 'Einkauf', parent_id: 'f-home', icon: '', color: 'green', position: null, count: 4 },
@@ -206,7 +207,7 @@ describe('NOTES-23 AC-1 on a phone one view after the other', () => {
     const tree = find('folders-page')!.querySelector('a[href="/folder/f-home"]')!
     expect(tree.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     const rows = [...section.querySelectorAll<HTMLAnchorElement>('[data-testid="folders-smart-folder"]')]
-    expect(rows.map((row) => row.textContent)).toEqual([t('smart.preset.open_tasks') + '›', t('smart.preset.shared_with_me') + '›', t('smart.preset.attachments') + '›', 'Rezepte offen›'])
+    expect(rows.map((row) => row.textContent)).toEqual([t('smart.preset.open_tasks') + '›', 'Von anderen›', t('smart.preset.attachments') + '›', 'Rezepte offen›'])
     expect(rows.map((row) => row.getAttribute('href'))).toEqual(['/smart/s-open', '/smart/s-shared', '/smart/s-files', '/smart/s-own'])
     expect(rows.map((row) => row.querySelector('[data-symbol]')!.getAttribute('data-symbol'))).toEqual(['filter', 'people', 'paperclip', 'filter'])
     expect(find('folders-smart-new')!.getAttribute('href')).toBe('/smart/new')
@@ -216,13 +217,15 @@ describe('NOTES-23 AC-1 on a phone one view after the other', () => {
 
   it('NOTES-23 AC-1 opened at 390 px, nexnotes starts with the folders, then a folder, then the note, each with "‹ Back"', async () => {
     await render('/')
-    // The folders first (drawing "Handy-Ordner"): the inbox, all notes, the tree, then the smart folders as in the sidebar.
+    // The folders first (drawing "Handy-Ordner"): the tiles of the sidebar (inbox, all notes, shared with me), the tree,
+    // then the smart folders as in the sidebar.
     expect(where()).toBe('/folders')
     const page = find('folders-page')!
     expect(page.textContent).toContain(t('folders.inbox.name'))
-    expect(find('folders-all')?.getAttribute('href')).toBe('/')
-    // What others shared is a smart folder now (NOTES-7), no fixed place of its own.
-    expect(find('folders-shared')).toBeNull()
+    expect(find('sidebar-all')?.getAttribute('href')).toBe('/')
+    // What others shared is a fixed place again (23.11.2026): its tile leads to the page.
+    expect(find('sidebar-shared')?.getAttribute('href')).toBe('/shared')
+    expect(find('sidebar-shared')!.textContent).toContain(t('shares.page.title'))
     expect(page.textContent).toContain('Haushalt')
     // "New note" large at the bottom right.
     const fab = page.querySelector<HTMLButtonElement>(`button[aria-label="${t('folders.page.newNote', { name: t('folders.inbox.name') })}"]`)
@@ -316,7 +319,7 @@ describe('NOTES-23 AC-1 on a phone one view after the other', () => {
   it('NOTES-23 AC-1 only the first address of the page is the start: "All notes" later stays all notes', async () => {
     await render('/')
     expect(where()).toBe('/folders')
-    await click(find('folders-all'))
+    await click(find('sidebar-all'))
     expect(where()).toBe('/')
   })
 
@@ -446,7 +449,7 @@ describe('NOTES-23 AC-7 every button and field is 44 px to tap', () => {
       for (const control of controls) expect(control.matches(rule.selector), `${at}: ${control.outerHTML.slice(0, 120)}`).toBe(true)
       for (const control of controls.filter((control) => control.matches('a[href], button, [role="button"]')))
         expect(control.matches(rule.wide), `${at}: ${control.outerHTML.slice(0, 120)}`).toBe(true)
-      for (const link of box.querySelectorAll('[data-testid="phone-back"], [data-testid="folders-all"], [data-testid="folders-page"] a'))
+      for (const link of box.querySelectorAll('[data-testid="phone-back"], [data-testid="sidebar-all"], [data-testid="folders-page"] a'))
         expect(link.className, `${at}: ${link.outerHTML.slice(0, 120)}`).toMatch(big)
     }
   })

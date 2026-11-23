@@ -10,7 +10,7 @@ Schön, dass du da bist! nexnotes ist für schnelle Notizen: aufschreiben, wiede
 
 ## So ist nexnotes aufgebaut
 
-- **Links die Seitenleiste:** „Alle Notizen“, der Eingang, deine Ordner, die intelligenten Ordner und deine Schlagwörter.
+- **Links die Seitenleiste:** oben die Kacheln „Eingang“, „Alle Notizen“ und „Mit mir geteilt“, darunter deine Ordner, die intelligenten Ordner und deine Schlagwörter.
 - **In der Mitte die Liste:** die Notizen des Ordners, den du gerade gewählt hast.
 - **Rechts die Notiz:** Hier schreibst du. Mehrere Notizen liegen als Tabs nebeneinander.
 

@@ -178,6 +178,20 @@ def shared_ids(db: Session, account: Account) -> set[str]:
     return found - own
 
 
+def places(db: Session, account: Account, inbox_id: str) -> dict[str, int]:
+    """The numbers of the tiles at the top of the sidebar (NOTES-4 AC-16), counted as the iOS app counts them: the
+    notes of "Alle Notizen" (own and shared, alive), those shared with the account ("Mit mir geteilt"), and those in the
+    inbox marked "Titel prüfen" (a locked note shows no mark, so it is not counted)."""
+    alive = Note.deleted_at.is_(None)
+    own = db.scalar(select(func.count()).select_from(Note).where(Note.owner_id == account.id, alive)) or 0
+    others = shared_ids(db, account)
+    shared = (db.scalar(select(func.count()).select_from(Note).where(Note.id.in_(others), alive)) or 0) if others else 0
+    check = db.scalar(select(func.count()).select_from(Note).where(
+        Note.owner_id == account.id, Note.folder_id == inbox_id, alive, Note.title_check.is_(True),
+        Note.locked.is_not(True))) or 0
+    return {"all": int(own) + int(shared), "shared": int(shared), "inbox_title_check": int(check)}
+
+
 #: The columns a list needs, read without the ORM (EC-2: 10,000 notes in well under a second). The text only as far as
 #: a preview reaches.
 _PREVIEW_SOURCE = 2 * notes.PREVIEW_CHARS

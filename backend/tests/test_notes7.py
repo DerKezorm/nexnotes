@@ -468,7 +468,7 @@ def test_notes7_ac6_names_are_checked(client, operator):
 
 # --- AC-7: the ones every new account gets ----------------------------------------------------------------------------
 
-PRESETS = ["open_tasks", "recent", "shared_with_me", "attachments"]
+PRESETS = ["open_tasks", "recent", "attachments"]
 
 
 def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(client, operator):
@@ -477,7 +477,6 @@ def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(clien
     assert [(row.preset, row.name, row.match, row.conditions) for row in rows] == [
         ("open_tasks", "", "all", [{"kind": "tasks", "op": "open"}]),
         ("recent", "", "all", [{"kind": "date", "field": "updated", "period": "week"}]),
-        ("shared_with_me", "", "all", [{"kind": "shared", "op": "with_me"}]),
         ("attachments", "", "all", [{"kind": "attachment", "type": "any"}]),
     ]
     with new_client(lena) as theirs:
@@ -494,7 +493,7 @@ def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(clien
         assert titles(shown(theirs, recent["id"])) == ["Alt", "Einkauf"]
         assert theirs.delete(f"/api/smart-folders/{open_tasks['id']}").status_code == 204
         left = theirs.get("/api/smart-folders").json()["items"]
-        assert [item["preset"] for item in left] == ["recent", "shared_with_me", "attachments"]
+        assert [item["preset"] for item in left] == ["recent", "attachments"]
         assert left[0]["id"] == recent["id"]
 
 
@@ -526,26 +525,27 @@ def test_notes7_ac7_accounts_from_before_get_them_once_and_not_again(client, ope
     assert smart_rows(operator) == []
 
 
-def test_notes7_ac7_accounts_from_before_get_shared_with_me_and_attachments_once(client, operator):
-    """The sidebar's fixed entries became presets: accounts that had the first two get the other two once, at the
-    end of their own list; whoever deletes them does not get them again; a name of one's own is not taken twice."""
+def test_notes7_ac7_accounts_from_before_get_attachments_once(client, operator):
+    """The sidebar's fixed entry "Anhänge" became a preset: accounts that had the first two get it once, at the end of
+    their own list; whoever deletes it does not get it again; a name of one's own is not taken twice. "Mit mir geteilt"
+    is not given (a fixed place again since 23.11.2026)."""
     anna = make_account("anna-seed")
     with SessionLocal() as db:
-        # A database from before: the first two presets, but neither of the new ones. (Straight into the database:
-        # a client starting the app would give them at once.)
+        # A database from before: the first two presets, but not the new one. (Straight into the database: a client
+        # starting the app would give it at once.)
         db.execute(SmartFolder.__table__.delete().where(SmartFolder.preset.in_(smart_folders.PLACES)))
         db.execute(Setting.__table__.delete().where(Setting.key == smart_folders.SEEDED_PLACES))
         db.commit()
-        smart_folders.create(db, db.get(Account, anna.id), "Shared with me", "all", [TASKS])
+        smart_folders.create(db, db.get(Account, anna.id), "Attachments", "all", [TASKS])
     own = make(client, "Mein Ordner", TASKS)
     with SessionLocal() as db:
-        assert smart_folders.seed_existing(db) == 2
+        assert smart_folders.seed_existing(db) == 1
         assert smart_folders.seed_existing(db) == 0
     rows = smart_rows(operator)
-    assert [row.preset for row in rows] == ["open_tasks", "recent", "", "shared_with_me", "attachments"]
-    assert [row.position for row in rows] == [0, 1, 2, 3, 4] and rows[2].id == own["id"]
-    # Anna named one "Shared with me" herself: only "Anhänge" comes.
-    assert [row.preset for row in smart_rows(anna)] == ["open_tasks", "recent", "", "attachments"]
+    assert [row.preset for row in rows] == ["open_tasks", "recent", "", "attachments"]
+    assert [row.position for row in rows] == [0, 1, 2, 3] and rows[2].id == own["id"]
+    # Anna named one "Attachments" herself: nothing comes.
+    assert [row.preset for row in smart_rows(anna)] == ["open_tasks", "recent", ""]
     # Deleted, not given again (not even after the next start).
     for item in client.get("/api/smart-folders").json()["items"]:
         if item["preset"] in smart_folders.PLACES:
@@ -555,14 +555,14 @@ def test_notes7_ac7_accounts_from_before_get_shared_with_me_and_attachments_once
     assert [row.preset for row in smart_rows(operator)] == ["open_tasks", "recent", ""]
 
 
-def test_notes7_ac7_shared_with_me_shows_what_the_shared_page_shows(client, operator):
-    """"Mit mir geteilt" as a smart folder: the notes of "Mit mir geteilt" (directly and through folders), with the
-    same rights: never a note of somebody else not shared, never one in the trash, never a locked one, never one of a
-    share that ended."""
+def test_notes7_ac1_shared_with_me_shows_what_the_shared_page_shows(client, operator):
+    """The condition "Geteilt: mit mir geteilt": the notes of "Mit mir geteilt" (directly and through folders), with
+    the same rights: never a note of somebody else not shared, never one in the trash, never a locked one, never one of
+    a share that ended."""
     anna = make_account("anna-share")
     mine = note(client, "Meine Notiz")
     share(client, "note", mine, anna)
-    folders = {item["preset"]: item for item in client.get("/api/smart-folders").json()["items"]}
+    with_me = make(client, "Von anderen", {"kind": "shared", "op": "with_me"})
     with new_client(anna) as theirs:
         direct = note(theirs, "Direkt geteilt")
         trip = folder(theirs, "Reise")
@@ -578,7 +578,7 @@ def test_notes7_ac7_shared_with_me_shows_what_the_shared_page_shows(client, oper
         unshare(theirs, "note", ended, operator)
         assert theirs.delete(f"/api/notes/{gone}").status_code == 204
     set_fields(locked, locked=True)
-    listing = shown(client, folders["shared_with_me"]["id"])
+    listing = shown(client, with_me["id"])
     assert titles(listing) == ["Direkt geteilt", "Im Ordner"]
     assert listing["counts"] == {"own": 0, "shared": 2}
     page = client.get("/api/shares/with-me").json()
@@ -884,7 +884,7 @@ def test_notes7_ec6_a_name_like_the_inner_key_of_a_preset_is_free(client, operat
         made = make(client, name, TASKS)
         assert made["name"] == name
     presets = [item for item in client.get("/api/smart-folders").json()["items"] if item["preset"]]
-    assert len(presets) == 4 and all(item["name"] == "" for item in presets)
+    assert len(presets) == 3 and all(item["name"] == "" for item in presets)
     # Renamed back to its language's name, a preset takes its key again without a clash.
     recent = next(item for item in presets if item["preset"] == "recent")
     assert client.put(f"/api/smart-folders/{recent['id']}", json={"name": "Neu"}).status_code == 200
@@ -1014,8 +1014,7 @@ def test_notes7_look_an_unknown_symbol_or_colour_is_refused(client, operator, lo
 def test_notes7_look_presets_come_with_the_symbol_of_their_entry(client, operator):
     lena = make_account("lena-look")
     assert [(row.preset, row.icon, row.color) for row in smart_rows(lena)] == [
-        ("open_tasks", "filter", ""), ("recent", "filter", ""), ("shared_with_me", "people", ""),
-        ("attachments", "paperclip", ""),
+        ("open_tasks", "filter", ""), ("recent", "filter", ""), ("attachments", "paperclip", ""),
     ]
 
 
@@ -1028,7 +1027,7 @@ def test_notes7_look_presets_from_before_get_their_symbol_once(client, operator)
         db.commit()
         smart_folders.seed_existing(db)
     after = {row.preset: row.icon for row in smart_rows(operator)}
-    assert after == {"open_tasks": "filter", "recent": "filter", "shared_with_me": "people", "attachments": "paperclip"}
+    assert after == {"open_tasks": "filter", "recent": "filter", "attachments": "paperclip"}
     # Once: a symbol the member picks later stays, also after the next start.
     assert client.put(f"/api/smart-folders/{rows['attachments'].id}", json={"icon": "filter"}).status_code == 200
     with SessionLocal() as db:

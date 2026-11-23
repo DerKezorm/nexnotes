@@ -1,5 +1,5 @@
 /**
- * The folders in the sidebar, after the drawing "Seitenleiste" (NOTES-4): the inbox with its count, then the folders
+ * The folders in the sidebar, after the drawing "Seitenleiste" (NOTES-4), below the tiles (`QuickTiles.tsx`): the folders
  * as a tree, each with its symbol or color, its name (cut short, whole in the tooltip, EC-3) and the number of its own
  * notes (AC-8), with subfolders also all notes below in brackets, „3 (12)“ (as in the iPhone app, 22.11.2026). Open
  * and closed are remembered per device (AC-6).
@@ -9,10 +9,10 @@
  * Keyboard (EC-11): arrows move through the tree and open and close, Enter opens, F2 renames, Shift+F10 or the menu
  * key opens the menu, Delete asks before the trash.
  */
-import { ChevronDown, ChevronRight, Inbox, MoreHorizontal, Plus } from 'lucide-react'
+import { ChevronDown, ChevronRight, MoreHorizontal, Plus } from 'lucide-react'
 import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, NavLink, useMatch, useNavigate } from 'react-router-dom'
+import { Link, useMatch, useNavigate } from 'react-router-dom'
 
 import type { Folder } from './api'
 import { draggedNow, droppedFrom, endDrag, startFolderDrag } from './actions'
@@ -25,46 +25,6 @@ import { useFolderCountWords } from './countWords'
 
 function rowId(id: string): string {
   return `folder-row-${id}`
-}
-
-/** The inbox at the top of the sidebar, with its count; notes dropped on it go back into it. */
-export function InboxEntry({ onNavigate }: { onNavigate?: () => void }) {
-  const { t } = useTranslation()
-  const tree = useFolders()
-  const [over, setOver] = useState(false)
-  const inbox = tree.inbox
-  const take = (event: DragEvent) => {
-    if (!inbox || !accepts(tree, draggedNow(), inbox.id, 'into', true)) return
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    setOver(true)
-  }
-  return (
-    <NavLink
-      to="/inbox"
-      onClick={onNavigate}
-      data-testid="sidebar-inbox"
-      onDragOver={take}
-      onDragEnter={take}
-      onDragLeave={() => setOver(false)}
-      onDrop={(event) => {
-        event.preventDefault()
-        setOver(false)
-        const dragged = droppedFrom(event)
-        endDrag()
-        if (inbox && dragged?.kind === 'notes') void drop(tree, dragged, inbox.id, 'into')
-      }}
-      className={({ isActive }) =>
-        'mt-1 flex h-[34px] items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] transition-colors ' +
-        (isActive ? 'nn-chosen font-semibold' : 'text-mist-100 hover:bg-ink-800') +
-        (over ? ' ring-2 ring-accent-500' : '')
-      }
-    >
-      <Inbox aria-hidden className="h-4 w-4 shrink-0 text-mist-500" strokeWidth={1.8} />
-      <span className="flex-1 truncate">{t('folders.inbox.name')}</span>
-      {inbox && inbox.count > 0 && <span className="text-xs text-mist-500 tabular-nums">{inbox.count}</span>}
-    </NavLink>
-  )
 }
 
 export function FolderTree({ onNavigate }: { onNavigate?: () => void }) {

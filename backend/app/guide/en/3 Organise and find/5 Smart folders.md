@@ -9,7 +9,7 @@ A smart folder is a saved search that looks like a folder. It collects every not
 
 ## Included
 
-You get four right away: **Open checklists**, **Recently edited**, **Shared with me** and **Attachments**. Change, rename or delete them as you like.
+You get three right away: **Open checklists**, **Recently edited** and **Attachments**. Change, rename or delete them as you like.
 
 ## Making your own
 
