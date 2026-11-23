@@ -14,7 +14,7 @@ import * as Y from 'yjs'
 import i18n from '../i18n'
 import { AuthProvider } from '../state/auth'
 import { accountChanged, followAccount, forgetAccount } from '../state/account'
-import { attachmentAad, checkKdf, contentAad, derive, fromB64, KDF_ALLOWED, makeVault, noteKey, packAttachment, rewrapVault, seal, toB64, unpackAttachment, unseal, unwrapVault, versionAad, WeakKdfError, KDF_ITERATIONS, type Kdf } from './crypto'
+import { attachmentAad, checkKdf, contentAad, derive, fromB64, KDF_ALLOWED, makeVault, noteKey, openAttachment, packAttachment, rewrapVault, seal, toB64, unpackAttachment, unseal, unwrapVault, versionAad, WeakKdfError, KDF_ITERATIONS, type Kdf } from './crypto'
 import { ChangePasswordDialog, ForgotDialog, LockDialog, UnlockCard } from './dialogs'
 import { LockedNote } from './LockedNote'
 import { SealedProvider } from './provider'
@@ -243,6 +243,17 @@ describe('the cryptography', () => {
     } finally {
       random.mockRestore()
     }
+  })
+
+  it('NOTES-16 AC-2 a picture sealed twice (read from the browser cache at locking) opens as the picture (TestFlight 0.16.0)', async () => {
+    const vault = await crypto.subtle.importKey('raw', Uint8Array.from({ length: 32 }, (_, i) => i), 'HKDF', false, ['deriveKey'])
+    const key = await noteKey(vault, 'BrowserLockedNote00001')
+    const aad = attachmentAad('BrowserLockedNote00001', 'BrowserWebPPicture0001')
+    const twice = fromB64('AnWsdFmZM5gkL9O9sojNKxbJNI2+VNzkfvYQBebUEet8yqe1RNEZqbpS6GcGjLimox4l4UvqH2WIszCvyBQVnuW+USZ0+afPenVZ9me7CKF9ckcfMZJ3R1vYIfOJ5hgiVdp4EvW4ToMVDxIu/JBeSGpY39jBWZKIHSoSnCS3yOkW0ooxJdVWkvcX10al0P/pTWuFwrTt092X+y9M7BZ0d/4TIxetL5nI973c+EeU+fXhYtCzdNDTk0n82iYsX9t2L/g4YtwrQvMXWFLtghj7d1jNDtzGWD5kmY6t2tYasZR412w/nBpCfYvEUNCNgjjE3nS3DxyulQlfuQvmbRodT9GimT/ZRQxzRccy2v1phrkLVyOa/CZ1YRPOJ6vxDXPnlLYUwPjYKXgYmtk4HpFk4luIssLlZRqNS4RTNZJJlEmnVwgsAiExtwmgZhrWKOZ7Wb/+NpgQ')
+    expect(unpackAttachment(await unseal(key, twice, aad)).data[0]).toBe(2)
+    const { header, data } = await openAttachment(key, twice, aad)
+    expect(header.mime).toBe('image/webp')
+    expect(toB64(data)).toBe('UklGRlYAAABXRUJQVlA4IEoAAABwAwCdASoYABAAPm0qkUWkIqGYBABABsSgCxCIAq//cAAOa+gA/vEAf/8M7f/hfv+GKf/A/qw91hjn6sPen3QJrDpX7NOLuWuYAA==')
   })
 
   it('NOTES-16 AC-2 the sealed file is read past the browser cache (the address held the plain file before the lock)', async () => {

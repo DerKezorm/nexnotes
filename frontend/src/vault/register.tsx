@@ -20,7 +20,7 @@ import { bytes as formatBytes } from '../lib/format'
 import { onAccountChange } from '../state/account'
 import { Card } from '../pages/settings/ui'
 import { sendSealed, vaultApi, type VaultStatus } from './api'
-import { attachmentAad, contentAad, fromB64, noteKey, packAttachment, seal, sealedVersionAad, toB64, unpackAttachment, unseal } from './crypto'
+import { attachmentAad, contentAad, fromB64, noteKey, openAttachment, packAttachment, seal, sealedVersionAad, toB64, unseal } from './crypto'
 import { ChangePasswordDialog, ForgotDialog, LockDialog, RemoveLockDialog } from './dialogs'
 import { LockedNote, NOTE_UNLOCKED_EVENT } from './LockedNote'
 import { openSealed } from './opened'
@@ -95,7 +95,7 @@ function openFile(noteId: string, id: string): Promise<Opened> {
       if (!vault) throw new Error('the vault is closed')
       const key = await noteKey(vault, noteId)
       const sealed = new Uint8Array(await (await vaultApi.file(id)).arrayBuffer())
-      const { header, data } = unpackAttachment(await unseal(key, sealed, attachmentAad(noteId, id)))
+      const { header, data } = await openAttachment(key, sealed, attachmentAad(noteId, id))
       const shown = PICTURES.includes(header.mime) ? header.mime : 'application/octet-stream'
       return { url: URL.createObjectURL(new Blob([data], { type: shown })), name: header.name, mime: shown, size: data.length }
     })()

@@ -205,6 +205,21 @@ export function packAttachment(header: AttachmentHeader, data: Uint8Array<ArrayB
   return out
 }
 
+/** An attachment's sealed file opened. One whose file is the sealed file of the same place again (locked once more while
+ * this page read the sealed file from the browser's cache, before `vaultApi.file` went past it) is opened once more;
+ * the iOS app does the same. */
+export async function openAttachment(key: CryptoKey, blob: Uint8Array<ArrayBuffer>, aad: string): Promise<{ header: AttachmentHeader; data: Uint8Array<ArrayBuffer> }> {
+  let opened = unpackAttachment(await unseal(key, blob, aad))
+  for (let round = 0; round < 4 && opened.data[0] === FORMAT; round++) {
+    try {
+      opened = unpackAttachment(await unseal(key, opened.data, aad))
+    } catch {
+      break
+    }
+  }
+  return opened
+}
+
 export function unpackAttachment(plain: Uint8Array<ArrayBuffer>): { header: AttachmentHeader; data: Uint8Array<ArrayBuffer> } {
   const length = new DataView(plain.buffer, plain.byteOffset).getUint32(0)
   const parsed = JSON.parse(new TextDecoder().decode(plain.subarray(4, 4 + length))) as Partial<AttachmentHeader>

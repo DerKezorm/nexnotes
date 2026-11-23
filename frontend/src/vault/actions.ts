@@ -9,7 +9,7 @@
  */
 import { currentAccount } from '../state/account'
 import { vaultApi } from './api'
-import { attachmentAad, contentAad, fromB64, makeVault, noteKey, packAttachment, rewrapVault, seal, sealedVersionAad, unpackAttachment, unseal, versionAad, WeakKdfError } from './crypto'
+import { attachmentAad, contentAad, fromB64, makeVault, noteKey, openAttachment, packAttachment, rewrapVault, seal, sealedVersionAad, unseal, versionAad, WeakKdfError } from './crypto'
 import { checkFor, forgetRev, takeKey, vaultKey } from './session'
 
 /** Steps of a lock or unlock, for the progress the dialog shows. */
@@ -75,7 +75,7 @@ export async function unlockNote(noteId: string, progress: Progress = () => unde
     const names: Record<string, string> = {}
     for (const attachmentId of start.attachments) {
       const sealed = await bytes(await vaultApi.file(attachmentId))
-      const { header, data } = unpackAttachment(await unseal(key, sealed, attachmentAad(noteId, attachmentId)))
+      const { header, data } = await openAttachment(key, sealed, attachmentAad(noteId, attachmentId))
       names[attachmentId] = header.name
       await vaultApi.stage(noteId, 'unlock', `attachment:${attachmentId}`, data)
       step()
