@@ -868,3 +868,15 @@ def test_notes24_notesios1_the_app_hears_whether_the_account_runs_the_server(cli
         assert answer.status_code == 200, answer.text
         assert answer.json()["account"]["operator"] is False
         assert App(other, answer.json()["token"]).get("/me").json()["account"]["operator"] is False
+
+
+def test_notes24_notesios5_a_quick_note_tells_the_app_where_it_came_from(client: TestClient, operator) -> None:
+    """NOTESIOS-5 AC-4 (23.11.2026): ``changes`` carries the origin of a note (contract 0.12), so another device of the
+    same account shows "from the share sheet" too; a note without one carries an empty origin."""
+    device = paired(client)
+    device.new_note("01HZQUICKORIGIN0000000000A", "Recipe link", "https://example.com/recipe", origin="share:Safari")
+    device.new_note("01HZQUICKORIGIN0000000000B", "Plain")
+    other = paired(client)
+    notes = {item["id"]: item for item in other.changes()["notes"]}
+    assert notes["01HZQUICKORIGIN0000000000A"]["origin"] == "share:Safari"
+    assert notes["01HZQUICKORIGIN0000000000B"]["origin"] == ""

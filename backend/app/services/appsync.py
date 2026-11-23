@@ -518,6 +518,8 @@ class View:
             "paper": row.paper or "blank", "icon": row.icon or "", "color": row.color or "",
             "pinned": row.pinned_at is not None if own else row.id in self.pins,
             "title_check": bool(row.title_check), "locked": bool(row.locked),
+            # Where a quick note came from (NOTESIOS-5 AC-4, contract 0.12), shown on every device.
+            "origin": row.origin or "",
             "right": "owner" if own else self.rights.note(row),
             "tags": [] if row.locked else self.tags.get(row.id, []),
             "texts": "" if row.locked else self.texts.get(row.id, ""),
