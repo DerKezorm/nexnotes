@@ -16,4 +16,4 @@ Die Darstellung gilt für alle Listen und wandert mit dir auf jedes Gerät. Die 
 
 ![Notizen als Kacheln](shots/tiles.webp)
 
-Unter „Hinweise“ schaltest du die kleinen Zeichen für Checklisten, Anhänge und Schlagwörter in der Liste ein oder aus. Die Breite von Seitenleiste und Liste verstellst du, indem du an ihrer Kante ziehst.
+Unter „Hinweise“ setzt du je einen Haken für Checklisten, Anhänge und Schlagwörter: So zeigt die Liste etwa den Fortschritt deiner Checklisten, aber keine Schlagwörter. Dieselben drei Haken findest du unter **Einstellungen › Darstellung** bei „Notizlisten“; die Wahl gilt auf allen Geräten. Die Breite von Seitenleiste und Liste verstellst du, indem du an ihrer Kante ziehst.

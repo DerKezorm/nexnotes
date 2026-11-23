@@ -13,8 +13,19 @@ type Files = {
 const fsName = 'node:fs'
 const files = (await import(/* @vite-ignore */ fsName)) as Files
 
-/** What gives a sliding switch away: its role, in JSX, in an object or in a selector, and the pill it is drawn as. */
-const SWITCH = [/role=\{?["'`]switch["'`]/, /role:\s*["'`]switch["'`]/, /\[role=["']?switch["']?\]/, /\bw-\[38px\][^'"`]*rounded-full|rounded-full[^'"`]*\bw-\[38px\]/]
+/** What gives a sliding switch away: its role, in JSX, in an object or in a selector, and the pill it is drawn as (a
+ * round track 38 px wide, as in the settings once, or a low track 30 to 39 px wide, as in the menu "Ansicht" beside
+ * "Hinweise"; a square sign of that width is no pill). */
+const SWITCH = [
+  /role=\{?["'`]switch["'`]/,
+  /role:\s*["'`]switch["'`]/,
+  /\[role=["']?switch["']?\]/,
+  /\bw-\[38px\][^'"`]*rounded-full|rounded-full[^'"`]*\bw-\[38px\]/,
+  /(?<![\w-])h-(?:4|5|6|\[[12]\dpx\])\s[^'"`]*(?<![\w-])w-\[3\dpx\]/,
+]
+
+/** The pill of the hints as the menu "Ansicht" drew it until 23.11.2026: the guard must know it. */
+const OLD_MENU_PILL = `<span aria-hidden className={'flex h-5 w-[34px] shrink-0 items-center rounded-[10px] p-0.5 ' + (look.hints ? 'justify-end' : 'justify-start')}>`
 
 describe('on and off', () => {
   it('is never a switch anywhere in the sources', () => {
@@ -30,6 +41,20 @@ describe('on and off', () => {
       })
     }
     expect(found).toEqual([])
+  })
+
+  it('knows the pill of a switch, also the one the menu "Ansicht" had beside "Hinweise"', () => {
+    expect(SWITCH.some((pattern) => pattern.test(OLD_MENU_PILL))).toBe(true)
+    expect(SWITCH.some((pattern) => pattern.test(`className="rounded-full w-[38px] bg-accent-500"`))).toBe(true)
+    // A tick is no switch.
+    expect(SWITCH.some((pattern) => pattern.test(`<Check aria-hidden className={'h-4 w-4 shrink-0 ' + (on ? '' : 'invisible')} />`))).toBe(false)
+  })
+
+  it('the menu "Ansicht" offers the hints kind by kind as ticked menu entries', () => {
+    const menu = files.readFileSync('src/notes/list/ViewMenu.tsx', 'utf-8')
+    expect(menu).toContain('role="menuitemcheckbox"')
+    expect(menu).toMatch(/HINT_KINDS\.map/)
+    expect(menu).not.toMatch(/look\.hints \?/)
   })
 
   describe('a row of the settings', () => {
