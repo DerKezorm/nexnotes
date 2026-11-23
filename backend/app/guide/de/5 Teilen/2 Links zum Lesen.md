@@ -3,7 +3,7 @@ icon: link
 ---
 # Links zum Lesen
 
-Willst du eine Notiz jemandem zeigen, der kein Konto hat, schalte im Dialog „Teilen“ den **Link zum Lesen** ein. Wer den Link kennt, kann die Notiz lesen, aber nicht ändern.
+Willst du eine Notiz jemandem zeigen, der kein Konto hat, setz im Dialog „Teilen“ den Haken bei **Link zum Lesen**. Wer den Link kennt, kann die Notiz lesen, aber nicht ändern.
 
 ![Ein Link zum Lesen mit Ablaufdatum](shots/share-link.webp)
 
