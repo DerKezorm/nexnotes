@@ -3,7 +3,7 @@ icon: link
 ---
 # Read links
 
-To show a note to someone without an account, turn on the **"Read link"** in the dialog "Share". Whoever has the link can read the note, but not change it.
+To show a note to someone without an account, tick **"Link to read"** in the dialog "Share". Whoever has the link can read the note, but not change it.
 
 ![A read link with its last day](shots/share-link.webp)
 

@@ -25,7 +25,7 @@ export function NotePinButton({ noteId, head, disabled }: { noteId: string; head
   return (
     <button
       type="button"
-      className={'nn-btn nn-btn-ghost h-[34px] w-[34px] border-transparent px-0 ' + (shown ? 'text-accent-400' : '')}
+      className={'nn-btn nn-btn-ghost h-[34px] w-[34px] border-transparent px-0 ' + (shown ? 'not-disabled:text-accent-400' : '')}
       aria-label={label}
       aria-pressed={shown}
       title={label}

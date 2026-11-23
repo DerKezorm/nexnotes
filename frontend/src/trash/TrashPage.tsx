@@ -96,7 +96,7 @@ export function TrashPage() {
         {list && <span className="text-[13px] text-mist-500">{t('trash.keeps', { count: list.trash_days })}</span>}
         <button
           type="button"
-          className="nn-btn ml-auto h-[38px] border border-bad-500 px-3.5 text-[13.5px] text-bad-500 not-disabled:hover:bg-ink-800"
+          className="nn-btn ml-auto h-[38px] border border-edge px-3.5 text-[13.5px] not-disabled:border-bad-500 not-disabled:text-bad-500 not-disabled:hover:bg-ink-800"
           onClick={() => setAsking({ kind: 'empty' })}
           disabled={!list || list.items.length === 0 || busy !== ''}
           data-testid="trash-empty"
@@ -143,7 +143,7 @@ export function TrashPage() {
                 </button>
                 <button
                   type="button"
-                  className="nn-btn h-9 w-9 px-0 text-bad-500 not-disabled:hover:bg-ink-800"
+                  className="nn-btn h-9 w-9 px-0 not-disabled:text-bad-500 not-disabled:hover:bg-ink-800"
                   aria-label={t('trash.purge', { title })}
                   title={t('trash.purge', { title })}
                   onClick={() => setAsking({ kind: 'purge', item })}

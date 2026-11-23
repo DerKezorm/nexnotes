@@ -60,4 +60,34 @@ describe('a locked button', () => {
     }
     expect([...found]).toEqual([])
   })
+
+  // A colour a component adds stands in the utility layer and beats `.nn-btn:disabled` of the components layer: the
+  // trash's "Empty trash" and "Delete for good" kept their red words and edge while locked. A button that can be locked
+  // takes its signal colour only `not-disabled:`.
+  it('keeps no signal colour of its own while locked', () => {
+    const sources = files
+      .readdirSync('src', { recursive: true })
+      .map((name) => name.replace(/\\/g, '/'))
+      .filter((name) => name.endsWith('.tsx') && !name.includes('.test.'))
+    const signal = /^(?:text|border|bg|ring|outline)-(?:bad|warn|ok|accent)-/
+    const found = new Set<string>()
+    for (const name of sources) {
+      const text = files.readFileSync(`src/${name}`, 'utf-8')
+      // Every opening `<button …>` tag, braces and all, up to its own `>`.
+      for (let at = text.indexOf('<button'); at !== -1; at = text.indexOf('<button', at + 1)) {
+        let depth = 0
+        let end = at
+        for (; end < text.length; end++) {
+          if (text[end] === '{') depth++
+          else if (text[end] === '}') depth--
+          else if (text[end] === '>' && depth === 0) break
+        }
+        const tag = text.slice(at, end + 1)
+        // Only a button that can be locked: its `disabled` attribute, not the `disabled:` of a class.
+        if (!/\sdisabled[=\s>/]/.test(tag) || !/\bnn-(?:btn|menu-item)\b/.test(tag)) continue
+        for (const utility of tag.split(/[\s'"`{}()+]+/).filter((part) => signal.test(part))) found.add(`${name}: ${utility}`)
+      }
+    }
+    expect([...found]).toEqual([])
+  })
 })
