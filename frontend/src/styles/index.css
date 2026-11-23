@@ -138,7 +138,7 @@
   }
 
   .nn-menu-item {
-    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm text-mist-200 hover:bg-ink-800 hover:text-mist-100 disabled:opacity-40;
+    @apply flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left text-sm text-mist-200 not-disabled:hover:bg-ink-800 not-disabled:hover:text-mist-100 disabled:opacity-40;
   }
 
   /* A field: 40 px, 9 px corners, honey edge and ring in focus. */
@@ -151,6 +151,9 @@
     box-shadow: 0 0 0 3px rgb(201 149 18 / 0.28);
   }
 
+  /* A locked button stays grey in every state: each variant's hover is `not-disabled:hover:` (not `enabled:`, the
+     classes also dress links), else `.nn-btn-accent:hover` (same weight, later) would beat `.nn-btn:disabled` and paint
+     a locked button honey under the pointer. */
   .nn-btn {
     @apply inline-flex h-10 items-center justify-center gap-2 px-4 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:bg-ink-800 disabled:text-mist-600;
     border-radius: var(--radius-button);
@@ -158,12 +161,12 @@
 
   /* The one main action: honey, dark text. */
   .nn-btn-accent {
-    @apply bg-accent-500 text-on-accent hover:bg-accent-600;
+    @apply bg-accent-500 text-on-accent not-disabled:hover:bg-accent-600;
   }
 
   /* Secondary: an edge, no ground. */
   .nn-btn-ghost {
-    @apply border border-edge text-mist-200 hover:bg-ink-800 hover:text-mist-100;
+    @apply border border-edge text-mist-200 not-disabled:hover:bg-ink-800 not-disabled:hover:text-mist-100;
   }
 
   /* A picture over the whole page (an attachment, a sketch): covering in both modes, nothing of the app shows through;
@@ -179,12 +182,12 @@
 
   /* Danger: only for deleting and what cannot be undone. */
   .nn-btn-danger {
-    @apply bg-bad-500 text-on-bad hover:opacity-90;
+    @apply bg-bad-500 text-on-bad not-disabled:hover:opacity-90;
   }
 
   /* Quiet: text in the accent colour. */
   .nn-btn-quiet {
-    @apply h-auto px-0 text-accent-400 hover:underline;
+    @apply h-auto px-0 text-accent-400 not-disabled:hover:underline;
   }
 
   .nn-card {

@@ -302,7 +302,7 @@ export function Toolbar({ editor, onLink, compact = false, part = 'all', label, 
           aria-haspopup={button.menu ? 'menu' : undefined}
           aria-expanded={button.menu ? menu === button.key : undefined}
           title={title}
-          className={`${size} flex items-center justify-center rounded-lg transition-colors disabled:opacity-35 ${button.active ? 'nn-chosen' : 'text-mist-300 hover:bg-ink-800 hover:text-mist-100'}`}
+          className={`${size} flex items-center justify-center rounded-lg transition-colors disabled:opacity-35 ${button.active ? 'nn-chosen' : 'text-mist-300 not-disabled:hover:bg-ink-800 not-disabled:hover:text-mist-100'}`}
         >
           <Icon className="h-4 w-4" strokeWidth={button.key === 'bold' ? 2.6 : 2} aria-hidden />
         </button>

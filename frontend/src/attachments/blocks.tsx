@@ -196,7 +196,7 @@ function PictureBlock({ info, noteId, size, actions }: { info: AttachmentInfo; n
         </span>
         <span className="flex items-center gap-1">
           {actions.editable && actions.onSize ? (
-            <button ref={sizeButton} type="button" className="nn-btn-quiet rounded px-0.5 hover:text-mist-100" aria-haspopup="menu" aria-expanded={sizeMenu} onClick={() => setSizeMenu(!sizeMenu)} data-testid="attachment-size">
+            <button ref={sizeButton} type="button" className="nn-btn-quiet rounded px-0.5 not-disabled:hover:text-mist-100" aria-haspopup="menu" aria-expanded={sizeMenu} onClick={() => setSizeMenu(!sizeMenu)} data-testid="attachment-size">
               {t('attachments.size.label', { size: t(`attachments.size.${size}`) })}
             </button>
           ) : null}
@@ -290,7 +290,7 @@ function PdfCard({ info, noteId, actions }: { info: AttachmentInfo; noteId: stri
         </span>
       </button>
       {view && (
-        <button type="button" className="nn-btn-quiet self-end rounded px-1 text-[12.5px] text-mist-400 hover:text-mist-100" onClick={() => view(info, noteId)} data-testid="attachment-pdf-large">
+        <button type="button" className="nn-btn-quiet self-end rounded px-1 text-[12.5px] text-mist-400 not-disabled:hover:text-mist-100" onClick={() => view(info, noteId)} data-testid="attachment-pdf-large">
           {t('attachments.openLargeShort')}
         </button>
       )}

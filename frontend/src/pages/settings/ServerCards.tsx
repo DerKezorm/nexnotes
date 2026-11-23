@@ -167,7 +167,7 @@ export function OcrCard({ server }: { server: Server }) {
                 const next = on ? s.ocr_languages.filter((item) => item !== code) : [...s.ocr_languages, code]
                 void server.save({ ocr_languages: OCR_LANGUAGES.filter((item) => next.includes(item)) })
               }}
-              className={'rounded-[9px] border px-3 py-1.5 text-sm ' + (on ? 'nn-chosen border-accent-700/50' : 'border-ink-700 text-mist-400 hover:text-mist-100')}
+              className={'rounded-[9px] border px-3 py-1.5 text-sm ' + (on ? 'nn-chosen border-accent-700/50' : 'border-ink-700 text-mist-400 not-disabled:hover:text-mist-100')}
             >
               {t(`server.ocrLanguages.${code}`)}
             </button>

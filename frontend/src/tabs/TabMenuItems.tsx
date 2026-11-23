@@ -36,7 +36,7 @@ export function TabMenuItems({ noteId, onDone }: { noteId: string; onDone: () =>
         type="button"
         role="menuitem"
         aria-disabled={props.done || undefined}
-        className={'nn-menu-item ' + (props.done ? 'cursor-default opacity-50 hover:bg-transparent' : '')}
+        className={'nn-menu-item ' + (props.done ? 'cursor-default opacity-50 not-disabled:hover:bg-transparent' : '')}
         data-testid={props.testId}
         onClick={() => {
           if (props.done) return

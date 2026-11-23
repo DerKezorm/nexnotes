@@ -60,7 +60,7 @@ export function FolderMenu({
             }}
             className={
               'nn-menu-item justify-between ' +
-              (entry.later ? 'cursor-not-allowed opacity-50 hover:bg-transparent' : entry.danger ? 'text-bad-500 hover:text-bad-500' : '')
+              (entry.later ? 'cursor-not-allowed opacity-50 not-disabled:hover:bg-transparent' : entry.danger ? 'text-bad-500 not-disabled:hover:text-bad-500' : '')
             }
           >
             <span className="flex items-center gap-2.5">

@@ -31,7 +31,7 @@ export function NoticeHost() {
       >
         <span className="min-w-0">{shown.text}</span>
         {shown.undo && (
-          <button type="button" onClick={() => void undo()} disabled={busy} className="shrink-0 rounded-md px-2 py-1 font-semibold text-accent-400 hover:bg-ink-700">
+          <button type="button" onClick={() => void undo()} disabled={busy} className="shrink-0 rounded-md px-2 py-1 font-semibold text-accent-400 not-disabled:hover:bg-ink-700">
             {t('folders.trash.undo')}
           </button>
         )}

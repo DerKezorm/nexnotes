@@ -31,7 +31,7 @@ export function TableMenuItems({ editor, onDone }: { editor: Editor; onDone: () 
             type="button"
             role={action === 'toggleHeaderRow' ? 'menuitemcheckbox' : 'menuitem'}
             aria-checked={action === 'toggleHeaderRow' ? header : undefined}
-            className={'nn-menu-item ' + (action.startsWith('delete') ? 'text-bad-500 hover:text-bad-500' : '')}
+            className={'nn-menu-item ' + (action.startsWith('delete') ? 'text-bad-500 not-disabled:hover:text-bad-500' : '')}
             data-testid={`table-${action}`}
             onClick={() => {
               onDone()

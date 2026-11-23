@@ -249,7 +249,7 @@ export function AccountsTab() {
 
 function MenuItem({ children, onClick, danger = false }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
   return (
-    <button type="button" role="menuitem" onClick={onClick} className={'nn-menu-item ' + (danger ? 'text-bad-500 hover:text-bad-500' : '')}>
+    <button type="button" role="menuitem" onClick={onClick} className={'nn-menu-item ' + (danger ? 'text-bad-500 not-disabled:hover:text-bad-500' : '')}>
       <span className="truncate">{children}</span>
     </button>
   )

@@ -26,7 +26,7 @@ export function TitleIcon({ icon, color, editable, onChange }: { icon: string; c
           disabled={!editable}
           aria-label={t('editor.icon.change')}
           title={t('editor.icon.change')}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg hover:bg-ink-800 disabled:hover:bg-transparent"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg not-disabled:hover:bg-ink-800"
           data-testid="title-icon"
         >
           <NoteIcon icon={icon} color={color} size={24} />

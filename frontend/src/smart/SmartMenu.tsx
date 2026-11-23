@@ -71,7 +71,7 @@ export function SmartMenu({
               onClose()
               onAction(entry.key)
             }}
-            className={'nn-menu-item ' + (off ? 'cursor-not-allowed opacity-50 hover:bg-transparent' : entry.danger ? 'text-bad-500 hover:text-bad-500' : '')}
+            className={'nn-menu-item ' + (off ? 'cursor-not-allowed opacity-50 not-disabled:hover:bg-transparent' : entry.danger ? 'text-bad-500 not-disabled:hover:text-bad-500' : '')}
           >
             <Icon aria-hidden className="h-4 w-4" strokeWidth={1.8} />
             {t(entry.text)}
