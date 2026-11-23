@@ -117,8 +117,8 @@ def count_missing(db: Session, batch: int = 200) -> int:
 # --- What a list shows changed ------------------------------------------------------------------------------------
 
 #: The columns a list shows: a change to any of them sets ``listed_at``.
-_LISTED = ("title", "title_check", "text", "folder_id", "owner_id", "deleted_at", "pinned_at", "color", "tasks_done",
-           "tasks_total", "locked")
+_LISTED = ("title", "title_check", "text", "folder_id", "owner_id", "deleted_at", "pinned_at", "color", "icon",
+           "tasks_done", "tasks_total", "locked")
 
 
 def _changed(target: Note) -> bool:

@@ -16,7 +16,8 @@ export type Folder = {
  * the notes in the inbox marked "Titel prüfen". */
 export type Places = { all: number; shared: number; inbox_title_check: number }
 
-export type FolderTree = { inbox: { id: string; count: number }; folders: Folder[]; places?: Places }
+/** `stamp`: what `/api/folders/stamp` said just before the tree was read (NOTES-24, changes from a device). */
+export type FolderTree = { inbox: { id: string; count: number }; folders: Folder[]; places?: Places; stamp?: string }
 
 export type InboxNote = {
   id: string
@@ -37,6 +38,8 @@ export type Impact = { notes: number; folders: number; trash_days: number }
 
 export const foldersApi = {
   tree: () => api<FolderTree>('/api/folders'),
+  /** Changes whenever the tree, its tiles or the smart folders would show something else, whichever way it came. */
+  stamp: () => api<{ stamp: string }>('/api/folders/stamp'),
   create: (name: string, parent_id: string | null, look: { icon?: string; color?: string } = {}) =>
     api<Folder>('/api/folders', { method: 'POST', body: { name, parent_id, ...look } }),
   change: (id: string, change: { name?: string; icon?: string; color?: string }) =>

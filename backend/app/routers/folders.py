@@ -10,9 +10,10 @@ from fastapi import Path as PathParam
 from pydantic import BaseModel, Field
 
 from ..deps import Account, DbSession
-from ..services import folders, guide, notes_list
+from ..services import appsync, folders, guide, notes_list
 from ..services import notes as notes_service
 from ..services import shares as shares_service
+from ..services.inbox import inbox_for
 
 router = APIRouter(prefix="/api/folders", tags=["folders"])
 
@@ -53,10 +54,22 @@ class OrderIn(BaseModel):
 def tree(account: Account, db: DbSession) -> dict[str, Any]:
     # A new account's guide (NOTES-26) still in the queue is there before the folders are shown.
     guide.catch_up(db, account.id)
+    # Read before the tree: a change made while it is read shows in the next stamp, never lost between the two. The
+    # inbox first, made on the first request, so that making it does not count as a change.
+    inbox_for(db, account.id)
+    seen = appsync.seen_stamp(db, account)
     found = folders.tree(db, account.id)
     # The numbers of the tiles above the tree (NOTES-4 AC-16): "Alle Notizen", "Mit mir geteilt", "Titel prüfen".
     found["places"] = notes_list.places(db, account, found["inbox"]["id"])
+    found["stamp"] = seen
     return found
+
+
+@router.get("/stamp")
+def stamp(account: Account, db: DbSession) -> dict[str, str]:
+    """Changes whenever the tree, its tiles or the smart folders would show something else, also when a device, MCP or
+    the API changed it (NOTES-24): the browser asks every few seconds and loads the tree again only then."""
+    return {"stamp": appsync.seen_stamp(db, account)}
 
 
 @router.post("", status_code=201)

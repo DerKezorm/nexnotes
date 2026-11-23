@@ -868,6 +868,22 @@ def changed_since(db: Session, account: Account, cursor: int) -> int | None:
     return None
 
 
+def seen_stamp(db: Session, account: Account) -> str:
+    """Changes whenever anything the account sees changed, whichever way it came (a device over ``/api/app/1``, MCP,
+    the API, another browser): the browser's tree, tiles and smart folders ask for it every few seconds and load
+    again only when it changed. The newest number of its notes, folders and smart folders, its own, the newest
+    tombstone of what it can no longer see, and how many notes and folders it sees (a note shared and withdrawn
+    leaves the newest number as it was)."""
+    notes_seen = db.execute(select(func.count(), func.max(Note.sync_seq)).where(_visible_notes(account.id))).one()
+    folders_seen = db.execute(select(func.count(), func.max(Folder.sync_seq))
+                              .where(_visible_folders(account.id))).one()
+    smart = db.scalar(select(func.max(SmartFolder.sync_seq)).where(SmartFolder.owner_id == account.id))
+    stone = db.scalar(select(func.max(AppTombstone.seq)).where(_stones(account.id)))
+    parts = (notes_seen[0], notes_seen[1], folders_seen[0], folders_seen[1], smart, stone,
+             _account_seq(db, account.id))
+    return "-".join(str(int(part or 0)) for part in parts)
+
+
 # --- Keeping it tidy ------------------------------------------------------------------------------------------------
 
 

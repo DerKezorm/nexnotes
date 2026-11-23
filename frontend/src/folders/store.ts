@@ -3,6 +3,11 @@
  * after every change and whenever the window comes back to the front (another device may have moved, renamed or
  * colored something meanwhile; order, symbol and color live on the server, NOTES-4 AC-10, AC-11).
  *
+ * Changes made elsewhere (the iOS app over `/api/app/1`, its share sheet, widget or shortcut, MCP, the API, another
+ * browser) reach an open page without reloading it (NOTES-24): while the page is in sight it asks the server's stamp
+ * every few seconds and loads the tree again only when it changed; the tiles, the inbox's number and the smart folders
+ * follow (`CHANGED_ELSEWHERE_EVENT`). The lists ask their own stamps (`useNoteList`).
+ *
  * Which folders are open in the sidebar is the browser's own (AC-6): `localStorage`, never the server.
  *
  * The open folder (`useCurrentFolder`) says where a new note lands (AC-9): in the open folder, otherwise in the inbox.
@@ -65,7 +70,16 @@ function build(tree: FolderTree | null, status: TreeState['status']): TreeState 
   return { status, inbox: tree?.inbox ?? null, places: tree?.places ?? null, folders, byId, children, totals: totalsOf(byId, children) }
 }
 
+/** How often an open page asks whether the tree changed elsewhere (NOTES-24). */
+export const TREE_STAMP_EVERY_MS = 5000
+/** The tree changed elsewhere and was loaded again: what else shows the account's things looks again too. */
+export const CHANGED_ELSEWHERE_EVENT = 'nexnotes:changed-elsewhere'
+
 let state: TreeState = build(null, 'idle')
+/** The server's stamp the tree shown belongs to; empty until one came. */
+let seen = ''
+/** The tree as it came, to leave the state alone when the same tree comes again (no new drawing). */
+let lastTree = ''
 const listeners = new Set<() => void>()
 let pending: Promise<void> | null = null
 let watching = false
@@ -85,7 +99,12 @@ export function refreshFolders(): Promise<void> {
   const request: Promise<void> = foldersApi
     .tree()
     .then((tree) => {
-      if (asked === generation) publish(build(tree, 'ready'))
+      if (asked !== generation) return
+      if (typeof tree.stamp === 'string' && tree.stamp) seen = tree.stamp
+      const text = JSON.stringify({ ...tree, stamp: undefined })
+      if (state.status === 'ready' && text === lastTree) return
+      lastTree = text
+      publish(build(tree, 'ready'))
     })
     .catch(() => {
       if (asked === generation) publish({ ...state, status: state.status === 'ready' ? 'ready' : 'failed' })
@@ -95,6 +114,25 @@ export function refreshFolders(): Promise<void> {
     })
   pending = request
   return request
+}
+
+/** Asks the server's stamp once (NOTES-24): a changed one loads the tree again and tells the others. */
+export function checkElsewhere(): Promise<void> {
+  if (listeners.size === 0 || state.status !== 'ready') return Promise.resolve()
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return Promise.resolve()
+  const asked = generation
+  return foldersApi
+    .stamp()
+    .then((answer) => {
+      const now = answer?.stamp
+      if (asked !== generation || typeof now !== 'string' || !now || now === seen) return
+      const first = !seen
+      seen = now
+      if (first) return
+      void refreshFolders()
+      window.dispatchEvent(new Event(CHANGED_ELSEWHERE_EVENT))
+    })
+    .catch(() => undefined)
 }
 
 function watch(): void {
@@ -107,6 +145,7 @@ function watch(): void {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') void refreshFolders()
   })
+  setInterval(() => void checkElsewhere(), TREE_STAMP_EVERY_MS)
 }
 
 function subscribe(listener: () => void): () => void {
@@ -124,6 +163,8 @@ export function useFolders(): TreeState {
 export function forgetFolders(): void {
   generation += 1
   pending = null
+  seen = ''
+  lastTree = ''
   publish(build(null, 'idle'))
 }
 

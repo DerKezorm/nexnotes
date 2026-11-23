@@ -1,9 +1,11 @@
 /**
  * The smart folders of the signed-in account, for the sidebar, the phone's way back and the editor: loaded once,
- * again after a change made here and when the window comes back to the front (another device may have changed them).
+ * again after a change made here, when the window comes back to the front and when the tree's stamp says something
+ * changed elsewhere (another device may have changed them).
  */
 import { useSyncExternalStore } from 'react'
 
+import { CHANGED_ELSEWHERE_EVENT } from '../folders/store'
 import { onAccountChange } from '../state/account'
 import { smartApi, type SmartFolder } from './api'
 
@@ -53,6 +55,8 @@ function watch(): void {
   if (watching || typeof window === 'undefined') return
   watching = true
   window.addEventListener('focus', () => void refreshSmartFolders())
+  // Changed on a device or in another browser (NOTES-24): the tree's stamp saw it.
+  window.addEventListener(CHANGED_ELSEWHERE_EVENT, () => void refreshSmartFolders())
 }
 
 function subscribe(listener: () => void): () => void {
