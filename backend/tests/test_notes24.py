@@ -880,3 +880,32 @@ def test_notes24_notesios5_a_quick_note_tells_the_app_where_it_came_from(client:
     notes = {item["id"]: item for item in other.changes()["notes"]}
     assert notes["01HZQUICKORIGIN0000000000A"]["origin"] == "share:Safari"
     assert notes["01HZQUICKORIGIN0000000000B"]["origin"] == ""
+
+
+def test_notes24_notesios21_changes_carry_when_a_note_was_pinned(client: TestClient, operator) -> None:
+    """NOTESIOS-21 (23.11.2026): ``changes`` carries when a note was pinned (contract 0.13), so the app's Markdown
+    export writes ``pinned_at`` like the server's. An own note carries its pin, a note of somebody else the member's own
+    pin of it, a note not pinned none."""
+    from datetime import UTC, datetime
+
+    from app.models_shares import SharePin
+
+    sharer = make_account("sharer")
+    with new_client(sharer) as other:
+        theirs = other.post("/api/notes", json={"markdown": "Shared list"}).json()
+        share(other, "note", theirs["id"], operator, "read")
+    device = paired(client)
+    device.new_note(NOTE_A, "Pinned")
+    device.new_note(NOTE_B, "Loose")
+    assert device.patch(f"/notes/{NOTE_A}", {"pinned": True}).json()["pinned"] is True
+    assert device.patch(f"/notes/{theirs['id']}", {"pinned": True}).json()["pinned"] is True
+    own_pin = datetime(2026, 11, 20, 8, 15, 30, 250000, tzinfo=UTC)
+    member_pin = datetime(2026, 11, 21, 17, 0, 5, tzinfo=UTC)
+    with SessionLocal() as db:
+        db.execute(update(Note).where(Note.id == NOTE_A).values(pinned_at=own_pin))
+        db.execute(update(SharePin).where(SharePin.note_id == theirs["id"]).values(pinned_at=member_pin))
+        db.commit()
+    notes = {item["id"]: item for item in paired(client).changes()["notes"]}
+    assert notes[NOTE_A]["pinned_at"] == "2026-11-20T08:15:30.250000Z"
+    assert notes[theirs["id"]]["pinned_at"] == "2026-11-21T17:00:05Z"
+    assert notes[NOTE_B]["pinned"] is False and notes[NOTE_B]["pinned_at"] is None

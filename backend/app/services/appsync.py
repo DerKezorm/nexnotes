@@ -33,7 +33,7 @@ import threading
 import time
 from collections.abc import Iterable
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any, Self
 
 from sqlalchemy import and_, event, func, inspect, or_, select, text
@@ -488,7 +488,8 @@ class View:
     account_id: int
     inbox: str | None
     rights: Rights
-    pins: set[str]
+    #: The account's own pins of notes of others (NOTES-13): note id to when it pinned it.
+    pins: dict[str, datetime]
     tags: dict[str, list[str]] = field(default_factory=dict)
     texts: dict[str, str] = field(default_factory=dict)
     #: The people a page names (owners of things of others, who wrote last): id to ``{"id", "name", "avatar"}``.
@@ -517,6 +518,8 @@ class View:
             "id": row.id, "title": row.title, "folder_id": self.folder_ref(row.folder_id, row.owner_id),
             "paper": row.paper or "blank", "icon": row.icon or "", "color": row.color or "",
             "pinned": row.pinned_at is not None if own else row.id in self.pins,
+            # When it was pinned (NOTESIOS-21, contract 0.13): the app's Markdown export writes it like the server's.
+            "pinned_at": _iso(row.pinned_at if own else self.pins.get(row.id)),
             "title_check": bool(row.title_check), "locked": bool(row.locked),
             # Where a quick note came from (NOTESIOS-5 AC-4, contract 0.12), shown on every device.
             "origin": row.origin or "",
@@ -671,8 +674,9 @@ def view_of(db: Session, account_id: int, note_ids: Iterable[str] = (), rows: It
     wanted = list(note_ids)
     rows = list(rows)
     folders = list(folders)
-    pins = set(db.scalars(select(SharePin.note_id).where(SharePin.account_id == account_id,
-                                                         SharePin.note_id.in_(wanted)))) if wanted else set()
+    pins = {row.note_id: row.pinned_at for row in db.execute(
+        select(SharePin.note_id, SharePin.pinned_at).where(SharePin.account_id == account_id,
+                                                           SharePin.note_id.in_(wanted)))} if wanted else {}
     named = {row.updated_by_id for row in rows} | {row.owner_id for row in rows if row.owner_id != account_id}
     named |= {row.owner_id for row in folders if row.owner_id != account_id}
     shared_notes, shared_folders = _own_shared(db, account_id) if rows or folders else (set(), set())
