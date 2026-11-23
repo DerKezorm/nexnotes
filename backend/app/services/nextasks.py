@@ -400,7 +400,20 @@ def _context(account_id: int) -> str:
 
 
 def connection_of(db: Session, account_id: int) -> NextasksConnection | None:
-    return db.get(NextasksConnection, account_id)
+    """The account's connection; one a paired device made goes with that device (NOTESIOS-22 AC-7): disconnected,
+    blocked, or the account's devices all signed out, its key opens nothing any more."""
+    row = db.get(NextasksConnection, account_id)
+    if row is not None and row.device_id is not None:
+        from ..models import TOKEN_DEVICE, ApiToken
+
+        token = db.get(ApiToken, row.device_id)
+        gone = token is None or token.kind != TOKEN_DEVICE or token.account_id != account_id
+        if gone or token.blocked_at is not None:
+            db.delete(row)
+            db.commit()
+            logger.info("nextasks connection of a gone device dropped account_id=%s", account_id)
+            return None
+    return row
 
 
 def access_of(db: Session, row: NextasksConnection) -> Access:
@@ -418,8 +431,9 @@ def connected_access(db: Session, account_id: int) -> Access:
     return access
 
 
-def connect(db: Session, account_id: int, url: str, token: str) -> NextasksConnection:
-    """Checks address and token at once (AC-5, EC-7) and keeps them only when they hold."""
+def connect(db: Session, account_id: int, url: str, token: str, *, device_id: int | None = None) -> NextasksConnection:
+    """Checks address and token at once (AC-5, EC-7) and keeps them only when they hold. ``device_id``: a paired
+    device connects (NOTESIOS-22 AC-7); the connection lives as long as that device does."""
     token = (token or "").strip()
     if not token or len(token) > MAX_TOKEN or any(ord(char) < 33 or ord(char) > 126 for char in token):
         raise NextasksError("nextasks_token_invalid", "nextasks does not take this key.", 409)
@@ -435,8 +449,10 @@ def connect(db: Session, account_id: int, url: str, token: str) -> NextasksConne
     row.token_enc = encrypt_secret(token, _context(account_id))
     row.name = name
     row.checked_at = utcnow()
+    row.device_id = device_id
     db.commit()
-    logger.info("nextasks connected account_id=%s host=%s", account_id, urlsplit(clean).hostname)
+    logger.info("nextasks connected account_id=%s host=%s device=%s", account_id, urlsplit(clean).hostname,
+                device_id is not None)
     return row
 
 

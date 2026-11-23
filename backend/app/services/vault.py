@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import Any
 
 from sqlalchemy import ColumnElement, delete, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ..db import SessionLocal, engine
@@ -845,6 +846,59 @@ def save(account: Account, note_id: str, content_b64: str, base_rev: int, epoch:
         logger.info("A locked note was saved on an older revision; the one before stays in the history note=%s",
                     note_id)
     return {"rev": saved_rev, "conflict": conflict}
+
+
+def create_locked(account: Account, *, note_id: str, folder_id: str | None, content_b64: str, epoch: int, title: str,
+                  paper: str | None, icon: str | None, created_at: datetime | None,
+                  origin: str = "") -> tuple[Note, bool]:
+    """A note that comes locked from another account (NOTESIOS-13 EC-4, NOTESIOS-16 AC-8): the device opened it with
+    the other account's vault and sealed it for this one (revision ``FIRST_REV``), so the server never holds its text
+    in the clear, not even for a moment. In one transaction: the note, locked, and its sealed content. Only into an own
+    folder that is not shared (a locked note is never shared, NOTES-13 EC-3). The same id again by the same account:
+    the same note (``False``); any other note of that id ``note_id_taken``."""
+    data = check_format(_bytes(content_b64, "content", 13, s.MAX_DOC + OVERHEAD))
+    if not notes.DEVICE_ID.fullmatch(note_id or ""):
+        raise error("invalid_input", "The input is not valid.", 422, fields=["id"])
+    with SessionLocal() as db:
+        found = _vault(db, account)
+        if epoch != found.epoch:
+            raise error("vault_changed", "The vault password changed. Unlock again.", 409, epoch=found.epoch)
+        existing = db.get(Note, note_id)
+        if existing is not None:
+            if existing.owner_id == account.id and existing.locked:
+                db.expunge(existing)
+                return existing, False
+            raise error("note_id_taken", "This note id is taken.", 409)
+        folder = notes._folder_for(db, account, folder_id)
+        if folder.owner_id != account.id:
+            raise error("note_shared", "Stop sharing the note before locking it.", 409)
+        if paper is not None:
+            notes.check_paper(paper)
+        from .symbols import SYMBOLS
+
+        if icon and icon not in SYMBOLS:
+            raise error("note_icon_unknown", "Choose a symbol from the list.", 422)
+        now = utcnow()
+        made = created_at if created_at is not None and created_at <= now else now
+        note = Note(id=note_id, owner_id=account.id, folder_id=folder.id, title=notedoc.clean_title(title),
+                    origin=(origin or "")[:100], ydoc=b"", text="", locked=True, created_at=made, updated_at=now,
+                    updated_by_id=account.id, paper=paper or notes.default_paper(account), icon=icon or "")
+        db.add(note)
+        db.flush()
+        if shares.lock_refused(db, note_id) or any(check(db, note) for check in SHARE_CHECKS):
+            db.rollback()
+            raise error("note_shared", "Stop sharing the note before locking it.", 409)
+        db.add(SealedNote(note_id=note_id, content=data, rev=FIRST_REV, saved_at=now, saved_by_id=account.id))
+        notes._written(db, note)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise error("note_id_taken", "This note id is taken.", 409) from None
+        db.refresh(note)
+        db.expunge(note)
+    logger.info("Locked note brought over note=%s", note_id)
+    return note, True
 
 
 async def store_attachment(account: Account, note_id: str, attachment_id: str, chunks: AsyncIterator[bytes],

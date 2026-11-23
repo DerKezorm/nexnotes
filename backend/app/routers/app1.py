@@ -38,9 +38,8 @@ from .. import __version__
 from ..db import SessionLocal
 from ..deps import client_ip
 from ..errors import detail, error
+from ..models import OPERATOR, ApiToken, Note
 from ..models import Account as AccountRow
-from ..models import OPERATOR
-from ..models import ApiToken, Note
 from ..models_notify import PushDevice
 from ..notedoc import schema as s
 from ..notedoc.room import Access
@@ -72,7 +71,8 @@ WAIT_RECHECK = 5.0
 #: Notes one ``sync`` takes at most.
 SYNC_NOTES = 50
 #: The parts of the interface beyond 0.4 this server has (``hello``): an app tells an older server by their absence.
-FEATURES = ("smart_folders", "history", "trash", "gallery", "texts", "import", "sharing", "live", "notify")
+FEATURES = ("smart_folders", "history", "trash", "gallery", "texts", "import", "sharing", "live", "notify",
+            "locked_import", "nextasks")
 
 
 def _refused(code: str, text: str, status: int, retry: int | None = None) -> HTTPException:

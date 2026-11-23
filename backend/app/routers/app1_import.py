@@ -13,17 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 
 from ..db import SessionLocal
 from ..errors import error
 from ..models import Folder
-from ..services import folders, notes
-from .app1 import Device, NewNote, make_note
+from ..services import folders, notes, vault
+from .app1 import Device, NewNote, _out, _utc, check_note_color, finish_new, make_note
 
 logger = logging.getLogger("nexnotes.app")
 
@@ -107,3 +108,40 @@ async def bring_over(found: Device, body: ImportIn) -> dict[str, Any]:
         logger.info("Brought over by a device folders=%s notes=%s created=%s", len(body.folders), len(body.notes),
                     made)
     return {"folders": folder_answers, "notes": note_answers}
+
+
+# --- A locked note brought over (NOTESIOS-13 EC-4, NOTESIOS-16 AC-8, interface 0.10) ------------------------------
+
+
+class LockedNote(BaseModel):
+    id: str = Field(min_length=1, max_length=64)
+    folder_id: str | None = Field(default=None, max_length=64)
+    title: str = Field(default="", max_length=1000)
+    #: The Yjs state sealed on the device for this note's id and revision 1 (``nexnotes sealed v2|content|<id>|1``).
+    content: str
+    #: The vault's epoch the device sealed with (a new password meanwhile: ``409 vault_changed``).
+    epoch: int
+    paper: str | None = Field(default=None, max_length=16)
+    icon: str | None = Field(default=None, max_length=64)
+    color: str | None = Field(default=None, max_length=16)
+    pinned: bool | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+    origin: str = Field(default="", max_length=100)
+
+
+@router.post("/locked-notes", status_code=201,
+             summary="A note that comes locked from another account, sealed on the device; never plain here")
+def create_locked(found: Device, body: LockedNote, response: Response) -> dict[str, Any]:
+    account = found.account
+    check_note_color(body.color)
+    # The inbox (or none) is the own inbox (``notes._folder_for`` takes it from ``None``).
+    folder_id = None if body.folder_id in (None, "", "inbox") else body.folder_id
+    _note, new = vault.create_locked(account, note_id=body.id, folder_id=folder_id, content_b64=body.content,
+                                     epoch=body.epoch, title=body.title, paper=body.paper, icon=body.icon,
+                                     created_at=_utc(body.created_at), origin=body.origin)
+    if new:
+        finish_new(account, body.id, color=body.color, pinned=body.pinned, updated_at=_utc(body.updated_at))
+    else:
+        response.status_code = 200
+    return {**_out(account, body.id), "rev": vault.FIRST_REV}

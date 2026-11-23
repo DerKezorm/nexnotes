@@ -21,8 +21,9 @@ from ..errors import error
 from ..models import Account as AccountRow
 from ..models import Folder, utcnow
 from ..models_notify import PushDevice
-from ..services import appsync, avatars, devices, folders, notes, notes_list, shares, tags
+from ..services import appsync, avatars, devices, folders, nextasks, notes, notes_list, shares, tags
 from ..services.inbox import inbox_for
+from ..services.nextasks import NextasksError
 from .app1 import Device, account_out
 
 logger = logging.getLogger("nexnotes.app")
@@ -309,4 +310,38 @@ def read_links(found: Device) -> list[dict[str, Any]]:
 def revoke_read_link(link_id: int, found: Device) -> Response:
     with SessionLocal() as db:
         shares.revoke_link(db, found.account, link_id)
+    return Response(status_code=204)
+
+
+# --- nextasks (NOTESIOS-22 AC-7, interface 0.10) ----------------------------------------------------------------
+
+
+class NextasksIn(BaseModel):
+    url: str = Field(min_length=1, max_length=nextasks.MAX_URL)
+    token: str = Field(min_length=1, max_length=nextasks.MAX_TOKEN)
+
+
+@router.get("/nextasks", summary="The member's nextasks: connected, where, as whom")
+def nextasks_status(found: Device) -> dict[str, Any]:
+    with SessionLocal() as db:
+        return nextasks.connection_out(db, nextasks.connection_of(db, found.account.id))
+
+
+@router.put("/nextasks", summary="Connect nextasks or change its key from the app; checked at once")
+def nextasks_connect(found: Device, body: NextasksIn) -> dict[str, Any]:
+    """As ``PUT /api/nextasks`` of the browser (NOTES-19 AC-5), with the rules and codes of it. The connection
+    belongs to this device: disconnecting the device ends it (nothing a device sets outlives it)."""
+    account = found.account
+    try:
+        with nextasks.outgoing(account.id, connecting=True), SessionLocal() as db:
+            row = nextasks.connect(db, account.id, body.url, body.token, device_id=found.device.id)
+            return nextasks.connection_out(db, row)
+    except NextasksError as exc:
+        raise exc.http() from exc
+
+
+@router.delete("/nextasks", status_code=204, summary="Disconnect nextasks from the app; tasks and marks stay")
+def nextasks_disconnect(found: Device) -> Response:
+    with SessionLocal() as db:
+        nextasks.disconnect(db, found.account.id)
     return Response(status_code=204)

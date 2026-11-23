@@ -29,6 +29,9 @@ class NextasksConnection(Base):
     #: The list (``<list>`` or ``<list>/<section>``) chosen last, preselected in the dialog (AC-6).
     last_list_id: Mapped[str] = mapped_column(String(100), default="")
     last_list_name: Mapped[str] = mapped_column(String(300), default="")
+    #: The paired device that connected it (NOTESIOS-22 AC-7), ``None`` from a browser. A device must leave nothing
+    #: behind that outlives disconnecting it: once its token is gone or blocked, the connection goes too.
+    device_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
 
 
 class NextasksLink(Base):
