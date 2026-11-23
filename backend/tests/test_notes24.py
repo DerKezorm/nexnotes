@@ -843,7 +843,7 @@ def test_notes24_me_names_the_account_the_device_and_the_limits(client, operator
     device = paired(client, "iPhone")
     body = device.get("/me").json()
     assert body["account"]["login"] == "tester" and body["device"]["name"] == "iPhone"
-    assert body["paper"] == "blank" and set(body["list_look"]) == {"style", "hints"}
+    assert body["paper"] == "blank" and set(body["list_look"]) == {"style", "hints", "hint_kinds"}
     assert body["limits"]["sync_notes"] == 50 and body["limits"]["changes_page"] == 500
     assert set(body["offers"]) >= {"push"}
 

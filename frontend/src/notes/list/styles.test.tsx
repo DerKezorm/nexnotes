@@ -1,6 +1,6 @@
 /**
  * The looks of the lists (decision of 21.11.2026 after the mock-up): list, cards, compact and tiles, one choice of the
- * account for every list, the hints on or off, the menu "Ansicht" (sort, grouping, look, hints; keyboard), the groups
+ * account for every list, the hints on or off kind by kind (checklists, attachments, tags), the menu "Ansicht" (sort, grouping, look, hints; keyboard), the groups
  * folded shut per device, and in every look the note's link (Alt click, middle click), its menu (right click, "…")
  * and its dragging.
  */
@@ -15,9 +15,9 @@ import { installTabLinks } from '../../tabs/links'
 import { NoteList } from '../NoteList'
 import { DEFAULT_VIEW, LIST_STYLES, type ListItem, type ListStyle, type ListView } from './api'
 import { forgetCollapsed } from './collapsed'
-import { layout, SIZES } from './layout'
+import { hasHints, layout, SIZES } from './layout'
 import { LookSettings } from './LookSettings'
-import { currentListLook, forgetListLook, takeListLook } from './look'
+import { ALL_HINTS, currentListLook, forgetListLook, NO_HINTS, takeListLook } from './look'
 import { arrange } from './order'
 import { takeEarly } from './preload'
 
@@ -32,7 +32,8 @@ type Call = { method: string; path: string; body: Record<string, unknown> | unde
 let calls: Call[] = []
 let items: ListItem[] = []
 let views: Map<string, ListView>
-let look = { list_style: 'list', list_hints: true }
+type Kinds = { checklist: boolean; attachments: boolean; tags: boolean }
+let look: { list_style: string; list_hints: boolean; list_hint_kinds?: Kinds } = { list_style: 'list', list_hints: true }
 let refuse = false
 
 function item(id: string, extra: Partial<ListItem> = {}): ListItem {
@@ -56,7 +57,11 @@ function answer({ method, path, body }: Call, query: URLSearchParams): { status:
   if (method === 'PUT' && path === '/api/me/list-look') {
     if (refuse) return { status: 422, body: { detail: { code: 'list_style_unknown', message: 'Choose list, cards, compact or tiles.' } } }
     if (body?.style !== undefined) look = { ...look, list_style: String(body.style) }
-    if (body?.hints !== undefined) look = { ...look, list_hints: Boolean(body.hints) }
+    // As the server: the one switch sets all three kinds, `hint_kinds` the kinds it names; `list_hints` is on while any is.
+    let kinds: Kinds = look.list_hint_kinds ?? { checklist: look.list_hints, attachments: look.list_hints, tags: look.list_hints }
+    if (body?.hints !== undefined) kinds = { checklist: Boolean(body.hints), attachments: Boolean(body.hints), tags: Boolean(body.hints) }
+    if (body?.hint_kinds !== undefined) kinds = { ...kinds, ...(body.hint_kinds as Partial<Kinds>) }
+    look = { ...look, list_hints: Object.values(kinds).some(Boolean), list_hint_kinds: kinds }
     return { status: 200, body: { id: 1, name: 'tester', ...look } }
   }
   return { status: 404, body: { detail: { code: 'not_found', message: 'Not found.' } } }
@@ -101,8 +106,9 @@ async function viewEntry(testId: string): Promise<HTMLElement> {
   return $(testId)!
 }
 
-function lookIs(style: ListStyle, hints = true): void {
-  look = { list_style: style, list_hints: hints }
+/** The look as the server sends it: `true`/`false` as a server before the kinds (one switch), or the three kinds. */
+function lookIs(style: ListStyle, hints: boolean | Kinds = true): void {
+  look = typeof hints === 'boolean' ? { list_style: style, list_hints: hints } : { list_style: style, list_hints: Object.values(hints).some(Boolean), list_hint_kinds: hints }
   act(() => takeListLook(look))
 }
 
@@ -186,13 +192,20 @@ describe('the looks of the lists', () => {
   it('the hints switch off for every look, and the choice is saved for the account', async () => {
     await render()
     expect($$('note-hints').length).toBeGreaterThan(0)
-    const hints = await viewEntry('list-hints')
-    expect(hints.getAttribute('role')).toBe('menuitemcheckbox')
-    expect(hints.getAttribute('aria-checked')).toBe('true')
-    await click(hints)
-    expect(calls.filter((call) => call.path === '/api/me/list-look').map((call) => call.body)).toEqual([{ hints: false }])
-    expect(currentListLook()).toEqual({ style: 'list', hints: false })
-    expect($('list-hints')!.getAttribute('aria-checked')).toBe('false')
+    for (const kind of ['checklist', 'attachments', 'tags'] as const) {
+      const entry = await viewEntry(`list-hints-${kind}`)
+      expect(entry.getAttribute('role')).toBe('menuitemcheckbox')
+      expect(entry.getAttribute('aria-checked')).toBe('true')
+      await click(entry)
+      expect($(`list-hints-${kind}`)!.getAttribute('aria-checked')).toBe('false')
+    }
+    expect(calls.filter((call) => call.path === '/api/me/list-look').map((call) => call.body)).toEqual([
+      { hint_kinds: { checklist: false } },
+      { hint_kinds: { attachments: false } },
+      { hint_kinds: { tags: false } },
+    ])
+    expect(currentListLook()).toEqual({ style: 'list', hints: NO_HINTS })
+    // A server before the kinds sends the one switch: off is off for all three.
     for (const style of LIST_STYLES) {
       lookIs(style, false)
       await again()
@@ -204,16 +217,46 @@ describe('the looks of the lists', () => {
     }
     // A row without hints is lower than one with them: the layout follows.
     const sections = arrange(items, DEFAULT_VIEW, new Date())
-    const heights = (hints: boolean) => layout(sections, 'list', 800, { hints }).entries.filter((entry) => entry.kind === 'row').map((entry) => entry.height)
+    const heights = (hints: boolean | typeof ALL_HINTS) => layout(sections, 'list', 800, { hints }).entries.filter((entry) => entry.kind === 'row').map((entry) => entry.height)
     expect(heights(true)).toEqual([SIZES.rowHints, SIZES.row])
+    expect(heights(ALL_HINTS)).toEqual([SIZES.rowHints, SIZES.row])
     expect(heights(false)).toEqual([SIZES.row, SIZES.row])
+    expect(heights(NO_HINTS)).toEqual([SIZES.row, SIZES.row])
+  })
+
+  it('NOTESIOS-6 AC-1: each kind of hint switches off by itself, in every look and in the height of a row', async () => {
+    await render()
+    await click(await viewEntry('list-hints-tags'))
+    expect(currentListLook().hints).toEqual({ checklist: true, attachments: true, tags: false })
+    for (const style of LIST_STYLES) {
+      lookIs(style, { checklist: true, attachments: true, tags: false })
+      await again()
+      expect(note('a').textContent, style).not.toContain('#einkauf')
+      expect(note('a').textContent, style).toContain(style === 'compact' ? '3/8' : '3 von 8')
+      expect(note('a').querySelector('[aria-label="2 Anhänge"]'), style).not.toBeNull()
+    }
+    for (const style of LIST_STYLES) {
+      lookIs(style, { checklist: false, attachments: false, tags: true })
+      await again()
+      if (style !== 'compact') expect(note('a').textContent, style).toContain('#einkauf')
+      expect(note('a').textContent, style).not.toContain('3 von 8')
+      expect(note('a').textContent, style).not.toContain('3/8')
+      expect(note('a').querySelector('[aria-label="2 Anhänge"]'), style).toBeNull()
+    }
+    // A note with only a checklist carries no hint line while checklists are off: its row stays low.
+    const only = item('t', { tasks: { done: 1, total: 2 } })
+    expect(hasHints(only, { checklist: true, attachments: false, tags: false })).toBe(true)
+    expect(hasHints(only, { checklist: false, attachments: true, tags: true })).toBe(false)
+    const rows = layout(arrange([only], DEFAULT_VIEW, new Date()), 'list', 800, { hints: { checklist: false, attachments: true, tags: true } })
+    expect(rows.entries.filter((entry) => entry.kind === 'row').map((entry) => entry.height)).toEqual([SIZES.row])
   })
 
   it('the menu "Ansicht" saves sort and grouping for the folder, look and hints for the account', async () => {
     await render()
     expect($('list-state')!.textContent).toBe('Zuletzt geändert · nach Datum gruppiert')
     const menu = await viewEntry('list-view-menu')
-    expect([...menu.querySelectorAll('[role="group"]')].map((group) => group.getAttribute('aria-label'))).toEqual(['Sortieren', 'Gruppieren', 'Darstellung'])
+    expect([...menu.querySelectorAll('[role="group"]')].map((group) => group.getAttribute('aria-label'))).toEqual(['Sortieren', 'Gruppieren', 'Darstellung', 'Hinweise'])
+    expect([...menu.querySelectorAll('[role="group"][aria-label="Hinweise"] [role="menuitemcheckbox"]')].map((entry) => entry.textContent)).toEqual(['Checklisten', 'Anhänge', 'Schlagwörter'])
     expect([...menu.querySelectorAll('[role="group"][aria-label="Darstellung"] [role="menuitemradio"]')].map((entry) => entry.textContent)).toEqual(['Liste', 'Karten', 'Kompakt', 'Kacheln'])
     await click($('list-sort-created')!)
     await click($('list-group-off')!)
@@ -234,7 +277,7 @@ describe('the looks of the lists', () => {
     expect($('list-state')!.textContent).toBe('Zuletzt geändert · nach Datum gruppiert · Kompakt')
     // Back in the first folder after a reload: what the server kept.
     forgetListLook()
-    lookIs(look.list_style as ListStyle, look.list_hints)
+    lookIs(look.list_style as ListStyle, look.list_hint_kinds ?? look.list_hints)
     await again('h')
     expect($('list-state')!.textContent).toBe('Erstellt · Kompakt')
   })
@@ -267,17 +310,27 @@ describe('the looks of the lists', () => {
     await click($('list-style-compact')!)
     expect($('settings-list-style-compact')!.getAttribute('aria-checked')).toBe('true')
     expect($('settings-list-style-tiles')!.getAttribute('aria-checked')).toBe('false')
-    // The hints the same way, both directions.
-    expect(($('settings-list-hints') as HTMLInputElement).checked).toBe(true)
-    await click($('settings-list-hints')!)
-    expect($('list-hints')!.getAttribute('aria-checked')).toBe('false')
-    await click($('list-hints')!)
-    expect(($('settings-list-hints') as HTMLInputElement).checked).toBe(true)
+    // The hints the same way, kind by kind (three ticks, no switches), both directions.
+    const ticks = [...$('settings-list-hints')!.querySelectorAll<HTMLInputElement>('input')]
+    expect(ticks.map((tick) => [tick.type, tick.getAttribute('role'), tick.getAttribute('aria-label')])).toEqual([
+      ['checkbox', null, 'Checklisten'],
+      ['checkbox', null, 'Anhänge'],
+      ['checkbox', null, 'Schlagwörter'],
+    ])
+    expect(ticks.every((tick) => tick.checked)).toBe(true)
+    await click($('settings-list-hints-attachments')!)
+    expect($('list-hints-attachments')!.getAttribute('aria-checked')).toBe('false')
+    expect($('list-hints-tags')!.getAttribute('aria-checked')).toBe('true')
+    await click($('list-hints-attachments')!)
+    expect(($('settings-list-hints-attachments') as HTMLInputElement).checked).toBe(true)
+    await click($('list-hints-checklist')!)
+    expect(($('settings-list-hints-checklist') as HTMLInputElement).checked).toBe(false)
     expect(calls.filter((call) => call.path === '/api/me/list-look').map((call) => call.body)).toEqual([
       { style: 'tiles' },
       { style: 'compact' },
-      { hints: false },
-      { hints: true },
+      { hint_kinds: { attachments: false } },
+      { hint_kinds: { attachments: true } },
+      { hint_kinds: { checklist: false } },
     ])
   })
 
@@ -292,7 +345,7 @@ describe('the looks of the lists', () => {
     await act(async () => menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true })))
     expect(document.activeElement).toBe($('list-sort-created'))
     await act(async () => menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true })))
-    expect(document.activeElement).toBe($('list-hints'))
+    expect(document.activeElement).toBe($('list-hints-tags'))
     await act(async () => menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })))
     await settle()
     expect($('list-view-menu')).toBeNull()

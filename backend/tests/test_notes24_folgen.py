@@ -123,7 +123,7 @@ def test_notes24_folge2_notesios6_ac2_look_and_views_from_the_app_count_in_the_b
     device = paired(client)
     device.post("/folders", {"id": FOLDER, "name": "Household"})
     look = device.put("/look", {"style": "compact", "hints": False})
-    assert look.status_code == 200 and look.json() == {"style": "compact", "hints": False}
+    assert look.status_code == 200 and look.json() == {"style": "compact", "hints": False, "hint_kinds": {"checklist": False, "attachments": False, "tags": False}}
     me = client.get("/api/auth/me").json()
     assert (me["list_style"], me["list_hints"]) == ("compact", False)
     assert code(device.put("/look", {"style": "spiral"})) == "list_style_unknown"
@@ -205,7 +205,7 @@ def test_notes24_folge3_the_account_comes_when_it_changed_and_in_every_full_list
     assert first["full"] is True
     account = first["account"]
     assert account["name"] == "Tester" and account["paper"] == "blank" and account["views"] == []
-    assert account["list_look"] == {"style": "list", "hints": True}
+    assert account["list_look"] == {"style": "list", "hints": True, "hint_kinds": {"checklist": True, "attachments": True, "tags": True}}
     # Nothing of it changed: no account.
     assert "account" not in device.changes()
     device.put("/look", {"style": "cards"})
@@ -456,3 +456,23 @@ def test_notes24_folge9_notesios1_ac11_a_picture_bomb_is_too_large(client, opera
     for size in (20_000, 8_000):
         answer = device.client.put("/api/app/1/avatar", headers=device.headers, content=_png_header(size, size))
         assert answer.status_code == 422 and code(answer) == "avatar_too_large", (size, answer.text)
+
+
+def test_notes24_notesios6_ac1_the_app_sends_and_reads_the_hints_kind_by_kind(client, operator):
+    """Contract 0.11: ``PUT /look`` takes ``hint_kinds`` beside ``hints``; ``list_look`` in ``changes`` and ``/me``
+    carries them; the browser's choice comes to the app."""
+    device = paired(client)
+    device.changes()
+    answer = device.put("/look", {"hints": True, "hint_kinds": {"checklist": True, "attachments": False, "tags": True}})
+    assert answer.status_code == 200, answer.text
+    assert answer.json()["hint_kinds"] == {"checklist": True, "attachments": False, "tags": True}
+    assert answer.json()["hints"] is True
+    assert client.get("/api/auth/me").json()["list_hint_kinds"]["attachments"] is False
+    client.put("/api/me/list-look", json={"hint_kinds": {"tags": False}})
+    look = device.changes()["account"]["list_look"]
+    assert look["hint_kinds"] == {"checklist": True, "attachments": False, "tags": False} and look["hints"] is True
+    assert device.get("/me").json()["list_look"] == look
+    # An app from before 0.11 sends the one switch: all three follow.
+    device.put("/look", {"hints": False})
+    assert device.changes()["account"]["list_look"] == {
+        "style": "list", "hints": False, "hint_kinds": {"checklist": False, "attachments": False, "tags": False}}

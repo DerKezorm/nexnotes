@@ -1,8 +1,8 @@
 /**
  * The button "Ansicht" above a list and its menu: sorting (last changed, created, title A–Z, and the direction; per
  * folder, NOTES-6 AC-4), grouping (by date or none; per folder, AC-5; none while sorted by title), the look of every
- * list (list, cards, compact, tiles) and the hints (checklist progress, attachments, tags); the last two are the
- * account's, the same in every list and on every device (`look.ts`). A list that offers its attachments as well (a
+ * list (list, cards, compact, tiles) and the hints (checklist progress, attachments, tags, each kind on or off); the
+ * last two are the account's, the same in every list and on every device (`look.ts`). A list that offers its attachments as well (a
  * smart folder with "Anhang") names `gallery` in `modes`: then the menu begins with "Zeigen" (notes or attachments);
  * the gallery sorts itself, so the rest stays away while it shows.
  *
@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 
 import { Menu } from '../../components/Menu'
 import { LIST_STYLES, type ListMode, type ListSort, type ListView } from './api'
-import type { ListLook } from './look'
+import { HINT_KINDS, type ListLook, type ListLookChange } from './look'
 import { STYLE_ICONS } from './styleIcons'
 
 const SORTS: ListSort[] = ['updated', 'created', 'title']
@@ -24,7 +24,7 @@ type Props = {
   view: ListView
   onChange: (change: Partial<ListView>) => void
   look: ListLook
-  onLook: (change: Partial<ListLook>) => void
+  onLook: (change: ListLookChange) => void
   /** `gallery` among them: the list can show its attachments instead of its notes. */
   modes?: readonly ListMode[]
 }
@@ -132,23 +132,23 @@ export function ViewMenu({ view, onChange, look, onLook, modes }: Props) {
                   </Choice>
                 ))}
               </Section>
-              <div className="mx-2 my-1 h-px bg-ink-700" role="separator" />
-              <button
-                type="button"
-                role="menuitemcheckbox"
-                aria-checked={look.hints}
-                data-testid="list-hints"
-                className="nn-menu-item"
-                onClick={() => onLook({ hints: !look.hints })}
-              >
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span>{t('noteList.hints.label')}</span>
-                  <span className="text-[11.5px] text-mist-600">{t('noteList.hints.text')}</span>
-                </span>
-                <span aria-hidden className={'flex h-5 w-[34px] shrink-0 items-center rounded-[10px] p-0.5 ' + (look.hints ? 'justify-end bg-accent-500' : 'justify-start bg-ink-600')}>
-                  <span className={'h-4 w-4 rounded-full ' + (look.hints ? 'bg-on-accent' : 'bg-mist-100')} />
-                </span>
-              </button>
+              <Section label={t('noteList.hints.label')}>
+                {/* Each kind on or off by itself (NOTES-6, NOTESIOS-6 AC-1), with a tick like every on and off. */}
+                {HINT_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={look.hints[kind]}
+                    data-testid={`list-hints-${kind}`}
+                    className="nn-menu-item"
+                    onClick={() => onLook({ hints: { [kind]: !look.hints[kind] } })}
+                  >
+                    <span className="min-w-0 flex-1 truncate">{t(`noteList.hints.kind.${kind}`)}</span>
+                    <Check aria-hidden className={'h-4 w-4 shrink-0 ' + (look.hints[kind] ? '' : 'invisible')} />
+                  </button>
+                ))}
+              </Section>
             </>
           )}
         </Menu>

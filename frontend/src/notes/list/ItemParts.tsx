@@ -9,6 +9,7 @@ import type { DragEvent, HTMLAttributes, MouseEvent, ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ListItem, ListMedia } from './api'
+import type { HintKinds } from './hintKinds'
 import { mediaText, sharedText } from './marks'
 
 /** "All notes": the folder a note lies in, with its color (a stripe). Without a color only the words: where a note of
@@ -33,8 +34,8 @@ export type ItemProps = {
   date?: string
   /** "All notes": the note's folder and a stripe in its color. */
   folder?: RowFolder | null
-  /** The hints are on (checklists, attachments, tags). */
-  hints?: boolean
+  /** The hints shown, each kind on or off (checklists, attachments, tags); `true` all, left out none. */
+  hints?: HintKinds | boolean
   /** The first of its group: no line above it. */
   first?: boolean
   onOpen?: (event: MouseEvent<HTMLAnchorElement>) => void

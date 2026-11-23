@@ -9,7 +9,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
-from pydantic import BaseModel, Field, StrictBool
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from sqlalchemy.orm import Session
 
 from .. import __version__
@@ -329,7 +329,8 @@ def me(account: Account, db: DbSession) -> dict[str, Any]:
         "min_password": MIN_PASSWORD,
         # The paper new notes start on (NOTES-3 AC-17): the account's own, not in the operator's list of accounts.
         "paper": notes_service.default_paper(account),
-        # How every list of notes looks (rows, cards, compact, tiles; with hints or without), on every device.
+        # How every list of notes looks (rows, cards, compact, tiles; which hints), on every device: `list_style`,
+        # `list_hints` (on while any kind shows) and `list_hint_kinds`.
         **{f"list_{key}": value for key, value in notes_list.list_look(account).items()},
     }
 
@@ -418,17 +419,28 @@ def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession) 
     return me(row, db)
 
 
+class HintKindsIn(BaseModel):
+    """Each kind of hint on or off (NOTES-6); a kind left out stays as it is."""
+    model_config = ConfigDict(extra="forbid")
+    checklist: StrictBool | None = None
+    attachments: StrictBool | None = None
+    tags: StrictBool | None = None
+
+
 class ListLookIn(BaseModel):
     style: str | None = Field(default=None, max_length=8)
+    #: All hints on or off at once (the one switch from before the kinds).
     hints: StrictBool | None = None
+    hint_kinds: HintKindsIn | None = None
 
 
 @router.put("/me/list-look", summary="How every list of notes of the own account looks: list, cards, compact or tiles, "
-                                     "with hints or without")
+                                     "with which hints (checklists, attachments, tags)")
 def set_list_look(payload: ListLookIn, account: Account, db: DbSession) -> dict[str, Any]:
     row = db.get(AccountRow, account.id)
     assert row is not None
-    notes_list.set_list_look(db, row, payload.style, payload.hints)
+    kinds = payload.hint_kinds.model_dump() if payload.hint_kinds is not None else None
+    notes_list.set_list_look(db, row, payload.style, payload.hints, kinds)
     return me(row, db)
 
 

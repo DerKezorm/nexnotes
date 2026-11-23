@@ -15,7 +15,8 @@ The first release.
 - **Editing together, live** (Yjs): everybody with access writes at the same time and sees the others' cursors.
 - **Inbox, folders and subfolders** with symbol and colour, `#tags` in the text, pins and colours, and **smart
   folders** from conditions (text, tag, folder, period, open checklists, attachment, colour, shared).
-- **Four list styles** (list, cards, compact, tiles), sorting and date groups per folder.
+- **Four list styles** (list, cards, compact, tiles) with hints (checklists, attachments, tags) switched on and off
+  one by one, sorting and date groups per folder.
 - **Tabs** (Alt-click opens a new one) and **two notes side by side**.
 - **Search** over titles, text, tags and recognised text, with Ctrl+K.
 - **Attachments**: pictures in three sizes, PDFs to leaf through, videos, a gallery of every attachment; **text

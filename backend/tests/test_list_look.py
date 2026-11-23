@@ -35,7 +35,7 @@ def look(client) -> tuple[str, bool]:
 
 def test_list_look_starts_as_a_list_with_hints(client, operator):
     assert look(client) == ("list", True)
-    assert notes_list.DEFAULT_LOOK == {"style": "list", "hints": True}
+    assert notes_list.DEFAULT_LOOK == {"style": "list", "hints": True, "hint_kinds": {"checklist": True, "attachments": True, "tags": True}}
 
 
 def test_list_look_is_kept_for_the_account_on_every_device(client, operator):
@@ -130,3 +130,61 @@ def test_list_look_hints_the_list_carries_how_many_attachments_a_note_has(client
     assert items[papers]["attachments"] == 1 and "media" not in items[papers]
     assert "attachments" not in items[bare]
     assert "attachments" not in items[locked]
+
+
+# --- The hints kind by kind (NOTES-6, NOTESIOS-6 AC-1) -------------------------------------------------------------
+
+
+def kinds(client) -> dict[str, bool]:
+    return client.get("/api/auth/me").json()["list_hint_kinds"]
+
+
+def test_notes6_notesios6_ac1_hints_switch_kind_by_kind_and_the_old_switch_still_counts(client, operator):
+    """Checklists, attachments and tags each on or off for the account; ``hints`` stays the one switch older apps and
+    browsers read (on while any kind shows) and send (all three at once)."""
+    assert kinds(client) == {"checklist": True, "attachments": True, "tags": True}
+    answer = client.put("/api/me/list-look", json={"hint_kinds": {"tags": False}})
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["list_hint_kinds"] == {"checklist": True, "attachments": True, "tags": False}
+    assert body["list_hints"] is True, "on while a kind shows"
+    # Only the kinds named change; the style stays.
+    client.put("/api/me/list-look", json={"style": "cards", "hint_kinds": {"checklist": False}})
+    assert kinds(client) == {"checklist": False, "attachments": True, "tags": False}
+    assert look(client) == ("cards", True)
+    client.put("/api/me/list-look", json={"hint_kinds": {"attachments": False}})
+    assert look(client) == ("cards", False), "the last kind off: off for older readers too"
+    # An older browser or app sends the one switch: all three follow.
+    client.put("/api/me/list-look", json={"hints": True})
+    assert kinds(client) == {"checklist": True, "attachments": True, "tags": True}
+    # Both at once: the switch first, then the kinds named.
+    client.put("/api/me/list-look", json={"hints": False, "hint_kinds": {"tags": True}})
+    assert kinds(client) == {"checklist": False, "attachments": False, "tags": True}
+    # Unknown kinds and values that are no booleans are refused, nothing changes.
+    for body in ({"hint_kinds": {"pictures": True}}, {"hint_kinds": {"tags": "no"}}, {"hint_kinds": True}):
+        assert client.put("/api/me/list-look", json=body).status_code == 422, body
+    assert kinds(client) == {"checklist": False, "attachments": False, "tags": True}
+    # Another account keeps its own.
+    with new_client(make_account("other-kinds")) as theirs:
+        assert kinds(theirs) == {"checklist": True, "attachments": True, "tags": True}
+
+
+def test_notes6_notesios6_ac1_accounts_with_the_old_switch_keep_it_as_three_kinds(client, operator):
+    """An account that kept ``list_hints`` as one switch: it reads as all three kinds at once, and the start turns it
+    into the three kinds; a stored kind the server does not know reads as on."""
+    with SessionLocal() as db:
+        row = db.get(Account, operator.id)
+        assert row is not None
+        row.preferences = {**(row.preferences or {}), "list_hints": False}
+        db.commit()
+    assert kinds(client) == {"checklist": False, "attachments": False, "tags": False}
+    assert look(client) == ("list", False)
+    with SessionLocal() as db:
+        assert notes_list.spread_hint_switches(db) == 1
+        assert notes_list.spread_hint_switches(db) == 0
+        row = db.get(Account, operator.id)
+        assert row is not None
+        assert row.preferences["list_hints"] == {"checklist": False, "attachments": False, "tags": False}
+        row.preferences = {**row.preferences, "list_hints": {"checklist": False, "tags": "yes"}}
+        db.commit()
+    assert kinds(client) == {"checklist": False, "attachments": True, "tags": True}

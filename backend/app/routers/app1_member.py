@@ -160,9 +160,18 @@ def order_folders(found: Device, body: OrderIn) -> dict[str, Any]:
 # --- How lists look (NOTESIOS-6) ---------------------------------------------------------------------------------
 
 
+class HintKindsIn(BaseModel):
+    """Each kind of hint on or off (contract 0.11, NOTESIOS-6 AC-1); a kind left out stays as it is."""
+    checklist: bool | None = None
+    attachments: bool | None = None
+    tags: bool | None = None
+
+
 class LookIn(BaseModel):
     style: str | None = Field(default=None, max_length=16)
+    #: All hints on or off at once (apps before 0.11); ``hint_kinds`` then sets the kinds it names.
     hints: bool | None = None
+    hint_kinds: HintKindsIn | None = None
 
 
 @router.put("/look", summary="How every list of the account looks")
@@ -170,7 +179,8 @@ def set_look(found: Device, body: LookIn) -> dict[str, Any]:
     with SessionLocal() as db:
         row = db.get(AccountRow, found.account.id)
         assert row is not None
-        return notes_list.set_list_look(db, row, body.style, body.hints)
+        kinds = body.hint_kinds.model_dump() if body.hint_kinds is not None else None
+        return notes_list.set_list_look(db, row, body.style, body.hints, kinds)
 
 
 class ViewIn(BaseModel):

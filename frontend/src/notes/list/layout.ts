@@ -9,6 +9,7 @@
  * heading only.
  */
 import type { ListItem, ListStyle } from './api'
+import { ALL_HINTS, anyHints, hintKinds, type HintKinds } from './hintKinds'
 import type { Section } from './order'
 
 export const SIZES = {
@@ -45,8 +46,8 @@ export type Entry =
 export type Layout = { entries: Entry[]; height: number; columns: number }
 
 export type LayoutOptions = {
-  /** Rows carry their hints (checklists, attachments, tags): a row with any is taller. */
-  hints?: boolean
+  /** The hints rows carry (checklists, attachments, tags; `true` all): a row with any of those kinds is taller. */
+  hints?: HintKinds | boolean
   /** The keys of the groups folded shut. */
   collapsed?: ReadonlySet<string>
   /** A touch screen: compact rows and group headings a finger high. */
@@ -66,16 +67,17 @@ export function cardColumns(width: number): number {
   return Math.max(1, Math.floor((width + SIZES.cardGap) / (SIZES.cardMin + SIZES.cardGap)))
 }
 
-/** Whether a note has anything for the hint line: checklists, attachments or tags (a locked one never). */
-export function hasHints(item: ListItem): boolean {
+/** Whether a note has anything for the hint line of the kinds switched on: checklists, attachments or tags (a locked
+ * one never). */
+export function hasHints(item: ListItem, kinds: HintKinds = ALL_HINTS): boolean {
   if (item.locked) return false
-  return Boolean((item.tasks && item.tasks.total > 0) || (item.attachments ?? 0) > 0 || (item.tags && item.tags.length > 0))
+  return Boolean((kinds.checklist && item.tasks && item.tasks.total > 0) || (kinds.attachments && (item.attachments ?? 0) > 0) || (kinds.tags && item.tags && item.tags.length > 0))
 }
 
 /** The height of a row of the list or of a compact row. */
 export function rowHeight(item: ListItem, style: ListStyle, options: LayoutOptions = {}): number {
   if (style === 'compact') return options.touch ? SIZES.compactTouch : SIZES.compact
-  return options.hints && hasHints(item) ? SIZES.rowHints : SIZES.row
+  return anyHints(options.hints) && hasHints(item, hintKinds(options.hints)) ? SIZES.rowHints : SIZES.row
 }
 
 /** The entries of a list: a heading per section (none for a list without groups), then its rows or rows of cards or

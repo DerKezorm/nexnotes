@@ -935,7 +935,11 @@
     },
     "hints": {
       "label": "Hinweise",
-      "text": "Checklisten, Anhänge, Schlagwörter",
+      "kind": {
+        "checklist": "Checklisten",
+        "attachments": "Anhänge",
+        "tags": "Schlagwörter"
+      },
       "attachments_one": "{{count}} Anhang",
       "attachments_other": "{{count}} Anhänge"
     }

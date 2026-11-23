@@ -10,6 +10,7 @@ import { NoteIcon } from '../../components/NoteIcon'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { anyHints, hintKinds } from './hintKinds'
 import { HintLine } from './Hints'
 import { boxProps, ItemActions, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
 import { noteColor } from './marks'
@@ -74,7 +75,7 @@ export function NoteRow(props: ItemProps) {
             )
           )}
         </span>
-        {hints && <HintLine item={item} className="mt-1.5" />}
+        {anyHints(hints) && <HintLine item={item} kinds={hintKinds(hints)} className="mt-1.5" />}
       </Link>
       {media?.url && <img src={media.url} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" loading="lazy" />}
       <ItemActions item={item} actions={actions} />

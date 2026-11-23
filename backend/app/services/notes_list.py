@@ -4,7 +4,8 @@ and colors.
 The server hands a list over whole, in one query without the documents; sorting and grouping by date happen in the
 browser, which alone knows the device's time zone (EC-7). How a folder is sorted and grouped is kept per account and
 folder, so that every device shows it the same way (AC-4, AC-5). How the notes look (rows, cards, compact rows, tiles)
-and whether rows carry their hints is the account's, the same for every list (``list_look``).
+and which hints rows carry (checklists, attachments, tags, each on or off) is the account's, the same for every
+list (``list_look``).
 
 A list that is open asks for ``stamp`` every few seconds and loads again only when it changed (EC-6). ``listed_at`` is
 set by an ORM event whenever something a list shows changes, whichever way the change comes (the editor, a move, the
@@ -378,17 +379,33 @@ def forget_tile_modes(db: Session) -> int:
 
 # --- The account's look -------------------------------------------------------------------------------------------
 
-#: How lists look until the account chose: rows with their hints (checklists, attachments, tags).
-DEFAULT_LOOK: dict[str, Any] = {"style": LIST_STYLES[0], "hints": True}
+#: The kinds of hints a row can carry, each switched on and off by itself (NOTES-6, NOTESIOS-6 AC-1): the progress of
+#: its checklists, how many attachments it holds, its tags.
+HINT_KINDS: tuple[str, ...] = ("checklist", "attachments", "tags")
+
+#: How lists look until the account chose: rows with all their hints (checklists, attachments, tags). ``hints`` is on
+#: while any kind shows: what readers from before the kinds (an older app or browser) read.
+DEFAULT_LOOK: dict[str, Any] = {"style": LIST_STYLES[0], "hints": True,
+                                "hint_kinds": {kind: True for kind in HINT_KINDS}}
+
+
+def hint_kinds(stored: Any) -> dict[str, bool]:
+    """The kinds of hints as kept in ``list_hints``: the one switch from before the kinds (on or off for all three),
+    or one value per kind; what is missing or unknown shows, as by default."""
+    if isinstance(stored, bool):
+        return {kind: stored for kind in HINT_KINDS}
+    chosen = stored if isinstance(stored, dict) else {}
+    return {kind: chosen[kind] if isinstance(chosen.get(kind), bool) else True for kind in HINT_KINDS}
 
 
 def list_look(account: Account) -> dict[str, Any]:
-    """How every list of the account looks, on every device: ``style`` (one of ``LIST_STYLES``) and ``hints``."""
+    """How every list of the account looks, on every device: ``style`` (one of ``LIST_STYLES``), ``hint_kinds`` (each
+    kind on or off) and ``hints`` (on while any kind shows; the one switch older readers know)."""
     chosen = account.preferences if isinstance(account.preferences, dict) else {}
     style = chosen.get("list_style")
-    hints = chosen.get("list_hints")
-    return {"style": style if style in LIST_STYLES else DEFAULT_LOOK["style"],
-            "hints": hints if isinstance(hints, bool) else DEFAULT_LOOK["hints"]}
+    kinds = hint_kinds(chosen.get("list_hints"))
+    return {"style": style if style in LIST_STYLES else DEFAULT_LOOK["style"], "hints": any(kinds.values()),
+            "hint_kinds": kinds}
 
 
 def check_style(style: str) -> str:
@@ -397,16 +414,39 @@ def check_style(style: str) -> str:
     return style
 
 
-def set_list_look(db: Session, account: Account, style: str | None, hints: bool | None) -> dict[str, Any]:
-    """Keeps how the account's lists look; only what is given changes."""
+def set_list_look(db: Session, account: Account, style: str | None, hints: bool | None,
+                  kinds: dict[str, bool | None] | None = None) -> dict[str, Any]:
+    """Keeps how the account's lists look; only what is given changes. ``hints`` (the one switch of older apps and
+    browsers) sets all three kinds; ``kinds`` then sets the kinds it names."""
     preferences = dict(account.preferences) if isinstance(account.preferences, dict) else {}
     if style is not None:
         preferences["list_style"] = check_style(style)
-    if hints is not None:
-        preferences["list_hints"] = bool(hints)
+    if hints is not None or kinds:
+        stored = hint_kinds(preferences.get("list_hints"))
+        if hints is not None:
+            stored = {kind: bool(hints) for kind in HINT_KINDS}
+        for kind, value in (kinds or {}).items():
+            if kind in HINT_KINDS and value is not None:
+                stored[kind] = bool(value)
+        preferences["list_hints"] = stored
     account.preferences = preferences
     db.commit()
     return list_look(account)
+
+
+def spread_hint_switches(db: Session) -> int:
+    """Accounts that kept the one switch of hints from before the kinds (``list_hints`` true or false) keep it as the
+    three kinds, each as the switch was. Runs at every start; accounts already with the kinds are left alone."""
+    changed = 0
+    for row in db.scalars(select(Account)):
+        preferences = row.preferences if isinstance(row.preferences, dict) else None
+        if preferences is None or not isinstance(preferences.get("list_hints"), bool):
+            continue
+        row.preferences = {**preferences, "list_hints": hint_kinds(preferences["list_hints"])}
+        changed += 1
+    if changed:
+        db.commit()
+    return changed
 
 
 # --- Pins and colors ----------------------------------------------------------------------------------------------

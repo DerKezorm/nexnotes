@@ -8,6 +8,7 @@ import { NoteIcon } from '../../components/NoteIcon'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { anyHints, hintKinds } from './hintKinds'
 import { MiniHints } from './Hints'
 import { boxProps, ItemActions, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
 import { noteColor } from './marks'
@@ -51,7 +52,7 @@ export function NoteCompact(props: ItemProps) {
           )}
         </span>
         <TitleMarks item={item} small scan={false} />
-        {hints && <MiniHints item={item} />}
+        {anyHints(hints) && <MiniHints item={item} kinds={hintKinds(hints)} />}
         {date && <span className="shrink-0 text-[12px] text-mist-600 tabular-nums">{date}</span>}
       </Link>
       <ItemActions item={item} actions={actions} small />

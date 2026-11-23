@@ -1,5 +1,5 @@
 /**
- * The hints a note carries in a list (switched off and on in the menu "Ansicht", kept for the account, `look.ts`): the
+ * The hints a note carries in a list (each kind switched off and on in the menu "Ansicht", kept for the account, `look.ts`): the
  * progress of its checklists with a small bar ("3 von 8"; all done in green), how many attachments it holds, its tags.
  * `mini` is the compact row's way: small numbers only ("3/8", the clip and a number).
  */
@@ -8,6 +8,7 @@ import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ListItem } from './api'
+import { ALL_HINTS, type HintKinds } from './hintKinds'
 import { tagName, tasksText } from './marks'
 
 export function TasksHint({ item }: { item: ListItem }) {
@@ -61,18 +62,18 @@ export function TagsHint({ item }: { item: ListItem }) {
   )
 }
 
-/** The hint line of a row, card or tile; nothing for a locked note or one without hints. `end` stands at its end
- * (the time of a card). */
-export function HintLine({ item, end, className = '' }: { item: ListItem; end?: ReactNode; className?: string }) {
-  const any = !item.locked && ((item.tasks?.total ?? 0) > 0 || (item.attachments ?? 0) > 0 || (item.tags?.length ?? 0) > 0)
+/** The hint line of a row, card or tile: the kinds switched on (`kinds`, all by default); nothing for a locked note or
+ * one without hints of those kinds. `end` stands at its end (the time of a card). */
+export function HintLine({ item, end, className = '', kinds = ALL_HINTS }: { item: ListItem; end?: ReactNode; className?: string; kinds?: HintKinds }) {
+  const any = !item.locked && ((kinds.checklist && (item.tasks?.total ?? 0) > 0) || (kinds.attachments && (item.attachments ?? 0) > 0) || (kinds.tags && (item.tags?.length ?? 0) > 0))
   if (!any && !end) return null
   return (
     <span className={'flex min-w-0 items-center gap-1.5 overflow-hidden ' + className} data-testid="note-hints">
       {any && (
         <>
-          <TasksHint item={item} />
-          <AttachmentsHint item={item} />
-          <TagsHint item={item} />
+          {kinds.checklist && <TasksHint item={item} />}
+          {kinds.attachments && <AttachmentsHint item={item} />}
+          {kinds.tags && <TagsHint item={item} />}
         </>
       )}
       {end && <span className="ml-auto shrink-0 pl-1">{end}</span>}
@@ -80,12 +81,12 @@ export function HintLine({ item, end, className = '' }: { item: ListItem; end?: 
   )
 }
 
-/** The compact row's hints: "✓ 3/8" and the clip with a number. */
-export function MiniHints({ item }: { item: ListItem }) {
+/** The compact row's hints: "✓ 3/8" and the clip with a number, each when its kind is on (`kinds`, all by default). */
+export function MiniHints({ item, kinds = ALL_HINTS }: { item: ListItem; kinds?: HintKinds }) {
   const { t } = useTranslation()
   if (item.locked) return null
-  const tasks = item.tasks && item.tasks.total > 0 ? item.tasks : null
-  const count = item.attachments ?? 0
+  const tasks = kinds.checklist && item.tasks && item.tasks.total > 0 ? item.tasks : null
+  const count = kinds.attachments ? (item.attachments ?? 0) : 0
   if (!tasks && count < 1) return null
   return (
     <span className="flex shrink-0 items-center gap-2 text-[11.5px] text-mist-500 tabular-nums" data-testid="note-hints">

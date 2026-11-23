@@ -24,10 +24,13 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     with SessionLocal() as db:
         counted = notes_list.count_missing(db)
         tiles = notes_list.forget_tile_modes(db)
+        spread = notes_list.spread_hint_switches(db)
     if counted:
         notes_list.logger.info("Checklists counted notes=%s", counted)
     if tiles:
         notes_list.logger.info("Folder views as tiles became lists views=%s", tiles)
+    if spread:
+        notes_list.logger.info("The switch of hints became one per kind accounts=%s", spread)
     yield
 
 

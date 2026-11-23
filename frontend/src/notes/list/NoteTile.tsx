@@ -14,6 +14,7 @@ import { Lock, Pin } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { hintKinds } from './hintKinds'
 import { AttachmentsHint } from './Hints'
 import { boxProps, ItemActions, MediaIcon, MoreButton, type ItemProps } from './ItemParts'
 import { mediaText, noteColor, sharedText, tagsText, tasksText } from './marks'
@@ -27,12 +28,13 @@ export function NoteTile(props: ItemProps & { narrow?: boolean }) {
   const locked = Boolean(item.locked)
   const band = noteColor(item)
   const shared = sharedText(item, t)
-  const tags = locked || !hints ? '' : tagsText(item)
-  const tasks = locked || !hints ? '' : tasksText(item, t)
+  const kinds = hintKinds(hints)
+  const tags = locked || !kinds.tags ? '' : tagsText(item)
+  const tasks = locked || !kinds.checklist ? '' : tasksText(item, t)
   const media = !locked && item.media && item.media.count > 0 ? item.media : null
   const title = item.title || t('notes.untitled')
   const foot = [date, tasks, shared].filter(Boolean).join(' · ')
-  const progress = !locked && hints && item.tasks && item.tasks.total > 0 ? Math.round((item.tasks.done / item.tasks.total) * 100) : null
+  const progress = !locked && kinds.checklist && item.tasks && item.tasks.total > 0 ? Math.round((item.tasks.done / item.tasks.total) * 100) : null
   const buttons = 28 * (actions?.length ?? 0)
   const more = <MoreButton item={item} onMenu={onMenu} className="h-7 w-7" />
   return (
@@ -96,7 +98,7 @@ export function NoteTile(props: ItemProps & { narrow?: boolean }) {
           )}
           <span className="flex min-w-0 items-center justify-between gap-2 text-[11.5px] text-mist-500">
             <span className="min-w-0 truncate">{foot}</span>
-            {hints && !locked && <AttachmentsHint item={item} />}
+            {kinds.attachments && !locked && <AttachmentsHint item={item} />}
             {tags && <span className="min-w-0 shrink truncate text-accent-400">{tags}</span>}
           </span>
         </span>

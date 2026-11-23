@@ -8,6 +8,7 @@ import { NoteIcon } from '../../components/NoteIcon'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
+import { anyHints, hintKinds } from './hintKinds'
 import { HintLine } from './Hints'
 import { boxProps, ItemActions, MoreButton, TitleMarks, type ItemProps } from './ItemParts'
 import { noteColor } from './marks'
@@ -54,7 +55,7 @@ export function NoteCard(props: ItemProps) {
           {locked ? t('noteList.lockedBody') : item.preview}
         </span>
         <span className="mt-auto flex min-w-0 items-center">
-          {hints ? <HintLine item={item} end={time} className="w-full" /> : <span className="ml-auto">{time}</span>}
+          {anyHints(hints) ? <HintLine item={item} kinds={hintKinds(hints)} end={time} className="w-full" /> : <span className="ml-auto">{time}</span>}
         </span>
       </Link>
       <span className="absolute top-2 right-2 flex items-center gap-0.5 rounded-lg bg-ink-850">

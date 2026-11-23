@@ -935,7 +935,11 @@
     },
     "hints": {
       "label": "Hints",
-      "text": "Checklists, attachments, tags",
+      "kind": {
+        "checklist": "Checklists",
+        "attachments": "Attachments",
+        "tags": "Tags"
+      },
       "attachments_one": "{{count}} attachment",
       "attachments_other": "{{count}} attachments"
     }
