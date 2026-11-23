@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../../api/client'
 import { Dialog } from '../../components/Dialog'
+import { Done } from '../../components/Field'
 import { errorText, problemText } from '../../lib/errors'
 import { copyText } from '../../lib/copy'
 import { go, startAddress } from '../../lib/providers'
@@ -189,11 +190,7 @@ export function Feedback({ problem, done = null }: { problem: Trouble; done?: st
         </p>
       )}
       {problem instanceof ApiError && problem.code === 'fresh_sign_in_required' && <SignInAgain providers={problem.values.providers} />}
-      {done && (
-        <p role="status" className="text-sm text-ok-500">
-          {done}
-        </p>
-      )}
+      <Done text={done} />
     </div>
   )
 }

@@ -20,6 +20,7 @@ import {
   type ServerSettings,
   type SettingsChange,
 } from '../../api/client'
+import { Done } from '../../components/Field'
 import { byName, forgetAddedLanguages, templateFile } from '../../i18n'
 import { bytes, dayTime } from '../../lib/format'
 import { moment } from '../../lib/time'
@@ -363,7 +364,7 @@ export function BackupsCard({ server }: { server: Server }) {
           )}
         </div>
       )}
-      {uploaded && <p className="rounded-[12px] border border-ok-500/40 bg-ok-500/10 px-4 py-3 text-sm text-mist-200">{t('server.uploadedHint')}</p>}
+      <Done text={uploaded ? t('server.uploadedHint') : null} />
       {restarting && <p className="rounded-[12px] border border-warn-500/40 bg-warn-500/10 px-4 py-3 text-sm text-warn-500">{t('server.restarting')}</p>}
       <Feedback problem={action.problem} done={action.done} />
       {asking && (

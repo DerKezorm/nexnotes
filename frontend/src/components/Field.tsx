@@ -1,4 +1,4 @@
-/** A field with its name above it, and a problem as a red box: the pieces of the account page. */
+/** A field with its name above it, a problem as a red box, success as a green line: the pieces of the account page. */
 import { useId } from 'react'
 
 export function Field({
@@ -44,6 +44,16 @@ export function Field({
         </span>
       )}
     </div>
+  )
+}
+
+/** That it worked, as the settings' cards say it: one green line, no box (a box stays for what went wrong). */
+export function Done({ text, className = '' }: { text: string | null; className?: string }) {
+  if (!text) return null
+  return (
+    <p role="status" className={('text-sm text-ok-500 ' + className).trim()}>
+      {text}
+    </p>
   )
 }
 

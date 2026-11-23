@@ -134,6 +134,28 @@ describe.each(['en', 'de'])('the server tab (%s)', (language) => {
     expect(fetches()).toBe(before + 1)
   })
 
+  it('an uploaded backup says so in one green line, no box; the result of a check keeps its box', async () => {
+    await backupsCard([ENTRY])
+    const picker = box.querySelector<HTMLInputElement>('input[type="file"]')!
+    Object.defineProperty(picker, 'files', { configurable: true, value: [new File(['zip'], 'nexnotes-backup-2.zip', { type: 'application/zip' })] })
+    await act(async () => void picker.dispatchEvent(new Event('change', { bubbles: true })))
+    await settle()
+    const dialog = document.querySelector('[role="dialog"]')!
+    expect(dialog.textContent).toContain(i18n.t('server.confirm.backup_upload.title'))
+    await act(async () => dialog.querySelector('form')!.requestSubmit())
+    await settle()
+    const line = [...box.querySelectorAll('[role="status"]')].find((node) => node.textContent === i18n.t('server.uploadedHint')) as HTMLElement
+    expect(line).toBeDefined()
+    expect(line.className).toContain('text-ok-500')
+    expect(line.className).not.toMatch(/\b(?:border|bg-|rounded)/)
+
+    const check = [...box.querySelectorAll('button')].find((button) => button.textContent === i18n.t('server.check'))!
+    await act(async () => check.click())
+    await settle()
+    const brief = box.querySelector('[data-testid="backup-brief"]')!
+    expect(brief.className).toMatch(/\bborder-ok-500\/40\b.*\bbg-ok-500\/10\b/)
+  })
+
   it('NOTES-1 AC-4 without backups "No backups yet." stands there once', async () => {
     await backupsCard([])
     expect(box.textContent!.split(i18n.t('server.noBackups')).length - 1).toBe(1)

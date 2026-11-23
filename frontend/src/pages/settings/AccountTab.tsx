@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { ACCOUNT_SECTIONS } from '../../extensions'
 import { Avatar } from '../../components/Avatar'
-import { Field, Problem } from '../../components/Field'
+import { Done, Field, Problem } from '../../components/Field'
 import { PasswordConfirmField } from '../../components/PasswordConfirm'
 import { SignOutWaiting, useSignOut } from '../../components/SignOut'
 import { ThemeSwitcher } from '../../components/ThemeSwitcher'
@@ -86,9 +86,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
     <div className="space-y-5">
       <div aria-live="polite">
         <Problem text={problem} />
-        {(done ?? (linkedShown && linkedLabel)) && (
-          <p className="rounded-[9px] border border-ok-500/30 bg-ok-500/10 px-3 py-2 text-sm text-ok-500">{done ?? t('me.linked', { name: linkedLabel })}</p>
-        )}
+        <Done text={done ?? (linkedShown && linkedLabel ? t('me.linked', { name: linkedLabel }) : null)} />
       </div>
 
       {shows('profile') && (
