@@ -70,6 +70,10 @@ describe('make the guide again (NOTES-26 AC-3)', () => {
     expect(made).toEqual([{ path: '/api/guide', method: 'POST', body: { language: 'de' } }])
     expect($('guide-made')!.textContent).toContain('„Anleitung (2)“ ist angelegt.')
     expect($('guide-made')!.querySelector('a')!.getAttribute('href')).toBe('/folder/f-1')
+    // That it worked is one green line, as the other cards say it, no box.
+    expect($('guide-made')!.getAttribute('role')).toBe('status')
+    expect($('guide-made')!.className).toContain('text-ok-500')
+    expect($('guide-made')!.className).not.toMatch(/\b(?:border|bg-|rounded)/)
     // The sidebar learns of the new folder.
     expect(calls.some((call) => call.path === '/api/folders' && call.method === 'GET')).toBe(true)
   })

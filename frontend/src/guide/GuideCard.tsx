@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api/client'
-import { Problem } from '../components/Field'
+import { Done, Problem } from '../components/Field'
 import { refreshFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
 import { Card } from '../pages/settings/ui'
@@ -45,14 +45,19 @@ export function GuideCard() {
     <Card id="guide" icon={BookOpen} title={t('guide.title')} text={t('guide.text')}>
       <div aria-live="polite">
         <Problem text={problem} />
-        {made && (
-          <p className="rounded-[9px] border border-ok-500/30 bg-ok-500/10 px-3 py-2 text-sm text-ok-500" data-testid="guide-made">
-            {t('guide.made', { name: made.name })}{' '}
-            <Link to={`/folder/${made.id}`} className="font-medium underline">
-              {t('guide.open')}
-            </Link>
-          </p>
-        )}
+        <Done
+          testId="guide-made"
+          text={
+            made && (
+              <>
+                {t('guide.made', { name: made.name })}{' '}
+                <Link to={`/folder/${made.id}`} className="font-medium underline">
+                  {t('guide.open')}
+                </Link>
+              </>
+            )
+          }
+        />
       </div>
       <button type="button" className="nn-btn nn-btn-ghost" disabled={busy} onClick={() => void make()} data-testid="guide-make">
         {busy ? t('guide.making') : t('guide.make')}

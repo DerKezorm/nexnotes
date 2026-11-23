@@ -1,5 +1,5 @@
 /** A field with its name above it, a problem as a red box, success as a green line: the pieces of the account page. */
-import { useId } from 'react'
+import { useId, type ReactNode } from 'react'
 
 export function Field({
   label,
@@ -47,11 +47,12 @@ export function Field({
   )
 }
 
-/** That it worked, as the settings' cards say it: one green line, no box (a box stays for what went wrong). */
-export function Done({ text, className = '' }: { text: string | null; className?: string }) {
+/** That it worked, as the settings' cards say it: one green line, no box (a box stays for what went wrong). The line
+ * may carry a link on ("… is ready. Open"). */
+export function Done({ text, className = '', testId }: { text: ReactNode; className?: string; testId?: string }) {
   if (!text) return null
   return (
-    <p role="status" className={('text-sm text-ok-500 ' + className).trim()}>
+    <p role="status" className={('text-sm text-ok-500 ' + className).trim()} data-testid={testId}>
       {text}
     </p>
   )
