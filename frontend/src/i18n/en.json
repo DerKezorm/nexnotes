@@ -2123,11 +2123,17 @@
       "localOff": "If your nextasks runs in the local network, the operator has to allow that first under Settings, Server.",
       "connect": "Connect",
       "checking": "Checking …",
-      "connected": "Connected to {{host}} as {{name}}",
+      "connected": "connected",
+      "as": "as {{name}}",
       "changeKey": "Change key",
       "disconnect": "Disconnect",
       "disconnectTitle": "Disconnect nextasks?",
-      "disconnectText": "The tasks stay in nextasks, and so do the marks beside the lines. New lines can be sent after connecting again."
+      "disconnectText": "The tasks stay in nextasks, and so do the marks beside the lines. New lines can be sent after connecting again.",
+      "areas": "Areas and lists",
+      "areasHint": "An area ticked shows all its lists, later ones too; otherwise single lists. All areas from the start.",
+      "standard": "Standard list",
+      "standardNone": "None",
+      "standardHint": "Chosen first when sending to nextasks. Only a ticked list can be it."
     },
     "send": {
       "button": "To nextasks",

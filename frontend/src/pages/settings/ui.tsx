@@ -2,7 +2,7 @@
  * Building blocks of the settings, account and about pages, the same as nexlore's (components/settings/ui.tsx and
  * components/TabRow.tsx): whoever knows one app finds the same card, row, field and tab in the other.
  */
-import type { LucideIcon } from 'lucide-react'
+import { ChevronDown, type LucideIcon } from 'lucide-react'
 import { useCallback, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
@@ -12,24 +12,66 @@ import { Dialog } from '../../components/Dialog'
 import { Done } from '../../components/Field'
 import { errorText, problemText } from '../../lib/errors'
 import { copyText } from '../../lib/copy'
+import { useDevicePref } from '../../lib/devicePref'
 import { go, startAddress } from '../../lib/providers'
 
-/** A card with its symbol in a small box, a title and a line of explanation. */
-export function Card({ icon: Icon, title, text, children, id }: { icon: LucideIcon; title: string; text?: string; children: ReactNode; id?: string }) {
-  return (
-    <section id={id} aria-labelledby={id ? `${id}-title` : undefined} className="rounded-[12px] border border-ink-700 bg-ink-850 p-5">
-      <div className="mb-4 flex gap-3">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-wash)] text-accent-400">
-          <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-        </span>
-        <div>
-          <h2 id={id ? `${id}-title` : undefined} className="font-semibold text-mist-100">
-            {title}
-          </h2>
-          {text && <p className="text-sm text-mist-500">{text}</p>}
+/** A card of the settings: its symbol in a small box (or `logo`, an app's own mark such as nextasks'), a title and a
+ * line of explanation. `foldable` names a choice of this device: the card folds to its head with the arrow on the right
+ * (the connections to the other apps, so the page stays short, as in nextime); folded until opened, its head then shows
+ * `summary`. The head is one button: Enter and space fold it, `aria-expanded` says how it stands. */
+type CardProps = { icon: LucideIcon; logo?: string; title: string; text?: string; children: ReactNode; id?: string; foldable?: string; summary?: ReactNode }
+
+export function Card(props: CardProps) {
+  // Only a foldable card reads the choice of this device; the others stay plain.
+  return props.foldable ? <FoldableCard {...props} foldable={props.foldable} /> : <CardView {...props} folded={false} />
+}
+
+function FoldableCard(props: CardProps & { foldable: string }) {
+  const [folded, setFolded] = useDevicePref(`fold.${props.foldable}`, (raw) => raw !== '0')
+  return <CardView {...props} folded={folded} onFold={() => setFolded(folded ? '0' : null)} />
+}
+
+function CardView({ icon: Icon, logo, title, text, children, id, summary, folded, onFold }: CardProps & { folded: boolean; onFold?: () => void }) {
+  const bodyId = useId()
+  const mark = logo ? (
+    <img src={logo} alt="" className="h-9 w-9 shrink-0 rounded-xl" data-testid="card-logo" />
+  ) : (
+    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[var(--color-accent-wash)] text-accent-400">
+      <Icon className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+    </span>
+  )
+  const words = (
+    <div className="min-w-0 flex-1">
+      <h2 id={id ? `${id}-title` : undefined} className="font-semibold text-mist-100">
+        {title}
+      </h2>
+      {text && <p className="text-sm text-mist-500">{text}</p>}
+      {folded && summary && (
+        <div className="mt-1.5" data-testid="card-summary">
+          {summary}
         </div>
-      </div>
-      <div className="space-y-3">{children}</div>
+      )}
+    </div>
+  )
+  return (
+    <section id={id} aria-labelledby={id ? `${id}-title` : undefined} className="rounded-[12px] border border-ink-700 bg-ink-850 p-5" data-folded={onFold ? folded : undefined}>
+      {onFold ? (
+        <button type="button" className={'flex w-full gap-3 text-left ' + (folded ? '' : 'mb-4')} aria-expanded={!folded} aria-controls={bodyId} onClick={onFold} data-testid="card-fold">
+          {mark}
+          {words}
+          <ChevronDown className={'mt-2 h-4 w-4 shrink-0 text-mist-500 transition-transform ' + (folded ? '-rotate-90' : '')} aria-hidden />
+        </button>
+      ) : (
+        <div className="mb-4 flex gap-3">
+          {mark}
+          {words}
+        </div>
+      )}
+      {!folded && (
+        <div id={bodyId} className="space-y-3">
+          {children}
+        </div>
+      )}
     </section>
   )
 }

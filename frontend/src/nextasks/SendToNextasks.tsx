@@ -3,8 +3,9 @@
  * day, and the marks beside the lines sent.
  *
  * - Only with nextasks connected (AC-4), never in a locked note or one opened from the vault (NOTES-16).
- * - The dialog chooses the list used last (AC-6), names how many tasks come from several lines (EC-2) and keeps one id
- *   per opening: a second click or a retry makes no second task (EC-6).
+ * - The dialog offers the lists chosen in Connections and chooses the standard list there, else the list used last
+ *   (AC-6); it names how many tasks come from several lines (EC-2) and keeps one id per opening: a second click or a
+ *   retry makes no second task (EC-6).
  * - A mark leads to its task, asked first whether nextasks still has it (EC-4); the marks are the member's own (EC-5).
  * - A failure says so and leaves the note alone; a key nextasks refuses leads to Connections (EC-1).
  */
@@ -161,7 +162,8 @@ function SendDialog({ noteId, lines, onClose, onSent, onPartly }: { noteId: stri
     nextasksApi.lists().then(
       (found) => {
         setLists(found.lists)
-        setListId(found.last ?? found.lists[0]?.id ?? '')
+        // The standard list chosen in Connections first, else the list used last (AC-6), else the first.
+        setListId(found.lists.find((list) => list.default)?.id ?? found.last ?? found.lists[0]?.id ?? '')
       },
       (error) => setProblem({ text: problemText(error), fix: error instanceof ApiError && FIX_IN_CONNECTIONS.has(error.code) }),
     )

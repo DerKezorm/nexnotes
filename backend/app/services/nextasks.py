@@ -90,6 +90,15 @@ OWN_NAMES = ("localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopbac
 ANCHOR = re.compile(r"^\d{1,20}\.\d{1,20}$")
 REQUEST = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 LIST_ID = re.compile(r"^[A-Za-z0-9-]{1,64}(/[A-Za-z0-9-]{1,64})?$")
+#: An area of nextasks (a space), and the marks of an area or a list as nextasks stores them.
+AREA_ID = re.compile(r"^[A-Za-z0-9-]{1,100}$")
+SYMBOL = re.compile(r"^[a-z0-9-]{1,40}$")
+COLOR = re.compile(r"^([a-z]{1,20}|#[0-9a-fA-F]{6})$")
+#: At most so many areas, and single lists chosen.
+MAX_AREAS = 200
+MAX_CHOSEN = 500
+#: How long the areas are kept for the choice in Connections.
+AREAS_SECONDS = 60.0
 
 #: Stand-ins for the tests: how a name is resolved, and the transport (``None``: the network).
 RESOLVER = outbound.resolve
@@ -125,6 +134,9 @@ def _unreachable(reason: str, *args: Any) -> NextasksError:
 _gate_lock = threading.Lock()
 _started: dict[tuple[int, bool], deque[float]] = defaultdict(deque)
 _running: dict[int, int] = defaultdict(int)
+#: The areas and lists of an account's nextasks, for the choice in Connections: (when, areas, lists).
+_areas_lock = threading.Lock()
+_areas_cache: dict[int, tuple[float, dict[str, dict[str, Any]], list[dict[str, Any]]]] = {}
 
 
 @contextmanager
@@ -161,6 +173,8 @@ def forget() -> None:
     with _gate_lock:
         _started.clear()
         _running.clear()
+    with _areas_lock:
+        _areas_cache.clear()
 
 
 # --- The address ----------------------------------------------------------------------------------------------------
@@ -316,9 +330,9 @@ def check(access: Access) -> str:
     return str(me.get("display_name") or me.get("name") or "")[:200]
 
 
-def lists(access: Access) -> list[dict[str, Any]]:
-    """The lists the token may write into, each with its sections after it, as "Space › List (› Section)"; those of
-    hidden spaces at the end."""
+def _list_rows(access: Access) -> list[dict[str, Any]]:
+    """``GET /lists`` as nexnotes uses it, in nextasks' order: the lists the token may write into, each with its area
+    (nextasks' space), symbol, colour and sections."""
     data = request(access, "GET", "lists")
     rows = data.get("lists") if isinstance(data, dict) else None
     if not isinstance(rows, list):
@@ -327,16 +341,152 @@ def lists(access: Access) -> list[dict[str, Any]]:
     for row in rows:
         if not isinstance(row, dict) or not isinstance(row.get("id"), str) or not LIST_ID.match(row["id"]):
             continue
-        if row.get("writable") is False:
+        if row.get("writable") is False or SECTION in row["id"]:
             continue
-        name = " › ".join(str(part)[:100] for part in (row.get("space_name"), row.get("name")) if part)
-        hidden = row.get("hidden") is True
-        found.append({"id": row["id"], "name": name, "hidden": hidden})
-        for section in row.get("sections") or []:
-            if isinstance(section, dict) and isinstance(section.get("id"), str) and LIST_ID.match(section["id"]):
-                found.append({"id": f"{row['id']}{SECTION}{section['id']}",
-                              "name": f"{name} › {str(section.get('name') or '')[:100]}", "hidden": hidden})
+        area = row.get("space_id") if isinstance(row.get("space_id"), str) and AREA_ID.match(row["space_id"]) else ""
+        found.append({
+            "id": row["id"], "area": area, "area_name": _text(row.get("space_name"), 100),
+            "name": _text(row.get("name"), 100), "hidden": row.get("hidden") is True,
+            "icon": _mark(row.get("icon"), SYMBOL), "color": _mark(row.get("color"), COLOR),
+            "sections": [{"id": section["id"], "name": _text(section.get("name"), 100)}
+                         for section in row.get("sections") or []
+                         if isinstance(section, dict) and isinstance(section.get("id"), str)
+                         and LIST_ID.match(section["id"]) and SECTION not in section["id"]],
+        })
+    return found
+
+
+def _text(value: Any, size: int) -> str:
+    return str(value)[:size] if value is not None else ""
+
+
+def _mark(value: Any, rule: re.Pattern[str]) -> str:
+    return value if isinstance(value, str) and rule.match(value) else ""
+
+
+def _flat(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The lists for the sending, each with its sections after it, as "Area › List (› Section)"; those of
+    hidden areas at the end."""
+    found: list[dict[str, Any]] = []
+    for row in rows:
+        name = " › ".join(part for part in (row["area_name"], row["name"]) if part)
+        found.append({"id": row["id"], "name": name, "hidden": row["hidden"]})
+        for section in row["sections"]:
+            found.append({"id": f"{row['id']}{SECTION}{section['id']}", "name": f"{name} › {section['name']}",
+                          "hidden": row["hidden"]})
     return sorted(found, key=lambda one: one["hidden"])
+
+
+# --- Areas and lists chosen, the standard list ("Bereiche und Listen" in Connections) -----------------------------
+
+
+def choice_of(row: NextasksConnection) -> dict[str, set[str]] | None:
+    """The areas chosen whole and the single lists; ``None``: nothing chosen yet, every area whole."""
+    try:
+        found = jsonlib.loads(row.task_choice) if row.task_choice else None
+    except ValueError:
+        found = None
+    if not isinstance(found, dict):
+        return None
+    return {name: {one for one in found.get(name) or [] if isinstance(one, str)} for name in ("areas", "lists")}
+
+
+def _chosen(choice: dict[str, set[str]] | None, list_row: dict[str, Any]) -> bool:
+    # A list without an area (a nextasks before its spaces) cannot be chosen away: it is always offered.
+    if choice is None or not list_row["area"]:
+        return True
+    return list_row["area"] in choice["areas"] or list_row["id"] in choice["lists"]
+
+
+def _default(row: NextasksConnection, rows: list[dict[str, Any]]) -> str | None:
+    """The standard list while it is chosen and nextasks still has it; otherwise none, quietly."""
+    choice = choice_of(row)
+    wanted = row.default_list_id
+    return wanted if wanted and any(one["id"] == wanted and _chosen(choice, one) for one in rows) else None
+
+
+def offered(db: Session, account_id: int) -> dict[str, Any]:
+    """The lists the sending offers (web and app): the chosen ones with their sections, the standard list marked
+    ``default``; and the list used last while it is among them."""
+    access = connected_access(db, account_id)
+    with outgoing(account_id):
+        rows = _list_rows(access)
+    row = connection_of(db, account_id)
+    if row is None:
+        raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
+    choice = choice_of(row)
+    standard = _default(row, rows)
+    found = [{**one, "default": one["id"] == standard} for one in _flat([one for one in rows if _chosen(choice, one)])]
+    last = row.last_list_id if any(one["id"] == row.last_list_id for one in found) else ""
+    return {"lists": found, "last": last or None}
+
+
+def _areas(access: Access, account_id: int) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+    """The areas (nextasks' spaces) with symbol and colour in nextasks' order, and the lists; kept a minute, so ticking
+    one box after another asks nextasks once. A nextasks without ``/spaces`` names its areas by the lists."""
+    with _areas_lock:
+        kept = _areas_cache.get(account_id)
+    if kept and time.monotonic() - kept[0] < AREAS_SECONDS:
+        return kept[1], kept[2]
+    rows = _list_rows(access)
+    try:
+        spaces = request(access, "GET", "spaces")
+    except NextasksError as exc:
+        if exc.code != "nextasks_not_found":
+            raise
+        spaces = {}
+    named: dict[str, dict[str, Any]] = {}
+    for one in (spaces.get("spaces") if isinstance(spaces, dict) else None) or []:
+        if isinstance(one, dict) and isinstance(one.get("id"), str) and AREA_ID.match(one["id"]):
+            named[one["id"]] = {"id": one["id"], "name": _text(one.get("name"), 100),
+                                "icon": _mark(one.get("icon"), SYMBOL), "color": _mark(one.get("color"), COLOR)}
+    areas: dict[str, dict[str, Any]] = {}
+    for one in rows:
+        if one["area"] and one["area"] not in areas:
+            areas[one["area"]] = named.get(one["area"]) or {"id": one["area"], "name": one["area_name"], "icon": "",
+                                                             "color": ""}
+    areas = dict(list(areas.items())[:MAX_AREAS])
+    with _areas_lock:
+        _areas_cache[account_id] = (time.monotonic(), areas, rows)
+    return areas, rows
+
+
+def areas_out(db: Session, account_id: int) -> dict[str, Any]:
+    """Every area with its lists, in nextasks' order: whether the area is chosen whole and which lists alone; and the
+    standard list while it counts (``None`` otherwise, never an error)."""
+    access = connected_access(db, account_id)
+    with outgoing(account_id):
+        areas, rows = _areas(access, account_id)
+    row = connection_of(db, account_id)
+    if row is None:
+        raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
+    choice = choice_of(row)
+    out = []
+    for area_id, area in areas.items():
+        whole = choice is None or area_id in choice["areas"]
+        single = set() if choice is None else choice["lists"]
+        out.append({**area, "whole": whole,
+                    "lists": [{"id": one["id"], "name": one["name"], "icon": one["icon"], "color": one["color"],
+                               "chosen": whole or one["id"] in single}
+                              for one in rows if one["area"] == area_id]})
+    return {"areas": out, "default": _default(row, rows)}
+
+
+def choose(db: Session, account_id: int, areas: list[str], lists: list[str], default: str | None) -> dict[str, Any]:
+    """Keeps the areas chosen whole, the single lists and the standard list; a standard list not among the chosen
+    ones counts as none from here on (ticked again later, it stays none)."""
+    row = connection_of(db, account_id)
+    if row is None:
+        raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
+    row.task_choice = jsonlib.dumps({"areas": sorted({one for one in areas if AREA_ID.match(one)})[:MAX_AREAS],
+                                     "lists": sorted({one for one in lists if LIST_ID.match(one)})[:MAX_CHOSEN]})
+    row.default_list_id = default if default and LIST_ID.match(default) and SECTION not in default else ""
+    db.commit()
+    found = areas_out(db, account_id)
+    if row.default_list_id and found["default"] is None:
+        row.default_list_id = ""
+        db.commit()
+    return found
 
 
 def _link_of(value: Any) -> str:
@@ -444,7 +594,11 @@ def connect(db: Session, account_id: int, url: str, token: str, *, device_id: in
         row = NextasksConnection(account_id=account_id, url=clean, token_enc="")
         db.add(row)
     if row.url != clean:
+        # Another nextasks has other lists: what was chosen of the one before counts no more.
         row.last_list_id, row.last_list_name = "", ""
+        row.task_choice, row.default_list_id = "", ""
+    with _areas_lock:
+        _areas_cache.pop(account_id, None)
     row.url = clean
     row.token_enc = encrypt_secret(token, _context(account_id))
     row.name = name

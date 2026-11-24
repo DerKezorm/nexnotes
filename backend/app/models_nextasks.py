@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 
-from sqlalchemy import Date, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import Date, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .models import Base, UtcDateTime, utcnow
@@ -32,6 +32,12 @@ class NextasksConnection(Base):
     #: The paired device that connected it (NOTESIOS-22 AC-7), ``None`` from a browser. A device must leave nothing
     #: behind that outlives disconnecting it: once its token is gone or blocked, the connection goes too.
     device_id: Mapped[int | None] = mapped_column(Integer, nullable=True, default=None)
+    #: The areas and lists the sending offers ("Bereiche und Listen" in Connections): JSON ``{"areas": [...],
+    #: "lists": [...]}``, an area there whole (lists added later too), single lists of the others. "" (from the
+    #: start, and every connection made before the choice): every area whole.
+    task_choice: Mapped[str] = mapped_column(Text, default="", server_default="")
+    #: The standard list, chosen first in the sending; one no longer chosen or gone in nextasks counts as none.
+    default_list_id: Mapped[str] = mapped_column(String(100), default="", server_default="")
 
 
 class NextasksLink(Base):

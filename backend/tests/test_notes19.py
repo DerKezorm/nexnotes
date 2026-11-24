@@ -32,6 +32,8 @@ PUBLIC = "https://tasks.example.com"
 LIST = "11111111-1111-4111-8111-111111111111"
 SECTION = "22222222-2222-4222-8222-222222222222"
 OTHER_LIST = "33333333-3333-4333-8333-333333333333"
+HOME_AREA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+FAMILY_AREA = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
 
 
 class FakeNextasks:
@@ -48,6 +50,17 @@ class FakeNextasks:
         self.no_api = False
         self.fail_after: int | None = None
         self.redirect = False
+        #: The areas (spaces) and lists of this nextasks, as ``/spaces`` and ``/lists`` answer them.
+        self.spaces = [{"id": HOME_AREA, "name": "Zuhause", "icon": "house", "color": "orange"},
+                       {"id": FAMILY_AREA, "name": "Familie", "icon": "heart", "color": "#3a86ff"}]
+        self.lists = [
+            {"id": LIST, "space_id": HOME_AREA, "space_name": "Zuhause", "name": "Renovierung", "writable": True,
+             "hidden": False, "icon": "hammer", "color": "red", "sections": [{"id": SECTION, "name": "Bad"}]},
+            {"id": OTHER_LIST, "space_id": FAMILY_AREA, "space_name": "Familie", "name": "Einkauf", "writable": True,
+             "hidden": False, "icon": "shopping-cart", "color": "green", "sections": []},
+            {"id": "44444444-4444-4444-8444-444444444444", "space_name": "Firma", "name": "Nur lesen",
+             "writable": False, "sections": []},
+        ]
 
     def resolve(self, host: str, _port: int) -> list[str]:
         if host not in self.addresses:
@@ -74,14 +87,9 @@ class FakeNextasks:
             return httpx.Response(200, json={"name": "robin", "display_name": "Robin", "level": level,
                                              "features": self.features, "spaces": [], "version": "0.3.2"})
         if request.method == "GET" and path == "lists":
-            return httpx.Response(200, json={"lists": [
-                {"id": LIST, "space_id": "s", "space_name": "Zuhause", "name": "Renovierung", "writable": True,
-                 "hidden": False, "sections": [{"id": SECTION, "name": "Bad"}]},
-                {"id": OTHER_LIST, "space_id": "s", "space_name": "Familie", "name": "Einkauf", "writable": True,
-                 "hidden": False, "sections": []},
-                {"id": "44444444-4444-4444-8444-444444444444", "space_name": "Firma", "name": "Nur lesen",
-                 "writable": False, "sections": []},
-            ]})
+            return httpx.Response(200, json={"lists": self.lists})
+        if request.method == "GET" and path == "spaces":
+            return httpx.Response(200, json={"spaces": self.spaces})
         if request.method == "POST" and path == "tasks":
             if level != "write":
                 return httpx.Response(403, json={"detail": {"code": "token_reads_only", "message": "Reads only."}})

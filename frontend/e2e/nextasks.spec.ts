@@ -17,6 +17,9 @@ import { expect, test, type Page } from '@playwright/test'
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-nextasks00' }
 const TOKEN = 'ntk_e2e_stand_in_token_0123456789abcdef'
 const LIST = '11111111-1111-4111-8111-111111111111'
+const SHOPPING = '33333333-3333-4333-8333-333333333333'
+const HOME_AREA = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const FAMILY_AREA = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 
 type Task = { id: string; title: string; url: string; notes: string; list_id?: string; due_date?: string; external_ref?: string; trashed: boolean; link: string }
 
@@ -45,7 +48,19 @@ function standIn(host: string) {
       if (request.method === 'GET' && path === '/api/v1/me')
         return send(200, { name: 'robin', display_name: 'Robin', level: 'write', features: ['tasks', 'dashboard', 'external_ref'], spaces: [] })
       if (request.method === 'GET' && path === '/api/v1/lists')
-        return send(200, { lists: [{ id: LIST, space_name: 'Home', name: 'Renovation', writable: true, hidden: false, sections: [] }] })
+        return send(200, {
+          lists: [
+            { id: LIST, space_id: HOME_AREA, space_name: 'Home', name: 'Renovation', icon: 'hammer', color: 'red', writable: true, hidden: false, sections: [] },
+            { id: SHOPPING, space_id: FAMILY_AREA, space_name: 'Family', name: 'Shopping', icon: 'shopping-cart', color: 'green', writable: true, hidden: false, sections: [] },
+          ],
+        })
+      if (request.method === 'GET' && path === '/api/v1/spaces')
+        return send(200, {
+          spaces: [
+            { id: HOME_AREA, name: 'Home', icon: 'house', color: 'orange' },
+            { id: FAMILY_AREA, name: 'Family', icon: 'heart', color: '#3a86ff' },
+          ],
+        })
       if (request.method === 'POST' && path === '/api/v1/tasks') {
         const asked = JSON.parse(body) as Task
         const again = [...tasks.values()].find((task) => task.external_ref && task.external_ref === asked.external_ref)
@@ -94,7 +109,8 @@ async function connect(page: Page): Promise<void> {
   await card.getByLabel('Address of nextasks').fill(address)
   await card.getByLabel('API key').fill(TOKEN)
   await card.getByTestId('nextasks-connect').click()
-  await expect(card.getByTestId('nextasks-connected')).toHaveText(`Connected to ${home} as Robin`)
+  await expect(card.getByTestId('nextasks-connected')).toContainText('connected')
+  await expect(card.getByTestId('nextasks-address')).toHaveText(`${home} · as Robin`)
 }
 
 async function newNote(page: Page, markdown: string): Promise<string> {
@@ -155,4 +171,44 @@ test('NOTES-19 EC-2 EC-4 three lines become three tasks; a task deleted in nexta
   await expect(page.getByTestId('nextasks-gone')).toBeVisible()
   await page.getByTestId('nextasks-gone-remove').click()
   await expect(page.getByTestId('nextasks-mark')).toHaveCount(2)
+})
+
+test('NOTES-19 the card folds as in nextime; areas and lists chosen and a standard list decide what the sending offers', async ({ page }) => {
+  await connect(page)
+  await page.goto('/settings/connections')
+  const card = page.locator('#nextasks')
+  // Folded to its head: nextasks' logo, "connected" and the address; the head opens it by keyboard.
+  const head = card.getByTestId('card-fold')
+  await expect(head).toHaveAttribute('aria-expanded', 'false')
+  await expect(card.getByTestId('card-logo')).toHaveAttribute('src', '/apps/nextasks.svg')
+  await expect(card.getByTestId('nextasks-summary')).toContainText(home!)
+  await head.focus()
+  await page.keyboard.press('Enter')
+  await expect(head).toHaveAttribute('aria-expanded', 'true')
+  // Every area from the start; the family area out, then its shopping list alone; the standard list among them.
+  const family = card.getByTestId('nextasks-area-group').filter({ hasText: 'Family' })
+  await expect(family.getByTestId('nextasks-area')).toBeChecked()
+  await expect(family.getByTestId('nextasks-list')).toBeDisabled()
+  await family.getByTestId('nextasks-area').uncheck()
+  await expect(family.getByTestId('nextasks-list')).toBeEnabled()
+  const homeArea = card.getByTestId('nextasks-area-group').filter({ hasText: 'Home' })
+  await homeArea.getByTestId('nextasks-area').uncheck()
+  await family.getByTestId('nextasks-list').check()
+  await expect(family.getByTestId('nextasks-area')).toHaveJSProperty('indeterminate', true)
+  await card.getByLabel('Standard list').selectOption(SHOPPING)
+  await expect(card.getByLabel('Standard list')).toHaveValue(SHOPPING)
+  // Kept at the server: drawn again, the card stays open (this device) and shows the same choice.
+  await page.reload()
+  await expect(card.getByTestId('card-fold')).toHaveAttribute('aria-expanded', 'true')
+  await expect(card.getByLabel('Standard list')).toHaveValue(SHOPPING)
+  // The sending offers the shopping list alone, chosen first.
+  const id = await newNote(page, 'Oat milk')
+  await page.goto(`/notes/${id}`)
+  await page.getByTestId('note-body').getByText('Oat milk', { exact: true }).click()
+  await page.getByTestId('nextasks-send').click()
+  const list = page.getByTestId('nextasks-list')
+  await expect(list).toHaveValue(SHOPPING)
+  await expect(list.locator('option')).toHaveText(['Family › Shopping'])
+  // Back to every area for the next run on the same data.
+  expect((await page.request.put('/api/nextasks/areas', { data: { areas: [HOME_AREA, FAMILY_AREA], lists: [], default: null }, headers: TAB })).status()).toBe(200)
 })

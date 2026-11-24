@@ -17,8 +17,9 @@ import { NoteProvider } from '../editor/provider'
 import { CONNECTION_SECTIONS } from '../extensions'
 import { hideNotice, useNotice } from '../folders/notice'
 import i18n from '../i18n'
+import { forgetPrefs } from '../lib/devicePref'
 import type { NoteHead } from '../notes/api'
-import { setNextasks, type NextasksStatus, type TaskMark } from './api'
+import { setNextasks, type AreaChoice, type NextasksStatus, type TaskList, type TaskMark } from './api'
 import { dueText } from './hooks'
 import { anchorOf, linesToSend, marksKey, showMarks } from './marks'
 import { NextasksSection } from './NextasksSection'
@@ -31,12 +32,25 @@ let status: NextasksStatus
 let marks: TaskMark[]
 let sendAnswer: (call: Call) => Response
 let openAnswer: () => Response
+let areas: AreaChoice[]
+let standard: string | null
+let offered: TaskList[] | null
 let root: Root
 let box: HTMLDivElement
 const editors: Editor[] = []
 
 const LIST = '11111111-1111-4111-8111-111111111111'
 const SECTION = '22222222-2222-4222-8222-222222222222'
+const SHOPPING = '33333333-3333-4333-8333-333333333333'
+const HOME = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+const FAMILY = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+
+function startAreas(): AreaChoice[] {
+  return [
+    { id: HOME, name: 'Zuhause', icon: 'house', color: 'orange', whole: true, lists: [{ id: LIST, name: 'Renovierung', icon: 'hammer', color: 'red', chosen: true }] },
+    { id: FAMILY, name: 'Familie', icon: 'heart', color: '#3a86ff', whole: true, lists: [{ id: SHOPPING, name: 'Einkauf', icon: 'shopping-cart', color: 'green', chosen: true }] },
+  ]
+}
 const t = (key: string, values?: Record<string, unknown>) => i18n.t(key, values)
 
 function reply(status: number, body: unknown): Response {
@@ -55,6 +69,17 @@ function answer(call: Call): Response {
     status = { connected: false, local_allowed: true }
     return reply(204, null)
   }
+  if (method === 'GET' && path === '/api/nextasks/areas') return reply(200, { areas, default: standard })
+  if (method === 'PUT' && path === '/api/nextasks/areas') {
+    // As the server: whole areas take their lists, a standard list not among the chosen ones counts as none.
+    const whole = body!.areas as string[]
+    const single = body!.lists as string[]
+    areas = areas.map((area) => ({ ...area, whole: whole.includes(area.id), lists: area.lists.map((one) => ({ ...one, chosen: whole.includes(area.id) || single.includes(one.id) })) }))
+    const chosen = areas.flatMap((area) => area.lists.filter((one) => one.chosen).map((one) => one.id))
+    standard = typeof body!.default === 'string' && chosen.includes(body!.default) ? body!.default : null
+    return reply(200, { areas, default: standard })
+  }
+  if (method === 'GET' && path === '/api/nextasks/lists' && offered) return reply(200, { lists: offered, last: `${LIST}/${SECTION}` })
   if (method === 'GET' && path === '/api/nextasks/lists')
     return reply(200, {
       lists: [
@@ -151,6 +176,11 @@ beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   calls = []
   marks = []
+  areas = startAreas()
+  standard = null
+  offered = null
+  forgetPrefs()
+  localStorage.clear()
   status = { connected: true, local_allowed: true, url: 'http://nextasks.home:8510', host: 'nextasks.home', name: 'Robin', last_list: null }
   setNextasks(status)
   sendAnswer = (call) => {
@@ -214,7 +244,9 @@ describe('NOTES-19 nextasks in Settings, Connections', () => {
     act(() => type(key, 'ntk_good'))
     await click($('nextasks-connect'))
     expect(calls.find((call) => call.method === 'PUT')!.body).toEqual({ url: 'http://nextasks.home:8510', token: 'ntk_good' })
-    expect($('nextasks-connected')!.textContent).toBe('Verbunden mit nextasks.home als Robin')
+    // Just connected here, the card stays open: "verbunden", the address, as whom.
+    expect($('nextasks-connected')!.textContent).toBe('verbundennextasks.home · als Robin')
+    expect($('card-fold')).toBeNull()
     // The key changed: the address stays filled in, only the key is typed.
     await click($('nextasks-change'))
     const [again, newKey] = [...document.querySelectorAll<HTMLInputElement>('[data-testid="nextasks-form"] input')]
@@ -241,7 +273,102 @@ describe('NOTES-19 nextasks in Settings, Connections', () => {
   })
 })
 
+describe('NOTES-19 the nextasks card as in nextime: folding, areas and lists, the standard list', () => {
+  const area = (name: string) => $$('nextasks-area-group').find((group) => group.textContent!.includes(name))!
+  const tick = (group: HTMLElement, testId: string) => group.querySelector<HTMLInputElement>(`[data-testid="${testId}"]`)!
+  const puts = () => calls.filter((call) => call.method === 'PUT' && call.path === '/api/nextasks/areas').map((call) => call.body)
+
+  it('NOTES-19 connected, the card is folded to its head with nextasks logo, "verbunden" and the address; opened it stays open', async () => {
+    await render(<NextasksSection />)
+    const head = $('card-fold')!
+    expect(head.tagName).toBe('BUTTON')
+    expect(head.getAttribute('aria-expanded')).toBe('false')
+    expect($('card-logo')!.getAttribute('src')).toBe('/apps/nextasks.svg')
+    expect($('nextasks-summary')!.textContent).toBe('verbundennextasks.home')
+    expect($('nextasks-areas')).toBeNull()
+    expect(calls.some((call) => call.path === '/api/nextasks/areas')).toBe(false)
+    await click(head)
+    expect($('card-fold')!.getAttribute('aria-expanded')).toBe('true')
+    expect($('card-fold')!.getAttribute('aria-controls')).toBe($('nextasks-connected')!.parentElement!.id)
+    expect($('nextasks-summary')).toBeNull()
+    expect($('nextasks-address')!.textContent).toBe('nextasks.home · als Robin')
+    expect($('nextasks-change')).not.toBeNull()
+    // Kept on this device: drawn again, it is open.
+    await act(async () => root.unmount())
+    root = createRoot(box)
+    await render(<NextasksSection />)
+    expect($('card-fold')!.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('NOTES-19 all areas are ticked from the start, their lists ticked and locked, each with symbol and colour from nextasks', async () => {
+    localStorage.setItem('nexnotes.fold.nextasks.0', '0')
+    await render(<NextasksSection />)
+    expect($('nextasks-areas')!.querySelector('legend')!.textContent).toBe('Bereiche und Listen')
+    const home = area('Zuhause')
+    expect(tick(home, 'nextasks-area').checked).toBe(true)
+    expect(tick(home, 'nextasks-list').checked).toBe(true)
+    expect(tick(home, 'nextasks-list').disabled).toBe(true)
+    const marks = [...home.querySelectorAll<HTMLElement>('[data-testid="area-mark"]')]
+    expect(marks.map((mark) => [mark.dataset.symbol, mark.dataset.color])).toEqual([['house', 'orange'], ['hammer', 'red']])
+    expect(marks[1].getAttribute('aria-hidden')).toBe('true')
+    // The ticks are nexnotes' own (components/Check), each named by its row.
+    expect(tick(home, 'nextasks-area').className).toContain('accent-[var(--color-accent-500)]')
+    expect(tick(home, 'nextasks-area').closest('label')!.textContent).toBe('Zuhause')
+    expect(($('nextasks-standard') as HTMLSelectElement).value).toBe('')
+  })
+
+  it('NOTES-19 an area unticked leaves single lists to tick, the area then half; ticked again it takes all its lists', async () => {
+    localStorage.setItem('nexnotes.fold.nextasks.0', '0')
+    await render(<NextasksSection />)
+    await click(tick(area('Familie'), 'nextasks-area'))
+    expect(puts().at(-1)).toEqual({ areas: [HOME], lists: [], default: null })
+    const family = area('Familie')
+    expect(tick(family, 'nextasks-list').disabled).toBe(false)
+    expect(tick(family, 'nextasks-list').checked).toBe(false)
+    await click(tick(family, 'nextasks-list'))
+    expect(puts().at(-1)).toEqual({ areas: [HOME], lists: [SHOPPING], default: null })
+    expect(tick(area('Familie'), 'nextasks-area').indeterminate).toBe(true)
+    expect(tick(area('Familie'), 'nextasks-area').getAttribute('aria-checked')).toBe('mixed')
+    await click(tick(area('Familie'), 'nextasks-area'))
+    expect(puts().at(-1)).toEqual({ areas: [HOME, FAMILY], lists: [], default: null })
+  })
+
+  it('NOTES-19 one of the chosen lists becomes the standard list; chosen away it is none, quietly', async () => {
+    localStorage.setItem('nexnotes.fold.nextasks.0', '0')
+    await render(<NextasksSection />)
+    const choice = $('nextasks-standard') as HTMLSelectElement
+    // A named field with the chosen lists and "Keine", reachable by keyboard as any select.
+    expect(document.querySelector(`label[for="${choice.id}"]`)!.textContent).toBe('Standardliste')
+    expect([...choice.options].map((option) => option.textContent)).toEqual(['Keine', 'Zuhause › Renovierung', 'Familie › Einkauf'])
+    act(() => select(choice, SHOPPING))
+    await settle()
+    expect(puts().at(-1)).toEqual({ areas: [HOME, FAMILY], lists: [], default: SHOPPING })
+    expect(($('nextasks-standard') as HTMLSelectElement).value).toBe(SHOPPING)
+    await click(tick(area('Familie'), 'nextasks-area'))
+    expect(puts().at(-1)).toEqual({ areas: [HOME], lists: [], default: null })
+    expect(($('nextasks-standard') as HTMLSelectElement).value).toBe('')
+    expect([...($('nextasks-standard') as HTMLSelectElement).options].map((option) => option.textContent)).toEqual(['Keine', 'Zuhause › Renovierung'])
+    expect(document.querySelector('[role="alert"]')).toBeNull()
+  })
+})
+
 describe('NOTES-19 An nextasks in an open note', () => {
+  it('NOTES-19 the dialog offers the lists chosen in Connections and chooses the standard list before the one used last', async () => {
+    offered = [
+      { id: LIST, name: 'Zuhause › Renovierung', hidden: false, default: false },
+      { id: SHOPPING, name: 'Familie › Einkauf', hidden: false, default: true },
+    ]
+    const editor = makeEditor('<p>Milch</p>')
+    editor.commands.setTextSelection(2)
+    await render(<SendToNextasks noteId="n1" editor={editor} head={head()} sealed={false} />)
+    await click($('nextasks-send'))
+    const list = $('nextasks-list') as HTMLSelectElement
+    expect([...list.options].map((option) => option.value)).toEqual([LIST, SHOPPING])
+    expect(list.value).toBe(SHOPPING)
+    await click($('nextasks-submit'))
+    expect(calls.find((call) => call.path === '/api/nextasks/send')!.body!.list_id).toBe(SHOPPING)
+  })
+
   it('NOTES-19 AC-1 AC-6 the line of the cursor goes, to the list used last, with a due day', async () => {
     const editor = makeEditor('<p>Silikonfarbe grau bestätigen</p><p>Waschbecken abbauen lassen</p>')
     editor.commands.setTextSelection(inside(editor, 'Waschbecken') + 3)

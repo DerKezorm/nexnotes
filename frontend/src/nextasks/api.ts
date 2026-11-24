@@ -12,7 +12,13 @@ export type NextasksStatus = {
   last_list?: { id: string; name: string } | null
 }
 
-export type TaskList = { id: string; name: string; hidden: boolean }
+/** A list the sending offers; `default` marks the standard list chosen in Connections (interface 0.14). */
+export type TaskList = { id: string; name: string; hidden: boolean; default?: boolean }
+
+/** An area of nextasks with its lists for "Bereiche und Listen": the area whole (its later lists too), or lists alone. */
+export type AreaChoice = { id: string; name: string; icon?: string; color?: string; whole: boolean; lists: { id: string; name: string; icon?: string; color?: string; chosen: boolean }[] }
+
+export type AreaAnswer = { areas: AreaChoice[]; default: string | null }
 
 export type TaskMark = {
   id: number
@@ -41,6 +47,8 @@ export const nextasksApi = {
   connect: (url: string, token: string) => api<NextasksStatus>('/api/nextasks', { method: 'PUT', body: { url, token } }),
   disconnect: () => api<void>('/api/nextasks', { method: 'DELETE' }),
   lists: () => api<{ lists: TaskList[]; last: string | null }>('/api/nextasks/lists'),
+  areas: () => api<AreaAnswer>('/api/nextasks/areas'),
+  chooseAreas: (areas: string[], lists: string[], standard: string | null) => api<AreaAnswer>('/api/nextasks/areas', { method: 'PUT', body: { areas, lists, default: standard } }),
   send: (sending: Sending) => api<{ sent: number; links: TaskMark[] }>('/api/nextasks/send', { method: 'POST', body: sending }),
   links: (noteId: string) => api<{ links: TaskMark[] }>('/api/nextasks/links', { query: { note_id: noteId } }),
   open: (id: number) => api<{ url: string }>(`/api/nextasks/links/${id}/open`),

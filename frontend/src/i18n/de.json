@@ -2123,11 +2123,17 @@
       "localOff": "Läuft dein nextasks im eigenen Netz, muss der Betreiber das unter Einstellungen, Server erst erlauben.",
       "connect": "Verbinden",
       "checking": "Wird geprüft …",
-      "connected": "Verbunden mit {{host}} als {{name}}",
+      "connected": "verbunden",
+      "as": "als {{name}}",
       "changeKey": "Schlüssel ändern",
       "disconnect": "Trennen",
       "disconnectTitle": "nextasks trennen?",
-      "disconnectText": "Die Aufgaben bleiben in nextasks, die Zeichen an den Zeilen auch. Neue Zeilen schickst du erst nach dem nächsten Verbinden."
+      "disconnectText": "Die Aufgaben bleiben in nextasks, die Zeichen an den Zeilen auch. Neue Zeilen schickst du erst nach dem nächsten Verbinden.",
+      "areas": "Bereiche und Listen",
+      "areasHint": "Ein angehakter Bereich zeigt alle seine Listen, auch spätere; sonst einzelne Listen. Ab Werk alle Bereiche.",
+      "standard": "Standardliste",
+      "standardNone": "Keine",
+      "standardHint": "Beim Schicken an nextasks vorgewählt. Nur eine angehakte Liste kann es sein."
     },
     "send": {
       "button": "An nextasks",

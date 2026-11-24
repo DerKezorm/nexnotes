@@ -39,6 +39,13 @@ class SendIn(BaseModel):
     lines: list[LineIn] = Field(min_length=1, max_length=nextasks.MAX_LINES)
 
 
+class AreasIn(BaseModel):
+    #: Areas chosen whole (lists added later included), single lists of the other areas, the standard list.
+    areas: list[Annotated[str, Field(max_length=100)]] = Field(default_factory=list, max_length=nextasks.MAX_AREAS)
+    lists: list[Annotated[str, Field(max_length=130)]] = Field(default_factory=list, max_length=nextasks.MAX_CHOSEN)
+    default: str | None = Field(default=None, max_length=130)
+
+
 def _fail(exc: NextasksError, **more: Any) -> Exception:
     return exc.http(**more)
 
@@ -64,17 +71,30 @@ def disconnect(account: Account, db: DbSession) -> Response:
     return Response(status_code=204)
 
 
-@router.get("/lists", summary="The lists of nextasks the key may write into, the one used last first chosen")
+@router.get("/lists", summary="The lists chosen in Connections the key may write into; the standard list marked")
 def lists(account: Account, db: DbSession) -> dict[str, Any]:
+    """The browser's sending and the app's (with the device's token, interface 0.14): only the areas and lists chosen
+    in Connections, each list with ``default`` (the standard list, chosen first), and the list used last."""
     try:
-        access = nextasks.connected_access(db, account.id)
-        with nextasks.outgoing(account.id):
-            found = nextasks.lists(access)
+        return nextasks.offered(db, account.id)
     except NextasksError as exc:
         raise _fail(exc) from exc
-    row = nextasks.connection_of(db, account.id)
-    last = row.last_list_id if row is not None and any(item["id"] == row.last_list_id for item in found) else ""
-    return {"lists": found, "last": last or None}
+
+
+@router.get("/areas", summary="Every area of nextasks with its lists: chosen whole, or which lists alone")
+def areas(account: Account, db: DbSession) -> dict[str, Any]:
+    try:
+        return nextasks.areas_out(db, account.id)
+    except NextasksError as exc:
+        raise _fail(exc) from exc
+
+
+@router.put("/areas", summary="Choose the areas and lists the sending offers, and the standard list")
+def choose_areas(body: AreasIn, account: Account, db: DbSession) -> dict[str, Any]:
+    try:
+        return nextasks.choose(db, account.id, body.areas, body.lists, body.default)
+    except NextasksError as exc:
+        raise _fail(exc) from exc
 
 
 def _clean_line(text: str) -> str:
