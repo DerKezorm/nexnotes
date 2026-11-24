@@ -3,6 +3,14 @@
 All notable changes to nexnotes. The format follows Keep a Changelog; the
 project uses semantic versioning.
 
+## 1.0.1 – 2026-11-24
+
+The first published image.
+
+### Fixed
+
+- The arm64 image takes the SQLite that comes with it, not Debian's older one (the image of 1.0.0 did not build).
+
 ## 1.0.0 – 2026-11-24
 
 The first release.

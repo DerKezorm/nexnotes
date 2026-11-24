@@ -62,10 +62,13 @@ RUN apt-get update \
         tesseract-ocr-nld tesseract-ocr-por tesseract-ocr-pol tesseract-ocr-tur \
     && rm -rf /var/lib/apt/lists/*
 
-# SQLite from stage 2. /usr/local/lib comes before Debian's folders for the loader, so Python's sqlite3 module (and
-# anything else of the image) takes this one; the build stops when it does not, or when FTS5 with trigrams is missing.
+# SQLite from stage 2. /usr/local/lib is put first for the loader in a file of its own: Debian's libc.conf, which
+# names it, is read before x86_64-linux-gnu.conf but after aarch64-linux-gnu.conf, so on arm64 Python took Debian's
+# 3.46 (release 1.0.0, 24.11.2026). Python's sqlite3 module and anything else of the image take this one; the build
+# stops when it does not, or when FTS5 with trigrams is missing.
 COPY --from=sqlite /out/libsqlite3.so.0 /usr/local/lib/libsqlite3.so.0
-RUN ldconfig \
+RUN echo /usr/local/lib > /etc/ld.so.conf.d/000-nexnotes-sqlite.conf \
+    && ldconfig \
     && python -c "import sqlite3; assert sqlite3.sqlite_version_info >= (3, 50), sqlite3.sqlite_version; \
 sqlite3.connect(':memory:').execute(\"CREATE VIRTUAL TABLE t USING fts5(x, tokenize='trigram')\"); \
 print('SQLite', sqlite3.sqlite_version)"
