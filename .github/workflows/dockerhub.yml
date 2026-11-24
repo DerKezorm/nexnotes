@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version already on ghcr.io, like 0.1.0"
+        description: "Version already on ghcr.io, like 1.0.0"
         required: true
 
 permissions:

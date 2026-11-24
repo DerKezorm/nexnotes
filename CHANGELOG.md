@@ -3,7 +3,7 @@
 All notable changes to nexnotes. The format follows Keep a Changelog; the
 project uses semantic versioning.
 
-## 0.1.0 (unreleased)
+## 1.0.0 – 2026-11-24
 
 The first release.
 

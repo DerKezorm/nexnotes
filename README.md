@@ -10,7 +10,7 @@ soon on iPhone and iPad.
 
 nexnotes has a calm look of its own: honey as the one accent, notes on a quiet paper, light and dark.
 
-**Early days.** nexnotes 0.1.0 is the first release. Expect rough edges, and keep backups.
+**1.0.0** is the first public release. Keep backups all the same, see [Backup](#backup).
 
 ![A recipe note with a photo and a checklist, beside the folders, smart folders, tags and the list of the folder](docs/screenshots/note-dark.png)
 
@@ -100,7 +100,7 @@ services:
 ```
 
 Then `docker compose up -d`. Images for `linux/amd64` and `linux/arm64` are on the GitHub Container Registry, one tag
-per release (`0.1.0`) and `latest`. The [docker-compose.yml](docker-compose.yml) in this repository has the same service
+per release (`1.0.0`, also `1.0`) and `latest`. The [docker-compose.yml](docker-compose.yml) in this repository has the same service
 with every option explained; it builds from source with `docker compose up -d --build`.
 
 Open `http://<your-host>:8570`. The first account you create there becomes the operator. It needs the **setup code**
