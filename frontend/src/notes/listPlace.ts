@@ -10,8 +10,8 @@ export type ListPlace = 'page' | 'column'
 
 export const ListPlaceContext = createContext<ListPlace>('page')
 
-/** Beside two notes with the list as a column: folds the column away to the narrow strip at the left edge (NOTES-8
- * AC-9, sixth review). Anywhere else (one note, a page, the drawer) there is nothing to fold: null. */
+/** Beside one note or two with the list as a column: folds the column away to the narrow strip at the left edge
+ * (NOTES-8 AC-9, sixth review; one note too since 24.11.2026). On a page of its own there is nothing to fold: null. */
 export const ListCollapseContext = createContext<(() => void) | null>(null)
 
 /** The padding of a list: a page's on its own, a narrow one in the column beside the notes. */

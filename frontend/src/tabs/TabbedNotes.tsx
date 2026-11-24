@@ -14,7 +14,7 @@
  *   (`ListDrawer.tsx`): a list chosen in the sidebar opens it, a note chosen in it opens on the side used last and
  *   closes it. "«" in the list's head folds the column away to a narrow strip at the left edge, "»" there brings it
  *   back (kept on this device); without room for the column the strip opens the drawer (sixth review: the button
- *   "List" in the row of tabs is gone).
+ *   "List" in the row of tabs is gone). One note folds the column the same way and gets the whole width (24.11.2026).
  * - Two sides on show: one toolbar over both with the text tools, working on the side used last (`SharedToolbar.tsx`);
  *   each sheet keeps a small bar of its own for the whole note (21.11.2026). One side, or the switcher: as before.
  * - A note dragged from a list, or a tab, onto the right edge opens beside (AC-1).
@@ -93,7 +93,7 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const [dropping, setDropping] = useState(false)
   // The list beside an open note, as wide as set on this device; it gives way before a note gets too narrow.
   const [listWidth] = useColumnWidth('list')
-  // Beside two notes with room for it, the column can be hidden with the button "List"; kept on this device.
+  // The column beside the notes can be folded away with "«" in the list's head; kept on this device.
   const [columnOn, setColumnOn] = useDevicePref('splitList', (raw) => raw !== 'off')
   // The editors of the two sides on show, by tab, for the one toolbar over both.
   const [toolEntries, setToolEntries] = useState<ReadonlyMap<string, ToolsEntry>>(() => new Map())
@@ -156,12 +156,22 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const open = settled && Boolean(left)
   const split = open && Boolean(right)
   const stand = open ? listStand(split, width, listWidth) : 'none'
-  const showList = stand === 'column' && (!split || columnOn)
-  // Two notes and no column (folded away, or no room for it): the narrow strip at the left edge, and the list comes as
-  // a drawer over the left note.
-  const strip = split && !showList
+  const showList = stand === 'column' && columnOn
+  // The column folded away (one note or two), or two notes without room for it: the narrow strip at the left edge.
+  // Beside two notes without room the list comes as a drawer over the left note; one note without room has no list
+  // beside it at all, as before (24.11.2026: one note folds the list too, for the note over the whole width).
+  const strip = open && (split ? !showList : stand === 'column' && !columnOn)
   const both = split && width - (strip ? LIST_STRIP : 0) >= 2 * MIN_PANE + SEPARATOR
-  const drawer = useListDrawer(strip, listPath)
+  const drawer = useListDrawer(split && strip, listPath)
+  // One note with the column folded away: another list chosen (the sidebar, the search) unfolds it, there is no drawer
+  // to show it in.
+  const listBefore = useRef(listPath)
+  const unfoldForList = open && !split && !columnOn
+  useEffect(() => {
+    if (listBefore.current === listPath) return
+    listBefore.current = listPath
+    if (unfoldForList) setColumnOn(null)
+  }, [listPath, unfoldForList, setColumnOn])
   // "«" in the list's head folds the column away; the focus goes to the strip, which brings it back.
   const collapseList = useCallback(() => {
     setColumnOn('off')
@@ -247,7 +257,7 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
           <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined} data-testid="list-column">
             <div className={'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r' : 'flex w-full')}>
               <ListPlaceContext.Provider value={open ? 'column' : 'page'}>
-                <ListCollapseContext.Provider value={split ? collapseList : null}>{list}</ListCollapseContext.Provider>
+                <ListCollapseContext.Provider value={open ? collapseList : null}>{list}</ListCollapseContext.Provider>
               </ListPlaceContext.Provider>
             </div>
             {open && <ColumnHandle column="list" />}

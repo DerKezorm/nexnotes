@@ -160,15 +160,19 @@ test('NOTES-12 EC-8 NOTES-8 EC-1 the same note on both sides of one window is no
   await other.close()
 })
 
-test('NOTES-8 the button that ends side by side says "Show one note only"; the list folds with "«" in its head, not from the row of tabs', async ({ page }) => {
+test('NOTES-8 the button that ends side by side says "Show one note only"; the list folds with "«" in its head, not from the row of tabs, also beside one note', async ({ page }) => {
   const stamp = Date.now().toString(36)
   const id = await note(page, `Ends ${stamp}`, 'a')
   await note(page, `Ends beside ${stamp}`, 'b')
   await page.setViewportSize({ width: 1920, height: 1000 })
   await page.goto(`/notes/${id}`)
-  // One note: nothing to fold.
+  // One note folds the list too (24.11.2026): "«" in its head, "»" in the strip brings it back.
   await expect(page.getByTestId('list-head')).toBeVisible()
-  await expect(page.getByTestId('list-collapse')).toHaveCount(0)
+  await page.getByTestId('list-collapse').click()
+  await expect(page.getByTestId('list-column')).toHaveCount(0)
+  await expect(page.getByTestId('list-expand')).toBeVisible()
+  await page.getByTestId('list-expand').click()
+  await expect(page.getByTestId('list-column')).toBeVisible()
   await beside(page, `Ends beside ${stamp}`)
   const end = page.getByTestId('tab-end-split')
   await expect(end).toHaveAttribute('aria-label', 'Show one note only')

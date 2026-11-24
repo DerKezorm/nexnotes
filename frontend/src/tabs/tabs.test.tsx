@@ -1595,12 +1595,42 @@ describe('the list beside two notes', () => {
     expect($('list-column')).not.toBeNull()
     expect($('list-expand')).toBeNull()
     expect(localStorage.getItem(prefKey('splitList', 1))).toBeNull()
-    // One note: no "«", no strip, the list as always.
+    // One note: the list as always (folding it beside one note: the next test).
     await act(async () => tabs.endSplit())
     await idle()
-    expect($('list-collapse')).toBeNull()
-    expect($('list-expand')).toBeNull()
     expect($('list-column')).not.toBeNull()
+    expect($('list-expand')).toBeNull()
+  })
+
+  it('NOTES-8 AC-9 beside one note "«" folds the list too and the note takes the whole width; "»" or another list brings it back (24.11.2026)', async () => {
+    width = 300 + MIN_PANE + 200
+    await render('/notes/soup')
+    await idle()
+    expect(pane('right')).toBeNull()
+    const collapse = () => $('list-collapse', $('list-head')!)!
+    await until(() => Boolean($('list-head') && collapse()))
+    await act(async () => collapse().click())
+    expect($('list-column')).toBeNull()
+    expect(pane('left')).not.toBeNull()
+    const strip = () => $('list-expand')!
+    expect(strip().style.width).toBe(`${LIST_STRIP}px`)
+    expect(strip().getAttribute('aria-expanded')).toBe('false')
+    await until(() => document.activeElement === strip())
+    expect(localStorage.getItem(prefKey('splitList', 1))).toBe('off')
+    // No drawer for one note: "»" unfolds the column, the focus on its "«".
+    await act(async () => strip().click())
+    expect(drawer()).toBeNull()
+    expect($('list-column')).not.toBeNull()
+    await until(() => document.activeElement === $('list-collapse'))
+    // Folded again, another list chosen in the sidebar unfolds the column to show it.
+    await act(async () => collapse().click())
+    expect($('list-column')).toBeNull()
+    await act(async () => $('place-kitchen')!.click())
+    await idle()
+    await until(() => $('list-column') !== null)
+    expect($('folder-list', $('list-column')!)).not.toBeNull()
+    expect(drawer()).toBeNull()
+    expect($('list-expand')).toBeNull()
   })
 
   it('NOTES-8 AC-9 too narrow for the column: a folder chosen in the sidebar opens the drawer over the left note, the same one again too', async () => {
