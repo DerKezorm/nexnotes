@@ -563,7 +563,8 @@ async function run(language, samples, out) {
 // Run as a program; ``readme-shots.mjs`` imports the server, the example notes and the sign-in from here.
 export { BASE, PYTHON, HERE, WORDS, startServer, seed, signedIn, sleep }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+const same = (one, two) => (process.platform === 'win32' ? one.toLowerCase() === two.toLowerCase() : one === two)
+if (process.argv[1] && same(path.resolve(process.argv[1]), fileURLToPath(import.meta.url))) {
   const samples = fs.mkdtempSync(path.join(os.tmpdir(), 'nexnotes-guide-samples-'))
   execFileSync(PYTHON, [path.join(HERE, 'guide-shots.py'), 'samples', samples], { stdio: 'inherit' })
   for (const language of LANGUAGES) {
