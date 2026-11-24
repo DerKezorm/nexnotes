@@ -25,10 +25,13 @@ from ..deps import (
 from ..errors import detail, error
 from ..models import SIGN_IN_PASSWORD
 from ..models import Account as AccountRow
-from ..security import account_out, brake, end_all_sessions
-from ..services import accounts, totp
+from ..security import account_out, brake, sessions_ended
+from ..services import accounts, kontenpost, totp
+from ..services.konten_store import KontenStore
+from ..vendor import nexkonten
+from ..vendor.nexkonten import factor
 from .accounts import OperatorConfirmIn
-from .auth import PENDING_COOKIE, account_view, sign_in
+from .auth import PENDING_COOKIE, account_view, fail, sign_in
 
 logger = logging.getLogger("nexnotes.auth")
 
@@ -138,14 +141,22 @@ def _reset(db: DbSession, row: AccountRow) -> None:
     totp.forget_account(row.id)
 
 
+class FactorResetIn(OperatorConfirmIn):
+    #: The paired devices go too (the lost phone may be one of them): on from the start, the page asks.
+    disconnect_devices: bool = True
+
+
 @router.post("/accounts/{account_id}/totp/reset", summary="Operator: take the second factor of a locked-out account")
 def operator_reset(
     account_id: Annotated[int, Path(ge=1)],
-    payload: OperatorConfirmIn,
+    payload: FactorResetIn,
     request: Request,
     operator: OperatorAccount,
     db: DbSession,
 ) -> dict[str, Any]:
+    """Through the shared account module (``factor.operator_reset``): the time-based code, the recovery codes and
+    the passkeys go, every browser session and waiting sign-in ends, with ``disconnect_devices`` the paired devices
+    too, and a confirmed address hears of it."""
     # Connected: the second factor is the directory service's (or authentik's); the emergency account keeps its own.
     confirm_operator(request, db, operator, payload.current_password)
     if account_id == operator.id:
@@ -153,12 +164,18 @@ def operator_reset(
     row = db.get(AccountRow, account_id)
     if row is None:
         raise error("not_found", "No such account.", 404)
-    if not row.totp_secret_enc:
+    store = KontenStore(db)
+    if not row.totp_secret_enc and not store.passkeys_of(row.id):
         raise error("totp_not_enabled", "The second factor is not on.", 409)
-    _reset(db, row)
-    # A reset is what happens after a lost phone or a suspected intruder: whoever holds a session of that account
-    # is thrown out, and signs in afresh with the password alone.
-    end_all_sessions(db, row.id)
+    try:
+        mail = factor.operator_reset(store, row.id, actor_id=operator.id, actor_confirmed=True,
+                                     disconnect_devices=payload.disconnect_devices)
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
+    totp.forget_account(row.id)
+    sessions_ended()
+    kontenpost.queue(db, mail)
+    db.refresh(row)
     logger.warning("Second factor reset by the operator name=%s by=%s, all sessions ended", row.name, operator.name)
     return account_view(row)
 
@@ -182,7 +199,8 @@ def login_code(payload: CodeIn, request: Request, response: Response, db: DbSess
             headers={"Retry-After": str(wait)},
         )
     row = db.get(AccountRow, pending.account_id)
-    if row is None or not row.totp_secret_enc:
+    if row is None or not (row.totp_secret_enc or totp.load_recovery(row.totp_recovery)):
+        # Nothing a code could answer (an account with passkeys only answers with one, ``routers/passkeys``).
         totp.finish_pending(token)
         _clear_pending_cookie(response)
         raise error("second_factor_expired", "Start again with your password.", 401)
@@ -199,32 +217,29 @@ def login_code(payload: CodeIn, request: Request, response: Response, db: DbSess
         _clear_pending_cookie(response)
         raise error("account_locked", "Too many failed sign-ins. Try again later.", 429)
 
-    typed = totp.normalize_code(payload.code)
-    used_recovery = False
-    if len(typed) == totp.DIGITS and typed.isdigit():
-        try:
-            seed = totp.open_seed(row.totp_secret_enc)
-        except totp.SeedUnreadable:
-            # A different secret.key than the one that sealed the seed. Failing closed is the only safe answer; the
-            # operator resets the second factor and the person enrols again.
-            logger.error("Second factor seed unreadable name=%s (secret.key changed?)", row.name)
-            totp.finish_pending(token)
-            _clear_pending_cookie(response)
-            raise error(
-                "second_factor_unavailable",
-                "The second factor cannot be checked on this installation. Ask the operator to reset it.",
-                401,
-            ) from None
-        step = totp.verify_code(seed, typed, after_step=row.totp_last_step)
-        accepted = step is not None
-        if step is not None:
-            row.totp_last_step = step
-    else:
-        remaining = totp.use_recovery(row.totp_recovery, typed)
-        accepted = remaining is not None
-        if remaining is not None:
-            row.totp_recovery = remaining
-            used_recovery = True
+    # The code through the shared account module: a time-based code or a recovery code (also those of 1.0.1), each
+    # counted once, also for two requests at the same moment.
+    store = KontenStore(db)
+    try:
+        if row.totp_secret_enc and store.totp_seed(row.id) is None:
+            raise totp.SeedUnreadable()
+        method = factor.check_code(store, row.id, payload.code)
+        accepted = True
+    except totp.SeedUnreadable:
+        # A different secret.key than the one that sealed the seed. Failing closed is the only safe answer; the
+        # operator resets the second factor and the person enrols again.
+        totp.finish_pending(token)
+        _clear_pending_cookie(response)
+        raise error(
+            "second_factor_unavailable",
+            "The second factor cannot be checked on this installation. Ask the operator to reset it.",
+            401,
+        ) from None
+    except nexkonten.AccountError:
+        accepted = False
+        method = ""
+    db.refresh(row)
+    used_recovery = method == "recovery"
     if not accepted:
         brake.failed(key)
         accounts.note_failure(db, row)
@@ -245,7 +260,7 @@ def login_code(payload: CodeIn, request: Request, response: Response, db: DbSess
         logger.warning("Recovery code used name=%s left=%s", row.name, len(totp.load_recovery(row.totp_recovery)))
     else:
         logger.info("Second factor passed name=%s", row.name)
-    return sign_in(db, request, response, row)
+    return sign_in(db, request, response, row, remember=pending.remember, tell=True)
 
 
 @router.post("/auth/login/totp/cancel", status_code=204, summary="Give up the second step and start over")

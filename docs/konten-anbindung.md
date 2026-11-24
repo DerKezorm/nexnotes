@@ -9,6 +9,39 @@ nexnotes ist für das Modul das Vorbild (Weg „nexnotes und nextime“, Oberfl�
 `AccountTab.tsx`). Es ändert sich deshalb weniger als in den anderen Apps: Der Benutzername (`accounts.name`) wird
 sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adressen bekommen einen Bestätigungslink.
 
+## 0. Was gebaut ist / was fehlt
+
+Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`0752072`): `konten` 0.3.1, `oidc` 1.1.0,
+`post` 0.1.1, kopiert mit `tools/sync.py copy`. App-Version unverändert 1.0.1.
+
+**Gebaut (Backend):**
+
+| Teil | Wo |
+|---|---|
+| Store | `services/konten_store.py` (Store, FactorStore, PasskeyStore, SessionStore, PictureStore über `accounts`, `invites`, `password_resets`, `auth_sessions`, `api_tokens` und die neuen Tabellen) |
+| Neue Spalten | `accounts.email_confirmed` (1), `email_proven` (0), `avatar_source`, `passkey_handle`, `new_sign_in_mail` (1), `new_password_origin`; `auth_sessions.uid`, `remember` (1), `stage` (`full`), `kind` (`browser`); `invites.display_name`, `invites.mailed` (0); `password_resets.origin` (`operator`) |
+| Neue Tabellen | `models_accounts.py`: `former_names`, `setup_claims`, `email_changes`, `passkeys`, `failed_unknown`, `mail_outbox` |
+| Wanderung | `services/konten_wanderung.py` aus `db.init_db` (Sicherung davor wie bisher): `uid` für alte Sitzungen, eindeutiger Index auf `lower(name)` erst nach Zählen, Indizes auf `lower(email)` und `former_names` |
+| Anmelden | `POST /api/auth/login` über `login.authenticate`, Bremse `BRAKE` mit `attempt_key` (bekannter Browser: eigener Topf, 5 frei, wie 1.0.1), Feld `remember` neu, Sitzung über `sessions.start`, Mail „Neue Anmeldung“ |
+| Einrichtung | `POST /api/setup` über `setup.setup` (Feld `name` neu, sonst Vorschlag) |
+| Passwort vergessen | `POST /api/auth/forgot` (`name`), `resets.forgot_in_background`; `GET /api/auth/methods` sagt `forgot_mail`, `passkeys` |
+| Einladung | `GET/POST /api/invite/{token}` über `invite_form`/`accept_invite` (Feld `name` neu), `POST /api/invites` mit `display_name` |
+| Reset-Link | `GET/POST /api/reset/{token}` über `reset_state`/`use_reset`; Betreiber `POST /api/accounts/{id}/reset-link` über `resets.reset_link` (Mail oder Link, `sent`) |
+| Profil | `PUT /api/me/profile` (`name`, `password` neu), `POST /api/me/email/resend`, `DELETE /api/me/email/pending`, `GET/POST /api/email/{token}`, `PUT /api/me/new-sign-in-mail` |
+| Sitzungen | `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{uid}`, `GET /api/auth/access`, `POST /api/auth/access/disconnect`, `POST /api/auth/access/seen` |
+| Betreiber | `PUT /api/accounts/{id}/name`, `/display-name`, `DELETE /api/accounts/{id}/email`; Liste mit `email_duplicate`; Faktor-Reset über `factor.operator_reset` (Feld `disconnect_devices`) |
+| Zweiter Faktor | Code-Schritt prüft über `factor.check_code` (alte Codes gelten); Einrichten wie 1.0.1 |
+| OIDC 1.1.0 | `services/oidc_store.py`: Namensregeln und belegte Namen aus dem Modul, Anzeigename aus dem Claim, Bild vom Anbieter im Faden, Adresse folgt bei Konten nur über Anbieter (sonst Angebot wie 1.0.1) |
+| Mails | `services/post_store.py` (Store über `smtp_*` und `mail_outbox`, Minutenrunde in `main`), `services/kontenpost.py`; Einladung und Testmail über `post` sofort |
+| Alte Fehlerkennungen | `konten_store.OLD_CODES` (`invalid_email`, `name_taken`, `invalid_account_name`) |
+| Tests | Vertrag `tests/nexkonten` + `tests/nexpost` (216 grün, 5 übersprungen mit Grund), Test „Bestand“ ohne `xfail` (49 grün), angepasste App-Tests (Brems-Zahlen des Moduls, Setup-Code ≥ 16 Zeichen, Mailtexte von `post`) |
+
+**Fehlt noch:** Passkey-Routen (`routers/passkeys.py`: Anmelden, Hinzufügen, Entfernen, Betreiber-Schalter),
+Notfallbefehl (`python -m app.emergency reset-link <name>`), Mail-Einstellungen über `post.settings` (Absendername,
+letzter Fehler auf der Seite), Bestand-Test Teil 2 (Authenticator, Codes, Sitzungen, Bilder, SMTP), das ganze
+Frontend (Abschnitt 6), Fehlersätze für die neuen Kennungen (`test_texts.py` rot: `use_logout`, `already_set_up`),
+volle Testläufe.
+
 ## 1. Bestand heute (1.0.1)
 
 ### Datenmodell (`backend/app/models.py`)

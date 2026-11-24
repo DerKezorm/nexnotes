@@ -25,6 +25,7 @@ from sqlalchemy import (
     event,
     false,
     text,
+    true,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import TypeDecorator
@@ -96,6 +97,11 @@ class Account(Base):
     #: Where ``email`` came from: "" (typed or an invitation) or ``provider`` (a sign-in provider's address). An
     #: address from a provider goes with the account's last link (the shared sign-in module).
     email_source: Mapped[str] = mapped_column(String(16), default="", server_default="")
+    #: The address **counts** (signing in, a forgotten password, notices; the shared account module). Every address
+    #: of 1.0.1 counts, also one taken over from a provider: whoever signed in with it keeps doing so.
+    email_confirmed: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    #: Somebody opened a link mailed to the address (a confirmation link). 1.0.1 mailed none: false for the Bestand.
+    email_proven: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     #: The address a provider knows the account by, offered on the account page to an account with a password (it
     #: takes it only when it says so); ``provider_email_off``: the address the account said "don't ask again" to.
     provider_email: Mapped[str] = mapped_column(String(255), default="", server_default="")
@@ -127,6 +133,16 @@ class Account(Base):
     #: The profile picture (``services/avatars.py``): a square WebP drawn anew, loaded only when asked for.
     avatar: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
     avatar_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: "" for a picture the person set (and every picture of 1.0.1), ``provider`` for one taken from a sign-in
+    #: provider: a provider's picture never replaces an own one.
+    avatar_source: Mapped[str] = mapped_column(String(16), default="", server_default="")
+    #: The random user handle of the account's passkeys (WebAuthn), made with the first passkey and kept.
+    passkey_handle: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    #: "A mail at a new sign-in" (on from the start): a browser that never signed in as the account before.
+    new_sign_in_mail: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    #: The password was set through a link: where it came from (``self``, ``operator``, ``server``), "" for none.
+    #: The account page then lists the ways in that stayed ("These devices still have access"), until put away.
+    new_password_origin: Mapped[str] = mapped_column(String(16), default="", server_default="")
     #: The account's own preferences; only what it chose.
     preferences: Mapped[Any] = mapped_column(JSON, nullable=True)
     #: What the device cookies of this account are signed with (``security.device_token``): drawn anew on a new
@@ -180,6 +196,17 @@ class AuthSession(Base):
     #: This sign-in came through a provider that checks the second factor itself (the entry's switch was on): the
     #: operator's "second factor required" does not force a setup for this session, whatever the account is.
     provider_checked: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    #: The id the list "Where you are signed in" names the session by (the token's hash never leaves the server).
+    #: Sessions of 1.0.1 get one at the first start (``services/konten_wanderung``).
+    uid: Mapped[str | None] = mapped_column(String(32), nullable=True, unique=True, index=True)
+    #: "Stay signed in": 30 days from the last use, sliding; without it the session ends with the browser and lives
+    #: at most 12 hours. Sessions of 1.0.1 were all remembered (30 days).
+    remember: Mapped[bool] = mapped_column(Boolean, default=True, server_default=true())
+    #: ``full``, or ``setup``: the session may only set up the second factor the operator requires (15 minutes).
+    stage: Mapped[str] = mapped_column(String(8), default="full", server_default="full")
+    #: ``browser``; ``waiting`` a sign-in that waits for its second factor, ``device`` a paired device's session
+    #: (the shared account module's kinds; nexnotes' own devices hold tokens, ``api_tokens``). 1.0.1: browsers only.
+    kind: Mapped[str] = mapped_column(String(8), default="browser", server_default="browser")
 
 
 class OidcProvider(Base):
@@ -248,6 +275,10 @@ class Invite(Base):
     #: The role the new account gets.
     role: Mapped[str] = mapped_column(String(16), default=MEMBER)
     email: Mapped[str] = mapped_column(String(255), default="")
+    #: What the operator gave as the display name (the form shows it); invitations of 1.0.1 have none.
+    display_name: Mapped[str] = mapped_column(String(80), default="", server_default="")
+    #: The link went by mail to ``email``: whoever comes through it proved the address.
+    mailed: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     created_by: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
@@ -265,6 +296,9 @@ class PasswordReset(Base):
     created_by: Mapped[int | None] = mapped_column(ForeignKey("accounts.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
+    #: ``self`` ("Forgot your password?"), ``operator`` (under Accounts) or ``server`` (the emergency command). Every
+    #: link of 1.0.1 was the operator's.
+    origin: Mapped[str] = mapped_column(String(16), default="operator", server_default="operator")
 
 
 #: Token kinds: a paired iPhone or iPad (NOTES-24), or a key for MCP tools (NOTES-20). Both act as their account.

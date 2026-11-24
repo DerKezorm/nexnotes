@@ -35,7 +35,7 @@ from ..models import (
 )
 from ..models import Invite as InviteRow
 from ..security import decrypt_secret, encrypt_secret
-from ..vendor import nexoidc
+from ..vendor import nexkonten, nexoidc
 from ..vendor.nexoidc import (
     AccountState,
     Invite,
@@ -46,6 +46,8 @@ from ..vendor.nexoidc import (
     secret_context,
 )
 from . import accounts, settings_service
+from .konten_store import KontenStore
+from .konten_store import provider_picture as konten_provider_picture
 
 logger = logging.getLogger("nexnotes.oidc")
 
@@ -96,15 +98,10 @@ def configure() -> None:
 
 
 def clean_name(raw: str) -> str:
-    """An account name from what the provider suggests: lower case, nexnotes' characters, at most 64; a number at
-    the end (``max-2``) survives the cut. Empty when nothing usable is left."""
-    cleaned = re.sub(r"[^a-z0-9._-]", "-", raw.strip().lower()).strip("-._")
-    if len(cleaned) > NAME_MAX:
-        numbered = _NUMBERED.match(cleaned)
-        suffix = numbered.group(2) if numbered else ""
-        stem = numbered.group(1) if numbered else cleaned
-        cleaned = stem[: NAME_MAX - len(suffix)].rstrip("-._") + suffix
-    return cleaned if accounts.NAME_PATTERN.match(cleaned) else ""
+    """Since ``oidc`` 1.1.0 the naming rules of the shared account module (the same in every app): lower case,
+    ``a-z 0-9 . _ -``, umlauts written out (``Müller`` becomes ``mueller``), a number at the end survives the cut; ""
+    when nothing usable is left."""
+    return nexkonten.names.clean_username(raw)
 
 
 def provider_only(account: Account) -> bool:
@@ -130,23 +127,26 @@ def address_taken(db: Session, address: str, own_id: int) -> bool:
 
 
 def take_address(db: Session, account: Account, address: str) -> bool:
-    """The provider's address becomes the account's own (followed, or taken from the offer). False when another
-    account has it."""
+    """The account takes the provider's address that it was offered (its own act, on the account page): it counts
+    from then on, follows the provider and goes with the last link. False when another account has it."""
     if address_taken(db, address, account.id):
         logger.warning("Provider address not taken, another account has it name=%s address=%s",
                        account.name, protocol.masked(address))
         return False
     account.email = address
     account.email_source = FROM_PROVIDER
+    account.email_confirmed = True
+    account.email_proven = False
     account.provider_email = ""
     return True
 
 
 def from_provider(db: Session, account: Account, raw: str | None) -> None:
     """What a provider says about the address at a sign-in or a link (the caller commits). ``email_verified`` is
-    never read (the shared sign-in module): the address finds nobody, it is only what the account is mailed at. An
-    account through providers only follows it; every other account is offered it on its account page and takes it
-    only when it says so. Never an address another account has."""
+    never read (the shared sign-in module): the address finds nobody. An account through providers only follows it
+    (``nexkonten.profiles.follow_provider_email``: it does not count and is not proven, and an own address of the
+    account stays); every other account is offered it on its account page and takes it only when it says so (then
+    it counts, the person's own act). Never an address another account has."""
     address = clean_address(raw)
     if not address:
         return
@@ -154,7 +154,10 @@ def from_provider(db: Session, account: Account, raw: str | None) -> None:
         account.provider_email = ""
         return
     if provider_only(account):
-        take_address(db, account, address)
+        db.flush()
+        if nexkonten.profiles.follow_provider_email(KontenStore(db), account.id, address):
+            db.refresh(account)
+            account.provider_email = ""
         return
     account.provider_email = address
 
@@ -190,6 +193,8 @@ def links_gone(db: Session, account_id: int) -> None:
     if account.email_source == FROM_PROVIDER:
         account.email = ""
         account.email_source = ""
+        account.email_confirmed = True
+        account.email_proven = False
     account.provider_email = ""
     account.provider_email_off = ""
 
@@ -359,24 +364,57 @@ class SqlStore:
         return clean_name(raw)
 
     def name_taken(self, name: str) -> bool:
-        return accounts.by_name(self.db, name) is not None
+        """Taken: another account has the name now or had it, it belonged to an account deleted for good, or it is
+        somebody else's display name (the shared account module)."""
+        return nexkonten.names.username_taken(KontenStore(self.db), name)
 
-    def create_account(self, name: str, *, invite: Invite | None, email: str | None) -> int:
-        row = Account(name=name, role=MEMBER, sign_in=SIGN_IN_OIDC, password_hash="", whats_new_seen=__version__)
+    def create_account(
+        self, name: str, *, invite: Invite | None, email: str | None, display_name: str = "", picture: str = ""
+    ) -> int:
+        """A new account through a provider only (no password).
+
+        - **Display name:** the provider's (claim ``name``), else the invitation's, else empty; one another account
+          shows stays empty (unique, the account module).
+        - **Address:** the invitation's (the operator typed it; it counts, proven when the link went by mail), else
+          the provider's when no other account has it: then it follows the provider and does not count. It never
+          finds an account.
+        - **Picture:** comes through ``provider_picture``, not here."""
+        store = KontenStore(self.db)
+        invitation = invite.rights if invite is not None and isinstance(invite.rights, InviteRow) else None
+        shown = nexkonten.names.provider_display_name(store, display_name or "")
+        if not shown and invitation is not None:
+            shown = nexkonten.names.provider_display_name(store, invitation.display_name or "")
+        address = ""
+        if invitation is not None and invitation.email and not address_taken(self.db, invitation.email, 0):
+            address = invitation.email
+        row = Account(
+            name=name,
+            display_name=shown,
+            role=MEMBER,
+            sign_in=SIGN_IN_OIDC,
+            password_hash="",
+            email=address,
+            email_confirmed=True,
+            email_proven=bool(address and invitation is not None and invitation.mailed),
+            whats_new_seen=__version__,
+        )
         self.db.add(row)
         self.db.flush()
-        address = clean_address(email)
-        if address:
-            # Through the provider only: the account follows its address (never one another account has).
-            take_address(self.db, row, address)
-        if invite is not None and isinstance(invite.rights, InviteRow):
-            invitation = invite.rights
-            if not row.email and invitation.email and not address_taken(self.db, invitation.email, row.id):
-                # The address the invitation went to, when the provider gave none: as with a password.
-                row.email = invitation.email
+        if not address and clean_address(email):
+            nexkonten.profiles.follow_provider_email(store, row.id, clean_address(email))
+            self.db.refresh(row)
+        if invitation is not None:
             accounts.redeem(self.db, invitation, row, consumed=True, commit=False)
         logger.info("Account created name=%s role=%s sign_in=oidc", row.name, row.role)
         return row.id
+
+    def provider_picture(self, account_id: int, picture: str, issuer: str) -> None:
+        """After every sign-in through a provider that sends a picture: an account **without** a picture gets the
+        provider's, in a thread of its own (a fetch takes up to five seconds). An own picture is never replaced."""
+        row = self.db.get(Account, account_id)
+        if row is None or row.avatar_at is not None:
+            return
+        konten_provider_picture(row.id, picture, issuer)
 
     # --- Invitations -----------------------------------------------------------------------------------------------
 

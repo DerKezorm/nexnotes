@@ -88,7 +88,8 @@ def test_an_expired_session_is_gone(client: TestClient) -> None:
 
 def test_the_brake_holds_a_guesser_back(client: TestClient) -> None:
     make_account("anna")
-    for _ in range(5):
+    # The shared account module's brake: five failures free at the account, the sixth starts the wait.
+    for _ in range(6):
         assert client.post("/api/auth/login", json={"name": "anna", "password": "wrong password"}).status_code == 401
     held = client.post("/api/auth/login", json={"name": "anna", "password": PASSWORD})
     # Even the right password waits: otherwise the brake would tell when a guess was right.
@@ -144,7 +145,8 @@ def test_password_sign_in_off_keeps_the_operator_in(client: TestClient) -> None:
     refused = client.post("/api/auth/login", json={"name": "anna", "password": PASSWORD})
     assert refused.status_code == 403 and refused.json()["detail"]["code"] == "password_login_off"
     assert client.post("/api/auth/login", json={"name": "boss", "password": PASSWORD}).status_code == 200
-    assert client.get("/api/auth/methods").json() == {"password": False, "providers": []}
+    methods = client.get("/api/auth/methods").json()
+    assert methods["password"] is False and methods["providers"] == [] and methods["forgot_mail"] is False
 
 
 def test_changing_the_password_ends_the_other_sessions(client: TestClient) -> None:

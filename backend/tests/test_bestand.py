@@ -41,7 +41,7 @@ from app.db import SessionLocal, engine
 from app.main import app
 from app.models import Account
 from app.security import MAX_FAILURES, SESSION_COOKIE, brake
-from app.services import mailer, search, settings_service, totp
+from app.services import search, settings_service, totp
 from app.vendor import nexoidc
 from app.vendor.nexoidc import attempt, protocol
 
@@ -151,19 +151,57 @@ def anbieter():
     attempt.forget_used_states()
 
 
+class Postfach:
+    """The system mail that went into the outbox during the test (the shared post module sends it from there), as a
+    list of ``{"an", "text"}``."""
+
+    def __init__(self) -> None:
+        self.start = self._last()
+
+    @staticmethod
+    def _last() -> int:
+        from sqlalchemy import func, select
+
+        from app.models_accounts import MailOutbox
+
+        with SessionLocal() as db:
+            return int(db.scalar(select(func.max(MailOutbox.id))) or 0)
+
+    def _mails(self) -> list[dict]:
+        from sqlalchemy import select
+
+        from app.models_accounts import MailOutbox
+
+        with SessionLocal() as db:
+            rows = db.scalars(select(MailOutbox).where(MailOutbox.id > self.start).order_by(MailOutbox.id))
+            return [{"an": json.loads(row.letter)["to"], "text": json.loads(row.letter)["text"]} for row in rows]
+
+    def __iter__(self):
+        return iter(self._mails())
+
+    def __getitem__(self, index: int) -> dict:
+        return self._mails()[index]
+
+    def __len__(self) -> int:
+        return len(self._mails())
+
+    def __eq__(self, other: object) -> bool:
+        return self._mails() == other
+
+    def clear(self) -> None:
+        self.start = self._last()
+
+
 @pytest.fixture
 def post(monkeypatch):
-    """Mail goes into a list instead of out; a mail server counts as set up."""
-    gesendet: list[dict] = []
+    """A mail server counts as set up; what is mailed is read from the outbox. "Forgot your password?" does its work
+    before the answer here (it runs after the answer otherwise)."""
+    from app.routers import auth as auth_router
 
-    def senden(db, message):
-        body = message.get_body(("plain",))
-        gesendet.append({"an": str(message["To"]), "text": body.get_content() if body else str(message)})
-
-    monkeypatch.setattr(mailer, "_send", senden)
+    monkeypatch.setattr(auth_router, "FORGOT_AT_ONCE", True)
     with SessionLocal() as db:
         settings_service.save(db, {"smtp_host": "smtp.example.com", "smtp_from": "notes@example.com"})
-    return gesendet
+    return Postfach()
 
 
 def browser() -> TestClient:
@@ -461,7 +499,6 @@ def test_the_open_reset_link_of_the_operator_still_sets_a_password(bestand):
 NACH_DEM_UMBAU = pytest.mark.xfail(strict=True, reason="comes with the account module (docs/konten-anbindung.md)")
 
 
-@NACH_DEM_UMBAU
 def test_after_the_change_a_shared_address_signs_in_neither(bestand):
     """Rule 3. Today 1.0.1 looks the address up with ``limit(1)`` and lets the first of the two in (``kim``); after
     the change neither signs in by it, both still by name."""
@@ -471,7 +508,6 @@ def test_after_the_change_a_shared_address_signs_in_neither(bestand):
         assert antwort.status_code == 401, (_name(konto), antwort.text)
 
 
-@NACH_DEM_UMBAU
 @pytest.mark.parametrize("konto", EINDEUTIGE_ADRESSE, ids=_name)
 def test_after_the_change_forgot_password_mails_a_link(bestand, post, konto):
     """"Passwort vergessen" by mail, with name or unique address; the link holds one hour. Route of the plan:

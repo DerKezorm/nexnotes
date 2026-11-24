@@ -21,7 +21,7 @@ os.environ["NEXNOTES_ARGON2_PARALLELISM"] = "1"
 # Never GitHub from a test: port 9 refuses at once.
 os.environ["NEXNOTES_UPDATE_URL"] = "http://127.0.0.1:9/releases/latest"
 os.environ["NEXNOTES_SECRET_KEY"] = "test-secret-key-for-the-test-run-only"
-SETUP_CODE = "test-setup-code"
+SETUP_CODE = "test-setup-code-of-the-tests"
 os.environ["NEXNOTES_SETUP_TOKEN"] = SETUP_CODE
 # Accounts start empty in the tests: the guide (NOTES-26) is switched on by the tests that are about it.
 os.environ["NEXNOTES_GUIDE"] = "0"

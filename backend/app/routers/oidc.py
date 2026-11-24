@@ -324,7 +324,7 @@ async def _returned(slug: str, request: Request) -> RedirectResponse:
         # The module logged the sign-in with its provider already; ``sign_in`` adds nexnotes' own line, the session
         # and the browser's language for mails.
         # A provider that checks the second factor itself has checked it: this sign-in is not sent to set one up.
-        sign_in(s.db, request, response, row, provider_checked=arrival.provider.trusts_second_factor)
+        sign_in(s.db, request, response, row, provider_checked=arrival.provider.trusts_second_factor, tell=True)
         return response
 
 

@@ -285,6 +285,20 @@ def _fresh_from_provider(request: Request, db: Session, row: AccountRow) -> None
                 f"last {OPERATOR_FRESH_MINUTES} minutes.", 403, minutes=OPERATOR_FRESH_MINUTES, providers=providers)
 
 
+def confirm_fresh_session(request: Request, db: Session, account: AccountRow) -> None:
+    """The browser session is younger than ``OPERATOR_FRESH_MINUTES``: the person signed in just now (after a new
+    password through a link, "Disconnect all" asks no password again, but a stolen older session is not enough)."""
+    cookie = request.cookies.get(SESSION_COOKIE)
+    session = None
+    if cookie and not _bearer(request):
+        session = db.scalar(select(AuthSession).where(AuthSession.token_hash == hash_token(cookie)))
+    if (session is not None and session.account_id == account.id
+            and utcnow() - session.created_at <= timedelta(minutes=OPERATOR_FRESH_MINUTES)):
+        return
+    raise error("fresh_sign_in_required", "Sign in again first: this needs a sign-in from the last "
+                f"{OPERATOR_FRESH_MINUTES} minutes.", 403, minutes=OPERATOR_FRESH_MINUTES, providers=[])
+
+
 def confirm_operator(request: Request, db: Session, operator: AccountRow, password: str) -> None:
     """The operator's password once more, before an act a stolen session must not be enough for: carrying a backup
     away or bringing one back, making a reset link for another account, taking its second factor, changing a role,

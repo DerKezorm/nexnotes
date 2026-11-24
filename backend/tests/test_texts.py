@@ -36,11 +36,18 @@ RAISED = re.compile(
 )
 
 
+#: The shared account and post modules bring their own sentences for their codes (``account.error.*``,
+#: ``mail.error.*``, checked in ``frontend/src/nexkonten.test.ts`` and ``nexpost.test.ts``) and name other apps in their
+#: comments; they are not nexnotes' to word.
+SHARED = {"nexkonten", "nexpost"}
+
+
 def _sources(folder: Path, suffixes: tuple[str, ...]) -> str:
     return "\n".join(
         path.read_text(encoding="utf-8")
         for path in sorted(folder.rglob("*"))
         if path.suffix in suffixes and ".test." not in path.name and "i18n" not in path.parts
+        and not SHARED & set(path.parts)
     )
 
 
@@ -147,4 +154,9 @@ def test_notes2_ac2_no_word_of_another_app_is_left_in_the_frame() -> None:
         for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1) if foreign.search(line)
     ]
     assert found == []
-    assert all("space" not in text for words in mailer.INVITE_MAIL.values() for text in words.values())
+    # The mails come from the shared post module: its invitation names no space either.
+    from app.vendor import nexpost
+
+    for language in mailer.MAIL_LANGUAGES:
+        invite = nexpost.letters.texts(language)["invite"]
+        assert isinstance(invite, dict) and all("space" not in str(text).lower() for text in invite.values())

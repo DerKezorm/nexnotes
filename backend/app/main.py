@@ -55,8 +55,10 @@ from .routers import tokens as tokens_router
 from .routers import totp as totp_router
 from .routers import vault as vault_router
 from .security import HashingBusy, purge_sessions
-from .services import accounts, backups, cleanup, locales, logs, mounts, oidc_store, settings_service, totp
+from .services import backups, cleanup, locales, logs, mounts, oidc_store, post_store, settings_service, totp
+from .services.konten_store import KontenStore
 from .vendor import nexoidc
+from .vendor.nexkonten import setup as konten_setup
 
 logger = logging.getLogger("nexnotes")
 
@@ -93,6 +95,11 @@ async def _sweep_forever(stop: asyncio.Event) -> None:
     rounds = 0
     while not stop.is_set():
         totp.sweep()
+        # System mail waiting in the outbox goes out (the shared post module), in a thread: SMTP blocks.
+        try:
+            await asyncio.to_thread(post_store.run_due)
+        except Exception:
+            logger.exception("Outbox round failed")
         if rounds % 60 == 0:
             with SessionLocal() as db:
                 purge_sessions(db)
@@ -156,7 +163,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         tasks.append(asyncio.create_task(_sweep_forever(stop)))
     logger.info("nexnotes %s started sqlite=%s", __version__, sqlite3.sqlite_version)
     with SessionLocal() as db:
-        accounts.announce_setup_code(db)
+        konten_setup.announce_setup(KontenStore(db))
     try:
         yield
     finally:

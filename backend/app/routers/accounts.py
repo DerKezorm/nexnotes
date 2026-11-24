@@ -21,9 +21,13 @@ from ..errors import error
 from ..models import DELETE_GRACE_DAYS, OPERATOR
 from ..models import Account as AccountRow
 from ..security import end_all_sessions
-from ..services import accounts, content, settings_service, totp
+from ..services import accounts, content, kontenpost, settings_service, totp
 from ..services.accounts import AccountError
+from ..services.konten_store import KontenStore
 from ..services.oidc_store import linked_providers
+from ..vendor import nexkonten
+from ..vendor.nexkonten import login as konten_login
+from ..vendor.nexkonten import profiles, resets
 from .auth import account_view, fail
 
 logger = logging.getLogger("nexnotes.auth")
@@ -41,8 +45,18 @@ class RoleIn(BaseModel):
 
 
 class ResetLinkIn(BaseModel):
-    #: How long the link is valid, as for an invitation: 1, 7 or 30 days.
-    days: int = 7
+    #: How long the link is valid: 1, 7 or 30 days (the shared module's ``OPERATOR_DAYS``, one from the start).
+    days: int = 1
+    current_password: str = Field(default="", max_length=200)
+
+
+class NameIn(BaseModel):
+    name: str = Field(max_length=64)
+    current_password: str = Field(default="", max_length=200)
+
+
+class DisplayNameIn(BaseModel):
+    display_name: str = Field(max_length=200)
     current_password: str = Field(default="", max_length=200)
 
 
@@ -64,11 +78,17 @@ def _row(db: DbSession, account_id: int) -> AccountRow:
 
 def _listed(db: DbSession, row: AccountRow, linked: dict[int, list[dict[str, object]]]) -> dict[str, Any]:
     used = content.counts(db, row.id)
-    view = account_view(row)
+    view = account_view(row, db)
     view.pop("two_factor_recovery_left", None)
+    for private in ("provider_email", "new_password_origin", "new_sign_in_mail", "former_name"):
+        view.pop(private, None)
     view.pop("password_reset_notice", None)
+    store = KontenStore(db)
+    konto = store.get_account(row.id)
     return {
         **view,
+        # The address is held by another account too (left by 1.0.1): it signs nobody in, the list says so.
+        "email_duplicate": bool(konto and konten_login.duplicate_email(store, konto)),
         "locked": accounts.is_locked(row),
         "blocked": row.blocked_at is not None,
         "blocked_at": row.blocked_at.isoformat() if row.blocked_at else None,
@@ -181,15 +201,77 @@ def set_limit(account_id: int, payload: LimitIn, operator: OperatorAccount, db: 
 
 
 @router.post("/{account_id}/reset-link", status_code=201,
-             summary="A one-time link with which the person sets a new password themselves (shown once)")
+             summary="A link with which the person sets a new password themselves (mailed, or shown once)")
 def reset_link(
     account_id: int, payload: ResetLinkIn, request: Request, operator: OperatorAccount, db: DbSession,
 ) -> dict[str, Any]:
+    """Through the shared account module (``resets.reset_link``), after the operator's own confirmation: with a mail
+    server and an address that counts it goes there (``sent``), otherwise the page shows it once. Also for a blocked
+    account (the block stays), never for the operator's own; an account through a provider only gets its first
+    password this way, while signing in by password is on."""
+    confirm_operator(request, db, operator, payload.current_password)
+    row = _row(db, account_id)
+    if row.deleted_at is not None:
+        raise error("not_found", "No such account.", 404)
+    try:
+        made = resets.reset_link(
+            KontenStore(db), row.id, actor_id=operator.id, actor_confirmed=True, mail=kontenpost.can_mail(db),
+            password_login=bool(settings_service.get(db, "password_login")), days=payload.days,
+        )
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
+    logger.warning("Password reset link made name=%s by=%s", row.name, operator.name)
+    if made.mail is not None:
+        sent = kontenpost.queue(db, made.mail, days=payload.days)
+        if not sent:
+            resets.reset_mail_failed(KontenStore(db), row.id)
+            raise error("mail_failed", "The mail server did not take the mail.", 502)
+        return {"link": None, "sent": True, "expires_at": made.expires_at.isoformat()}
+    base = settings_service.public_url(db) or str(request.base_url).rstrip("/")
+    return {"link": f"{base}/reset/{made.token}", "sent": False, "expires_at": made.expires_at.isoformat()}
+
+
+@router.put("/{account_id}/name", summary="Give an account another username")
+def set_name(account_id: int, payload: NameIn, request: Request, operator: OperatorAccount,
+             db: DbSession) -> dict[str, Any]:
     confirm_operator(request, db, operator, payload.current_password)
     row = _row(db, account_id)
     try:
-        made, token = accounts.create_reset(db, operator, row, days=payload.days)
-    except AccountError as exc:
+        notice = profiles.change_username(KontenStore(db), row.id, payload.name, actor_id=operator.id,
+                                          actor_confirmed=True)
+    except nexkonten.AccountError as exc:
         raise fail(exc) from exc
-    base = settings_service.public_url(db) or str(request.base_url).rstrip("/")
-    return {"link": f"{base}/reset/{token}", "expires_at": made.expires_at.isoformat()}
+    kontenpost.queue(db, notice)
+    db.refresh(row)
+    logger.warning("Username changed account_id=%s by=%s", row.id, operator.name)
+    return _listed(db, row, linked_providers(db))
+
+
+@router.put("/{account_id}/display-name", summary="Give an account another display name")
+def set_display_name(account_id: int, payload: DisplayNameIn, request: Request, operator: OperatorAccount,
+                     db: DbSession) -> dict[str, Any]:
+    confirm_operator(request, db, operator, payload.current_password)
+    row = _row(db, account_id)
+    try:
+        profiles.change_display_name(KontenStore(db), row.id, payload.display_name, actor_id=operator.id,
+                                     actor_confirmed=True)
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
+    db.refresh(row)
+    return _listed(db, row, linked_providers(db))
+
+
+@router.delete("/{account_id}/email", summary="Take an account's address away (never set one)")
+def remove_email(account_id: int, payload: OperatorConfirmIn, request: Request, operator: OperatorAccount,
+                 db: DbSession) -> dict[str, Any]:
+    confirm_operator(request, db, operator, payload.current_password)
+    row = _row(db, account_id)
+    try:
+        changed = profiles.remove_email(KontenStore(db), row.id, actor_id=operator.id, actor_confirmed=True,
+                                        mail=kontenpost.can_mail(db))
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
+    kontenpost.queue(db, changed.notice)
+    db.refresh(row)
+    logger.warning("Address removed account_id=%s by=%s", row.id, operator.name)
+    return _listed(db, row, linked_providers(db))

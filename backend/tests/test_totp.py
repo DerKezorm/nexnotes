@@ -45,6 +45,10 @@ class Clock:
 def clock(monkeypatch: pytest.MonkeyPatch) -> Clock:
     fake = Clock()
     monkeypatch.setattr(totp, "time", fake)
+    # The code step checks through the shared account module, which reads the same clock.
+    from app.vendor.nexkonten import factor
+
+    monkeypatch.setattr(factor, "time", fake)
     return fake
 
 

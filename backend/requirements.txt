@@ -18,3 +18,6 @@ typst==0.15.0
 http-ece==1.2.1
 # Time zones by name for "today" and "last 7 days" of smart folders, in the zone of the device (NOTES-7 EC-3).
 tzdata==2026.6
+# Passkeys (konten 0.3.x, WebAuthn): the version the shared account module is tested with (its manifest test asks).
+webauthn==3.0.1
+cbor2==6.3.0

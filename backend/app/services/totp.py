@@ -198,6 +198,8 @@ class PendingSignIn:
     account_id: int
     expires: float
     attempts: int = 0
+    #: "Stay signed in" as the password step asked it.
+    remember: bool = True
 
 
 @dataclass
@@ -243,7 +245,7 @@ def _hash(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
-def start_pending(account_id: int) -> str:
+def start_pending(account_id: int, *, remember: bool = True) -> str:
     """Parks the password step and returns the token for the cookie."""
     token = secrets.token_urlsafe(32)
     with _store.lock:
@@ -251,7 +253,8 @@ def start_pending(account_id: int) -> str:
         for key, entry in list(_store.pending.items()):
             if entry.account_id == account_id:
                 del _store.pending[key]
-        _store.pending[_hash(token)] = PendingSignIn(account_id=account_id, expires=time.monotonic() + PENDING_SECONDS)
+        _store.pending[_hash(token)] = PendingSignIn(account_id=account_id, expires=time.monotonic() + PENDING_SECONDS,
+                                                     remember=remember)
     return token
 
 
