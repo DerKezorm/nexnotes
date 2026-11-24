@@ -13,7 +13,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
   const context = await request.newContext({ baseURL, extraHTTPHeaders: TAB })
   const setup = await (await context.get('/api/setup')).json()
   if (setup.needs_setup) {
-    const made = await context.post('/api/setup', { data: { display_name: 'Tester', email: 'tester@example.com', password: OPERATOR.password, language: 'en', code: 'e2e-setup-code' } })
+    const made = await context.post('/api/setup', { data: { display_name: 'Tester', email: 'tester@example.com', password: OPERATOR.password, language: 'en', code: 'e2e-setup-code-of-the-run' } })
     if (!made.ok()) throw new Error(`setup failed: ${made.status()}`)
   } else {
     const signed = await context.post('/api/auth/login', { data: OPERATOR })

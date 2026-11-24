@@ -52,7 +52,7 @@ test('sign-in through the provider button ends in a session', async ({ page, bro
   const own = await browser.newContext({ storageState: { cookies: [], origins: [] } })
   const ossie = await own.newPage()
   await ossie.goto('/login')
-  await ossie.getByLabel('Email').fill('ossie@example.com')
+  await ossie.getByLabel('Username or email').fill('ossie@example.com')
   await ossie.getByLabel('Password').fill(PASSWORD)
   await ossie.getByRole('button', { name: 'Sign in', exact: true }).click()
   await expect(ossie).not.toHaveURL(/\/login/)
