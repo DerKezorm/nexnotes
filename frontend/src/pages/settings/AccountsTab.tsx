@@ -17,12 +17,13 @@ import { Dialog } from '../../components/Dialog'
 import { bytes, day, dayTime } from '../../lib/format'
 import { ago } from '../../lib/time'
 import { useAuth } from '../../state/auth'
+import { DISPLAY_NAME_MAX, INVITE_DAYS, RESET_DAYS, RESET_DAYS_DEFAULT, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { Button, Card, Confirm, CopyLink, Feedback, Input, Select, Toggle, useAction } from './ui'
 
 const GB = 1024 ** 3
 
 type Asking =
-  | { kind: 'block' | 'unblock' | 'restore' | 'signOut' | 'resetFactor' | 'role'; row: AccountRow }
+  | { kind: 'block' | 'unblock' | 'restore' | 'signOut' | 'resetFactor' | 'role' | 'removeEmail'; row: AccountRow }
   | { kind: 'delete'; row: AccountRow; notes: number; shared: number; days: number }
   | { kind: 'unlink'; row: AccountRow; provider: LinkedProvider }
 
@@ -43,6 +44,8 @@ export function AccountsTab() {
   const [asking, setAsking] = useState<Asking | null>(null)
   const [limitFor, setLimitFor] = useState<AccountRow | null>(null)
   const [resetFor, setResetFor] = useState<AccountRow | null>(null)
+  const [renaming, setRenaming] = useState<{ row: AccountRow; field: 'name' | 'display_name' } | null>(null)
+  const [disconnect, setDisconnect] = useState(true)
   const action = useAction()
   const lang = i18n.language
 
@@ -94,7 +97,8 @@ export function AccountsTab() {
                             {shown}
                             {row.deleted_at ? ` (${t('accounts.deleted')})` : row.blocked ? ` (${t('accounts.blocked')})` : ''}
                           </span>
-                          <span className="block truncate text-xs text-mist-500">{row.email || row.name}</span>
+                          <span className="block truncate text-xs text-mist-500">{row.email ? `${row.name} · ${row.email}` : row.name}</span>
+                          {row.email_duplicate && <span className="block text-xs text-warn-500">{t('account.emailDuplicate')}</span>}
                         </span>
                       </div>
                     </td>
@@ -141,6 +145,9 @@ export function AccountsTab() {
                             <>
                               <MenuItem onClick={() => setAsking({ kind: 'role', row })}>{row.role === 'operator' ? t('accounts.makeMember') : t('accounts.makeOperator')}</MenuItem>
                               <MenuItem onClick={() => setLimitFor(row)}>{t('accounts.setLimit')}</MenuItem>
+                              <MenuItem onClick={() => setRenaming({ row, field: 'display_name' })}>{t('accounts.changeDisplayName')}</MenuItem>
+                              <MenuItem onClick={() => setRenaming({ row, field: 'name' })}>{t('accounts.changeUsername')}</MenuItem>
+                              {row.email && <MenuItem onClick={() => setAsking({ kind: 'removeEmail', row })}>{t('account.emailRemove')}</MenuItem>}
                               <MenuItem onClick={() => setResetFor(row)}>{t('accounts.resetLink')}</MenuItem>
                               {row.two_factor && <MenuItem onClick={() => setAsking({ kind: 'resetFactor', row })}>{t('accounts.resetFactor')}</MenuItem>}
                               <MenuItem onClick={() => setAsking({ kind: 'signOut', row })}>{t('accounts.signOut')}</MenuItem>
@@ -211,6 +218,9 @@ export function AccountsTab() {
       )}
       {limitFor && <LimitDialog row={limitFor} onClose={() => setLimitFor(null)} onSaved={load} />}
       {resetFor && <ResetLinkDialog row={resetFor} askOwn={operatorPassword} onClose={() => setResetFor(null)} />}
+      {renaming && (
+        <NameDialog row={renaming.row} field={renaming.field} askOwn={operatorPassword} onClose={() => setRenaming(null)} onSaved={load} />
+      )}
       {asking && (
         <Confirm
           title={t(`accounts.confirm.${asking.kind}.title`, { name: asking.row.display_name || asking.row.name })}
@@ -227,6 +237,11 @@ export function AccountsTab() {
           danger={asking.kind === 'delete' || asking.kind === 'block'}
           password={operatorPassword && asking.kind !== 'signOut'}
           onCancel={() => setAsking(null)}
+          details={
+            asking.kind === 'resetFactor' ? (
+              <Toggle label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />
+            ) : undefined
+          }
           onConfirm={async (password) => {
             const row = asking.row
             if (asking.kind === 'delete') await accountsApi.remove(row.id, password)
@@ -234,7 +249,8 @@ export function AccountsTab() {
             if (asking.kind === 'block') await accountsApi.block(row.id, password)
             if (asking.kind === 'unblock') await accountsApi.unblock(row.id, password)
             if (asking.kind === 'signOut') await accountsApi.signOut(row.id)
-            if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password)
+            if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password, disconnect)
+            if (asking.kind === 'removeEmail') await accountsApi.removeEmail(row.id, password)
             if (asking.kind === 'role') await accountsApi.role(row.id, row.role === 'operator' ? 'member' : 'operator', password)
             if (asking.kind === 'unlink') await oidcAdminApi.unlinkAccount(row.id, asking.provider.id, password)
             setAsking(null)
@@ -259,6 +275,7 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
   const { t, i18n } = useTranslation()
   const { me } = useAuth()
   const [email, setEmail] = useState('')
+  const [shownName, setShownName] = useState('')
   const [role, setRole] = useState<'member' | 'operator'>('member')
   const [days, setDays] = useState('7')
   const [send, setSend] = useState(false)
@@ -289,16 +306,24 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
           onSubmit={(event) => {
             event.preventDefault()
             void action.run(async () => {
-              const answer = await invitesApi.make({ email: email.trim(), role, days: Number(days), send: mailing, language: i18n.language })
+              const answer = await invitesApi.make({
+                email: email.trim(),
+                display_name: shownName.trim(),
+                role,
+                days: Number(days),
+                send: mailing,
+                language: i18n.language,
+              })
               setMade({ link: answer.link, sent: answer.sent, email: email.trim() })
               onMade()
             })
           }}
         >
-          <Input label={t('auth.email')} type="email" value={email} onChange={setEmail} hint={t('accounts.inviteEmailHint')} />
+          <Input label={t('account.email')} type="email" value={email} onChange={setEmail} hint={t('accounts.inviteEmailHint')} />
+          <Input label={t('account.displayName')} value={shownName} onChange={setShownName} maxLength={DISPLAY_NAME_MAX} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Select label={t('accounts.role')} value={role} onChange={setRole} options={[{ value: 'member', label: t('roles.member') }, { value: 'operator', label: t('roles.operator') }]} />
-            <Select label={t('accounts.valid')} value={days} onChange={setDays} options={['1', '7', '30'].map((value) => ({ value, label: t('server.days', { count: Number(value) }) }))} />
+            <Select label={t('account.validFor')} value={days} onChange={setDays} options={INVITE_DAYS.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))} />
           </div>
           {me?.mail && <Toggle label={t('accounts.sendMail')} checked={send} onChange={setSend} disabled={!email.trim()} />}
           <Feedback problem={action.problem} />
@@ -357,17 +382,79 @@ function LimitDialog({ row, onClose, onSaved }: { row: AccountRow; onClose: () =
   )
 }
 
-/** The operator never sets another account's password (NOTES-2 AC-7): a one-time link lets the person do it. */
+/** Another username or display name for an account, with the operator's own password (the shared account module). */
+function NameDialog({ row, field, askOwn, onClose, onSaved }: {
+  row: AccountRow
+  field: 'name' | 'display_name'
+  askOwn: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t } = useTranslation()
+  const [value, setValue] = useState(field === 'name' ? row.name : row.display_name)
+  const [own, setOwn] = useState('')
+  const action = useAction()
+  const shown = row.display_name || row.name
+  const label = field === 'name' ? t('account.username') : t('account.displayName')
+  return (
+    <Dialog title={field === 'name' ? t('accounts.changeUsername') : t('accounts.changeDisplayName')} onClose={onClose}>
+      <form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          void action.run(async () => {
+            if (field === 'name') await accountsApi.rename(row.id, value.trim(), own)
+            else await accountsApi.displayName(row.id, value.trim(), own)
+            onSaved()
+            onClose()
+          })
+        }}
+      >
+        <p className="text-sm text-mist-400">{shown}</p>
+        <Input
+          label={label}
+          value={value}
+          onChange={setValue}
+          maxLength={field === 'name' ? USERNAME_MAX : DISPLAY_NAME_MAX}
+          hint={field === 'name' ? t('account.usernameRules') : t('account.displayNameHint')}
+        />
+        {askOwn && <Input label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={own} onChange={setOwn} />}
+        <Feedback problem={action.problem} />
+        <div className="flex justify-end gap-2">
+          <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
+            {t('common.cancel')}
+          </button>
+          <button type="submit" disabled={action.busy || (askOwn && !own) || (field === 'name' && !value.trim())} className="nn-btn nn-btn-accent">
+            {t('common.save')}
+          </button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+/** The operator never sets another account's password (NOTES-2 AC-7): a one-time link lets the person do it; with a
+ * mail server and an address it goes there. */
 function ResetLinkDialog({ row, askOwn, onClose }: { row: AccountRow; askOwn: boolean; onClose: () => void }) {
   const { t } = useTranslation()
-  const [days, setDays] = useState('7')
+  const [days, setDays] = useState(String(RESET_DAYS_DEFAULT))
   const [own, setOwn] = useState('')
   const [link, setLink] = useState<string | null>(null)
+  const [sent, setSent] = useState(false)
   const action = useAction()
   const name = row.display_name || row.name
   return (
     <Dialog title={t('accounts.resetLinkFor', { name })} onClose={onClose}>
-      {link ? (
+      {sent ? (
+        <div className="space-y-3" data-testid="reset-link">
+          <p role="status" className="text-sm font-medium text-ok-500">{t('account.resetLinkSent', { email: row.email })}</p>
+          <div className="flex justify-end">
+            <button type="button" className="nn-btn nn-btn-accent" onClick={onClose}>
+              {t('common.done')}
+            </button>
+          </div>
+        </div>
+      ) : link ? (
         <div className="space-y-3" data-testid="reset-link">
           <p className="text-sm text-mist-300">{t('accounts.resetLinkShown', { name })}</p>
           <CopyLink value={link} label={t('accounts.resetLink')} />
@@ -382,11 +469,15 @@ function ResetLinkDialog({ row, askOwn, onClose }: { row: AccountRow; askOwn: bo
           className="space-y-3"
           onSubmit={(event) => {
             event.preventDefault()
-            void action.run(async () => setLink((await accountsApi.resetLink(row.id, Number(days), own)).link))
+            void action.run(async () => {
+              const answer = await accountsApi.resetLink(row.id, Number(days), own)
+              if (answer.sent) setSent(true)
+              else setLink(answer.link)
+            })
           }}
         >
           <p className="text-sm text-mist-400">{t('accounts.resetLinkText', { name })}</p>
-          <Select label={t('accounts.valid')} value={days} onChange={setDays} options={['1', '7', '30'].map((value) => ({ value, label: t('server.days', { count: Number(value) }) }))} />
+          <Select label={t('account.validFor')} value={days} onChange={setDays} options={RESET_DAYS.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))} />
           {askOwn && <Input label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={own} onChange={setOwn} />}
           <Feedback problem={action.problem} />
           <div className="flex justify-end gap-2">

@@ -73,6 +73,11 @@
         "button": "Lösen",
         "text": "Das Konto meldet sich danach nicht mehr über {{name}} an.",
         "title": "Verknüpfung von {{name}} lösen?"
+      },
+      "removeEmail": {
+        "title": "Adresse von {{name}} entfernen?",
+        "text": "Das Konto meldet sich danach nur noch mit dem Benutzernamen an. Eine neue Adresse setzt die Person selbst.",
+        "button": "Adresse entfernen"
       }
     },
     "countNotes_one": "{{count}} Notiz",
@@ -125,9 +130,10 @@
     "until": "bis {{day}}",
     "usedNoLimit": "{{used}} · ohne Grenze",
     "usedOf": "{{used}} von {{limit}}",
-    "valid": "Gültig",
     "withdraw": "Zurückziehen",
-    "withdrawn": "Einladung zurückgezogen."
+    "withdrawn": "Einladung zurückgezogen.",
+    "changeUsername": "Benutzername ändern",
+    "changeDisplayName": "Anzeigename ändern"
   },
   "app": {
     "home": "Zur Startseite",
@@ -235,12 +241,10 @@
     "backToLogin": "Zur Anmeldung",
     "code": {
       "back": "Zurück zum Passwort",
-      "hint": "Sechs Ziffern, oder ein Wiederherstellungscode vom Papier.",
       "label": "Code",
       "text": "Der Code aus deiner Authenticator-App, oder ein Wiederherstellungscode.",
       "title": "Zweiter Faktor"
     },
-    "email": "E-Mail",
     "invite": {
       "expiredText": "Diese Einladung ist abgelaufen. Bitte um eine neue.",
       "expiredTitle": "Einladung abgelaufen",
@@ -256,13 +260,10 @@
     },
     "login": {
       "ended": "Deine Sitzung ist beendet. Melde dich wieder an.",
-      "forgot": "Passwort vergessen?",
-      "forgotText": "Der Betreiber kann dir in den Einstellungen unter „Konten“ einen Link erstellen, mit dem du selbst ein neues Passwort setzt.",
       "noAccount": "Kein Konto? Lass dich vom Betreiber einladen.",
       "submit": "Anmelden",
       "title": "Bei nexnotes anmelden"
     },
-    "name": "Name",
     "password": "Passwort",
     "passwordConfirm": "Passwort bestätigen",
     "reset": {
@@ -1261,8 +1262,6 @@
     "title": "Einstellungen"
   },
   "setup": {
-    "code": "Einrichtungscode",
-    "codeHint": "Steht im Log des Containers, oder du hast ihn selbst vorgegeben.",
     "folder": "Datenordner {{path}}",
     "free": "{{size}} frei",
     "passwordHint_one": "Mindestens {{count}} Zeichen. Den zweiten Faktor richtest du gleich danach ein.",
@@ -2300,5 +2299,9 @@
     "invalid": "Diese Seite öffnet die nexnotes-App selbst. Starte das Verbinden in der App.",
     "doneTitle": "Verbunden",
     "done": "Weiter geht es in der App."
+  },
+  "emailLink": {
+    "title": "Neue Adresse bestätigen",
+    "submit": "Bestätigen"
   }
 }

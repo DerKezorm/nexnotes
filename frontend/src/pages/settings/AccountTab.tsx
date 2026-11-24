@@ -10,6 +10,9 @@ import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
+import { Dialog } from '../../components/Dialog'
+import { DISPLAY_NAME_MAX, EMAIL_MAX, USERNAME_MAX } from '../../vendor/nexkonten/konten'
+import { Notice, PasskeysBox, RemainingAccess, SessionsBox } from './SecurityBoxes'
 import { ACCOUNT_SECTIONS } from '../../extensions'
 import { Avatar } from '../../components/Avatar'
 import { Done, Field, Problem } from '../../components/Field'
@@ -42,7 +45,11 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
   const { me, setMe, refresh } = useAuth()
   const [params] = useSearchParams()
   const [name, setName] = useState(me?.display_name ?? '')
+  const [username, setUsername] = useState(me?.name ?? '')
   const [email, setEmail] = useState(me?.email ?? '')
+  /** A new username or address asks for the own password first (the shared account module). */
+  const [confirming, setConfirming] = useState(false)
+  const [own, setOwn] = useState('')
   const [providers, setProviders] = useState<MyProvider[] | null>(null)
   const loadProviders = () => authApi.myProviders().then(setProviders, () => setProviders([]))
   useEffect(() => {
@@ -76,14 +83,37 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
       setDone(success)
       await refresh()
     } catch (error) {
-      setProblem(problemText(error))
+      if (error instanceof Notice) {
+        setDone(error.message)
+        await refresh()
+      } else setProblem(problemText(error))
     } finally {
       setBusy(false)
     }
   }
 
+  const saveProfile = (password: string) =>
+    run(async () => {
+      const before = me.pending_email ?? ''
+      const saved = await authApi.profile({
+        display_name: name,
+        email: email.trim(),
+        ...(username.trim().toLowerCase() !== me.name ? { name: username.trim() } : {}),
+        ...(password ? { password } : {}),
+      })
+      setName(saved.display_name)
+      setUsername(saved.name)
+      setEmail(saved.email)
+      setMe(saved)
+      if (saved.pending_email && saved.pending_email !== before) {
+        // With a mail server the new address waits for its link; until then the old one counts.
+        throw new Notice(t('account.emailConfirmSent', { email: saved.pending_email }))
+      }
+    }, t('me.profile.saved'))
+
   return (
     <div className="space-y-5">
+      {me.new_password_origin && <RemainingAccess onDone={() => void refresh()} />}
       <div aria-live="polite">
         <Problem text={problem} />
         <Done text={done ?? (linkedShown && linkedLabel ? t('me.linked', { name: linkedLabel }) : null)} />
@@ -116,23 +146,68 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
             </div>
           </div>
           <form
-            className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+            className="grid gap-3 sm:grid-cols-2 sm:items-start"
             onSubmit={(event) => {
               event.preventDefault()
-              void run(async () => {
-                const saved = await authApi.profile({ display_name: name, email })
-                setName(saved.display_name)
-                setEmail(saved.email)
-                setMe(saved)
-              }, t('me.profile.saved'))
+              const weighty = username.trim().toLowerCase() !== me.name || email.trim().toLowerCase() !== (me.email ?? '').toLowerCase()
+              // An account with a password confirms a new username or address with it; one through a provider only
+              // is asked for a fresh sign-in there by the server.
+              if (weighty && me.sign_in === 'password') return setConfirming(true)
+              void saveProfile('')
             }}
           >
-            <Field label={t('auth.name')} value={name} onChange={setName} autoComplete="name" maxLength={80} />
-            <Field label={t('auth.email')} value={email} onChange={setEmail} type="email" autoComplete="email" />
-            <button type="submit" disabled={busy || (name.trim() === me.display_name && email.trim() === me.email)} className={LOUD}>
-              {t('common.save')}
-            </button>
+            <Field label={t('account.displayName')} value={name} onChange={setName} autoComplete="name" maxLength={DISPLAY_NAME_MAX} hint={t('account.displayNameHint')} />
+            <div>
+              <Field label={t('account.username')} value={username} onChange={setUsername} autoComplete="username" maxLength={USERNAME_MAX} hint={t('account.usernameRules')} />
+              {me.former_name && <p className="mt-1 text-xs text-mist-500">{t('account.formerUsername')}</p>}
+            </div>
+            <div className="sm:col-span-2">
+              <Field label={t('account.email')} value={email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hint={t('account.emailHint')} />
+              {me.pending_email && (
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-mist-400" data-testid="email-pending">
+                  <span>{t('account.emailPending', { email: me.pending_email })}</span>
+                  <button type="button" disabled={busy} className={QUIET} onClick={() => void run(async () => setMe(await authApi.resendEmail()), t('account.emailConfirmSent', { email: me.pending_email }))}>
+                    {t('account.emailResend')}
+                  </button>
+                  <button type="button" disabled={busy} className={QUIET} onClick={() => void run(async () => setMe(await authApi.withdrawEmail()), '')}>
+                    {t('account.emailWithdraw')}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="sm:col-span-2 flex justify-end">
+              <button
+                type="submit"
+                disabled={busy || (name.trim() === me.display_name && email.trim() === (me.email ?? '') && username.trim().toLowerCase() === me.name)}
+                className={LOUD}
+              >
+                {t('common.save')}
+              </button>
+            </div>
           </form>
+          {confirming && (
+            <Dialog title={t('account.confirmWithPassword')} onClose={() => setConfirming(false)}>
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setConfirming(false)
+                  void saveProfile(own)
+                  setOwn('')
+                }}
+              >
+                <Field label={t('account.currentPassword')} value={own} onChange={setOwn} type="password" autoComplete="current-password" autoFocus />
+                <div className="flex justify-end gap-2">
+                  <button type="button" className={PLAIN} onClick={() => setConfirming(false)}>
+                    {t('common.cancel')}
+                  </button>
+                  <button type="submit" disabled={!own} className={LOUD}>
+                    {t('common.save')}
+                  </button>
+                </div>
+              </form>
+            </Dialog>
+          )}
           <p className="text-xs text-mist-500">{t('me.profile.role', { role: t(`roles.${me.role}`) })}</p>
           {me.provider_email && (
             <div data-testid="mail-offer" className="rounded-[12px] border border-accent-700/40 bg-[var(--color-accent-wash)] px-3.5 py-3 text-sm">
@@ -286,6 +361,27 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
             <h3 className="mb-2 text-sm font-medium text-mist-100">{t('twofactor.title')}</h3>
             <SecondFactor me={me} />
           </div>
+
+          <PasskeysBox signedInByPassword={me.sign_in === 'password'} />
+
+          <SessionsBox />
+
+          <label className="flex items-start gap-2 rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm">
+            <input
+              type="checkbox"
+              className="mt-1"
+              checked={me.new_sign_in_mail !== false}
+              disabled={busy}
+              onChange={(event) => {
+                const on = event.target.checked
+                void run(async () => setMe(await authApi.newSignInMail(on)), '')
+              }}
+            />
+            <span>
+              <span className="font-medium text-mist-100">{t('account.newSignInMail')}</span>
+              <span className="block text-xs text-mist-500">{t('account.newSignInMailHint')}</span>
+            </span>
+          </label>
 
           <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-ink-700 px-3 py-2.5 text-sm">
             <Lock className="h-4 w-4 text-mist-500" aria-hidden />

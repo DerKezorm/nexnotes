@@ -1,23 +1,35 @@
 /**
- * The pages before signing in: the first account (with the setup code from the server's log), signing in (password,
- * then the second factor; or a provider's button, in the order of the sign-in blueprint), accepting an invitation, and
- * setting a new password with the operator's reset link.
+ * The pages before signing in: the first account (with the setup code from the server's log), signing in (username
+ * or email and password, then the second factor; a passkey; or a provider's button, in the order of the sign-in
+ * blueprint), a forgotten password, accepting an invitation, setting a new password with a link, and confirming a new
+ * address. Fields, their order and their words come from the shared account module (`vendor/nexkonten`).
  */
 import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
-import { ApiError, authApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
+import { ApiError, authApi, emailLinkApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
 import { Logo } from '../components/Logo'
 import { PasswordConfirmField } from '../components/PasswordConfirm'
 import { ProviderButtons } from '../components/ProviderButtons'
 import { ThemeSwitcher } from '../components/ThemeSwitcher'
 import i18n from '../i18n'
 import { errorText, signInErrorText } from '../lib/errors'
+import { passkeysSupported, signInWithPasskey } from '../lib/passkeys'
 import { bytes } from '../lib/format'
 import { usePasswordConfirm } from '../lib/passwordConfirm'
 import { useTitle } from '../lib/title'
 import { safeNext, useAuth } from '../state/auth'
+import {
+  DISPLAY_NAME_MAX,
+  EMAIL_MAX,
+  followUsername,
+  normalizeUsername,
+  STAY_SIGNED_IN_DEFAULT,
+  suggestUsername,
+  USERNAME_MAX,
+  usernameProblem,
+} from '../vendor/nexkonten/konten'
 
 export function AuthFrame({ title, text, children, footer }: { title: string; text?: string; children: ReactNode; footer?: ReactNode }) {
   useTitle(title)
@@ -130,11 +142,22 @@ export function waysIn(): Promise<Methods> {
   })
 }
 
+/** The username field follows the display name until somebody types into it (the shared module's suggestion). */
+function useUsername(displayName: string, initial = '') {
+  const [state, setState] = useState({ touched: initial !== '', username: initial })
+  const username = followUsername(state, displayName)
+  return {
+    username,
+    setUsername: (value: string) => setState({ touched: true, username: value }),
+  }
+}
+
 export function SetupPage() {
   const { t } = useTranslation()
   const { status, setMe } = useAuth()
   const [state, setState] = useState<SetupState | null>(null)
   const [name, setName] = useState('')
+  const { username, setUsername } = useUsername(name)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const again = usePasswordConfirm(password)
@@ -160,12 +183,13 @@ export function SetupPage() {
         .join(' · ')
     : undefined
   return (
-    <AuthFrame title={t('setup.title')} text={t('setup.text')} footer={footer}>
+    <AuthFrame title={t('account.setupTitle')} text={t('setup.text')} footer={footer}>
       <form
         className="space-y-4"
         onSubmit={async (event) => {
           event.preventDefault()
-          if (!name.trim()) return setProblem({ code: 'name_missing' })
+          if (!name.trim()) return setProblem({ code: 'display_name_empty' })
+          if (usernameProblem(username)) return setProblem({ code: 'username_invalid' })
           if (password.length < min) return setProblem({ code: 'password_too_short', values: { minimum: min } })
           setProblem(null)
           if (!again.matches()) return
@@ -174,6 +198,7 @@ export function SetupPage() {
             setMe(
               await authApi.setup({
                 display_name: name.trim(),
+                name: normalizeUsername(username),
                 email: email.trim(),
                 password,
                 password_confirm: again.confirm,
@@ -190,10 +215,11 @@ export function SetupPage() {
       >
         {state?.data_on_share && <Warning>{t('setup.share')}</Warning>}
         <Problem problem={problem} />
-        <AuthField label={t('setup.code')} value={code} onChange={setCode} autoFocus hint={t('setup.codeHint')} />
-        <AuthField label={t('auth.name')} value={name} onChange={setName} autoComplete="name" maxLength={80} />
-        <AuthField label={t('auth.email')} value={email} onChange={setEmail} type="email" autoComplete="email" />
-        <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: min })} />
+        <AuthField label={t('account.setupCode')} value={code} onChange={setCode} autoComplete="off" autoFocus hint={t('account.setupCodeHint')} />
+        <AuthField label={t('account.displayName')} value={name} onChange={setName} autoComplete="name" maxLength={DISPLAY_NAME_MAX} hint={t('account.displayNameHint')} />
+        <AuthField label={t('account.username')} value={username} onChange={setUsername} autoComplete="username" maxLength={USERNAME_MAX} hint={t('account.usernameHint')} />
+        <AuthField label={t('account.email')} value={email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hint={t('account.emailHint')} />
+        <AuthField label={t('account.newPassword')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: min })} />
         <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
         <Primary busy={busy}>{t('setup.submit')}</Primary>
       </form>
@@ -209,8 +235,10 @@ export function LoginPage() {
   const [methods, setMethods] = useState<Methods | null>(null)
   const [name, setName] = useState('')
   const [password, setPassword] = useState('')
+  const [remember, setRemember] = useState(STAY_SIGNED_IN_DEFAULT)
   // After a provider that is not trusted with the second factor the server parked the sign-in: the code step.
   const [step, setStep] = useState<'password' | 'code'>(params.get('step') === 'code' ? 'code' : 'password')
+  const [passkeyStep, setPasskeyStep] = useState(false)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<Trouble>(params.get('error') ? { code: params.get('error')! } : null)
@@ -229,6 +257,11 @@ export function LoginPage() {
   if (status === 'signedIn') return <Navigate to={next} replace />
   if (methods === null) return null
 
+  const signedIn = async () => {
+    setMe(await authApi.me())
+    navigate(next, { replace: true })
+  }
+
   const submit = async () => {
     if (step === 'password' && !name.trim()) return setProblem({ code: 'email_missing' })
     if (step === 'password' && !password) return setProblem({ code: 'password_missing' })
@@ -236,16 +269,16 @@ export function LoginPage() {
     setProblem(null)
     setFromAddress(false)
     try {
-      let answer: Me | { second_factor: true }
+      let answer: Me | { second_factor: true; passkey?: boolean }
       if (step === 'code') answer = await authApi.code(code.trim())
-      else answer = await authApi.login(name.trim(), password)
+      else answer = await authApi.login(name.trim(), password, remember)
       if ('second_factor' in answer) {
         setPassword('')
+        setPasskeyStep(Boolean(answer.passkey) && passkeysSupported())
         setStep('code')
         return
       }
-      setMe(await authApi.me())
-      navigate(next, { replace: true })
+      await signedIn()
     } catch (error) {
       const found = troubleOf(error)
       setProblem(found)
@@ -253,6 +286,19 @@ export function LoginPage() {
         setStep('password')
         setCode('')
       }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const withPasskey = async () => {
+    setBusy(true)
+    setProblem(null)
+    try {
+      await signInWithPasskey()
+      await signedIn()
+    } catch (error) {
+      if (error instanceof ApiError) setProblem(troubleOf(error))
     } finally {
       setBusy(false)
     }
@@ -269,8 +315,13 @@ export function LoginPage() {
           }}
         >
           <Problem problem={problem} fromAddress={fromAddress} />
-          <AuthField label={t('auth.code.label')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus hint={t('auth.code.hint')} />
+          <AuthField label={t('account.code')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus hint={t('account.codeHint')} />
           <Primary busy={busy}>{t('auth.login.submit')}</Primary>
+          {passkeyStep && (
+            <button type="button" disabled={busy} className="nn-btn nn-btn-ghost w-full" onClick={() => void withPasskey()}>
+              {t('account.passkeySignIn')}
+            </button>
+          )}
           <button
             type="button"
             className="w-full text-center text-xs text-mist-500 hover:text-mist-300"
@@ -293,6 +344,7 @@ export function LoginPage() {
   const providers = methods.providers
   const passwordShown = methods.password || providers.length === 0 || operatorWay
   const endedNote = ended && <Warning>{t('auth.login.ended')}</Warning>
+  const passkeyShown = Boolean(methods.passkeys) && passkeysSupported()
   return (
     <AuthFrame title={t('auth.login.title')}>
       {passwordShown ? (
@@ -305,19 +357,36 @@ export function LoginPage() {
         >
           {endedNote}
           <Problem problem={problem} fromAddress={fromAddress} />
-          <AuthField label={t('auth.email')} value={name} onChange={setName} autoComplete="username" autoFocus name="email" />
-          <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="current-password" />
+          <AuthField label={t('account.login')} value={name} onChange={setName} autoComplete="username" autoFocus name="email" maxLength={EMAIL_MAX} />
+          <AuthField label={t('account.password')} value={password} onChange={setPassword} type="password" autoComplete="current-password" />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
+            <span>{t('account.stayIn')}</span>
+          </label>
           <Primary busy={busy}>{t('auth.login.submit')}</Primary>
-          <button type="button" className="nn-btn-quiet block text-sm" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>
-            {t('auth.login.forgot')}
-          </button>
-          {forgot && <p className="text-xs text-mist-500">{t('auth.login.forgotText')}</p>}
+          {methods.forgot_mail ? (
+            <Link to="/forgot" className="nn-btn-quiet block text-sm">
+              {t('account.forgot')}
+            </Link>
+          ) : (
+            <>
+              <button type="button" className="nn-btn-quiet block text-sm" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>
+                {t('account.forgot')}
+              </button>
+              {forgot && <p className="text-xs text-mist-500">{t('account.forgotNoMail')}</p>}
+            </>
+          )}
         </form>
       ) : (
         <div className="space-y-4">
           {endedNote}
           <Problem problem={problem} fromAddress={fromAddress} />
         </div>
+      )}
+      {passkeyShown && (
+        <button type="button" disabled={busy} className="nn-btn nn-btn-ghost mt-4 w-full" onClick={() => void withPasskey()}>
+          {t('account.passkeySignIn')}
+        </button>
       )}
       <ProviderButtons providers={providers} next={next} withOr={passwordShown} />
       {!passwordShown && (
@@ -330,6 +399,124 @@ export function LoginPage() {
   )
 }
 
+/** "Forgot your password?" by mail: the same answer whatever was typed; without a mail server only the sentence. */
+export function ForgotPage() {
+  const { t } = useTranslation()
+  const [methods, setMethods] = useState<Methods | null>(null)
+  const [name, setName] = useState('')
+  const [sent, setSent] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<Trouble>(null)
+  useEffect(() => {
+    void waysIn().then(setMethods)
+  }, [])
+  if (methods === null) return null
+  const back = (
+    <Link to="/login" className="nn-btn nn-btn-ghost mt-4 flex w-full">
+      {t('auth.backToLogin')}
+    </Link>
+  )
+  if (!methods.forgot_mail) {
+    return (
+      <AuthFrame title={t('account.forgotTitle')}>
+        <p className="text-sm text-mist-400">{t('account.forgotNoMail')}</p>
+        {back}
+      </AuthFrame>
+    )
+  }
+  if (sent) {
+    return (
+      <AuthFrame title={t('account.forgotTitle')}>
+        <p role="status" className="text-sm text-mist-400">{t('account.forgotSent')}</p>
+        {back}
+      </AuthFrame>
+    )
+  }
+  return (
+    <AuthFrame title={t('account.forgotTitle')}>
+      <form
+        className="space-y-4"
+        onSubmit={async (event) => {
+          event.preventDefault()
+          if (!name.trim()) return
+          setBusy(true)
+          setProblem(null)
+          try {
+            await authApi.forgot(name.trim())
+            setSent(true)
+          } catch (error) {
+            setProblem(troubleOf(error))
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        <Problem problem={problem} />
+        <AuthField label={t('account.login')} value={name} onChange={setName} autoComplete="username" autoFocus maxLength={EMAIL_MAX} />
+        <Primary busy={busy}>{t('account.forgotSubmit')}</Primary>
+      </form>
+      {back}
+    </AuthFrame>
+  )
+}
+
+/** The link that confirms a new address: one click, no sign-in needed. */
+export function EmailPage() {
+  const { t } = useTranslation()
+  const { token = '' } = useParams()
+  const [email, setEmail] = useState<string | null>(null)
+  const [state, setState] = useState<'open' | 'done' | 'invalid'>('open')
+  const [busy, setBusy] = useState(false)
+  const [problem, setProblem] = useState<Trouble>(null)
+  useEffect(() => {
+    emailLinkApi.offer(token).then((answer) => setEmail(answer.email), () => setState('invalid'))
+  }, [token])
+  if (state === 'invalid') {
+    return (
+      <AuthFrame title={t('emailLink.title')}>
+        <p className="text-sm text-mist-400">{t('account.error.email_link_invalid')}</p>
+        <Link to="/login" className="nn-btn nn-btn-ghost mt-4 flex w-full">
+          {t('auth.backToLogin')}
+        </Link>
+      </AuthFrame>
+    )
+  }
+  if (email === null) return null
+  if (state === 'done') {
+    return (
+      <AuthFrame title={t('emailLink.title')}>
+        <p role="status" className="text-sm text-mist-400">{t('account.emailConfirmed')}</p>
+        <Link to="/" className="nn-btn nn-btn-accent mt-4 flex w-full">
+          {t('auth.invite.toApp')}
+        </Link>
+      </AuthFrame>
+    )
+  }
+  return (
+    <AuthFrame title={t('emailLink.title')} text={email}>
+      <form
+        className="space-y-4"
+        onSubmit={async (event) => {
+          event.preventDefault()
+          setBusy(true)
+          setProblem(null)
+          try {
+            await emailLinkApi.confirm(token)
+            setState('done')
+          } catch (error) {
+            setProblem(troubleOf(error))
+          } finally {
+            setBusy(false)
+          }
+        }}
+      >
+        <Problem problem={problem} />
+        <Primary busy={busy}>{t('emailLink.submit')}</Primary>
+      </form>
+    </AuthFrame>
+  )
+}
+
 export function InvitePage() {
   const { t } = useTranslation()
   const { token = '' } = useParams()
@@ -338,7 +525,8 @@ export function InvitePage() {
   const [offer, setOffer] = useState<InviteOffer | null>(null)
   /** Why the link does not hold: expired, or anything else (used, withdrawn, replaced). */
   const [invalid, setInvalid] = useState<'invalid' | 'expired' | null>(null)
-  const [name, setName] = useState('')
+  const [name, setName] = useState<string | null>(null)
+  const [username, setUsernameState] = useState<{ touched: boolean; username: string }>({ touched: false, username: '' })
   const [email, setEmail] = useState<string | null>(null)
   const [password, setPassword] = useState('')
   const again = usePasswordConfirm(password)
@@ -374,6 +562,9 @@ export function InvitePage() {
     )
   }
 
+  const shown = name ?? offer.display_name ?? ''
+  // The suggestion of the server (from the invitation) until the display name is typed, then it follows that.
+  const suggested = username.touched ? username.username : (name === null ? (offer.name ?? '') : suggestUsername(shown))
   const passwordWay = offer.password && methods.password
   return (
     <AuthFrame title={t('auth.invite.title')} text={text}>
@@ -383,14 +574,16 @@ export function InvitePage() {
           className="space-y-4"
           onSubmit={async (event) => {
             event.preventDefault()
-            if (!name.trim()) return setProblem({ code: 'name_missing' })
+            if (!shown.trim()) return setProblem({ code: 'display_name_empty' })
+            if (usernameProblem(suggested)) return setProblem({ code: 'username_invalid' })
             setProblem(null)
             if (!again.matches()) return
             setBusy(true)
             try {
               setMe(
                 await invitesApi.accept(token, {
-                  display_name: name.trim(),
+                  display_name: shown.trim(),
+                  name: normalizeUsername(suggested),
                   email: (email ?? offer.email).trim(),
                   password,
                   password_confirm: again.confirm,
@@ -405,9 +598,17 @@ export function InvitePage() {
           }}
         >
           <Problem problem={problem} />
-          <AuthField label={t('auth.name')} value={name} onChange={setName} autoComplete="name" autoFocus maxLength={80} />
-          <AuthField label={t('auth.email')} value={email ?? offer.email} onChange={setEmail} type="email" autoComplete="email" />
-          <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: offer.min_password })} />
+          <AuthField label={t('account.displayName')} value={shown} onChange={setName} autoComplete="name" autoFocus maxLength={DISPLAY_NAME_MAX} hint={t('account.displayNameHint')} />
+          <AuthField
+            label={t('account.username')}
+            value={suggested}
+            onChange={(value) => setUsernameState({ touched: true, username: value })}
+            autoComplete="username"
+            maxLength={USERNAME_MAX}
+            hint={t('account.usernameHint')}
+          />
+          <AuthField label={t('account.email')} value={email ?? offer.email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hint={t('account.emailHint')} />
+          <AuthField label={t('account.newPassword')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: offer.min_password })} />
           <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
           <Primary busy={busy}>{t('auth.invite.submit')}</Primary>
         </form>
@@ -417,11 +618,12 @@ export function InvitePage() {
   )
 }
 
-/** The operator's reset link (NOTES-2 AC-7): the person sets a new password; nobody is signed in by it. */
+/** A link for a new password (the person's own, the operator's, or the server's emergency command): the person sets
+ * a new password; nobody is signed in by it. */
 export function ResetPage() {
   const { t } = useTranslation()
   const { token = '' } = useParams()
-  const [offer, setOffer] = useState<{ name: string; min_password: number } | null>(null)
+  const [offer, setOffer] = useState<{ name: string; username?: string; min_password: number } | null>(null)
   const [invalid, setInvalid] = useState<'invalid' | 'expired' | null>(null)
   const [password, setPassword] = useState('')
   const again = usePasswordConfirm(password)
@@ -446,7 +648,7 @@ export function ResetPage() {
   }
   if (!offer) return null
   return (
-    <AuthFrame title={t('auth.reset.title')} text={t('auth.reset.text', { name: offer.name })}>
+    <AuthFrame title={t('account.resetTitle')} text={t('auth.reset.text', { name: offer.username || offer.name })}>
       <form
         className="space-y-4"
         onSubmit={async (event) => {
@@ -468,7 +670,7 @@ export function ResetPage() {
         }}
       >
         <Problem problem={problem} />
-        <AuthField label={t('auth.password')} value={password} onChange={setPassword} type="password" autoComplete="new-password" autoFocus hint={t('setup.passwordHint', { count: offer.min_password })} />
+        <AuthField label={t('account.newPassword')} value={password} onChange={setPassword} type="password" autoComplete="new-password" autoFocus hint={t('setup.passwordHint', { count: offer.min_password })} />
         <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
         <Primary busy={busy}>{t('auth.reset.submit')}</Primary>
       </form>

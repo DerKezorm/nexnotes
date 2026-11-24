@@ -78,7 +78,7 @@ describe('NOTES-22', () => {
       const { t } = useTranslation()
       return (
         <label>
-          {t('auth.name')}
+          {t('account.displayName')}
           <textarea defaultValue="" data-testid="text" />
         </label>
       )
@@ -90,7 +90,7 @@ describe('NOTES-22', () => {
     const area = box.querySelector<HTMLTextAreaElement>('[data-testid="text"]')!
     area.value = 'Milch, Butter, Brot'
     await act(async () => void (await changeLanguage('de', false)))
-    expect(box.textContent).toContain('Name')
+    expect(box.textContent).toContain('Anzeigename')
     expect(box.querySelector<HTMLTextAreaElement>('[data-testid="text"]')!.value).toBe('Milch, Butter, Brot')
     act(() => root.unmount())
     box.remove()
@@ -105,9 +105,9 @@ describe('NOTES-22', () => {
   })
 
   it('NOTES-22 EC-1 a text missing in a language appears in English, never as a bare key', async () => {
-    i18n.addResourceBundle('xx', 'translation', { auth: { name: 'Nom' } }, true, true)
+    i18n.addResourceBundle('xx', 'translation', { account: { displayName: 'Nom' } }, true, true)
     await i18n.changeLanguage('xx')
-    expect(i18n.t('auth.name')).toBe('Nom')
+    expect(i18n.t('account.displayName')).toBe('Nom')
     expect(i18n.t('auth.password')).toBe('Password')
   })
 

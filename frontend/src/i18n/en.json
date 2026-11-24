@@ -73,6 +73,11 @@
         "button": "Unlink",
         "text": "The account no longer signs in through {{name}} afterwards.",
         "title": "Unlink {{name}}?"
+      },
+      "removeEmail": {
+        "title": "Remove the address of {{name}}?",
+        "text": "The account then signs in with its username only. A new address is set by the person themselves.",
+        "button": "Remove address"
       }
     },
     "countNotes_one": "{{count}} note",
@@ -125,9 +130,10 @@
     "until": "until {{day}}",
     "usedNoLimit": "{{used}} · no limit",
     "usedOf": "{{used}} of {{limit}}",
-    "valid": "Valid for",
     "withdraw": "Withdraw",
-    "withdrawn": "Invitation withdrawn."
+    "withdrawn": "Invitation withdrawn.",
+    "changeUsername": "Change username",
+    "changeDisplayName": "Change display name"
   },
   "app": {
     "home": "To the start",
@@ -235,12 +241,10 @@
     "backToLogin": "To the sign-in",
     "code": {
       "back": "Back to the password",
-      "hint": "Six digits, or a recovery code from paper.",
       "label": "Code",
       "text": "The code from your authenticator app, or a recovery code.",
       "title": "Second factor"
     },
-    "email": "Email",
     "invite": {
       "expiredText": "This invitation has expired. Ask for a new one.",
       "expiredTitle": "Invitation expired",
@@ -256,13 +260,10 @@
     },
     "login": {
       "ended": "Your session has ended. Sign in again.",
-      "forgot": "Forgot your password?",
-      "forgotText": "The operator can make you a link in the settings under “Accounts”, with which you set a new password yourself.",
       "noAccount": "No account? Ask the operator for an invitation.",
       "submit": "Sign in",
       "title": "Sign in to nexnotes"
     },
-    "name": "Name",
     "password": "Password",
     "passwordConfirm": "Confirm password",
     "reset": {
@@ -1261,8 +1262,6 @@
     "title": "Settings"
   },
   "setup": {
-    "code": "Setup code",
-    "codeHint": "It is in the container's log, or you set it yourself.",
     "folder": "Data folder {{path}}",
     "free": "{{size}} free",
     "passwordHint_one": "At least {{count}} character. You set up the second factor right afterwards.",
@@ -2300,5 +2299,9 @@
     "invalid": "The nexnotes app opens this page itself. Start connecting in the app.",
     "doneTitle": "Connected",
     "done": "Carry on in the app."
+  },
+  "emailLink": {
+    "title": "Confirm the new address",
+    "submit": "Confirm"
   }
 }

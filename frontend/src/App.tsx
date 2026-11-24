@@ -4,7 +4,7 @@ import { Navigate, Route, Routes, useLocation } from 'react-router-dom'
 import { AppShell } from './components/AppShell'
 import { NotFoundPage } from './components/NotFound'
 import { AppConnectPage } from './pages/AppConnectPage'
-import { InvitePage, LoginPage, ResetPage, SetupPage } from './pages/AuthPages'
+import { EmailPage, ForgotPage, InvitePage, LoginPage, ResetPage, SetupPage } from './pages/AuthPages'
 import { NotesHome } from './pages/NotesHome'
 import { FormerAboutAddress, SettingsPage } from './pages/SettingsPage'
 import { FEATURE_ROUTES, LIST_LAYOUT, type FeatureRoute } from './extensions'
@@ -50,6 +50,8 @@ export default function App() {
       <Route path="login" element={<LoginPage />} />
       <Route path="invite/:token" element={<InvitePage />} />
       <Route path="reset/:token" element={<ResetPage />} />
+      <Route path="forgot" element={<ForgotPage />} />
+      <Route path="email/:token" element={<EmailPage />} />
       {/* The app for iPhone, iPad and Mac signs in here from its sign-in sheet (NOTES-24 AC-2); outside the shell. */}
       <Route path="app-connect" element={<AppConnectPage />} />
       <Route

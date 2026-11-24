@@ -10,12 +10,19 @@
  * comes from outside the code.
  *
  * The texts of sign-in through providers (`oidc.…`) come with the shared module `vendor/nexoidc`, the same words in
- * every nex app; they are merged in here, `{{app}}` says "nexnotes".
+ * every nex app; they are merged in here, `{{app}}` says "nexnotes". So are those of accounts (`account.…`, the shared
+ * module `vendor/nexkonten`) and of system mail (`mail.…`, `vendor/nexpost`).
  */
 
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
+import { kontenVariables } from '../vendor/nexkonten/konten'
+import kontenDe from '../vendor/nexkonten/konten.de.json'
+import kontenEn from '../vendor/nexkonten/konten.en.json'
+import { postVariables } from '../vendor/nexpost/post'
+import postDe from '../vendor/nexpost/post.de.json'
+import postEn from '../vendor/nexpost/post.en.json'
 import { oidcVariables, oidcWording } from '../vendor/nexoidc/oidc'
 import oidcDe from '../vendor/nexoidc/oidc.de.json'
 import oidcEn from '../vendor/nexoidc/oidc.en.json'
@@ -25,8 +32,8 @@ import ownEn from './en.json'
 type Texts = Record<string, unknown>
 
 /** nexnotes' own texts with the shared sign-in texts. */
-const en: Texts = { ...ownEn, ...oidcWording(oidcEn, { singleAccount: false, invitations: true }) }
-const de: Texts = { ...ownDe, ...oidcWording(oidcDe, { singleAccount: false, invitations: true }) }
+const en: Texts = { ...ownEn, ...oidcWording(oidcEn, { singleAccount: false, invitations: true }), ...kontenEn, ...postEn }
+const de: Texts = { ...ownDe, ...oidcWording(oidcDe, { singleAccount: false, invitations: true }), ...kontenDe, ...postDe }
 /** What `{{app}}` stands for in the shared texts. */
 export const APP_NAME = 'nexnotes'
 
@@ -137,7 +144,10 @@ i18n.use(initReactI18next).init({
   resources: { en: { translation: en }, de: { translation: de } },
   lng: first in SHIPPED ? first : FALLBACK,
   fallbackLng: FALLBACK,
-  interpolation: { escapeValue: false, defaultVariables: oidcVariables(APP_NAME) },
+  interpolation: {
+    escapeValue: false,
+    defaultVariables: { ...oidcVariables(APP_NAME), ...postVariables(APP_NAME), ...kontenVariables(APP_NAME) },
+  },
   returnNull: false,
 })
 document.documentElement.lang = i18n.language

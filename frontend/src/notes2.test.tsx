@@ -86,21 +86,23 @@ describe('the setup (NOTES-1)', () => {
       </AuthProvider>,
       '/setup',
     )
-    expect(box.textContent).toContain(i18n.t('setup.title'))
-    expect(box.textContent).toContain(i18n.t('setup.codeHint'))
+    expect(box.textContent).toContain(i18n.t('account.setupTitle'))
+    expect(box.textContent).toContain(i18n.t('account.setupCodeHint'))
     expect(box.textContent).toContain('412 GB')
     const fields = [...box.querySelectorAll('input')]
     expect(fields.map((field) => field.closest('label')?.querySelector('span')?.textContent)).toEqual([
-      i18n.t('setup.code'), i18n.t('auth.name'), i18n.t('auth.email'), i18n.t('auth.password'), i18n.t('auth.passwordConfirm'),
+      // The order of the shared account module (SCREENS.setup): the username follows the display name.
+      i18n.t('account.setupCode'), i18n.t('account.displayName'), i18n.t('account.username'), i18n.t('account.email'),
+      i18n.t('account.newPassword'), i18n.t('auth.passwordConfirm'),
     ])
     type(fields[0], 'AB12-CD34-EF56')
     type(fields[1], 'Robin')
-    type(fields[2], 'robin@example.com')
-    type(fields[3], 'twelve chars')
+    type(fields[3], 'robin@example.com')
     type(fields[4], 'twelve chars')
+    type(fields[5], 'twelve chars')
     await act(async () => box.querySelector('form')!.requestSubmit())
     await settle()
-    expect(made).toEqual({ display_name: 'Robin', email: 'robin@example.com', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34-EF56', language: 'en' })
+    expect(made).toEqual({ display_name: 'Robin', name: 'robin', email: 'robin@example.com', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34-EF56', language: 'en' })
     expect(box.querySelector('[data-testid="home"]')).not.toBeNull()
   })
 
@@ -223,7 +225,7 @@ describe('a session that ends while writing', () => {
     type(password, 'twelve chars')
     await act(async () => document.querySelector<HTMLFormElement>('[data-testid="session-expired"]')!.requestSubmit())
     await settle()
-    expect(calls.find((call) => call.path === '/api/auth/login')?.body).toEqual({ name: 'anna@example.com', password: 'twelve chars' })
+    expect(calls.find((call) => call.path === '/api/auth/login')?.body).toEqual({ name: 'anna@example.com', password: 'twelve chars', remember: true })
     expect(document.querySelector('[data-testid="session-expired"]')).toBeNull()
     expect(resumed).toHaveBeenCalledTimes(1)
     expect(document.querySelector<HTMLTextAreaElement>('[data-testid="note"]')!.value).toBe('Einkaufsliste: Milch, Butter')
@@ -385,7 +387,7 @@ describe('the invitation dialog (NOTES-2 AC-2)', () => {
     expect(submit().textContent).toBe('Send invitation')
     await act(async () => dialog.querySelector('form')!.requestSubmit())
     await settle()
-    expect(made).toEqual([{ email: 'robin@example.com', role: 'member', days: 7, send: true, language: 'en' }])
+    expect(made).toEqual([{ email: 'robin@example.com', display_name: '', role: 'member', days: 7, send: true, language: 'en' }])
     expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe('Invitation sent to robin@example.com.')
     expect(document.body.textContent).toContain(i18n.t('accounts.inviteLinkToo'))
     await act(async () => void (await i18n.changeLanguage('de')))

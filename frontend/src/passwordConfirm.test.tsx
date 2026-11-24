@@ -105,10 +105,10 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     }
     const { SetupPage } = await import('./pages/AuthPages')
     await render(<AuthProvider><Routes><Route path="/setup" element={<SetupPage />} /><Route path="/" element={<p>home</p>} /></Routes></AuthProvider>, '/setup')
-    const confirm = expectPair(box, i18n.t('auth.password'))
-    type(field(i18n.t('setup.code')), 'AB12-CD34')
-    type(field(i18n.t('auth.name')), 'Robin')
-    type(field(i18n.t('auth.password')), 'twelve chars')
+    const confirm = expectPair(box, i18n.t('account.newPassword'))
+    type(field(i18n.t('account.setupCode')), 'AB12-CD34')
+    type(field(i18n.t('account.displayName')), 'Robin')
+    type(field(i18n.t('account.newPassword')), 'twelve chars')
     type(confirm, 'twelve charz')
     await expectMismatchRefused(box.querySelector('form')!, confirm, 'POST', '/api/setup')
     // Typed again the same: the message goes, and the form sends both.
@@ -116,7 +116,8 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     expect(box.textContent).not.toContain(i18n.t('errors.password_mismatch'))
     await submit(box.querySelector('form')!)
     expect(sent('POST', '/api/setup').map((call) => call.body)).toEqual([
-      { display_name: 'Robin', email: '', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34', language: 'en' },
+      // The username follows the display name until somebody types into it (the shared account module).
+      { display_name: 'Robin', name: 'robin', email: '', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34', language: 'en' },
     ])
   })
 
@@ -130,15 +131,15 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     }
     const { InvitePage } = await import('./pages/AuthPages')
     await render(<AuthProvider><Routes><Route path="/invite/:token" element={<InvitePage />} /><Route path="/" element={<p>home</p>} /></Routes></AuthProvider>, '/invite/abc')
-    const confirm = expectPair(box, i18n.t('auth.password'))
-    type(field(i18n.t('auth.name')), 'Anna')
-    type(field(i18n.t('auth.password')), 'twelve chars')
+    const confirm = expectPair(box, i18n.t('account.newPassword'))
+    type(field(i18n.t('account.displayName')), 'Anna')
+    type(field(i18n.t('account.newPassword')), 'twelve chars')
     type(confirm, 'twelve')
     await expectMismatchRefused(box.querySelector('form')!, confirm, 'POST', '/api/invite/')
     type(confirm, 'twelve chars')
     await submit(box.querySelector('form')!)
     expect(sent('POST', '/api/invite/').map((call) => call.body)).toEqual([
-      { display_name: 'Anna', email: '', password: 'twelve chars', password_confirm: 'twelve chars' },
+      { display_name: 'Anna', name: 'anna', email: '', password: 'twelve chars', password_confirm: 'twelve chars' },
     ])
   })
 
