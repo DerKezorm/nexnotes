@@ -560,18 +560,23 @@ async function run(language, samples, out) {
   return { done, failed }
 }
 
-const samples = fs.mkdtempSync(path.join(os.tmpdir(), 'nexnotes-guide-samples-'))
-execFileSync(PYTHON, [path.join(HERE, 'guide-shots.py'), 'samples', samples], { stdio: 'inherit' })
-for (const language of LANGUAGES) {
-  const pngs = fs.mkdtempSync(path.join(os.tmpdir(), `nexnotes-guide-png-${language}-`))
-  const { done, failed } = await run(language, samples, pngs)
-  console.log(`${language}: ${done.length} pictures${failed.length ? `, failed: \n  ${failed.join('\n  ')}` : ''}`)
-  const target = process.env.NEXNOTES_SHOTS_OUT ? path.join(process.env.NEXNOTES_SHOTS_OUT, language) : path.join(BACKEND, 'app', 'guide', language, 'shots')
-  for (const name of fs.readdirSync(pngs).filter((file) => file.startsWith('_failed-'))) {
-    fs.copyFileSync(path.join(pngs, name), path.join(os.tmpdir(), `nexnotes-guide-${language}${name}`))
-    fs.rmSync(path.join(pngs, name))
+// Run as a program; ``readme-shots.mjs`` imports the server, the example notes and the sign-in from here.
+export { BASE, PYTHON, HERE, WORDS, startServer, seed, signedIn, sleep }
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  const samples = fs.mkdtempSync(path.join(os.tmpdir(), 'nexnotes-guide-samples-'))
+  execFileSync(PYTHON, [path.join(HERE, 'guide-shots.py'), 'samples', samples], { stdio: 'inherit' })
+  for (const language of LANGUAGES) {
+    const pngs = fs.mkdtempSync(path.join(os.tmpdir(), `nexnotes-guide-png-${language}-`))
+    const { done, failed } = await run(language, samples, pngs)
+    console.log(`${language}: ${done.length} pictures${failed.length ? `, failed: \n  ${failed.join('\n  ')}` : ''}`)
+    const target = process.env.NEXNOTES_SHOTS_OUT ? path.join(process.env.NEXNOTES_SHOTS_OUT, language) : path.join(BACKEND, 'app', 'guide', language, 'shots')
+    for (const name of fs.readdirSync(pngs).filter((file) => file.startsWith('_failed-'))) {
+      fs.copyFileSync(path.join(pngs, name), path.join(os.tmpdir(), `nexnotes-guide-${language}${name}`))
+      fs.rmSync(path.join(pngs, name))
+    }
+    console.log(execFileSync(PYTHON, [path.join(HERE, 'guide-shots.py'), 'webp', pngs, target]).toString().trim())
+    fs.rmSync(pngs, { recursive: true, force: true })
   }
-  console.log(execFileSync(PYTHON, [path.join(HERE, 'guide-shots.py'), 'webp', pngs, target]).toString().trim())
-  fs.rmSync(pngs, { recursive: true, force: true })
+  fs.rmSync(samples, { recursive: true, force: true })
 }
-fs.rmSync(samples, { recursive: true, force: true })

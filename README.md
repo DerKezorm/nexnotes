@@ -12,10 +12,11 @@ nexnotes has a calm look of its own: honey as the one accent, notes on a quiet p
 
 **1.0.0** is the first public release. Keep backups all the same, see [Backup](#backup).
 
-![A recipe note with a photo and a checklist, beside the folders, smart folders, tags and the list of the folder](docs/screenshots/note-dark.png)
+![A recipe note with a photo and a checklist, beside the tiles, the folders and the list of the folder](docs/screenshots/note-dark.png)
 
-*A note with a picture, a checklist and folded headings. On the left the inbox, folders with their own symbol and
-colour, smart folders, tags and the trash; in the middle the notes of the folder, pinned ones first.*
+*A note with a picture and a checklist. On the left the tiles for the inbox, all notes and what others share with
+you, then folders with their own symbol and colour and the smart folders; in the middle the notes of the folder,
+pinned ones first.*
 
 ## Screenshots
 
@@ -26,6 +27,10 @@ colour, smart folders, tags and the trash; in the middle the notes of the folder
 ![Four tabs open, a cleaning plan with a table and a shopping list side by side](docs/screenshots/split-dark.png)
 
 *Tabs like in a browser (Alt-click opens a note in a new one), and two notes side by side.*
+
+![One note with the whole width: the sidebar and the list folded to narrow strips, the outline beside the note](docs/screenshots/focus-light.png)
+
+*The sidebar and the list fold away to narrow strips, and the note gets the whole width, with its outline beside it.*
 
 <p>
   <img src="docs/screenshots/ocr-light.png" alt="A photographed receipt opened large, with the recognised text beside it" width="68%">
