@@ -379,7 +379,7 @@ def _flat(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(found, key=lambda one: one["hidden"])
 
 
-# --- Areas and lists chosen, the standard list ("Bereiche und Listen" in Connections) -----------------------------
+# --- Areas and lists chosen, the standard list (the card "Areas and lists" in Connections) ----------------------------
 
 
 def choice_of(row: NextasksConnection) -> dict[str, set[str]] | None:
