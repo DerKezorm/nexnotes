@@ -57,6 +57,28 @@ OEFFENTLICHE_ADRESSE = "https://notes.example.com"
 TAB = {"X-Nexnotes-Client": "tab-bestand0"}
 
 
+#: The mail server the operator saved (made-up host and password, never reached).
+MAILSERVER = {
+    "smtp_host": "smtp.example.com",
+    "smtp_port": 465,
+    "smtp_security": "tls",
+    "smtp_user": "notes@example.com",
+    "smtp_from": "notes@example.com",
+}
+MAIL_PASSWORT = "bestand-mail-26"
+
+
+def _png() -> bytes:
+    """A small picture made at run time (no file in Git)."""
+    import io
+
+    from PIL import Image
+
+    out = io.BytesIO()
+    Image.new("RGB", (64, 64), (200, 120, 40)).save(out, format="PNG")
+    return out.getvalue()
+
+
 def dump_datei(ordner: Path = HIER) -> Path:
     return ordner / f"bestand-{FASSUNG}.sql.gz"
 
@@ -227,6 +249,8 @@ def bauen(ziel: Path) -> None:
 
     with SessionLocal() as db:
         settings_service.save(db, {"public_url": OEFFENTLICHE_ADRESSE})
+    # The mail server as the settings page of the version saves it (the password sealed with the server's key).
+    ok(betrieb.put("/api/settings", json=MAILSERVER | {"smtp_password": MAIL_PASSWORT}))
     ok(
         betrieb.post(
             "/api/oidc/admin/providers",
@@ -319,6 +343,8 @@ def bauen(ziel: Path) -> None:
         etikett="mona",
     )
     codes_mona = zwei_faktor_an(mona, "mona", pw_mona)
+    # A profile picture of her own (the version draws it anew as WebP).
+    ok(mona.put("/api/auth/avatar", content=_png()))
     zufall.etikett = "kopplung-mona"
     kopplung = ok(mona.post("/api/app-pairing", json={"address": OEFFENTLICHE_ADRESSE}), 201).json()
     zufall.etikett = "geraet-mona"
@@ -336,7 +362,8 @@ def bauen(ziel: Path) -> None:
             "zweiter_faktor": "mona",
             "wiederherstellungscodes": codes_mona,
             "geraet": geraet,
-            "fall": "password, second factor, paired iPhone",
+            "bild": True,
+            "fall": "password, second factor, paired iPhone, own profile picture",
         }
     )
 
@@ -439,6 +466,7 @@ def bauen(ziel: Path) -> None:
         "konten": konten,
         "offene_einladung": {"schluessel": offen, "email": "gast@example.org", "role": "member"},
         "offener_ruecksetzlink": {"schluessel": ruecksetzen, "name": "erika-muster"},
+        "mailserver": MAILSERVER | {"smtp_password": MAIL_PASSWORT},
     }
     manifest_datei(ziel).write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     shutil.rmtree(daten, ignore_errors=True)

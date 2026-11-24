@@ -491,12 +491,63 @@ def test_the_open_reset_link_of_the_operator_still_sets_a_password(bestand):
     assert nochmal.status_code == 404
 
 
-# --- After the change (account module): what the draft changes on purpose ------------------------------------------
-#
-# ⚠️ **Strict xfail.** They fail today. The day the module is wired in they pass, strict turns that into a red test,
-# and whoever wired it removes the marker. Until then they say what the plan promises (rule 3, "Passwort vergessen").
+# --- Part 2 of the account module: what 1.0.1 set up keeps working --------------------------------------------------
 
-NACH_DEM_UMBAU = pytest.mark.xfail(strict=True, reason="comes with the account module (docs/konten-anbindung.md)")
+
+def test_the_mail_server_of_1_0_1_still_reads_with_its_password(bestand):
+    """The shared post module reads the settings 1.0.1 saved (``smtp_*``, the password sealed with the server's
+    key) as they were."""
+    from app.services.post_store import PostStore
+
+    saved = MANIFEST["mailserver"]
+    with SessionLocal() as db:
+        settings = PostStore(db).mail_settings()
+    assert (settings.host, settings.port, settings.security, settings.user, settings.sender) == (
+        saved["smtp_host"], saved["smtp_port"], saved["smtp_security"], saved["smtp_user"], saved["smtp_from"]
+    )
+    assert settings.password == saved["smtp_password"] and settings.configured
+
+
+def test_a_profile_picture_of_1_0_1_is_still_shown(bestand):
+    konto = next(k for k in KONTEN if k.get("bild"))
+    klient = browser()
+    anmelden(klient, konto)
+    selbst = ich(klient)
+    assert selbst["avatar"], "the picture is still there"
+    bild = klient.get(f"/api/avatars/{selbst['id']}")
+    assert bild.status_code == 200 and bild.headers["content-type"].startswith("image/")
+
+
+def test_the_session_of_1_0_1_is_listed_and_can_be_signed_out_alone(bestand):
+    """"Where you are signed in" knows the browser session 1.0.1 started (it got its id at the start)."""
+    konto = next(k for k in KONTEN if k.get("sitzung"))
+    alt = browser()
+    alt.cookies.set(SESSION_COOKIE, konto["sitzung"])
+    liste = alt.get("/api/auth/sessions")
+    assert liste.status_code == 200, liste.text
+    assert [eintrag["current"] for eintrag in liste.json()] == [True]
+    neu = browser()
+    anmelden(neu, konto)
+    fremd = next(e for e in neu.get("/api/auth/sessions").json() if not e["current"])
+    assert neu.delete(f"/api/auth/sessions/{fremd['uid']}").status_code == 204
+    assert ich(alt) is None and ich(neu) is not None
+
+
+@pytest.mark.parametrize("konto", MIT_FAKTOR, ids=_name)
+def test_the_authenticator_app_of_1_0_1_still_answers_and_a_code_counts_once(bestand, konto):
+    """The seed sealed by 1.0.1 opens through the shared module's store; a code is spent once."""
+    code = totp.code_at(totp_geheimnis(konto["zweiter_faktor"]), time.time())
+    erster = browser()
+    assert erster.post("/api/auth/login", json={"name": _name(konto), "password": konto["passwort"]}).status_code == 200
+    assert erster.post("/api/auth/login/totp", json={"code": code}).status_code == 200
+    brake.forget()
+    zweiter = browser()
+    assert zweiter.post("/api/auth/login", json={"name": _name(konto), "password": konto["passwort"]}).status_code == 200
+    wieder = zweiter.post("/api/auth/login/totp", json={"code": code})
+    assert wieder.status_code == 401 and wieder.json()["detail"]["code"] == "totp_code_wrong"
+
+
+# --- What the account module changed on purpose (rule 3, "Passwort vergessen"); they were strict xfail before ------
 
 
 def test_after_the_change_a_shared_address_signs_in_neither(bestand):

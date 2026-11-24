@@ -71,7 +71,8 @@
         "dmu3a-hry7e"
       ],
       "geraet": "nnd_bestand-geraet-mona-21",
-      "fall": "password, second factor, paired iPhone"
+      "bild": true,
+      "fall": "password, second factor, paired iPhone, own profile picture"
     },
     {
       "name": "sam",
@@ -122,5 +123,13 @@
   "offener_ruecksetzlink": {
     "schluessel": "bestand-ruecksetzen-erika-35",
     "name": "erika-muster"
+  },
+  "mailserver": {
+    "smtp_host": "smtp.example.com",
+    "smtp_port": 465,
+    "smtp_security": "tls",
+    "smtp_user": "notes@example.com",
+    "smtp_from": "notes@example.com",
+    "smtp_password": "bestand-mail-26"
   }
 }
