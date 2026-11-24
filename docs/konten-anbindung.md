@@ -232,6 +232,11 @@ Groß/Klein verglichen, Start löscht offene Einladungen, Start beendet Sitzunge
 zählt nur bei Eingabe des Namens, gelöschtes Konto meldet sich an, und Regel 3 vorab gebaut (die doppelte Adresse
 meldet keinen mehr an): dann wird das strikte `xfail` rot, wie es soll.
 
+Der Vertragstest des Moduls (`tests/nexkonten/test_nexkonten_existing.py`) fragt die App über `Adapter.legacy()`
+nach einer Datenbank der Vorfassung und einer Liste `(eingetippt, Passwort, geht)`. Die Fixture hier liefert beides:
+`legacy()` lädt `bestand-1.0.1.sql.gz` wie `test_bestand.py` und baut die Liste aus `bestand-1.0.1.json` (Name und
+eindeutige Adresse: geht; doppelte Adresse, gesperrt, gelöscht, nur Anbieter: geht nicht).
+
 Vor dem Aufspielen dieselbe Probe auf einer **Kopie** der Live-Datenbank (Regel 11): doppelte Adressen zählen
 (`SELECT lower(email), count(*) FROM accounts WHERE email <> '' GROUP BY 1 HAVING count(*) > 1`), dann die neue
 Fassung gegen die Kopie starten.
