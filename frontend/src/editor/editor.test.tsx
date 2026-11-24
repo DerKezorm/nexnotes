@@ -21,6 +21,7 @@ import { GROUP_LINE, groupWidth, TOOL_GROUPS, TOOL_WIDTH, toolRows } from './too
 import { forgetPrefs, prefKey } from '../lib/devicePref'
 import { Outline } from './Outline'
 import { SelectionBar } from './SelectionBar'
+import { hideNotice } from '../folders/notice'
 import { headingsOf, OUTLINE_COLUMN_FROM, outlineFits } from './outlineData'
 import { parseTextWidth, TEXT_MAX } from './textWidth'
 
@@ -723,7 +724,7 @@ describe('NOTES-3 AC-20 the bar at selected text', () => {
     expect(bar()).not.toBeNull()
     expect(bar()!.getAttribute('role')).toBe('toolbar')
     expect([...bar()!.querySelectorAll('[data-tool]')].map((one) => one.getAttribute('aria-label'))).toEqual([
-      'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Highlighter colours', 'Link', 'Code', 'Text style', 'Clear formatting',
+      'Bold', 'Italic', 'Underline', 'Strikethrough', 'Highlighter', 'Highlighter colours', 'Link', 'Code', 'Text style', 'Clear formatting', 'Copy',
     ])
     // Next to the text, inside the editor's own box (one selection, one bar: the own one).
     expect(editor.view.dom.parentElement!.contains(bar())).toBe(true)
@@ -781,6 +782,37 @@ describe('NOTES-3 AC-20 the bar at selected text', () => {
     await act(async () => tool('clear').click())
     expect(editor.getHTML()).not.toContain('<strong>')
     expect(editor.getHTML()).not.toContain('<mark')
+    await act(async () => root.unmount())
+  })
+
+  it('NOTES-3 AC-20 "Copy" puts the selection on the clipboard as Ctrl+C does, with its formats and as plain text, and says so', async () => {
+    const written: Array<Record<string, Blob>> = []
+    vi.stubGlobal('ClipboardItem', class {
+      constructor(public data: Record<string, Blob>) {
+        written.push(data)
+      }
+    })
+    vi.stubGlobal('isSecureContext', true)
+    const write = vi.fn(async () => undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { write }, configurable: true })
+    const { editor, root } = await withBar('<p><strong>word</strong> and more</p>')
+    await select(editor, 1, 9)
+    const button = tool('copy')
+    expect(button.getAttribute('aria-label')).toBe('Copy')
+    expect(button.title).toMatch(/^Copy \((Ctrl|⌘)\+C\)$/)
+    // Reached with the arrows like the other tools.
+    expect(button.hasAttribute('data-tool')).toBe(true)
+    await act(async () => button.click())
+    await later()
+    expect(write).toHaveBeenCalledTimes(1)
+    const [item] = written
+    expect(await item['text/html'].text()).toContain('<strong>word</strong> and')
+    expect(await item['text/plain'].text()).toBe('word and')
+    expect(document.body.textContent).toContain('Copied')
+    // The selection stays.
+    expect([editor.state.selection.from, editor.state.selection.to]).toEqual([1, 9])
+    Reflect.deleteProperty(navigator, 'clipboard')
+    hideNotice()
     await act(async () => root.unmount())
   })
 

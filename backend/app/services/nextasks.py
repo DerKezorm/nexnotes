@@ -63,6 +63,8 @@ MAX_TITLE = 500
 #: What nextasks takes in ``notes`` and ``external_ref``.
 MAX_NOTES = 20_000
 MAX_REF = 200
+#: Where a whole note's text was cut to fit ``notes``.
+CUT_MARK = " …"
 #: Lines one sending may hold (EC-2).
 MAX_LINES = 50
 #: The features a nextasks must name in ``/me``.
@@ -496,12 +498,26 @@ def _link_of(value: Any) -> str:
     return ""
 
 
+def task_notes(text: str, back: str) -> tuple[str, bool]:
+    """A task's notes: the text above the way back, cut where nextasks' limit would refuse it. Whether it was cut."""
+    text = text.strip()
+    if not text:
+        return back[:MAX_NOTES], False
+    whole = f"{text}\n\n{back}"
+    if len(whole) <= MAX_NOTES:
+        return whole, False
+    room = max(MAX_NOTES - len(back) - len(CUT_MARK) - 2, 0)
+    return f"{text[:room].rstrip()}{CUT_MARK}\n\n{back}", True
+
+
 def create_task(access: Access, *, title: str, note_url: str, note_title: str, list_id: str, due: date | None,
-                ref: str) -> dict[str, Any]:
-    """One task (``POST /tasks``): its id and link. The same ``ref`` again gives the task made before."""
+                ref: str, text: str = "") -> dict[str, Any]:
+    """One task (``POST /tasks``): its id and link. The same ``ref`` again gives the task made before. ``text`` (a
+    whole note sent) stands in the task's notes above the way back; ``cut`` says it was cut to nextasks' limit."""
     back = f"From nexnotes: [{_markdown_text(note_title) or note_url}]({note_url})"
+    notes, cut = task_notes(text, back)
     body: dict[str, Any] = {"title": title[:MAX_TITLE], "url": note_url, "external_ref": ref[:MAX_REF],
-                            "notes": back[:MAX_NOTES]}
+                            "notes": notes}
     list_part, _, section = list_id.partition(SECTION)
     if list_part:
         body["list_id"] = list_part
@@ -518,7 +534,7 @@ def create_task(access: Access, *, title: str, note_url: str, note_title: str, l
         raise
     if not isinstance(task, dict) or not isinstance(task.get("id"), str) or not task["id"]:
         raise _unreachable("an answer of another form")
-    return {"id": task["id"][:100], "link": _link_of(task.get("link"))}
+    return {"id": task["id"][:100], "link": _link_of(task.get("link")), "cut": cut}
 
 
 def _markdown_text(text: str) -> str:
@@ -704,3 +720,19 @@ def send(db: Session, account_id: int, *, note_id: str, note_title: str, note_ur
         db.commit()
     logger.info("Lines sent to nextasks note=%s count=%s account_id=%s", note_id, len(made), account_id)
     return made
+
+
+def send_note(db: Session, account_id: int, *, note_id: str, title: str, text: str, note_url: str, request_id: str,
+              list_id: str, list_name: str, due: date | None) -> bool:
+    """A whole note as one task: its title as the task's, its plain text in the task's notes above the way back (cut
+    to nextasks' limit; the answer says whether). No mark (it belongs to no line); the ``external_ref`` of the
+    sending's first place makes a second click or a retry give the same task (EC-6). Whether the text was cut."""
+    access = connected_access(db, account_id)
+    task = create_task(access, title=title, note_url=note_url, note_title=title, list_id=list_id, due=due,
+                       ref=ref_for(account_id, request_id, 0), text=text)
+    connection = connection_of(db, account_id)
+    if connection is not None:
+        connection.last_list_id, connection.last_list_name = list_id, list_name[:300]
+        db.commit()
+    logger.info("Note sent to nextasks note=%s account_id=%s cut=%s", note_id, account_id, task["cut"])
+    return bool(task["cut"])

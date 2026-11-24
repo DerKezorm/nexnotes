@@ -23,7 +23,7 @@
  */
 import { Selection } from '@tiptap/pm/state'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
-import { Copy, Ellipsis, History, Share2, Trash2, Upload, WifiOff } from 'lucide-react'
+import { Ellipsis, WifiOff } from 'lucide-react'
 import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
@@ -31,19 +31,15 @@ import { useFileDrag, useJumpToAttachment } from '../attachments/hooks'
 import { AttachButton, DropHint, RefusalList } from '../attachments/NoteParts'
 import { Dialog } from '../components/Dialog'
 import { Menu } from '../components/Menu'
-import { ExportDialog } from '../export'
 import { showNotice } from '../folders/notice'
 import { refreshFolders } from '../folders/store'
-import { historyHref } from '../history/href'
 import { RestoreWatch } from '../history/RestoreWatch'
-import { ShareDialog } from '../shares/ShareDialog'
 import { problemText } from '../lib/errors'
 import { pageTitle } from '../lib/title'
 import { notesApi, notesChanged, type NoteHead } from '../notes/api'
 import { addOpenNote, setLeaveGuard, setPopGuard, type LeaveGuard } from '../notes/context'
 import { isListPath, keepsNotesOpen, noteOf } from '../notes/workspace'
-import { NoteColorRow, NotePinButton } from '../notes/list/EditorMarks'
-import { noteHref } from '../notes/newNote'
+import { NotePinButton } from '../notes/list/EditorMarks'
 import { NotifyBell, useJumpToChange, useViewing } from '../notify'
 import { useAuth } from '../state/auth'
 import { acquireProvider, othersOpen, releaseProvider } from '../tabs/live'
@@ -54,7 +50,8 @@ import { bodyIsEmpty, editorExtensions, editorProps, safeHref } from './extensio
 import { presenceFromAwareness, presenceUser, type Presence } from './presence'
 import { PresenceBar } from './PresenceBar'
 import { NoteProvider, type EditorConnection, type LiveStatus } from './provider'
-import { LOCKED_VIEW, NOTE_HEAD_PARTS, NOTE_MENU_ITEMS } from './noteParts'
+import { LOCKED_VIEW, NOTE_HEAD_PARTS } from './noteParts'
+import { useNoteMenu } from './NoteMenu'
 import { cleanTitle, suggestTitle } from './title'
 import { whenText } from './when'
 import { TitleField, type TitleFieldHandle } from './TitleField'
@@ -63,7 +60,6 @@ import { SelectionBar } from './SelectionBar'
 import { TableControls } from './TableControls'
 import { TitleIcon } from './TitleIcon'
 import { paperOf } from './paper'
-import { PaperPicker } from './PaperPicker'
 import { OutlineToggleContext, outlineFits, useOutlineShown, type OutlineToggle } from './outlineData'
 import { TEXT_MAX, useTextWidth } from './textWidth'
 import { Toolbar } from './Toolbar'
@@ -179,8 +175,6 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
   const [askLeave, setAskLeave] = useState<null | (() => void)>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [exportOpen, setExportOpen] = useState(false)
-  const [shareOpen, setShareOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   const [textWidth] = useTextWidth()
   const [outlineShown, setOutlineShown] = useOutlineShown()
@@ -510,41 +504,23 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
 
   // --- actions --------------------------------------------------------------------------------------------------
 
-  const remove = async () => {
-    setMenuOpen(false)
-    try {
-      deleted.current = true
-      await notesApi.remove(noteId)
-      notesChanged()
-      void refreshFolders()
-      showNotice({
-        text: t('notes.deleted'),
-        undo: async () => {
-          await notesApi.restore(noteId)
-          notesChanged()
-          void refreshFolders()
-          navigate(noteHref(noteId))
-        },
-      })
+  const noteMenu = useNoteMenu({
+    noteId,
+    head,
+    sealed,
+    myId,
+    title: shownTitle,
+    onHead: setHead,
+    onProblem: setProblem,
+    onDeleting: (going) => {
+      deleted.current = going
+    },
+    onDeleted: () => {
       if (onDeleted) onDeleted()
       else navigate('/')
-    } catch (error) {
-      deleted.current = false
-      setProblem(problemText(error))
-    }
-  }
-
-  const duplicate = async () => {
-    setMenuOpen(false)
-    try {
-      const copy = await notesApi.duplicate(noteId)
-      notesChanged()
-      void refreshFolders()
-      navigate(noteHref(copy.id))
-    } catch (error) {
-      setProblem(problemText(error))
-    }
-  }
+    },
+    onShared: loadHead,
+  })
 
   const titleOk = async () => {
     setMenuOpen(false)
@@ -634,68 +610,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
                 {t('notes.titleOk')}
               </button>
             )}
-            {head?.can_share && !sealed && (
-              <button
-                type="button"
-                role="menuitem"
-                className="nn-menu-item"
-                data-testid="note-share"
-                onClick={() => {
-                  setMenuOpen(false)
-                  setShareOpen(true)
-                }}
-              >
-                <Share2 className="h-4 w-4" aria-hidden />
-                {t('shares.menu')}
-              </button>
-            )}
-            {!sealed && (
-              <button type="button" role="menuitem" className="nn-menu-item" data-testid="note-duplicate" onClick={() => void duplicate()}>
-                <Copy className="h-4 w-4" aria-hidden />
-                {t('editor.duplicate')}
-              </button>
-            )}
-            {!sealed && (
-              <button
-                type="button"
-                role="menuitem"
-                className="nn-menu-item"
-                data-testid="note-export"
-                onClick={() => {
-                  setMenuOpen(false)
-                  setExportOpen(true)
-                }}
-              >
-                <Upload className="h-4 w-4" aria-hidden />
-                {t('export.menu')}
-              </button>
-            )}
-            {NOTE_MENU_ITEMS.map((Item, index) => (
-              <Item key={index} noteId={noteId} head={head} sealed={sealed} mine={Boolean(head && head.owner?.id === myId)} close={() => setMenuOpen(false)} />
-            ))}
-            <Link to={historyHref(noteId)} role="menuitem" className="nn-menu-item" data-testid="note-history" onClick={() => setMenuOpen(false)}>
-              <History className="h-4 w-4" aria-hidden />
-              {t('history.menu')}
-            </Link>
-            <button type="button" role="menuitem" className="nn-menu-item not-disabled:text-bad-500" data-testid="note-delete" onClick={() => void remove()} disabled={!head?.can_write}>
-              <Trash2 className="h-4 w-4" aria-hidden />
-              {t('editor.delete')}
-            </button>
-            {head?.can_write && <NoteColorRow noteId={noteId} head={head} onDone={() => setMenuOpen(false)} />}
-            {head?.can_write && (
-              <div className="border-t border-ink-700 px-2 pt-2 pb-1">
-                <p className="mb-1.5 px-1 text-[11px] font-semibold tracking-wide text-mist-500 uppercase">{t('editor.paper.label')}</p>
-                <PaperPicker
-                  value={paperOf(head.paper)}
-                  role="menuitemradio"
-                  onChange={(paper) => {
-                    setMenuOpen(false)
-                    setHead({ ...head, paper })
-                    notesApi.setPaper(noteId, paper).then(setHead, (error) => setProblem(problemText(error)))
-                  }}
-                />
-              </div>
-            )}
+            {noteMenu.entries(() => setMenuOpen(false))}
           </Menu>
         )}
       </span>
@@ -881,25 +796,7 @@ export function LiveNote({ provider, noteId, fresh, onDeleted, guarded = true, o
       )}
 
       {linkOpen && editor && <LinkDialog editor={editor} onClose={() => setLinkOpen(false)} />}
-      {shareOpen && head && (
-        <ShareDialog
-          kind="note"
-          id={noteId}
-          title={shownTitle || head.title}
-          onClose={() => {
-            setShareOpen(false)
-            loadHead()
-          }}
-        />
-      )}
-      {exportOpen && head && (
-        <ExportDialog
-          note={{ id: noteId, title: head.title }}
-          // The note's own folder, when it is one of the member's (a shared note's folder is not theirs to export).
-          folder={head.owner?.id === me?.id && head.path.length ? exportFolder(head.path[head.path.length - 1]) : undefined}
-          onClose={() => setExportOpen(false)}
-        />
-      )}
+      {noteMenu.dialogs}
       {askLeave && (
         <LeaveDialog
           suggestion={suggestion}
@@ -1022,8 +919,4 @@ export function LinkDialog({ editor, onClose }: { editor: Editor; onClose: () =>
       </form>
     </Dialog>
   )
-}
-
-function exportFolder(step: { id: string; name: string; inbox: boolean }) {
-  return { id: step.id, name: step.name, inbox: step.inbox }
 }

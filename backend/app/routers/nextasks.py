@@ -36,7 +36,9 @@ class SendIn(BaseModel):
     list_id: str = Field(pattern=nextasks.LIST_ID.pattern)
     list_name: str = Field(default="", max_length=300)
     due_date: date | None = None
-    lines: list[LineIn] = Field(min_length=1, max_length=nextasks.MAX_LINES)
+    #: The lines, one task each; none with ``whole``: the whole note becomes one task.
+    lines: list[LineIn] = Field(default_factory=list, max_length=nextasks.MAX_LINES)
+    whole: bool = False
 
 
 class AreasIn(BaseModel):
@@ -101,17 +103,31 @@ def _clean_line(text: str) -> str:
     return " ".join(text.split())[: nextasks.MAX_TITLE]
 
 
-@router.post("/send", summary="Each line becomes a task in nextasks with a link back to the note; a mark per line")
+@router.post("/send", summary="Each line becomes a task in nextasks with a link back to the note; a mark per line, "
+             "or the whole note one task")
 def send(body: SendIn, request: Request, account: Account, db: DbSession) -> dict[str, Any]:
     # Reading the note is enough (EC-5): the mark is the member's own, never written into the note.
     note = notes.note_for(db, account, body.note_id)
     if note.locked or notes.busy(db, note.id):
         # Never from a locked note (NOTES-16): its text is not the server's to hand on.
         raise error("note_locked", "The note is locked.", 409)
-    lines = [nextasks.Line(text=_clean_line(line.text), anchor=line.anchor) for line in body.lines]
-    if any(not line.text for line in lines):
-        raise error("invalid_input", "The input is not valid.", 422, fields=["lines"])
     note_url = f"{oauth.base_url(request, db)}/notes/{note.id}"
+    if body.whole:
+        # The whole note as one task: its title, its plain text in the task's notes (cut to nextasks' limit).
+        title = _clean_line(note.title) or _clean_line(notes.suggest_title(note.text or ""))
+        if body.lines or not title:
+            raise error("invalid_input", "The input is not valid.", 422, fields=["lines"])
+        try:
+            with nextasks.outgoing(account.id):
+                cut = nextasks.send_note(db, account.id, note_id=note.id, title=title, text=note.text or "",
+                                         note_url=note_url, request_id=body.request_id, list_id=body.list_id,
+                                         list_name=body.list_name, due=body.due_date)
+        except NextasksError as exc:
+            raise _fail(exc) from exc
+        return {"sent": 1, "links": [], "cut": cut}
+    lines = [nextasks.Line(text=_clean_line(line.text), anchor=line.anchor) for line in body.lines]
+    if not lines or any(not line.text for line in lines):
+        raise error("invalid_input", "The input is not valid.", 422, fields=["lines"])
     try:
         with nextasks.outgoing(account.id):
             made = nextasks.send(db, account.id, note_id=note.id, note_title=note.title, note_url=note_url,

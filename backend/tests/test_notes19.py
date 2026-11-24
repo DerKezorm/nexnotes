@@ -588,3 +588,41 @@ def test_notes19_at_most_two_requests_of_an_account_run_at_once(client, operator
     fake.down = True
     for _ in range(3):
         assert code(client.get("/api/nextasks/lists")) == "nextasks_unreachable"
+
+
+# --- The whole note as one task (24.11.2026) -----------------------------------------------------------------------
+
+
+def send_whole(client: TestClient, note_id: str, *, request_id: str | None = None):
+    return client.post("/api/nextasks/send", json={"note_id": note_id, "request_id": request_id or uuid.uuid4().hex,
+                                                   "list_id": LIST, "list_name": "Zuhause › Renovierung",
+                                                   "whole": True})
+
+
+def test_notes19_the_whole_note_becomes_one_task_with_its_text_and_the_way_back(client, operator, fake):
+    connected(client)
+    note = new_note(client, title="Handwerker Bad", markdown="Silikon grau\n\nWaschbecken tauschen")
+    request_id = uuid.uuid4().hex
+    sent = send_whole(client, note["id"], request_id=request_id)
+    assert sent.status_code == 200, sent.text
+    assert sent.json() == {"sent": 1, "links": [], "cut": False}
+    [task] = fake.tasks.values()
+    back = f"http://testserver/notes/{note['id']}"
+    assert task["title"] == "Handwerker Bad" and task["url"] == back and task["list_id"] == LIST
+    assert task["notes"].startswith("Silikon grau") and "Waschbecken tauschen\n\nFrom nexnotes" in task["notes"]
+    assert task["notes"].endswith(f"From nexnotes: [Handwerker Bad]({back})")
+    assert task["external_ref"] == f"nexnotes:{operator.id}:{request_id}:0"
+    # A second click with the same sending makes no second task; no mark for a whole note.
+    assert send_whole(client, note["id"], request_id=request_id).status_code == 200
+    assert len(fake.tasks) == 1 and links(client, note["id"]) == []
+    # Longer than nextasks takes: cut, and the answer says so.
+    long = new_note(client, title="Lang", markdown="wort " * 5000)
+    cut = send_whole(client, long["id"])
+    assert cut.status_code == 200 and cut.json()["cut"] is True
+    longest = next(task for task in fake.tasks.values() if task["title"] == "Lang")
+    assert len(longest["notes"]) <= nextasks.MAX_NOTES and longest["notes"].endswith(f"/notes/{long['id']})")
+    # Lines and the whole note at once are refused.
+    both = client.post("/api/nextasks/send", json={"note_id": note["id"], "request_id": uuid.uuid4().hex,
+                                                   "list_id": LIST, "whole": True,
+                                                   "lines": [{"text": "x", "anchor": block_id(0)}]})
+    assert both.status_code == 422

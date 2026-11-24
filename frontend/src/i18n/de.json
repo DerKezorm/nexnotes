@@ -405,7 +405,10 @@
       "outline": "Gliederung ein- oder ausblenden",
       "more": "Mehr Werkzeuge",
       "noteTools": "Werkzeuge der Notiz",
-      "readOnly": "Nur lesen"
+      "readOnly": "Nur lesen",
+      "copy": "Kopieren",
+      "copied": "Kopiert",
+      "copyFailed": "Kopieren hat nicht geklappt."
     },
     "style": {
       "h1": "Überschrift",
@@ -2161,6 +2164,13 @@
       "title": "Aufgabe nicht mehr da",
       "text": "Diese Aufgabe gibt es in nextasks nicht mehr. Die Zeile bleibt, wie sie ist.",
       "remove": "Zeichen entfernen"
+    },
+    "selection": "Als nextasks-Aufgabe",
+    "note": {
+      "menu": "Als nextasks-Aufgabe",
+      "limit": "Der Titel wird zur Aufgabe, der Text zu ihren Notizen. nextasks nimmt höchstens {{max}} Zeichen, ein längerer Text wird gekürzt.",
+      "hint": "Die Notiz bleibt, wie sie ist; die Aufgabe führt zu ihr zurück.",
+      "doneCut": "Aufgabe in nextasks angelegt, der Text gekürzt."
     }
   },
   "tokens": {

@@ -405,7 +405,10 @@
       "outline": "Show or hide the outline",
       "more": "More tools",
       "noteTools": "Tools of the note",
-      "readOnly": "Read only"
+      "readOnly": "Read only",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Copying did not work."
     },
     "style": {
       "h1": "Heading",
@@ -2161,6 +2164,13 @@
       "title": "Task no longer there",
       "text": "This task is no longer in nextasks. The line stays as it is.",
       "remove": "Remove mark"
+    },
+    "selection": "As a nextasks task",
+    "note": {
+      "menu": "As a nextasks task",
+      "limit": "The title becomes the task, the text its notes. nextasks takes at most {{max}} characters; a longer text is cut.",
+      "hint": "The note stays as it is; the task leads back to it.",
+      "doneCut": "Task made in nextasks, its text cut."
     }
   },
   "tokens": {

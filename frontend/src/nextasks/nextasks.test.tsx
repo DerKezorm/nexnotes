@@ -23,7 +23,8 @@ import { setNextasks, type AreaChoice, type NextasksStatus, type TaskList, type 
 import { dueText } from './hooks'
 import { anchorOf, linesToSend, marksKey, showMarks } from './marks'
 import { NextasksSection } from './NextasksSection'
-import { SendToNextasks } from './SendToNextasks'
+import { NoteTaskHost, NoteTaskItem, SendToNextasks } from './SendToNextasks'
+import { SelectionBar } from '../editor/SelectionBar'
 import './register'
 
 type Call = { method: string; path: string; query: string; body: Record<string, unknown> | undefined }
@@ -468,6 +469,86 @@ describe('NOTES-19 An nextasks in an open note', () => {
     expect($('nextasks-send')).toBeNull()
     await render(<SendToNextasks noteId="n1" editor={editor} head={head()} sealed />)
     expect($('nextasks-send')).toBeNull()
+  })
+})
+
+describe("nextasks from the bar at the selection and from the note's menu (24.11.2026)", () => {
+  const later = () => act(async () => void (await new Promise((resolve) => setTimeout(resolve, 200))))
+  const tool = (key: string) => document.querySelector<HTMLButtonElement>(`[data-testid="selection-bar"] [data-testid="selection-tool-${key}"]`)
+
+  beforeAll(() => {
+    // jsdom knows no layout; the bar asks where the selection stands.
+    const noRects = () => Object.assign([], { item: () => null }) as unknown as DOMRectList
+    Range.prototype.getClientRects = noRects
+    Range.prototype.getBoundingClientRect = () => new DOMRect()
+    Element.prototype.getClientRects = noRects
+  })
+
+  it('"Als nextasks-Aufgabe" at the selection sends the selected lines as the head button does, only where that one stands', async () => {
+    const editor = makeEditor('<p>Silikon</p><p>Waschbecken</p><p>Termin</p>')
+    await render(
+      <>
+        <SendToNextasks noteId="n1" editor={editor} head={head()} sealed={false} />
+        <SelectionBar editor={editor} onLink={() => undefined} />
+      </>,
+    )
+    await act(async () => void editor.chain().focus().setTextSelection({ from: inside(editor, 'Silikon'), to: inside(editor, 'Waschbecken') + 4 }).run())
+    await later()
+    const button = tool('nextasks')!
+    expect(button.getAttribute('aria-label')).toBe('Als nextasks-Aufgabe')
+    expect(button.title).toBe('Als nextasks-Aufgabe')
+    expect(button.hasAttribute('data-tool')).toBe(true)
+    await click(button)
+    expect($$('nextasks-line').map((line) => line.textContent)).toEqual(['Silikon', 'Waschbecken'])
+    await click($('nextasks-submit'))
+    const body = calls.find((call) => call.path === '/api/nextasks/send')!.body!
+    expect((body.lines as Array<{ text: string }>).map((line) => line.text)).toEqual(['Silikon', 'Waschbecken'])
+    // A locked note has no head button and so none at the selection either.
+    await render(
+      <>
+        <SendToNextasks noteId="n1" editor={editor} head={head({ locked: true })} sealed={false} />
+        <SelectionBar editor={editor} onLink={() => undefined} />
+      </>,
+    )
+    await act(async () => void editor.chain().focus().setTextSelection({ from: 2, to: 6 }).run())
+    await later()
+    expect(tool('copy')).not.toBeNull()
+    expect(tool('nextasks')).toBeNull()
+  })
+
+  it('"Als nextasks-Aufgabe" in the note menu makes the whole note one task, to the standard list, and says the limit', async () => {
+    offered = [
+      { id: LIST, name: 'Zuhause › Renovierung', hidden: false, default: false },
+      { id: SHOPPING, name: 'Familie › Einkauf', hidden: false, default: true },
+    ]
+    sendAnswer = () => reply(200, { sent: 1, links: [], cut: true })
+    const close = vi.fn()
+    await render(
+      <>
+        <NoteTaskItem noteId="n1" head={head()} sealed={false} mine close={close} />
+        <NoteTaskHost />
+      </>,
+    )
+    expect($('note-nextasks')!.textContent).toBe('Als nextasks-Aufgabe')
+    await click($('note-nextasks'))
+    expect(close).toHaveBeenCalled()
+    expect($('nextasks-note-title')!.textContent).toBe('Handwerker Bad')
+    expect($('nextasks-note-limit')!.textContent).toContain('20.000 Zeichen')
+    expect(($('nextasks-list') as HTMLSelectElement).value).toBe(SHOPPING)
+    await click($('nextasks-submit'))
+    const body = calls.find((call) => call.path === '/api/nextasks/send')!.body!
+    expect(body).toMatchObject({ note_id: 'n1', whole: true, list_id: SHOPPING, list_name: 'Familie › Einkauf' })
+    expect(body.lines).toBeUndefined()
+    expect($('notice')!.textContent).toBe('Aufgabe in nextasks angelegt, der Text gekürzt.')
+    expect($('nextasks-note-title')).toBeNull()
+    // Not for a locked note, not from the vault, not without nextasks connected.
+    await render(<NoteTaskItem noteId="n1" head={head({ locked: true })} sealed={false} mine close={close} />)
+    expect($('note-nextasks')).toBeNull()
+    await render(<NoteTaskItem noteId="n1" head={head()} sealed mine close={close} />)
+    expect($('note-nextasks')).toBeNull()
+    act(() => setNextasks({ connected: false, local_allowed: true }))
+    await render(<NoteTaskItem noteId="n1" head={head()} sealed={false} mine close={close} />)
+    expect($('note-nextasks')).toBeNull()
   })
 })
 

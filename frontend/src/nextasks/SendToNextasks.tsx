@@ -8,6 +8,9 @@
  *   retry makes no second task (EC-6).
  * - A mark leads to its task, asked first whether nextasks still has it (EC-4); the marks are the member's own (EC-5).
  * - A failure says so and leaves the note alone; a key nextasks refuses leads to Connections (EC-1).
+ * - The same sending from the bar at the selection ("Als nextasks-Aufgabe", `sendSelection`), and the whole note as one
+ *   task from the note's menu, in the editor and in the list (`NoteTaskItem`, the dialog over the page in
+ *   `NoteTaskHost`): its title, its text in the task's notes, cut to nextasks' limit.
  */
 import { ListChecks } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -16,13 +19,17 @@ import { Link } from 'react-router-dom'
 
 import { ApiError } from '../api/client'
 import { Dialog } from '../components/Dialog'
-import type { NoteHeadPartProps } from '../editor/noteParts'
+import type { NoteHeadPartProps, NoteMenuContext } from '../editor/noteParts'
 import { showNotice } from '../folders/notice'
 import { problemText } from '../lib/errors'
 import { newRequestId, nextasksApi, type SendLine, type TaskList, type TaskMark } from './api'
 import { dueText, useNextasks } from './hooks'
 import { linesToSend, marksKey, marksPlugin, showMarks } from './marks'
+import { registerLineSender } from './selection'
 import './marks.css'
+
+/** What nextasks takes in a task's notes (`TaskIn.notes`); a longer note is cut. */
+const NOTES_LIMIT = 20_000
 
 /** Codes that mean: the connection itself is wrong, fix it in Connections (EC-1). */
 const FIX_IN_CONNECTIONS = new Set(['nextasks_token_invalid', 'nextasks_api_off', 'nextasks_read_only', 'nextasks_too_old', 'nextasks_not_connected', 'nextasks_address_local', 'nextasks_address_refused', 'nextasks_address_port'])
@@ -89,6 +96,14 @@ export function SendToNextasks({ noteId, editor, head, sealed }: NoteHeadPartPro
     }
   }, [usable, editor, draw, refresh])
 
+  const take = useCallback(() => {
+    const found = linesToSend(editor.state)
+    if (found.length === 0) showNotice({ text: t('nextasks.send.nothing') })
+    else setLines(found)
+  }, [editor, t])
+
+  useEffect(() => (usable ? registerLineSender(editor, take) : undefined), [usable, editor, take])
+
   if (!usable) return null
   return (
     <>
@@ -99,11 +114,7 @@ export function SendToNextasks({ noteId, editor, head, sealed }: NoteHeadPartPro
         title={t('nextasks.send.button')}
         data-testid="nextasks-send"
         onMouseDown={(event) => event.preventDefault()}
-        onClick={() => {
-          const found = linesToSend(editor.state)
-          if (found.length === 0) showNotice({ text: t('nextasks.send.nothing') })
-          else setLines(found)
-        }}
+        onClick={take}
       >
         <ListChecks className="h-4 w-4" aria-hidden />
       </button>
@@ -148,8 +159,66 @@ export function SendToNextasks({ noteId, editor, head, sealed }: NoteHeadPartPro
   )
 }
 
-function SendDialog({ noteId, lines, onClose, onSent, onPartly }: { noteId: string; lines: SendLine[]; onClose: () => void; onSent: (count: number) => void; onPartly: () => void }) {
+const OPEN_NOTE_TASK = 'nexnotes:nextasks-note'
+
+/** "Als nextasks-Aufgabe" in the note's menu (editor and list): only connected, never for a locked note. */
+export function NoteTaskItem({ noteId, head, sealed, close }: NoteMenuContext) {
   const { t } = useTranslation()
+  const status = useNextasks()
+  if (!status?.connected || sealed || !head || head.locked || head.deleted_at) return null
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      className="nn-menu-item"
+      data-testid="note-nextasks"
+      onClick={() => {
+        close()
+        window.dispatchEvent(new CustomEvent(OPEN_NOTE_TASK, { detail: { noteId, title: head.title || t('notes.untitled') } }))
+      }}
+    >
+      <ListChecks className="h-4 w-4" aria-hidden />
+      {t('nextasks.note.menu')}
+    </button>
+  )
+}
+
+/** The dialog for a whole note, over the page: the menu that opened it is gone by then. */
+export function NoteTaskHost() {
+  const { t } = useTranslation()
+  const [asked, setAsked] = useState<{ noteId: string; title: string } | null>(null)
+  useEffect(() => {
+    const open = (event: Event) => setAsked((event as CustomEvent<{ noteId: string; title: string }>).detail)
+    window.addEventListener(OPEN_NOTE_TASK, open)
+    return () => window.removeEventListener(OPEN_NOTE_TASK, open)
+  }, [])
+  if (!asked) return null
+  return (
+    <SendDialog
+      key={asked.noteId}
+      noteId={asked.noteId}
+      whole={asked.title}
+      onClose={() => setAsked(null)}
+      onSent={(_count, cut) => {
+        setAsked(null)
+        showNotice({ text: cut ? t('nextasks.note.doneCut') : t('nextasks.send.done', { count: 1 }) })
+      }}
+    />
+  )
+}
+
+type DialogProps = {
+  noteId: string
+  /** The lines to send, one task each; or `whole`, the note's title: the whole note as one task. */
+  lines?: SendLine[]
+  whole?: string
+  onClose: () => void
+  onSent: (count: number, cut: boolean) => void
+  onPartly?: () => void
+}
+
+function SendDialog({ noteId, lines = [], whole, onClose, onSent, onPartly }: DialogProps) {
+  const { t, i18n } = useTranslation()
   // One sending, one id: whatever happens to the clicks, nextasks makes each task once (EC-6).
   const [requestId] = useState(newRequestId)
   const [lists, setLists] = useState<TaskList[] | null>(null)
@@ -175,12 +244,13 @@ function SendDialog({ noteId, lines, onClose, onSent, onPartly }: { noteId: stri
     setProblem(null)
     const list = lists?.find((item) => item.id === listId)
     try {
-      const done = await nextasksApi.send({ note_id: noteId, request_id: requestId, list_id: listId, list_name: list?.name ?? '', ...(due ? { due_date: due } : {}), lines })
-      onSent(done.sent)
+      const what = whole !== undefined ? { whole: true } : { lines }
+      const done = await nextasksApi.send({ note_id: noteId, request_id: requestId, list_id: listId, list_name: list?.name ?? '', ...(due ? { due_date: due } : {}), ...what })
+      onSent(done.sent, Boolean(done.cut))
     } catch (error) {
       setBusy(false)
       setProblem({ text: problemText(error), fix: error instanceof ApiError && FIX_IN_CONNECTIONS.has(error.code) })
-      if (error instanceof ApiError && Number(error.values.sent) > 0) onPartly()
+      if (error instanceof ApiError && Number(error.values.sent) > 0) onPartly?.()
     }
   }
 
@@ -193,7 +263,16 @@ function SendDialog({ noteId, lines, onClose, onSent, onPartly }: { noteId: stri
           void send()
         }}
       >
-        {lines.length === 1 ? (
+        {whole !== undefined ? (
+          <div className="space-y-2">
+            <p className="rounded-[10px] border border-ink-700 bg-ink-900 px-3 py-2.5 text-sm text-mist-100" data-testid="nextasks-note-title">
+              {whole}
+            </p>
+            <p className="text-sm text-mist-300" data-testid="nextasks-note-limit">
+              {t('nextasks.note.limit', { max: NOTES_LIMIT.toLocaleString(i18n.language) })}
+            </p>
+          </div>
+        ) : lines.length === 1 ? (
           <p className="rounded-[10px] border border-ink-700 bg-ink-900 px-3 py-2.5 text-sm text-mist-100" data-testid="nextasks-line">
             {lines[0].text}
           </p>
@@ -228,7 +307,7 @@ function SendDialog({ noteId, lines, onClose, onSent, onPartly }: { noteId: stri
           </span>
           <input type="date" className="nn-field mt-1" value={due} onChange={(event) => setDue(event.target.value)} data-testid="nextasks-due" />
         </label>
-        <p className="text-xs text-mist-500">{t('nextasks.send.hint')}</p>
+        <p className="text-xs text-mist-500">{whole !== undefined ? t('nextasks.note.hint') : t('nextasks.send.hint')}</p>
         {problem && (
           <div role="alert" className="rounded-[9px] border border-bad-500/30 bg-bad-500/10 px-3 py-2 text-sm text-bad-500" data-testid="nextasks-problem">
             <p>{problem.text}</p>
@@ -244,7 +323,7 @@ function SendDialog({ noteId, lines, onClose, onSent, onPartly }: { noteId: stri
             {t('common.cancel')}
           </button>
           <button type="submit" className="nn-btn nn-btn-accent" disabled={busy || !listId} data-testid="nextasks-submit">
-            {lines.length === 1 ? t('nextasks.send.submit') : t('nextasks.send.submitMany', { count: lines.length })}
+            {whole !== undefined || lines.length === 1 ? t('nextasks.send.submit') : t('nextasks.send.submitMany', { count: lines.length })}
           </button>
         </div>
       </form>

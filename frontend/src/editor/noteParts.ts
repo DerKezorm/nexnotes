@@ -5,8 +5,12 @@
  *   note opened in this browser. Without it a locked note says only that it is locked.
  * - `NOTE_MENU_ITEMS`: entries of the note's menu ("Sperren", "Sperre aufheben").
  * - `NOTE_HEAD_PARTS`: parts in the head of an open note that work with its text ("An nextasks", NOTES-19).
+ * - `SELECTION_ACTIONS`: buttons at the end of the bar at the selection that do something with the selected text
+ *   ("Als nextasks-Aufgabe"); each says for an editor whether it is offered there now.
  */
 import type { Editor } from '@tiptap/react'
+import type { TFunction } from 'i18next'
+import type { LucideIcon } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 
 import type { NoteHead } from '../notes/api'
@@ -47,3 +51,7 @@ export type NoteHeadPartProps = {
 }
 
 export const NOTE_HEAD_PARTS: ComponentType<NoteHeadPartProps>[] = []
+
+export type SelectionAction = { key: string; label: string; icon: LucideIcon; run: () => void }
+
+export const SELECTION_ACTIONS: ((editor: Editor, t: TFunction) => SelectionAction | null)[] = []

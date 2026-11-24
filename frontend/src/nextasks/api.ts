@@ -39,7 +39,9 @@ export type Sending = {
   list_id: string
   list_name: string
   due_date?: string
-  lines: SendLine[]
+  lines?: SendLine[]
+  /** The whole note as one task: its title, its text in the task's notes (cut to nextasks' limit). */
+  whole?: boolean
 }
 
 export const nextasksApi = {
@@ -49,7 +51,7 @@ export const nextasksApi = {
   lists: () => api<{ lists: TaskList[]; last: string | null }>('/api/nextasks/lists'),
   areas: () => api<AreaAnswer>('/api/nextasks/areas'),
   chooseAreas: (areas: string[], lists: string[], standard: string | null) => api<AreaAnswer>('/api/nextasks/areas', { method: 'PUT', body: { areas, lists, default: standard } }),
-  send: (sending: Sending) => api<{ sent: number; links: TaskMark[] }>('/api/nextasks/send', { method: 'POST', body: sending }),
+  send: (sending: Sending) => api<{ sent: number; links: TaskMark[]; cut?: boolean }>('/api/nextasks/send', { method: 'POST', body: sending }),
   links: (noteId: string) => api<{ links: TaskMark[] }>('/api/nextasks/links', { query: { note_id: noteId } }),
   open: (id: number) => api<{ url: string }>(`/api/nextasks/links/${id}/open`),
   removeLink: (id: number) => api<void>(`/api/nextasks/links/${id}`, { method: 'DELETE' }),

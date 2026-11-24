@@ -1,7 +1,9 @@
 /**
  * The small bar at selected text (NOTES-3 AC-20, third review): the most used formats right above the selection,
  * in the order and with the symbols of the toolbar: bold, italic, underline, strike, the highlighter (a click gives
- * honey, the arrow beside it the other colours), link, code, the text style, clearing the formats.
+ * honey, the arrow beside it the other colours), link, code, the text style, clearing the formats; then copying the
+ * selection as Ctrl+C does (with its formats and as plain text) and what features add for the selected text
+ * (`SELECTION_ACTIONS`: "Als nextasks-Aufgabe").
  *
  * Only for one's own selection of real text (never an empty one, never in a code block, never for someone who only
  * reads) and only on a desk with a mouse or touchpad: on a touch screen the system's own menu stands at a selection and
@@ -13,11 +15,13 @@ import type { Editor } from '@tiptap/core'
 import { PluginKey, TextSelection, type Selection } from '@tiptap/pm/state'
 import { useEditorState } from '@tiptap/react'
 import { BubbleMenu } from '@tiptap/react/menus'
-import { Bold, ChevronDown, Code, Highlighter, Italic, Link as LinkIcon, RemoveFormatting, Strikethrough, Underline, type LucideIcon } from 'lucide-react'
+import { Bold, ChevronDown, Code, Copy, Highlighter, Italic, Link as LinkIcon, RemoveFormatting, Strikethrough, Underline, type LucideIcon } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { showNotice } from '../folders/notice'
 import { HIGHLIGHT_COLORS } from './extensions'
+import { SELECTION_ACTIONS } from './noteParts'
 
 const SELECTION_BAR = new PluginKey('selectionBar')
 
@@ -27,6 +31,29 @@ const ALT = MOD === '⌘' ? '⌥' : 'Alt'
 /** A screen with nothing that hovers (a phone, a tablet without a mouse): the bar stays away there. */
 function touchOnly(): boolean {
   return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(any-hover: none)').matches
+}
+
+/**
+ * The selection to the clipboard as Ctrl+C puts it there: the editor's own HTML (`text/html`) and its plain text. The
+ * clipboard API needs a secure context; over plain http the editor's own copy (the copy command) does it.
+ */
+async function copySelection(editor: Editor): Promise<boolean> {
+  const { dom, text } = editor.view.serializeForClipboard(editor.state.selection.content())
+  if (navigator.clipboard?.write && window.isSecureContext && typeof ClipboardItem !== 'undefined') {
+    try {
+      const item = new ClipboardItem({ 'text/html': new Blob([dom.innerHTML], { type: 'text/html' }), 'text/plain': new Blob([text], { type: 'text/plain' }) })
+      await navigator.clipboard.write([item])
+      return true
+    } catch {
+      // Refused (no permission, page not in focus): the copy command below may still work.
+    }
+  }
+  editor.view.focus()
+  try {
+    return document.execCommand('copy')
+  } catch {
+    return false
+  }
 }
 
 function readState(editor: Editor) {
@@ -39,6 +66,8 @@ function readState(editor: Editor) {
     link: editor.isActive('link'),
     code: editor.isActive('code'),
     style: editor.isActive('heading', { level: 1 }) ? 'h1' : editor.isActive('heading', { level: 2 }) ? 'h2' : 'p',
+    // A new selection draws the bar anew: what features offer at it (`SELECTION_ACTIONS`) is asked then.
+    at: `${editor.state.selection.from}-${editor.state.selection.to}`,
   }
 }
 
@@ -149,6 +178,16 @@ export function SelectionBar({ editor, onLink, headHeight = 0 }: { editor: Edito
     },
     { key: 'style', label: t('editor.tools.style'), icon: ChevronDown, run: () => setOpen(open === 'style' ? null : 'style') },
     { key: 'clear', label: t('editor.tools.clear'), icon: RemoveFormatting, run: () => chain().unsetAllMarks().run() },
+    {
+      key: 'copy',
+      label: t('editor.tools.copy'),
+      shortcut: `${MOD}+C`,
+      icon: Copy,
+      run: () => {
+        void copySelection(editor).then((done) => showNotice({ text: t(done ? 'editor.tools.copied' : 'editor.tools.copyFailed') }))
+      },
+    },
+    ...SELECTION_ACTIONS.flatMap((action) => action(editor, t) ?? []),
   ]
   const styles = [
     ['h1', () => chain().setHeading({ level: 1 }).run()],
@@ -228,7 +267,7 @@ export function SelectionBar({ editor, onLink, headHeight = 0 }: { editor: Edito
           const narrow = tool.key === 'highlight-colors'
           return (
             <span key={tool.key} className="flex shrink-0 items-center">
-              {(tool.key === 'link' || tool.key === 'style' || tool.key === 'clear') && <span aria-hidden className="mx-1 h-5 w-px bg-ink-700" />}
+              {(tool.key === 'link' || tool.key === 'style' || tool.key === 'clear' || tool.key === 'copy') && <span aria-hidden className="mx-1 h-5 w-px bg-ink-700" />}
               <button
                 type="button"
                 data-tool
@@ -238,7 +277,7 @@ export function SelectionBar({ editor, onLink, headHeight = 0 }: { editor: Edito
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={tool.run}
                 aria-label={tool.label}
-                aria-pressed={menu ? undefined : tool.key === 'clear' || tool.key === 'link' ? undefined : tool.active}
+                aria-pressed={menu || tool.active === undefined || tool.key === 'clear' || tool.key === 'link' ? undefined : tool.active}
                 aria-haspopup={menu ? 'menu' : undefined}
                 aria-expanded={menu ? open === (tool.key === 'style' ? 'style' : 'highlight') : undefined}
                 title={tool.shortcut ? `${tool.label} (${tool.shortcut})` : tool.label}

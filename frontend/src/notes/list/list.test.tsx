@@ -38,6 +38,8 @@ let shared = 0
 let stampValue = 1
 let folders: Folder[] = []
 let look: { list_style: string; list_hints: boolean } = { list_style: 'list', list_hints: true }
+/** The heads `GET /api/notes/<id>` answers (the note's menu in the list asks for it). */
+let heads: Record<string, unknown> = {}
 const INBOX = 'inbox-1'
 const DAY = 86_400_000
 
@@ -72,6 +74,8 @@ function answer(call: Call): { status: number; body: unknown } {
     views.set(where, next)
     return { status: 200, body: next }
   }
+  const head = /^\/api\/notes\/([^/]+)$/.exec(path)
+  if (head && method === 'GET' && heads[head[1]]) return { status: 200, body: heads[head[1]] }
   const one = /^\/api\/notes\/([^/]+)\/(pin|color)$/.exec(path)
   if (one && method === 'PUT') {
     const [, id, what] = one
@@ -132,6 +136,7 @@ beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   calls = []
   items = []
+  heads = {}
   shared = 0
   stampValue = 1
   views = new Map()
@@ -362,6 +367,42 @@ describe('NOTES-6 list and tiles', () => {
     await act(async () => void (await i18n.changeLanguage('de')))
     await settle()
     expect(headings()).toEqual(['Angeheftet', 'Notizen'])
+  })
+
+  it('the menu of a note in the list has the entries of the note menu, with its conditions and words', async () => {
+    items = [item('a', { title: 'Geschenkideen' }), item('b', { title: 'Tresor', locked: true })]
+    const headOf = (id: string, extra: Record<string, unknown> = {}) => ({
+      ...items.find((note) => note.id === id), path: [{ id: 'h', name: 'Haushalt', inbox: false }], updated_by: null,
+      owner: { id: 0, name: 'tester' }, deleted_at: null, can_write: true, can_share: true, paper: 'blank', ...extra,
+    })
+    heads = { a: headOf('a'), b: headOf('b', { locked: true }) }
+    await render('h')
+    await click(byText('Actions for “Geschenkideen”'))
+    const menu = document.querySelector<HTMLElement>('[data-testid="note-item-menu"]')!
+    const words = [...menu.querySelectorAll('[role="menuitem"]')].map((entry) => entry.textContent?.trim())
+    const tr = (key: string) => i18n.t(key)
+    const at = (word: string) => words.indexOf(word)
+    for (const key of ['shares.menu', 'editor.duplicate', 'export.menu', 'history.menu', 'editor.delete']) expect(words, key).toContain(tr(key))
+    // In the order of the note menu, after pinning and the tabs.
+    expect(at(tr('noteList.menu.pin'))).toBeLessThan(at(tr('shares.menu')))
+    expect([at(tr('shares.menu')), at(tr('editor.duplicate')), at(tr('export.menu')), at(tr('history.menu')), at(tr('editor.delete'))]).toEqual(
+      [...[at(tr('shares.menu')), at(tr('editor.duplicate')), at(tr('export.menu')), at(tr('history.menu')), at(tr('editor.delete'))]].sort((x, y) => x - y),
+    )
+    // The paper as well, and the list's own color row only once.
+    expect(menu.querySelector('[data-testid="note-item-note-entries"] [role="menuitemradio"]')).not.toBeNull()
+    expect(menu.querySelectorAll('[data-testid="note-colors"]')).toHaveLength(0)
+    // Duplicate does what the note menu does.
+    await click(byText(tr('editor.duplicate'), menu))
+    expect(calls.some((call) => call.method === 'POST' && call.path === '/api/notes/a/duplicate')).toBe(true)
+    expect(document.querySelector('[data-testid="note-item-menu"]')).toBeNull()
+    // A locked note: as an open locked note, nothing that reads its text (share, duplicate, export), by the right click too.
+    await act(async () => box.querySelector<HTMLElement>('[data-note="b"]')!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 30, clientY: 30 })))
+    await settle()
+    const locked = document.querySelector<HTMLElement>('[data-testid="note-item-menu"]')!
+    const lockedWords = [...locked.querySelectorAll('[role="menuitem"]')].map((entry) => entry.textContent?.trim())
+    expect(lockedWords).toContain(tr('history.menu'))
+    expect(lockedWords).toContain(tr('editor.delete'))
+    for (const key of ['shares.menu', 'editor.duplicate', 'export.menu']) expect(lockedWords, key).not.toContain(tr(key))
   })
 
   it('NOTES-6 AC-8 a color from the fixed row: a stripe on the tile, a mark in the list', async () => {
