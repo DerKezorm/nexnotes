@@ -260,7 +260,8 @@ describe('the cryptography', () => {
     const seen: RequestInit[] = []
     vi.stubGlobal('fetch', vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       seen.push(init ?? {})
-      return new Response(new Blob([new Uint8Array([2, 1])]), { status: 200 })
+      // The bytes themselves, not a Blob: Node 22's Response wants `stream()`, which jsdom's Blob lacks.
+      return new Response(new Uint8Array([2, 1]), { status: 200 })
     }))
     const { vaultApi } = await import('./api')
     await vaultApi.file('a1')
