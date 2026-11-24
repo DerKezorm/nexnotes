@@ -4,12 +4,14 @@
  * small line that says how the list is sorted and grouped. It stays at the top while the list scrolls.
  *
  * Beside two notes, with the list as a column, "«" at the end of the line folds the list away to a narrow strip at the
- * left edge (sixth review: the button "List" in the row of tabs was neither clear nor in the right place).
+ * left edge (sixth review: the button "List" in the row of tabs was neither clear nor in the right place). Before it
+ * "Hide sidebar" folds the sidebar away to a strip of its own (24.11.2026), on the list's page without a note too.
  */
-import { ChevronsLeft } from 'lucide-react'
+import { ChevronsLeft, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useContext, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { SidebarFoldContext } from '../../components/sidebarFold'
 import { ListCollapseContext } from '../listPlace'
 
 type Props = {
@@ -32,6 +34,8 @@ type Props = {
 export function ListHead({ heading, crumb, icon, count, view, actions, summary, narrow }: Props) {
   const { t } = useTranslation()
   const collapse = useContext(ListCollapseContext)
+  const sidebar = useContext(SidebarFoldContext)
+  const sidebarLabel = sidebar?.hidden ? t('tabs.showSidebar') : t('tabs.hideSidebar')
   return (
     <header className="sticky top-0 z-10 -mx-1 border-b border-ink-700 bg-ink-950 px-1 pt-1 pb-2.5" data-testid="list-head">
       {crumb && <div className="flex min-w-0 flex-wrap items-center gap-1 text-[12px] text-mist-600">{crumb}</div>}
@@ -48,6 +52,20 @@ export function ListHead({ heading, crumb, icon, count, view, actions, summary, 
         <span className="ml-auto flex shrink-0 items-center gap-1">
           {view}
           {actions}
+          {sidebar && (
+            <button
+              type="button"
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-lg text-mist-300 hover:bg-ink-800 hover:text-mist-100"
+              aria-label={sidebarLabel}
+              title={sidebarLabel}
+              aria-expanded={!sidebar.hidden}
+              data-sidebar-toggle=""
+              data-testid="sidebar-collapse"
+              onClick={sidebar.toggle}
+            >
+              {sidebar.hidden ? <PanelLeftOpen className="h-4 w-4" aria-hidden /> : <PanelLeftClose className="h-4 w-4" aria-hidden />}
+            </button>
+          )}
           {collapse && (
             <button
               type="button"

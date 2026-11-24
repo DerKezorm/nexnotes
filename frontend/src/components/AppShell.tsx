@@ -17,6 +17,7 @@ import { Dialog } from './Dialog'
 import { Logo } from './Logo'
 import { SessionDialog } from './SessionDialog'
 import { Sidebar } from './Sidebar'
+import { useSidebarFolded } from './sidebarFold'
 
 /** Once per page load: the browser tells the server its time, so the log can warn of a clock far off (NOTES-1 EC-11). */
 let clockTold = false
@@ -26,6 +27,7 @@ export function AppShell() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const [sidebarWidth] = useColumnWidth('sidebar')
+  const folded = useSidebarFolded()
 
   useEffect(() => {
     if (clockTold) return
@@ -38,7 +40,8 @@ export function AppShell() {
 
   return (
     <div className="flex h-dvh overflow-hidden">
-      <div className="relative hidden shrink-0 md:flex">
+      {/* Folded away beside the notes ("Hide sidebar", `sidebarFold.ts`): hidden, not gone, so it keeps its state. */}
+      <div className={'relative hidden shrink-0 ' + (folded ? '' : 'md:flex')} data-testid="shell-sidebar">
         <Sidebar width={sidebarWidth} />
         <ColumnHandle column="sidebar" />
       </div>

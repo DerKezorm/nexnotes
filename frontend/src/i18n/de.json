@@ -1578,6 +1578,8 @@
     "left": "links",
     "collapseList": "Liste einklappen",
     "expandList": "Liste aufklappen",
+    "hideSidebar": "Seitenleiste ausblenden",
+    "showSidebar": "Seitenleiste einblenden",
     "listDrawer": "Notizliste",
     "newTab": "Neue Notiz in neuem Tab",
     "openBeside": "Daneben öffnen",

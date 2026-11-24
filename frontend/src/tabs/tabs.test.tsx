@@ -28,6 +28,7 @@ import { tryLeave } from '../notes/context'
 import { AllNotesList, NotesPage } from '../notes/NotesPage'
 import { SIGNED_OUT_EVENT } from '../api/client'
 import { SessionDialog } from '../components/SessionDialog'
+import { useSidebarFolded } from '../components/sidebarFold'
 import { AuthProvider, useAuth } from '../state/auth'
 import { tabCommand } from './keys'
 import { acquireProvider, BRIDGE, forgetParked, parkedProviders, releaseProvider } from './live'
@@ -290,6 +291,11 @@ function Where() {
   return null
 }
 
+/** What the frame (`AppShell.tsx`) reads to hide the sidebar. */
+function SidebarProbe() {
+  return <div data-testid="sidebar-probe" data-folded={String(useSidebarFolded())} />
+}
+
 async function settle(ms = 30): Promise<void> {
   stillRunning()
   await act(async () => {
@@ -346,6 +352,7 @@ async function render(path: string): Promise<void> {
       <AuthProvider>
         <MemoryRouter initialEntries={[path]}>
           <Where />
+          <SidebarProbe />
           {/* The places of the sidebar that choose a list (as `Sidebar.tsx`: links inside the main menu). */}
           <nav aria-label="Main menu" data-testid="places">
             <Link to="/folder/kitchen" data-testid="place-kitchen">
@@ -1631,6 +1638,62 @@ describe('the list beside two notes', () => {
     expect($('folder-list', $('list-column')!)).not.toBeNull()
     expect(drawer()).toBeNull()
     expect($('list-expand')).toBeNull()
+  })
+
+  it('NOTES-8 AC-9 "Hide sidebar" folds the sidebar to a strip at the left edge, the strip brings it back; with the list folded too the note has the whole width (24.11.2026)', async () => {
+    width = 300 + MIN_PANE + 200
+    await render('/notes/soup')
+    await idle()
+    const hide = () => $('sidebar-collapse', $('list-head')!)!
+    await until(() => Boolean($('list-head') && hide()))
+    expect(hide().getAttribute('aria-label')).toBe('Hide sidebar')
+    expect(hide().getAttribute('title')).toBe('Hide sidebar')
+    expect(i18n.getResource('de', 'translation', 'tabs.hideSidebar')).toBe('Seitenleiste ausblenden')
+    expect(i18n.getResource('de', 'translation', 'tabs.showSidebar')).toBe('Seitenleiste einblenden')
+    // Left of "«" in the list's head.
+    expect(hide().compareDocumentPosition($('list-collapse')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    const folded = () => $('sidebar-probe')!.dataset.folded
+    expect(folded()).toBe('false')
+    expect($('sidebar-expand')).toBeNull()
+    // Folded away: a strip as narrow as the list's, the focus on it; kept on this device.
+    await act(async () => hide().click())
+    expect(folded()).toBe('true')
+    const strip = () => $('sidebar-expand')!
+    expect(strip().style.width).toBe(`${LIST_STRIP}px`)
+    expect(strip().getAttribute('aria-label')).toBe('Show sidebar')
+    await until(() => document.activeElement === strip())
+    expect(localStorage.getItem(prefKey('sidebar', 1))).toBe('off')
+    // The strip brings it back, the focus on the button again.
+    await act(async () => strip().click())
+    expect(folded()).toBe('false')
+    expect($('sidebar-expand')).toBeNull()
+    await until(() => document.activeElement === $('sidebar-collapse'))
+    expect(localStorage.getItem(prefKey('sidebar', 1))).toBeNull()
+    // The list folded: the button stands at the top of the list's strip.
+    await act(async () => $('list-collapse')!.click())
+    const inStrip = () => $('list-strip-sidebar', $('list-strip')!)!
+    expect(inStrip().getAttribute('aria-label')).toBe('Hide sidebar')
+    expect(inStrip().compareDocumentPosition($('list-expand')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    await act(async () => inStrip().click())
+    await until(() => document.activeElement === strip())
+    // Both away: two narrow strips at the left, the sidebar's first, then the note over all the rest.
+    expect(folded()).toBe('true')
+    expect(inStrip().getAttribute('aria-label')).toBe('Show sidebar')
+    expect($('list-column')).toBeNull()
+    expect(strip().compareDocumentPosition($('list-strip')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect($('list-strip')!.compareDocumentPosition(pane('left')!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect($('list-strip')!.style.width).toBe(`${LIST_STRIP}px`)
+    // The sidebar's strip is the first thing on the page, the list's strip right before the notes.
+    expect($('notes-page')!.firstElementChild).toBe(strip())
+    expect($('list-strip')!.nextElementSibling!.contains(pane('left'))).toBe(true)
+    // Kept after a reload; the button in the list's strip brings the sidebar back too.
+    forgetPrefs()
+    await reload('/notes/soup')
+    expect(folded()).toBe('true')
+    expect(strip()).not.toBeNull()
+    await act(async () => inStrip().click())
+    expect(folded()).toBe('false')
+    await until(() => document.activeElement === inStrip())
   })
 
   it('NOTES-8 AC-9 too narrow for the column: a folder chosen in the sidebar opens the drawer over the left note, the same one again too', async () => {

@@ -1578,6 +1578,8 @@
     "left": "left",
     "collapseList": "Collapse list",
     "expandList": "Expand list",
+    "hideSidebar": "Hide sidebar",
+    "showSidebar": "Show sidebar",
     "listDrawer": "Note list",
     "newTab": "New note in a new tab",
     "openBeside": "Open beside",

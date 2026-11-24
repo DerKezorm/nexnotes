@@ -15,17 +15,21 @@
  *   closes it. "«" in the list's head folds the column away to a narrow strip at the left edge, "»" there brings it
  *   back (kept on this device); without room for the column the strip opens the drawer (sixth review: the button
  *   "List" in the row of tabs is gone). One note folds the column the same way and gets the whole width (24.11.2026).
+ * - "Hide sidebar" in the list's head (or at the top of the list's strip while the list is folded) folds the sidebar
+ *   away to a strip of the same kind at the very left (`components/sidebarFold.ts`, kept on this device); with the
+ *   list folded too, the note has the whole width (24.11.2026).
  * - Two sides on show: one toolbar over both with the text tools, working on the side used last (`SharedToolbar.tsx`);
  *   each sheet keeps a small bar of its own for the whole note (21.11.2026). One side, or the switcher: as before.
  * - A note dragged from a list, or a tab, onto the right edge opens beside (AC-1).
  * - On the first visit of a page load at "/", the tabs of last time come back with their split (AC-5).
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react'
-import { ChevronsRight } from 'lucide-react'
+import { ChevronsRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 
 import { ColumnHandle } from '../components/ColumnHandle'
+import { SidebarFoldContext, useSidebarFoldable, useSidebarHidden } from '../components/sidebarFold'
 import type { ToolsEntry } from '../editor/sharedTools'
 import { draggedNow } from '../folders/actions'
 import { useFolders } from '../folders/store'
@@ -95,6 +99,10 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const [listWidth] = useColumnWidth('list')
   // The column beside the notes can be folded away with "«" in the list's head; kept on this device.
   const [columnOn, setColumnOn] = useDevicePref('splitList', (raw) => raw !== 'off')
+  // The sidebar can be folded away here too ("Hide sidebar" in the list's head); kept on this device.
+  useSidebarFoldable()
+  const [sidebarHidden, setSidebarHidden] = useSidebarHidden()
+  const sidebarStrip = useRef<HTMLButtonElement>(null)
   // The editors of the two sides on show, by tab, for the one toolbar over both.
   const [toolEntries, setToolEntries] = useState<ReadonlyMap<string, ToolsEntry>>(() => new Map())
   const registerTools = useCallback((key: string, entry: ToolsEntry | null) => {
@@ -185,6 +193,13 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
       requestAnimationFrame(() => page.current?.querySelector<HTMLElement>('[data-testid="list-collapse"]')?.focus())
     } else drawer.toggle(button)
   }
+  // Folding the sidebar away puts the focus on its strip; bringing it back, on the button that folds it again.
+  const toggleSidebar = () => {
+    const hide = !sidebarHidden
+    setSidebarHidden(hide)
+    requestAnimationFrame(() => (hide ? sidebarStrip.current : page.current?.querySelector<HTMLElement>('[data-sidebar-toggle]'))?.focus())
+  }
+  const sidebarLabel = sidebarHidden ? t('tabs.showSidebar') : t('tabs.hideSidebar')
   const areaWidth = width - (showList ? listWidth : strip ? LIST_STRIP : 0)
   const room = areaWidth - SEPARATOR
   const leftWidth = Math.round(Math.min(Math.max(state.ratio * room, MIN_PANE), room - MIN_PANE))
@@ -243,139 +258,175 @@ function Tabbed({ noteId, fresh, list, listPath, account }: Props & { account: n
   const usedLast = side === 'left' ? left : right
   const shown = [left, right].filter((tab): tab is NonNullable<typeof tab> => Boolean(tab))
   return (
-    <div ref={page} className="flex h-full min-h-0 flex-col" data-testid="notes-page" data-tabs="on">
-      {state.tabs.length > 0 && (
-        <TabBar
-          state={state}
-          metas={metas}
-          split={split}
-          open={open}
-        />
+    <div className="flex h-full min-h-0" data-testid="notes-page" data-tabs="on">
+      {sidebarHidden && (
+        <button
+          ref={sidebarStrip}
+          type="button"
+          aria-label={t('tabs.showSidebar')}
+          title={t('tabs.showSidebar')}
+          aria-expanded={false}
+          data-testid="sidebar-expand"
+          style={{ width: LIST_STRIP }}
+          className="group flex min-h-0 shrink-0 flex-col items-center gap-3 border-r border-ink-700 pt-3 text-mist-500 outline-offset-[-2px] hover:bg-ink-900 hover:text-mist-100"
+          onClick={toggleSidebar}
+        >
+          <PanelLeftOpen className="h-4 w-4 shrink-0" aria-hidden />
+          <span aria-hidden className="text-[12px] font-medium tracking-wide [writing-mode:vertical-rl]">
+            {t('tabs.showSidebar')}
+          </span>
+        </button>
       )}
-      <div className="relative flex min-h-0 flex-1">
-        {(!open || showList) && (
-          <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined} data-testid="list-column">
-            <div className={'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r' : 'flex w-full')}>
-              <ListPlaceContext.Provider value={open ? 'column' : 'page'}>
-                <ListCollapseContext.Provider value={open ? collapseList : null}>{list}</ListCollapseContext.Provider>
-              </ListPlaceContext.Provider>
+      <div ref={page} className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {state.tabs.length > 0 && (
+          <TabBar
+            state={state}
+            metas={metas}
+            split={split}
+            open={open}
+          />
+        )}
+        <div className="relative flex min-h-0 flex-1">
+          {(!open || showList) && (
+            <div className={'relative flex min-h-0 shrink-0 ' + (open ? '' : 'w-full flex-1')} style={open ? { width: listWidth } : undefined} data-testid="list-column">
+              <div className={'nn-scroll min-h-0 min-w-0 flex-1 flex-col overflow-y-auto border-ink-700 ' + (open ? 'flex border-r' : 'flex w-full')}>
+                <ListPlaceContext.Provider value={open ? 'column' : 'page'}>
+                  <SidebarFoldContext.Provider value={{ hidden: sidebarHidden, toggle: toggleSidebar }}>
+                    <ListCollapseContext.Provider value={open ? collapseList : null}>{list}</ListCollapseContext.Provider>
+                  </SidebarFoldContext.Provider>
+                </ListPlaceContext.Provider>
+              </div>
+              {open && <ColumnHandle column="list" />}
             </div>
-            {open && <ColumnHandle column="list" />}
-          </div>
-        )}
-        {strip && (
-          <button
-            type="button"
-            aria-label={t('tabs.expandList')}
-            title={t('tabs.expandList')}
-            aria-expanded={stand === 'column' ? false : drawer.open}
-            aria-controls={stand !== 'column' && drawer.open ? drawer.id : undefined}
-            data-list-toggle=""
-            data-testid="list-expand"
-            style={{ width: LIST_STRIP }}
-            className="group flex min-h-0 shrink-0 flex-col items-center gap-3 border-r border-ink-700 pt-3 text-mist-500 outline-offset-[-2px] hover:bg-ink-900 hover:text-mist-100"
-            onClick={(event) => expandList(event.currentTarget)}
-          >
-            <ChevronsRight className="h-4 w-4 shrink-0" aria-hidden />
-            <span aria-hidden className="text-[12px] font-medium tracking-wide [writing-mode:vertical-rl]">
-              {t('tabs.expandList')}
-            </span>
-          </button>
-        )}
-        {drawer.open && <ListDrawer drawer={drawer} width={Math.min(listWidth, width)} list={list} />}
-        {open && (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-            {split && !both && (
-              <div role="radiogroup" aria-label={t('tabs.sides')} className="flex shrink-0 gap-1 border-b border-ink-700 px-3 py-1.5" data-testid="side-switch">
-                {(['left', 'right'] as Side[]).map((one) => {
-                  const tab = one === 'left' ? left : right
-                  const title = (tab && metas.get(tab.note)?.title) || t('notes.untitled')
+          )}
+          {strip && (
+            <div style={{ width: LIST_STRIP }} className="flex min-h-0 shrink-0 flex-col border-r border-ink-700" data-testid="list-strip">
+              <button
+                type="button"
+                className="flex h-[30px] w-full shrink-0 items-center justify-center pt-1.5 text-mist-500 outline-offset-[-2px] hover:bg-ink-900 hover:text-mist-100"
+                aria-label={sidebarLabel}
+                title={sidebarLabel}
+                aria-expanded={!sidebarHidden}
+                data-sidebar-toggle=""
+                data-testid="list-strip-sidebar"
+                onClick={toggleSidebar}
+              >
+                {sidebarHidden ? <PanelLeftOpen className="h-4 w-4" aria-hidden /> : <PanelLeftClose className="h-4 w-4" aria-hidden />}
+              </button>
+              <button
+                type="button"
+                aria-label={t('tabs.expandList')}
+                title={t('tabs.expandList')}
+                aria-expanded={stand === 'column' ? false : drawer.open}
+                aria-controls={stand !== 'column' && drawer.open ? drawer.id : undefined}
+                data-list-toggle=""
+                data-testid="list-expand"
+                style={{ width: LIST_STRIP }}
+                className="group flex min-h-0 flex-1 flex-col items-center gap-3 pt-3 text-mist-500 outline-offset-[-2px] hover:bg-ink-900 hover:text-mist-100"
+                onClick={(event) => expandList(event.currentTarget)}
+              >
+                <ChevronsRight className="h-4 w-4 shrink-0" aria-hidden />
+                <span aria-hidden className="text-[12px] font-medium tracking-wide [writing-mode:vertical-rl]">
+                  {t('tabs.expandList')}
+                </span>
+              </button>
+            </div>
+          )}
+          {drawer.open && <ListDrawer drawer={drawer} width={Math.min(listWidth, width)} list={list} />}
+          {open && (
+            <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+              {split && !both && (
+                <div role="radiogroup" aria-label={t('tabs.sides')} className="flex shrink-0 gap-1 border-b border-ink-700 px-3 py-1.5" data-testid="side-switch">
+                  {(['left', 'right'] as Side[]).map((one) => {
+                    const tab = one === 'left' ? left : right
+                    const title = (tab && metas.get(tab.note)?.title) || t('notes.untitled')
+                    return (
+                      <button
+                        key={one}
+                        type="button"
+                        role="radio"
+                        aria-checked={side === one}
+                        onClick={() => focusSideAction(one)}
+                        className={'nn-btn h-8 min-w-0 flex-1 px-3 text-[13px] ' + (side === one ? 'nn-btn-accent' : 'nn-btn-ghost')}
+                      >
+                        <span className="shrink-0 font-semibold">{t(`tabs.${one}`)}</span>
+                        <span className="min-w-0 truncate">{title}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+              {both && (
+                <SharedToolbar
+                  entry={usedLast ? toolEntries.get(usedLast.key) : undefined}
+                  side={side}
+                  title={(usedLast && metas.get(usedLast.note)?.title) || t('notes.untitled')}
+                />
+              )}
+              <div
+                ref={area}
+                className="relative flex min-h-0 min-w-0 flex-1"
+                onDragOverCapture={onDragOver}
+                onDropCapture={onDrop}
+                onDragLeave={(event) => {
+                  if (!area.current?.contains(event.relatedTarget as Node | null)) setDropping(false)
+                }}
+              >
+                {shown.map((tab) => {
+                  const one: Side = tab.key === state.left ? 'left' : 'right'
+                  const focused = one === side
+                  const style = both ? (one === 'left' ? { order: 0, flex: `0 0 ${leftWidth}px` } : { order: 2, flex: '1 1 0' }) : { order: one === 'left' ? 0 : 2, flex: '1 1 0' }
                   return (
-                    <button
-                      key={one}
-                      type="button"
-                      role="radio"
-                      aria-checked={side === one}
-                      onClick={() => focusSideAction(one)}
-                      className={'nn-btn h-8 min-w-0 flex-1 px-3 text-[13px] ' + (side === one ? 'nn-btn-accent' : 'nn-btn-ghost')}
-                    >
-                      <span className="shrink-0 font-semibold">{t(`tabs.${one}`)}</span>
-                      <span className="min-w-0 truncate">{title}</span>
-                    </button>
+                    <TabPane
+                      key={tab.key}
+                      tab={tab}
+                      side={one}
+                      meta={metas.get(tab.note)}
+                      focused={focused}
+                      line={both && focused}
+                      standing={both ? (focused ? 'active' : 'passive') : undefined}
+                      hidden={split && !both && !focused}
+                      fresh={fresh && focused && tab.note === noteId}
+                      style={style}
+                      registerTools={both ? registerTools : undefined}
+                    />
                   )
                 })}
+                {both && (
+                  <div
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={t('tabs.resize')}
+                    aria-valuemin={Math.round(MIN_RATIO * 100)}
+                    aria-valuemax={Math.round(MAX_RATIO * 100)}
+                    aria-valuenow={Math.round((leftWidth / room) * 100)}
+                    tabIndex={0}
+                    data-testid="tab-separator"
+                    style={{ order: 1, flex: `0 0 ${SEPARATOR}px` }}
+                    className="flex cursor-col-resize touch-none items-center justify-center outline-offset-[-2px]"
+                    onPointerDown={onSeparatorDown}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+                      event.preventDefault()
+                      tabs.ratio(leftWidth / room + (event.key === 'ArrowRight' ? 0.05 : -0.05))
+                    }}
+                  >
+                    <span aria-hidden className="h-11 w-1 rounded-sm bg-ink-600" />
+                  </div>
+                )}
+                {dropping && (
+                  <div
+                    aria-hidden
+                    data-testid="drop-beside"
+                    className="pointer-events-none absolute inset-y-2 right-2 flex w-1/4 min-w-[120px] items-center justify-center rounded-[12px] border border-dashed border-accent-500 bg-accent-wash px-3 text-center text-[13px] text-accent-400"
+                  >
+                    {t('tabs.dropBeside')}
+                  </div>
+                )}
               </div>
-            )}
-            {both && (
-              <SharedToolbar
-                entry={usedLast ? toolEntries.get(usedLast.key) : undefined}
-                side={side}
-                title={(usedLast && metas.get(usedLast.note)?.title) || t('notes.untitled')}
-              />
-            )}
-            <div
-              ref={area}
-              className="relative flex min-h-0 min-w-0 flex-1"
-              onDragOverCapture={onDragOver}
-              onDropCapture={onDrop}
-              onDragLeave={(event) => {
-                if (!area.current?.contains(event.relatedTarget as Node | null)) setDropping(false)
-              }}
-            >
-              {shown.map((tab) => {
-                const one: Side = tab.key === state.left ? 'left' : 'right'
-                const focused = one === side
-                const style = both ? (one === 'left' ? { order: 0, flex: `0 0 ${leftWidth}px` } : { order: 2, flex: '1 1 0' }) : { order: one === 'left' ? 0 : 2, flex: '1 1 0' }
-                return (
-                  <TabPane
-                    key={tab.key}
-                    tab={tab}
-                    side={one}
-                    meta={metas.get(tab.note)}
-                    focused={focused}
-                    line={both && focused}
-                    standing={both ? (focused ? 'active' : 'passive') : undefined}
-                    hidden={split && !both && !focused}
-                    fresh={fresh && focused && tab.note === noteId}
-                    style={style}
-                    registerTools={both ? registerTools : undefined}
-                  />
-                )
-              })}
-              {both && (
-                <div
-                  role="separator"
-                  aria-orientation="vertical"
-                  aria-label={t('tabs.resize')}
-                  aria-valuemin={Math.round(MIN_RATIO * 100)}
-                  aria-valuemax={Math.round(MAX_RATIO * 100)}
-                  aria-valuenow={Math.round((leftWidth / room) * 100)}
-                  tabIndex={0}
-                  data-testid="tab-separator"
-                  style={{ order: 1, flex: `0 0 ${SEPARATOR}px` }}
-                  className="flex cursor-col-resize touch-none items-center justify-center outline-offset-[-2px]"
-                  onPointerDown={onSeparatorDown}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-                    event.preventDefault()
-                    tabs.ratio(leftWidth / room + (event.key === 'ArrowRight' ? 0.05 : -0.05))
-                  }}
-                >
-                  <span aria-hidden className="h-11 w-1 rounded-sm bg-ink-600" />
-                </div>
-              )}
-              {dropping && (
-                <div
-                  aria-hidden
-                  data-testid="drop-beside"
-                  className="pointer-events-none absolute inset-y-2 right-2 flex w-1/4 min-w-[120px] items-center justify-center rounded-[12px] border border-dashed border-accent-500 bg-accent-wash px-3 text-center text-[13px] text-accent-400"
-                >
-                  {t('tabs.dropBeside')}
-                </div>
-              )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   )
