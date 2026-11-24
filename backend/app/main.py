@@ -46,6 +46,7 @@ from .routers import notes_list as notes_list_router
 from .routers import notify as notify_router
 from .routers import oauth as oauth_router
 from .routers import ocr as ocr_router
+from .routers import passkeys as passkeys_router
 from .routers import search as search_router
 from .routers import settings as settings_router
 from .routers import shares as shares_router
@@ -64,7 +65,8 @@ logger = logging.getLogger("nexnotes")
 
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
-    health, about, locales_router, logs_router, auth, totp_router, oidc, accounts_router, invites, settings_router,
+    health, about, locales_router, logs_router, auth, totp_router, passkeys_router, oidc, accounts_router, invites,
+    settings_router,
     backups_router, avatars_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.

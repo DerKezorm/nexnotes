@@ -41,6 +41,13 @@ class SettingsOut(BaseModel):
     smtp_user: str
     smtp_password_set: bool
     smtp_from: str
+    #: The name the system mail goes out under ("" for nexnotes), and the last result (the shared post module).
+    smtp_sender_name: str = ""
+    mail_last_ok_at: str = ""
+    mail_last_error: str = ""
+    mail_last_error_at: str = ""
+    #: Passkeys may be added and used to sign in (on from the start).
+    passkeys_allowed: bool = True
     upload_max_mb: int
     history_days: int
     trash_days: int
@@ -81,6 +88,8 @@ class SettingsIn(BaseModel):
     #: Empty removes the password; left out keeps it.
     smtp_password: str | None = Field(default=None, max_length=500)
     smtp_from: str | None = Field(default=None, max_length=255)
+    smtp_sender_name: str | None = Field(default=None, max_length=100)
+    passkeys_allowed: bool | None = None
     upload_max_mb: int | None = Field(default=None, ge=1, le=100_000)
     history_days: int | None = None
     trash_days: int | None = None
@@ -116,6 +125,11 @@ def _view(db: DbSession) -> SettingsOut:
         smtp_user=values["smtp_user"],
         smtp_password_set=bool(values["smtp_password_enc"]),
         smtp_from=values["smtp_from"],
+        smtp_sender_name=str(values.get("smtp_sender_name") or ""),
+        mail_last_ok_at=str(values.get("mail_last_ok_at") or ""),
+        mail_last_error=str(values.get("mail_last_error") or ""),
+        mail_last_error_at=str(values.get("mail_last_error_at") or ""),
+        passkeys_allowed=bool(values.get("passkeys_allowed", True)),
         upload_max_mb=settings_service.upload_max_mb(db),
         history_days=settings_service.history_days(db),
         trash_days=settings_service.trash_days(db),
@@ -182,6 +196,9 @@ def save(payload: SettingsIn, request: Request, operator: OperatorAccount, db: D
             if not value or any(code not in settings_service.OCR_LANGUAGES for code in value):
                 raise error("invalid_input", "The input is not valid.", 422, fields=["ocr_languages"])
             value = [code for code in settings_service.OCR_LANGUAGES if code in value]
+        elif key == "smtp_sender_name":
+            # One line: the name stands in the From header (the shared post module makes it one line again).
+            value = " ".join(str(value).split())
         elif key == "smtp_password":
             changes["smtp_password_enc"] = encrypt_secret(value)
             continue
