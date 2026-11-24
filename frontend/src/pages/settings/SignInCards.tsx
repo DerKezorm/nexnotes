@@ -108,6 +108,11 @@ export function SignInCard({ server, anyActive }: { server: Server; anyActive: b
             disabled={!s.two_factor_required && me?.sign_in === 'password' && !me?.two_factor}
             onChange={(two_factor_required) => void server.save({ two_factor_required })}
           />
+          <Toggle
+            label={t('account.passkeysAllowed')}
+            checked={s.passkeys_allowed !== false}
+            onChange={(passkeys_allowed) => void server.save({ passkeys_allowed })}
+          />
         </>
       )}
       <Feedback problem={server.problem} done={server.done} />

@@ -268,6 +268,13 @@ export type ServerSettings = {
   smtp_user: string
   smtp_password_set: boolean
   smtp_from: string
+  /** The name system mail goes out under ("" for nexnotes), and the last result (the shared post module). */
+  smtp_sender_name?: string
+  mail_last_ok_at?: string
+  mail_last_error?: string
+  mail_last_error_at?: string
+  /** Passkeys may be added and used to sign in (on from the start). */
+  passkeys_allowed?: boolean
   upload_max_mb: number
   history_days: number
   trash_days: number
