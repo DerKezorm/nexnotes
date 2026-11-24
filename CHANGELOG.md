@@ -17,7 +17,7 @@ The first release.
   folders** from conditions (text, tag, folder, period, open checklists, attachment, colour, shared).
 - **Four list styles** (list, cards, compact, tiles) with hints (checklists, attachments, tags) switched on and off
   one by one, sorting and date groups per folder.
-- **Tabs** (Alt-click opens a new one) and **two notes side by side**.
+- **Tabs** (Alt-click opens a new one) and **two notes side by side**; the sidebar and the list fold away.
 - **Search** over titles, text, tags and recognised text, with Ctrl+K.
 - **Attachments**: pictures in three sizes, PDFs to leaf through, videos, a gallery of every attachment; **text
   recognition** with Tesseract in nine languages; sketches and recordings from the iOS app shown in the browser.

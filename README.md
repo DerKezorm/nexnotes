@@ -47,7 +47,8 @@ view at a time and installs from the browser as an app.*
   `#tags` written right in the text, pins and colours, and **smart folders** built from conditions (tag, folder, open
   checklists, attachments, changed in the last days, shared with me, …).
 - **Four ways to show a list**: list, cards, compact and tiles, sorted and grouped by date per folder.
-- **Several notes at once**: tabs, Alt-click for a new tab, two notes side by side, the list folded away.
+- **Several notes at once**: tabs, Alt-click for a new tab, two notes side by side; the sidebar and the list fold
+  away and give the note the whole width.
 - **Search** over titles, text, tags and the recognised text of attachments, from anywhere with Ctrl+K.
 - **Attachments**: photos, PDFs, videos and other files by dragging, pasting or choosing; pictures in three sizes, PDFs
   to leaf through, videos that play in the note, a gallery of every attachment. **Text recognition** (Tesseract, nine
@@ -258,7 +259,7 @@ cd backend && python -m venv .venv && .venv/Scripts/python -m pip install -r req
 cd frontend && npm ci && npx vite
 ```
 
-Python 3.13 or newer, Node 22. On Linux the virtual environment's programs are in `.venv/bin`. The frontend on port
+Python 3.14 and Node 22, the versions of the image and the CI. On Linux the virtual environment's programs are in `.venv/bin`. The frontend on port
 5570 sends `/api` to the backend on 8570. Tests: `python -m pytest -q` in `backend`, `npx vitest run` in `frontend`,
 the browser tests with `npm run e2e`.
 

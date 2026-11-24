@@ -51,6 +51,8 @@ with an AGPL-3.0 work, and the source of every part is public.
 | Tesseract (Debian `tesseract-ocr`) with the language data `deu`, `eng`, `fra`, `spa`, `ita`, `nld`, `por`, `pol`, `tur` and `osd` (`tesseract-ocr-*`) | reads the text of attached pictures, scans and PDFs | Apache-2.0 |
 | Leptonica (Debian `libleptonica6`, through Tesseract) | reads pictures for Tesseract | BSD-2-Clause |
 | FFmpeg (Debian `ffmpeg`, with ffprobe) | the length and a still picture of an attached video | LGPL-2.1-or-later and GPL-2.0-or-later (Debian's build) |
+| gosu (Debian `gosu`) | drops root at the start, so nexnotes runs as `PUID`/`PGID` | Apache-2.0 |
+| curl (Debian `curl`) | the container's health check | curl (MIT-style) |
 
 The other dependencies are listed in `backend/requirements.txt` and `frontend/package.json` and come with their own
 licence files; the About page names the main ones.
