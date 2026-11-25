@@ -77,6 +77,8 @@ def _view(invite: Invite, db: DbSession) -> dict[str, Any]:
         "by": by.shown_name if by else None,
         "created_at": invite.created_at.isoformat(),
         "expires_at": invite.expires_at.isoformat(),
+        # Since konten 0.3.10: an expired invitation stays in the list, marked, until the operator withdraws it.
+        "expired": accounts.expired(invite),
     }
 
 

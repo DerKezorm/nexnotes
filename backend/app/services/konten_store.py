@@ -172,6 +172,8 @@ class KontenStore:
             # "No, thanks" of the module (0.3.4) is nexnotes' ``provider_email_off`` of 1.0.1: the same address stays
             # declined.
             declined_email=row.provider_email_off or "",
+            # "Last changed on" in the box Password (konten 0.3.10); empty for a password of before 1.0.1 kept it.
+            password_changed_at=row.password_changed_at,
         )
 
     @staticmethod
@@ -392,10 +394,14 @@ class KontenStore:
             .order_by(ApiToken.created_at)
         )
         found = [
-            Access(row.id, "device" if row.kind == TOKEN_DEVICE else "api_key", row.name, row.last_used_at)
+            Access(row.id, nexkonten.ACCESS_DEVICE if row.kind == TOKEN_DEVICE else nexkonten.ACCESS_API_KEY, row.name,
+                   row.last_used_at)
             for row in tokens
         ]
-        found += [Access(key.uid, "passkey", key.name, key.last_used_at) for key in self.passkeys_of(account_id)]
+        found += [
+            Access(key.uid, nexkonten.ACCESS_PASSKEY, key.name, key.last_used_at)
+            for key in self.passkeys_of(account_id)
+        ]
         return found
 
     def revoke_access(self, account_id: AccountId) -> int:

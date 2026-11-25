@@ -105,6 +105,17 @@
   --nexui-disabled-bg: var(--color-ink-800);
   --nexui-disabled-text: var(--color-mist-600);
   --nexui-scrim: var(--color-scrim);
+  /* A picture without a photo (ui 0.1.1, `Avatar`): the letter on the hue from the name (the same on the server and
+     on the iPhone), here saturation and lightness of that ground and the letter's colour. */
+  --nexui-avatar-saturation: 38%;
+  --nexui-avatar-lightness: 40%;
+  --nexui-avatar-text: #f2f2f5;
+}
+
+:root[data-theme='light'] {
+  --nexui-avatar-saturation: 45%;
+  --nexui-avatar-lightness: 46%;
+  --nexui-avatar-text: #ffffff;
 }
 
 @layer base {
