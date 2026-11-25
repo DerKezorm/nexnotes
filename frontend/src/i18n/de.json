@@ -910,8 +910,6 @@
     "linkPreviewsHint": "Der Server holt Titel und Bild verlinkter Seiten.",
     "mail": "Mail",
     "mailHint": "Über ihn verschickt nexnotes Einladungen, Links für ein neues Passwort und zum Bestätigen einer Adresse und Hinweise zu deinem Konto, etwa bei einer neuen Anmeldung. Ohne Server reicht der Link zum Kopieren.",
-    "mcp": "MCP-Zugang",
-    "mcpHint": "Mitglieder dürfen Schlüssel für KI-Werkzeuge anlegen.",
     "ocr": "Texterkennung",
     "ocrHint": "Sprachen, die in Bildern, Scans und PDFs gelesen werden.",
     "ocrLanguages": {
@@ -948,8 +946,6 @@
     "years_other": "{{count}} Jahren",
     "localNetwork": "Verbindungen ins eigene Netz",
     "localNetworkHint": "Mitglieder dürfen ihr nextasks auch unter einer Adresse im eigenen Netz (LAN, VPN) verbinden. Dann kann jedes Mitglied nexnotes Adressen dort ansprechen lassen.",
-    "api": "Programmschnittstelle (API) für Mitglieder",
-    "apiHint": "Mitglieder legen API-Token an, Programme und die nexdeck-Karte lesen damit. Aus: jede Anfrage unter /api/v1/ wird abgewiesen, die Tokens bleiben.",
     "backupHolds": "Eine Sicherung enthält alle Notizen samt Verlauf und Papierkorb, alle Anhänge, die Konten mit ihren Freigaben, intelligenten Ordnern und API-Token, die Einstellungen und den Schlüssel des Servers. Gesperrte Notizen bleiben darin verschlüsselt. Nicht dabei: Log, Exporte, Zwischenspeicher und eigene Sprachdateien, auch kein über NEXNOTES_SECRET_KEY gesetzter Schlüssel.",
     "ocrLanguagesLabel": "Sprachen"
   },

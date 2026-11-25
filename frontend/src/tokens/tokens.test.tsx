@@ -1,8 +1,9 @@
 /**
- * NOTES-25 Programmschnittstelle (API) on the page: the one section "API-Token" in Settings, Connections (the dialog,
- * the token shown once, the list with older keys, run-out in orange, revoking, "API aus"), the connected AI tools below
- * it, the operator's switch and the overview of every token with "Sperren". The server's side is in
- * `backend/tests/test_notes25_*.py`.
+ * NOTES-25 Programmschnittstelle (API) on the page, since the settings pass on the cards of the shared key module
+ * (schluessel 1.0.0) with nexnotes' words: "API-Schlüssel" in Settings, Connections (the dialog, the key shown once, the
+ * list with the older keys, run-out, revoking, "API aus"), "KI-Werkzeuge (MCP)" after it (connected AI tools, the older
+ * MCP keys), the operator's switch in "Schnittstellen" and "API-Schlüssel aller Konten" with "Sperren". The server's
+ * side is in `backend/tests/test_notes25_*.py` and the module's contract tests.
  */
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -13,29 +14,50 @@ import { originText } from '../folders/origin'
 import { OriginIcon } from '../folders/pages'
 import { whoText } from '../history/groups'
 import i18n from '../i18n'
-import { FeaturesCard } from '../pages/settings/GeneralCards'
-import type { ApiTokenEntry, OperatorToken } from './api'
-import { AllTokensCard } from './AllTokensCard'
-import { TokensSection } from './TokensSection'
+import { KEY_TEXTS, type AdminKey, type Interfaces as Switches, type KeyEntry, type KeyListing } from '../vendor/nexschluessel'
+import { AllKeys, ConnectionKeys, Interfaces } from './KeysCards'
 import './register'
+
+vi.mock('../state/auth', () => ({ useAuth: () => ({ me: { id: 1, name: 'tester', role: 'member' } }) }))
 
 type Call = { method: string; path: string; body: Record<string, unknown> | undefined }
 let calls: Call[] = []
-let tokens: ApiTokenEntry[]
-let connectors: ApiTokenEntry[]
-let every: OperatorToken[]
-let allowed: boolean
+let keys: KeyEntry[]
+let every: AdminKey[]
+let api: boolean
+let switches: Switches
 let root: Root
 let box: HTMLDivElement
 
 const SECRET = 'nn_api_ABCDefgh0123456789abcdefghijklmnopqrstuvw'
 const DAY = 86_400_000
+const BASE = '/api/connections'
+const FOLDERS = [
+  { id: 'inbox-1', name: 'Eingang' },
+  { id: 'f-home', name: 'Haushalt' },
+  { id: 'f-shop', name: 'Haushalt › Einkauf' },
+]
 
-function entry(fields: Partial<ApiTokenEntry> & { id: number; name: string }): ApiTokenEntry {
+function entry(fields: Partial<KeyEntry> & { id: number; name: string }): KeyEntry {
   return {
-    kind: 'api', legacy: null, level: 'read', access: ['api'], folders: null, created_at: '2026-11-01T10:00:00Z', last_used_at: null,
-    expires_at: new Date(Date.now() + 60 * DAY).toISOString(), expired: false, blocked: false, ...fields,
+    kind: 'api', right: 'read', options: { mcp: false }, areas: null, prefix: `nn_api_Ab${fields.id}x`, created_at: '2026-11-01T10:00:00Z',
+    last_used_at: null, expires_at: new Date(Date.now() + 60 * DAY).toISOString(), expired: false, expiring: false, blocked: false, legacy: null,
+    program: false, ...fields,
   }
+}
+
+function listing(): KeyListing {
+  return {
+    app: 'nexnotes', api, mcp: true, programs: true, api_path: '/api/v1', mcp_path: '/api/mcp', keys_wait: false, warn_days: 7,
+    address: 'https://notes.example.com',
+    kinds: [
+      { id: 'api', prefix: 'nn_api_', creatable: true, editable: true, rights: ['read', 'write'], default_right: 'read', options: ['mcp'], areas: FOLDERS,
+        areas_required: false, expiry_days: [30, 90, 365, null], default_days: 90, default_days_by_right: {}, max_keys: 20, count: 4, name_max: 100 },
+      { id: 'mcp', prefix: 'nn_mcp_', creatable: false, editable: false, rights: ['read', 'write'], default_right: 'read', options: [], areas: null,
+        areas_required: false, expiry_days: [30, 90, 365, null], default_days: 90, default_days_by_right: {}, max_keys: 20, count: 1, name_max: 100 },
+    ],
+    keys,
+  } as KeyListing
 }
 
 function reply(status: number, body: unknown): Response {
@@ -44,25 +66,28 @@ function reply(status: number, body: unknown): Response {
 
 function answer(call: Call): Response {
   const { method, path, body } = call
-  if (method === 'GET' && path === '/api/tokens') return reply(200, { allowed, mcp_allowed: true, address: 'https://notes.example', max_tokens: 20, tokens, connectors })
-  if (method === 'POST' && path === '/api/tokens') {
-    const made = entry({ id: 9, name: String(body!.name), level: body!.level as 'read' | 'write', folders: (body!.folders as string[] | null) ?? null })
-    tokens = [...tokens, made]
-    return reply(201, { made, token: SECRET })
+  if (method === 'GET' && path === `${BASE}/keys`) return reply(200, listing())
+  if (method === 'POST' && path === `${BASE}/keys`) {
+    const areas = Array.isArray(body!.areas) ? FOLDERS.filter((folder) => (body!.areas as string[]).includes(folder.id)) : null
+    const made = entry({ id: 9, name: String(body!.name), right: String(body!.right), options: body!.options as Record<string, boolean>, areas, expires_at: null })
+    keys = [made, ...keys]
+    return reply(201, { key: made, secret: SECRET })
   }
-  const revoke = /^\/api\/tokens\/(\d+)$/.exec(path)
+  const revoke = /^\/api\/connections\/keys\/(\d+)$/.exec(path)
   if (method === 'DELETE' && revoke) {
-    tokens = tokens.filter((one) => one.id !== Number(revoke[1]))
-    connectors = connectors.filter((one) => one.id !== Number(revoke[1]))
+    keys = keys.filter((one) => one.id !== Number(revoke[1]))
     return reply(204, null)
   }
-  if (method === 'GET' && path === '/api/folders')
-    return reply(200, { inbox: { id: 'inbox-1', count: 2 }, folders: [{ id: 'f-home', parent_id: null, name: 'Haushalt', icon: '', color: '', position: null, count: 3 }, { id: 'f-shop', parent_id: 'f-home', name: 'Einkauf', icon: '', color: '', position: null, count: 1 }] })
-  if (method === 'GET' && path === '/api/admin/tokens') return reply(200, { tokens: every })
-  const block = /^\/api\/admin\/tokens\/(\d+)\/block$/.exec(path)
+  if (method === 'GET' && path === `${BASE}/admin/keys`) return reply(200, { keys: every })
+  const block = /^\/api\/connections\/admin\/keys\/(\d+)\/block$/.exec(path)
   if (method === 'POST' && block) {
     every = every.map((one) => (one.id === Number(block[1]) ? { ...one, blocked: true } : one))
-    return reply(204, null)
+    return reply(200, every.find((one) => one.id === Number(block[1])))
+  }
+  if (method === 'GET' && path === `${BASE}/interfaces`) return reply(200, switches)
+  if (method === 'PUT' && path === `${BASE}/interfaces`) {
+    switches = { ...switches, ...(body as Switches) }
+    return reply(200, switches)
   }
   return reply(404, { detail: { code: 'not_found', message: 'Not found.' } })
 }
@@ -76,8 +101,13 @@ async function render(node: ReactNode): Promise<void> {
   await settle()
 }
 
-const $ = (testId: string) => document.body.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
-const $$ = (testId: string) => [...document.body.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
+const $ = (testId: string, scope: ParentNode = document.body) => scope.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+const $$ = (testId: string, scope: ParentNode = document.body) => [...scope.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
+const card = (id: string) => document.querySelector<HTMLElement>(`[data-card="${id}"]`)!
+const dialog = () => document.querySelector<HTMLElement>('[role="dialog"]')
+const dialogTitle = () => document.getElementById(dialog()?.getAttribute('aria-labelledby') ?? '')?.textContent
+const rowsOf = (scope: ParentNode) => $$('key-row', scope).filter((row) => row.tagName === 'TR')
+const button = (scope: ParentNode, text: string) => [...scope.querySelectorAll<HTMLElement>('button')].find((found) => found.textContent?.trim() === text) ?? null
 
 async function click(element: HTMLElement | null): Promise<void> {
   expect(element).not.toBeNull()
@@ -102,19 +132,20 @@ afterAll(async () => {
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   calls = []
-  allowed = true
-  tokens = [
-    entry({ id: 1, name: 'n8n Wetter', level: 'write', access: ['api', 'mcp'], folders: ['f-home', 'f-shop'], last_used_at: new Date(Date.now() - DAY).toISOString() }),
-    entry({ id: 2, name: 'Skript', expires_at: new Date(Date.now() + 3 * DAY).toISOString() }),
+  api = true
+  switches = { api: true, mcp: true }
+  keys = [
+    entry({ id: 1, name: 'n8n Wetter', right: 'write', options: { mcp: true }, areas: [FOLDERS[1]!, FOLDERS[2]!], last_used_at: new Date(Date.now() - DAY).toISOString() }),
+    entry({ id: 2, name: 'Skript', expires_at: new Date(Date.now() + 3 * DAY).toISOString(), expiring: true }),
     entry({ id: 3, name: 'Alt', expires_at: new Date(Date.now() - DAY).toISOString(), expired: true }),
-    entry({ id: 4, name: 'Chat', kind: 'mcp', legacy: 'mcp', access: ['mcp'], expires_at: null }),
-    entry({ id: 5, name: 'Küche', kind: 'dashboard', legacy: 'card', access: ['card'], expires_at: null, blocked: true }),
+    entry({ id: 4, name: 'Chat', kind: 'mcp', prefix: 'nn_mcp_Abcd', options: {}, expires_at: null }),
+    entry({ id: 5, name: 'Küche', legacy: 'card', expires_at: null, blocked: true }),
+    entry({ id: 6, name: 'Chat Desktop', kind: 'mcp', program: true, right: 'write', options: {}, expires_at: null }),
   ]
-  connectors = [entry({ id: 6, name: 'Chat Desktop', kind: 'connector', access: ['mcp'], expires_at: null })]
   every = [
-    { ...entry({ id: 1, name: 'n8n Wetter', level: 'write', access: ['api', 'mcp'] }), folders: 2, account: { id: 1, name: 'Tester' } },
-    { ...entry({ id: 7, name: 'Fremd', expires_at: null }), folders: 0, account: { id: 2, name: 'Anna' } },
-  ]
+    { ...entry({ id: 1, name: 'n8n Wetter', right: 'write', options: { mcp: true } }), areas: 2, account: { id: 1, name: 'tester', display_name: 'Tester', out: false } },
+    { ...entry({ id: 7, name: 'Fremd', expires_at: null }), areas: null, account: { id: 2, name: 'anna', display_name: 'Anna', out: false } },
+  ] as AdminKey[]
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'http://localhost')
     const call = { method: init?.method ?? 'GET', path: url.pathname, body: init?.body ? JSON.parse(String(init.body)) : undefined }
@@ -134,118 +165,130 @@ afterEach(async () => {
   vi.restoreAllMocks()
 })
 
-describe('NOTES-25 API tokens in Settings, Connections', () => {
+describe('NOTES-25 API keys in Settings, Connections', () => {
   it('NOTES-25 AC-1 the dialog asks name, right, MCP, folders and run-out, 90 days chosen, MCP off', async () => {
-    await render(<TokensSection />)
-    await click($('tokens-new'))
-    expect(document.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('Neuer API-Token')
-    expect(($('token-level-read') as HTMLInputElement).checked).toBe(true)
-    expect(($('token-mcp') as HTMLInputElement).checked).toBe(false)
-    expect(($('token-scope-all') as HTMLInputElement).checked).toBe(true)
-    expect(($('token-days') as HTMLSelectElement).value).toBe('90')
-    expect([...($('token-days') as HTMLSelectElement).options].map((option) => option.textContent)).toEqual(['30 Tage', '90 Tage', '1 Jahr', 'Nie'])
+    await render(<ConnectionKeys />)
+    await click($('api-keys-new'))
+    expect(dialogTitle()).toBe('Neuer API-Schlüssel')
+    expect($('key-right-read')!.getAttribute('aria-checked')).toBe('true')
+    expect(($('key-option-mcp') as HTMLInputElement).checked).toBe(false)
+    expect($('key-areas')!.textContent).toContain('Ordner')
+    expect($('key-areas-all')!.getAttribute('aria-checked')).toBe('true')
+    expect($('key-areas-all')!.textContent).toBe('Alle Notizen')
+    expect(($('key-expiry') as HTMLSelectElement).value).toBe('90')
+    expect([...($('key-expiry') as HTMLSelectElement).options].map((option) => option.textContent)).toEqual(['30 Tage', '90 Tage', '1 Jahr', 'Nie'])
     // Without a name, nothing is made.
-    expect(($('token-make') as HTMLButtonElement).disabled).toBe(true)
+    expect(($('key-submit') as HTMLButtonElement).disabled).toBe(true)
     expect(calls.some((call) => call.method === 'POST')).toBe(false)
   })
 
-  it('NOTES-25 AC-1 a token for some folders, read and write, with MCP, is shown exactly once with Copy', async () => {
+  it('NOTES-25 AC-1 a key for some folders, read and write, with MCP, is shown exactly once with Copy', async () => {
     const copied = vi.fn(async () => undefined)
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText: copied } })
     vi.stubGlobal('isSecureContext', true)
-    await render(<TokensSection />)
-    expect($('tokens-made')).toBeNull()
-    await click($('tokens-new'))
-    act(() => type(document.querySelector<HTMLInputElement>('[role="dialog"] input[type="text"]')!, 'Home Assistant'))
-    await click($('token-level-write'))
-    await click($('token-mcp'))
-    await click($('token-scope-some'))
+    await render(<ConnectionKeys />)
+    expect($('key-made')).toBeNull()
+    await click($('api-keys-new'))
+    act(() => type($('key-name') as HTMLInputElement, 'Home Assistant'))
+    await click($('key-right-write'))
+    await click($('key-option-mcp'))
+    await click($('key-areas-some'))
     // "Nur diese Ordner" needs one folder at least.
-    expect(($('token-make') as HTMLButtonElement).disabled).toBe(true)
-    expect($$('token-folder').map((box) => box.dataset.folder)).toEqual(['inbox-1', 'f-home', 'f-shop'])
-    await click($$('token-folder')[1])
-    const days = $('token-days') as HTMLSelectElement
+    expect(($('key-submit') as HTMLButtonElement).disabled).toBe(true)
+    expect(FOLDERS.map((folder) => $(`key-area-${folder.id}`) !== null)).toEqual([true, true, true])
+    await click($('key-area-f-home'))
+    const days = $('key-expiry') as HTMLSelectElement
     await act(async () => {
-      days.value = 'never'
+      days.value = [...days.options].find((option) => option.textContent === 'Nie')!.value
       days.dispatchEvent(new Event('change', { bubbles: true }))
     })
-    await click($('token-make'))
-    expect(calls.find((call) => call.method === 'POST')!.body).toEqual({ name: 'Home Assistant', level: 'write', mcp: true, folders: ['f-home'], days: null })
-    expect($('tokens-made')!.textContent).toContain('„Home Assistant“ angelegt')
-    expect($('tokens-made')!.textContent).toContain('Er wird nur dieses eine Mal angezeigt.')
-    expect($('tokens-secret')!.textContent).toBe(SECRET)
-    await click($('tokens-copy'))
+    await click($('key-submit'))
+    const sent = calls.find((call) => call.method === 'POST')!.body!
+    expect({ ...sent, client_ref: undefined }).toEqual({ kind: 'api', name: 'Home Assistant', right: 'write', options: { mcp: true }, areas: ['f-home'], days: null, client_ref: undefined })
+    expect($('key-made')!.textContent).toContain('„Home Assistant“ angelegt')
+    expect($('key-made')!.textContent).toContain('Er wird nur dieses eine Mal angezeigt')
+    expect(($('key-secret')!.querySelector('input') ?? $('key-secret')) as HTMLElement).toBeTruthy()
+    expect(document.body.innerHTML).toContain(SECRET)
+    await click(button($('key-made')!, 'Kopieren'))
     expect(copied).toHaveBeenCalledWith(SECRET)
-    expect($('tokens-copy')!.textContent).toBe('Kopiert')
     await act(async () => root.unmount())
     root = createRoot(box)
-    await render(<TokensSection />)
-    expect($('tokens-made')).toBeNull()
-    expect(document.body.textContent).not.toContain(SECRET)
+    await render(<ConnectionKeys />)
+    expect($('key-made')).toBeNull()
+    expect(document.body.innerHTML).not.toContain(SECRET)
   })
 
-  it('NOTES-25 AC-2 the list says right, access, folders, run-out and last use; orange from 7 days before', async () => {
-    await render(<TokensSection />)
-    expect($$('token-name').map((name) => name.textContent)).toEqual(['n8n Wetter', 'Skript', 'Alt', 'Chat', 'Küche'])
-    const metas = $$('token-meta').map((meta) => meta.textContent)
-    expect(metas[0]).toBe('lesen und schreiben · API · MCP · 2 Ordner')
-    expect(metas[1]).toBe('nur lesen · API · alle Notizen')
-    const runs = $$('token-expiry')
-    expect(runs[0].textContent).toMatch(/^Läuft am \d\d\.\d\d\.\d{4} ab$/)
-    expect(runs[0].className).not.toContain('text-warn-500')
-    expect(runs[1].className).toContain('text-warn-500')
-    expect(runs[2].textContent).toBe('Abgelaufen')
-    expect(runs[2].className).toContain('text-warn-500')
-    expect(runs[3].textContent).toBe('Läuft nie ab')
-    expect($$('token-row')[0].textContent).toContain('zuletzt gestern')
-    expect($$('token-row')[1].textContent).toContain('noch nie benutzt')
-    expect($('tokens-address')!.textContent).toBe('https://notes.example')
+  it('NOTES-25 AC-2 the list says right, folders, run-out and last use; marked from 7 days before', async () => {
+    await render(<ConnectionKeys />)
+    const rows = rowsOf(card('api-keys'))
+    expect(rows.map((row) => row.querySelector('.font-medium')!.textContent)).toEqual(['n8n Wetter', 'Skript', 'Alt', 'Küche'])
+    expect(rows[0]!.textContent).toContain('Lesen und schreiben')
+    expect(rows[0]!.textContent).toContain('MCP')
+    expect(rows[0]!.textContent).toContain('Haushalt, Haushalt › Einkauf')
+    expect(rows[1]!.textContent).toContain('Nur lesen')
+    expect(rows[1]!.textContent).toContain('alles')
+    expect(rows[0]!.textContent).toMatch(/Läuft am .+ ab/)
+    expect($('key-expiring', rows[0]!)).toBeNull()
+    expect($('key-expiring', rows[1]!)).not.toBeNull()
+    expect($('key-expired', rows[2]!)!.textContent).toBe('Abgelaufen')
+    expect(rows[3]!.textContent).toContain('Läuft nie ab')
+    expect(rows[1]!.textContent).toContain('noch nie')
+    expect(rows[0]!.textContent).not.toContain('noch nie')
+    expect(($('api-keys-address')!.querySelector('input') as HTMLInputElement).value).toBe('https://notes.example.com/api/v1')
+    expect($('api-keys-count')!.textContent).toBe('4 von 20 Schlüsseln')
   })
 
-  it('NOTES-25 AC-2 revoking asks once, then the token is gone', async () => {
-    await render(<TokensSection />)
-    await click($$('token-revoke')[1])
-    expect(document.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('„Skript“ widerrufen?')
+  it('NOTES-25 AC-2 revoking asks once, then the key is gone', async () => {
+    await render(<ConnectionKeys />)
+    await click($$('key-revoke', card('api-keys'))[1]!)
+    expect(dialogTitle()).toBe('„Skript“ widerrufen?')
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
-    await click($('tokens-revoke-confirm'))
-    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual(['/api/tokens/2'])
-    expect($$('token-name').map((name) => name.textContent)).not.toContain('Skript')
+    await click(button($('key-revoke-dialog')!, 'Widerrufen'))
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual([`${BASE}/keys/2`])
+    expect(rowsOf(card('api-keys')).map((row) => row.querySelector('.font-medium')!.textContent)).not.toContain('Skript')
   })
 
-  it('NOTES-25 AC-3 older keys stand in the same list with what they still open', async () => {
-    await render(<TokensSection />)
-    const metas = $$('token-meta').map((meta) => meta.textContent)
-    expect(metas[3]).toBe('nur lesen · nur MCP (älterer Schlüssel) · alle Notizen')
-    expect(metas[4]).toBe('nur lesen · nur nexdeck-Karte (älterer Token) · alle Notizen')
-    expect($$('token-row')[4].textContent).toContain('Vom Betreiber gesperrt')
+  it('NOTES-25 AC-3 older keys stand in the lists with what they still open', async () => {
+    await render(<ConnectionKeys />)
+    const card4 = rowsOf(card('api-keys'))[3]!
+    expect(card4.textContent).toContain(KEY_TEXTS.de.legacy.card)
+    expect($('key-blocked', card4)!.textContent).toBe('Vom Betreiber gesperrt')
+    // The MCP key made by hand: in "KI-Werkzeuge (MCP)", under "MCP-Schlüssel", revocable, not editable.
+    const mcp = rowsOf($('tools-keys', card('ai-tools'))!)
+    expect(mcp.map((row) => row.querySelector('.font-medium')!.textContent)).toEqual(['Chat'])
+    expect($('key-edit', mcp[0]!)).toBeNull()
+    expect($('key-revoke', mcp[0]!)).not.toBeNull()
   })
 
-  it('NOTES-25 AC-4 connected AI tools stand below the tokens and are revoked there', async () => {
-    await render(<TokensSection />)
-    expect(document.body.textContent).toContain('Verbundene KI-Werkzeuge')
-    expect($$('connector-row').map((row) => row.textContent)).toEqual([expect.stringContaining('Chat Desktop')])
-    await click($('connector-revoke'))
-    await click($('tokens-revoke-confirm'))
-    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual(['/api/tokens/6'])
-    expect($('connectors-none')).not.toBeNull()
+  it('NOTES-25 AC-4 connected AI tools stand below the keys and are revoked there', async () => {
+    await render(<ConnectionKeys />)
+    expect([...document.querySelectorAll('[data-card]')].map((found) => found.getAttribute('data-card'))).toEqual(['api-keys', 'ai-tools'])
+    expect(card('ai-tools').textContent).toContain('Verbundene Programme')
+    const programs = rowsOf($('tools-programs', card('ai-tools'))!)
+    expect(programs.map((row) => row.querySelector('.font-medium')!.textContent)).toEqual(['Chat Desktop'])
+    await click($('key-revoke', programs[0]!))
+    await click(button($('key-revoke-dialog')!, 'Widerrufen'))
+    expect(calls.filter((call) => call.method === 'DELETE').map((call) => call.path)).toEqual([`${BASE}/keys/6`])
+    expect(rowsOf($('tools-programs', card('ai-tools'))!)).toHaveLength(0)
+    expect(($('tools-address')!.querySelector('input') as HTMLInputElement).value).toBe('https://notes.example.com/api/mcp')
   })
 
-  it('NOTES-25 AC-5 while the operator has the API switched off, the section says so and makes nothing', async () => {
-    allowed = false
-    await render(<TokensSection />)
-    expect($('tokens-off')!.textContent).toBe(
-      'Der Betreiber hat die Programmschnittstelle abgeschaltet. Bestehende Tokens funktionieren erst wieder, wenn er sie einschaltet.',
+  it('NOTES-25 AC-5 while the operator has the API switched off, the card says so and makes nothing', async () => {
+    api = false
+    await render(<ConnectionKeys />)
+    expect($('api-keys-off')!.textContent).toContain(
+      'Der Betreiber hat die Programmschnittstelle abgeschaltet. Bestehende Schlüssel funktionieren erst wieder, wenn er sie einschaltet.',
     )
-    expect(($('tokens-new') as HTMLButtonElement).disabled).toBe(true)
+    expect(($('api-keys-new') as HTMLButtonElement).disabled).toBe(true)
   })
 
-  it('NOTES-25 AC-25 the section links to the API documentation', async () => {
-    await render(<TokensSection />)
-    expect($('tokens-docs')!.getAttribute('href')).toBe('/api/v1/docs')
-    expect($('tokens-docs')!.textContent).toBe('API-Dokumentation')
+  it('NOTES-25 AC-25 the card links to the API documentation', async () => {
+    await render(<ConnectionKeys />)
+    expect($('api-keys-docs')!.getAttribute('href')).toBe('/api/v1/docs')
+    expect($('api-keys-docs')!.textContent).toBe('Beschreibung der Schnittstelle')
   })
 
-  it('NOTES-25 one section API-Token in Connections, before the vault password, no separate MCP or card section', () => {
+  it('NOTES-25 one place for the keys in Connections, before the vault password, no separate MCP or card section', () => {
     const order = CONNECTION_SECTIONS.map((section) => section.key)
     expect(order).toContain('tokens')
     expect(order).not.toContain('mcp')
@@ -255,30 +298,35 @@ describe('NOTES-25 API tokens in Settings, Connections', () => {
 })
 
 describe('NOTES-25 the operator', () => {
-  it('NOTES-25 AC-5 the switch "Programmschnittstelle (API) für Mitglieder" stands in General and saves', async () => {
-    const save = vi.fn(async () => undefined)
-    const server = { settings: { link_previews: true, share_links: true, mcp_enabled: true, api_enabled: true, connections_local_network: false }, save }
-    await render(<FeaturesCard server={server as never} />)
-    const toggle = document.querySelector<HTMLInputElement>('input[data-testid="feature-api"]')!
+  it('NOTES-25 AC-5 the switch "Programmschnittstelle (API) für Mitglieder" stands in "Schnittstellen" and saves', async () => {
+    await render(<Interfaces />)
+    expect(card('interfaces')).not.toBeNull()
+    const toggle = document.querySelector<HTMLInputElement>('input[data-testid="interfaces-api"]')!
     expect(toggle.type).toBe('checkbox')
-    expect(toggle.labels![0].textContent).toBe('Programmschnittstelle (API) für Mitglieder')
+    expect(toggle.labels![0]!.textContent).toBe('Programmschnittstelle (API) für Mitglieder')
     expect(toggle.checked).toBe(true)
+    expect(document.querySelector<HTMLInputElement>('input[data-testid="interfaces-mcp"]')!.labels![0]!.textContent).toBe('MCP-Zugang')
     await click(toggle)
-    expect(save).toHaveBeenCalledWith({ api_enabled: false })
+    expect(calls.filter((call) => call.method === 'PUT').map((call) => call.body)).toEqual([{ api: false }])
+    expect(toggle.checked).toBe(false)
   })
 
-  it('NOTES-25 AC-27 every token of every account, folders only as a number, and Sperren', async () => {
-    await render(<AllTokensCard />)
-    const rows = $$('all-token-row')
-    expect(rows.map((row) => row.querySelector('span span')!.textContent)).toEqual(['Tester · n8n Wetter', 'Anna · Fremd'])
-    expect($$('all-token-meta')[0].textContent).toContain('lesen und schreiben · API · MCP · 2 Ordner')
-    expect(document.body.textContent).not.toContain('nn_api_')
-    await click($$('all-token-block')[1])
-    expect(document.querySelector('[role="dialog"]')!.getAttribute('aria-label')).toBe('„Fremd“ sperren?')
+  it('NOTES-25 AC-27 every key of every account, folders only as a number, and Sperren', async () => {
+    await render(<AllKeys />)
+    const rows = $$('all-keys-row').filter((row) => row.tagName === 'TR')
+    expect(rows.map((row) => row.textContent)).toEqual([expect.stringContaining('Tester'), expect.stringContaining('Anna')])
+    expect(rows[0]!.textContent).toContain('n8n Wetter')
+    expect(rows[0]!.textContent).toContain('Lesen und schreiben')
+    // The operator learns how many folders at most (the server answers a number), never which; never the key itself.
+    // The module's table shows the key's visible start and no column for the folders (see einst-fragen, nexnotes 4).
+    expect(document.body.textContent).not.toContain('Haushalt')
+    expect(document.body.textContent).not.toContain(SECRET)
+    await click($('all-keys-block', rows[1]!))
+    expect(dialogTitle()).toBe('„Fremd“ von Anna sperren?')
     expect(calls.some((call) => call.method === 'POST')).toBe(false)
-    await click(document.querySelector<HTMLElement>('[role="dialog"] button[type="submit"]'))
-    expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual(['/api/admin/tokens/7/block'])
-    expect($$('all-token-row')[1].textContent).toContain('Vom Betreiber gesperrt')
+    await click(button($('all-keys-block-dialog')!, 'Sperren'))
+    expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual([`${BASE}/admin/keys/7/block`])
+    expect($$('all-keys-row').filter((row) => row.tagName === 'TR')[1]!.dataset.blocked).toBe('true')
   })
 })
 

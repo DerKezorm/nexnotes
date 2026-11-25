@@ -910,8 +910,6 @@
     "linkPreviewsHint": "The server fetches title and picture of linked pages.",
     "mail": "Mail",
     "mailHint": "nexnotes sends invitations through it, links for a new password and to confirm an address, and notices about an account, such as a new sign-in. Without a server, the link to copy is enough.",
-    "mcp": "MCP access",
-    "mcpHint": "Members may make keys for AI tools.",
     "ocr": "Text recognition",
     "ocrHint": "Languages read in pictures, scans and PDFs.",
     "ocrLanguages": {
@@ -948,8 +946,6 @@
     "years_other": "{{count}} years",
     "localNetwork": "Connections into the local network",
     "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there.",
-    "api": "API for members",
-    "apiHint": "Members make API tokens; programs and the nexdeck card read with them. Off: every request under /api/v1/ is refused, the tokens stay.",
     "backupHolds": "A backup contains all notes with their history and trash, all attachments, the accounts with their shares, smart folders and API tokens, the settings and the server’s key. Locked notes stay encrypted in it. Not included: the log, exports, caches and your own language files, nor a key set through NEXNOTES_SECRET_KEY.",
     "ocrLanguagesLabel": "Languages"
   },

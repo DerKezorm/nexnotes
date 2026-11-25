@@ -27,6 +27,7 @@ from .routers import (
     api_v1,
     api_v1_write,
     auth,
+    connections,
     export,
     folders,
     health,
@@ -81,7 +82,7 @@ logger = logging.getLogger("nexnotes")
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
     health, about, locales_router, logs_router, auth, totp_router, passkeys_router, oidc, accounts_router, invites,
-    settings_router, server_signin, server_mail,
+    settings_router, server_signin, server_mail, connections,
     backups_router, avatars_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.

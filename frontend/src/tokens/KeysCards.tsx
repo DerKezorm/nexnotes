@@ -1,0 +1,52 @@
+/**
+ * The cards of the shared key module (schluessel 1.0.0, plan "Einstellungen") with nexnotes' words: "API-Schlüssel"
+ * and "KI-Werkzeuge (MCP)" in My account › Connections (NOTES-25, NOTES-20: API tokens with folders and the extra "also
+ * for AI tools", the older MCP and card keys in the same list, AI tools connected by OAuth), "Schnittstellen" in Server ›
+ * General (the switches "Programmschnittstelle (API) für Mitglieder" and "MCP-Zugang"), "API-Schlüssel aller Konten" in
+ * Server › Accounts (NOTES-25 AC-27). The routes are the module's under `/api/connections`; nexnotes' older ways
+ * (`/api/tokens`, `/api/admin/tokens`) stay for scripts.
+ */
+import { useTranslation } from 'react-i18next'
+
+import { api } from '../api/client'
+import { day } from '../lib/format'
+import { useAuth } from '../state/auth'
+import { AllKeysCard, ApiKeysCard, InterfacesCard, ToolsCard, type AppWords, type KeyRequest } from '../vendor/nexschluessel'
+
+/** nexnotes' client for the cards (its tab header, its errors with their codes). */
+// eslint-disable-next-line react-refresh/only-export-components
+export const keyRequest: KeyRequest = <T,>(path: string, init: Parameters<KeyRequest>[1] = {}) =>
+  api<T>(path, { method: init.method, query: init.query, body: init.body })
+
+/** Where the programming interface is described (NOTES-25 AC-25). */
+export const DOCS = '/api/v1/docs'
+
+function useWords(): AppWords {
+  const { t } = useTranslation()
+  return { areas: t('tokens.dialog.folders'), areasAll: t('tokens.dialog.foldersAll'), areasSome: t('tokens.dialog.foldersSome') }
+}
+
+/** My account › Connections, places 5 and 6: "API-Schlüssel", then "KI-Werkzeuge (MCP)". */
+export function ConnectionKeys() {
+  const { t, i18n } = useTranslation()
+  const { me } = useAuth()
+  const words = useWords()
+  return (
+    <>
+      <ApiKeysCard request={keyRequest} things={t('settings.things')} words={words} docsHref={DOCS} operator={me?.role === 'operator'} language={i18n.language} when={day} />
+      <ToolsCard request={keyRequest} words={words} language={i18n.language} when={day} />
+    </>
+  )
+}
+
+/** Server › General, place 3: "Schnittstellen". */
+export function Interfaces() {
+  const { i18n } = useTranslation()
+  return <InterfacesCard request={keyRequest} docsHref={DOCS} language={i18n.language} />
+}
+
+/** Server › Accounts, place 4: "API-Schlüssel aller Konten". */
+export function AllKeys() {
+  const { i18n } = useTranslation()
+  return <AllKeysCard request={keyRequest} words={useWords()} language={i18n.language} when={day} />
+}

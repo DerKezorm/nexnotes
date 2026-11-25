@@ -1,6 +1,7 @@
 /**
  * Server › General (plan "Einstellungen", "Allgemein"), the cards in their order: "Grenzen" (the largest attachment with
- * its own save, how long the history and the trash keep things), "Funktionen für alle Konten" (the switches), "Sprachen"
+ * its own save, how long the history and the trash keep things), "Funktionen für alle Konten" (the switches),
+ * "Schnittstellen" (the module schluessel's, placed by `SettingsAreas`), "Sprachen"
  * (built in, the operator's own as chips, the template, upload by code). And Server › Text recognition, nexnotes' own
  * area: the languages it reads as a segment of several. Built only from the ui kit.
  */
@@ -76,8 +77,8 @@ export function LimitsCard({ server }: { server: Server }) {
 }
 
 /**
- * The switches of the features for everybody (NOTES-1 AC-8). "MCP-Zugang" and "Programmschnittstelle (API)" move to
- * the card "Schnittstellen" of the module schluessel; until then they stand here.
+ * The switches of the features for everybody (NOTES-1 AC-8). "MCP-Zugang" and "Programmschnittstelle (API) für
+ * Mitglieder" are the card "Schnittstellen" of the module schluessel (`tokens/KeysCards.tsx`), right after this one.
  */
 export function FeaturesCard({ server }: { server: Server }) {
   const { t } = useTranslation()
@@ -87,8 +88,6 @@ export function FeaturesCard({ server }: { server: Server }) {
     <Card id="features" icon="SlidersHorizontal" title={t('server.features')}>
       <CheckboxRow label={t('server.linkPreviews')} hint={t('server.linkPreviewsHint')} checked={s.link_previews} onChange={(link_previews) => void server.save({ link_previews })} testId="feature-link-previews" />
       <CheckboxRow label={t('server.shareLinks')} hint={t('server.shareLinksHint')} checked={s.share_links} onChange={(share_links) => void server.save({ share_links })} testId="feature-share-links" />
-      <CheckboxRow label={t('server.mcp')} hint={t('server.mcpHint')} checked={s.mcp_enabled} onChange={(mcp_enabled) => void server.save({ mcp_enabled })} testId="feature-mcp" />
-      <CheckboxRow label={t('server.api')} hint={t('server.apiHint')} checked={s.api_enabled !== false} onChange={(api_enabled) => void server.save({ api_enabled })} testId="feature-api" />
       <CheckboxRow
         label={t('server.localNetwork')}
         hint={t('server.localNetworkHint')}

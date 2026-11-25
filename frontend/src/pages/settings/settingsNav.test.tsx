@@ -50,6 +50,8 @@ function answer(path: string): Answer | undefined {
   if (path === '/api/server/mail') {
     return { status: 200, body: { host: '', port: 587, security: 'starttls', user: '', password_set: false, sender: '', sender_name: '', sender_name_default: 'nexnotes', configured: false, warnings: [], last_ok_at: null, last_error: '', last_error_at: null, waiting: 0 } }
   }
+  if (path === '/api/connections/admin/keys') return { status: 200, body: { keys: [] } }
+  if (path === '/api/connections/interfaces') return { status: 200, body: { api: true, mcp: true } }
   if (path === '/api/server/storage') return { status: 200, body: { app: 'nexnotes', used: 1000, parts: [], complete: true, total: 1e12, disk_used: 1e11, free: 9e11, nearly_full: false, where: {}, network: [] } }
   if (path === '/api/server/storage/backups') {
     const schedule = { every: 'daily', time: '03:00', keep: 7 }
@@ -253,7 +255,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
     ['profile', ['profile', 'sign-out']],
     ['security', ['security']],
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
-    ['general', ['limits', 'features', 'languages']],
+    ['general', ['limits', 'features', 'interfaces', 'languages']],
     // The points of "Ready for the internet?" are boxes of their own in its card (here one, `ready-address`).
     ['sign-in', ['sign-in-ready', 'ready-address', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
@@ -267,7 +269,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
 
   it.each([
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
-    ['general', ['limits', 'features', 'languages']],
+    ['general', ['limits', 'features', 'interfaces', 'languages']],
     ['sign-in', ['sign-in-ready', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
     ['storage', ['storage', 'backups']],

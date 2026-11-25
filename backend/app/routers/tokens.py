@@ -1,4 +1,7 @@
-"""API tokens in the interface (NOTES-25): a member's list under Settings, Connections, making one (shown once),
+"""API tokens in the interface (NOTES-25), the ways of before the shared key module (schluessel 1.0.0), in their old
+shapes; making, revoking and blocking go through the module now (``routers/connections.py`` has its own ways).
+
+A member's list under Settings, Connections, making one (shown once),
 revoking one; and the operator's overview of every token with "Sperren" (AC-27).
 
 The list holds the API tokens and the older MCP and card keys, each with where it counts (AC-2, AC-3); connectors
@@ -21,6 +24,9 @@ from ..errors import error
 from ..models import TOKEN_API, TOKEN_DEVICE, ApiToken, utcnow
 from ..models import Account as AccountRow
 from ..services import apiaccess, apitokens, mcp
+from ..services.schluessel_store import CONFIG, KeyStore
+from ..vendor.nexschluessel import keys
+from ..vendor.nexschluessel.errors import KeyRefused
 from . import oauth
 
 logger = logging.getLogger("nexnotes.api")
@@ -70,11 +76,20 @@ def make(body: TokenIn, account: Account, db: DbSession) -> dict[str, Any]:
         folders = apiaccess.valid_folders(db, account, body.folders)
         if not folders:
             raise error("invalid_input", "The input is not valid.", 422, fields=["folders"])
-    if apitokens.count_tokens(db, account.id) >= apitokens.MAX_TOKENS:
-        raise error("tokens_too_many", f"An account holds at most {apitokens.MAX_TOKENS} API tokens.", 409,
-                    max=apitokens.MAX_TOKENS)
-    row, token = apitokens.make(db, account, name, kind=TOKEN_API, level=body.level, days=body.days,
-                                allow_mcp=body.mcp, folder_ids=folders)
+    # Made by the shared key module (schluessel 1.0.0) over the same table: the same prefix, hash and columns.
+    try:
+        made = keys.make(KeyStore(db), CONFIG, account.id, kind="api", name=name, right=body.level,
+                         areas=folders, options={"mcp": body.mcp}, days=body.days)
+    except KeyRefused as exc:
+        values = {key: value for key, value in exc.as_dict().items() if key not in ("code", "message")}
+        raise error(exc.public_code, exc.message, exc.status, **values) from exc
+    row = db.get(ApiToken, made.key.id)
+    assert row is not None
+    if folders is not None and row.folder_ids != folders:
+        # This way kept the folders in the order chosen (the module keeps the account's order): the same folders.
+        row.folder_ids = folders
+        db.commit()
+    token = made.secret
     logger.info("API token made token_id=%s level=%s mcp=%s folders=%s", row.id, row.level, bool(row.allow_mcp),
                 len(folders or []))
     return {"made": apitokens.token_out(row), "token": token}
@@ -85,9 +100,9 @@ def revoke(token_id: TokenId, account: Account, db: DbSession) -> Response:
     row = db.get(ApiToken, token_id)
     if row is None or row.account_id != account.id or row.kind == TOKEN_DEVICE:
         raise error("not_found", "Not found.", 404)
-    db.delete(row)
-    db.commit()
-    logger.info("Token revoked token_id=%s kind=%s", token_id, row.kind)
+    kind = row.kind
+    keys.revoke(KeyStore(db), CONFIG, account.id, token_id)
+    logger.info("Token revoked token_id=%s kind=%s", token_id, kind)
     return Response(status_code=204)
 
 
@@ -119,9 +134,7 @@ def block(token_id: TokenId, operator: OperatorAccount, db: DbSession) -> Respon
     row = db.get(ApiToken, token_id)
     if row is None or row.kind == TOKEN_DEVICE:
         raise error("not_found", "Not found.", 404)
-    if row.blocked_at is None:
-        row.blocked_at = utcnow()
-        db.commit()
+    keys.block(KeyStore(db), CONFIG, token_id)
     logger.warning("Token blocked by the operator token_id=%s account_id=%s by=%s", row.id, row.account_id,
                    operator.name)
     return Response(status_code=204)

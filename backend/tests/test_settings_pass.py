@@ -122,3 +122,50 @@ def test_the_mail_page_and_the_old_settings_show_the_same_server(client: TestCli
     # The old way still saves, and the new page reads it.
     client.put("/api/settings", json={"smtp_host": "smtp.example.com"})
     assert client.get("/api/server/mail").json()["host"] == "smtp.example.com"
+
+
+def test_keys_of_the_old_ways_and_the_new_ones_are_the_same_keys(client: TestClient, operator: Account) -> None:
+    """schluessel 1.0.0: ``/api/tokens`` and ``/api/admin/tokens`` stay in their shapes beside ``/api/connections``."""
+    from app.models import TOKEN_DEVICE
+    from app.services import apitokens
+
+    old = client.post("/api/tokens", json={"name": "Home Assistant", "level": "read", "days": 30})
+    assert old.status_code == 201 and old.json()["token"].startswith("nn_api_")
+    new = client.post("/api/connections/keys", json={"kind": "api", "name": "n8n", "right": "write",
+                                                     "options": {"mcp": True}})
+    assert new.status_code == 201, new.text
+    secret = new.json()["secret"]
+    assert secret.startswith("nn_api_")
+    listed = {entry["name"]: entry for entry in client.get("/api/connections/keys").json()["keys"]}
+    assert set(listed) == {"Home Assistant", "n8n"}
+    assert listed["n8n"]["options"] == {"mcp": True} and listed["Home Assistant"]["right"] == "read"
+    assert {entry["name"] for entry in client.get("/api/tokens").json()["tokens"]} == {"Home Assistant", "n8n"}
+    # A paired iPhone in the same table is never a key of the module, and a device never manages keys.
+    with SessionLocal() as db:
+        row = db.get(Account, operator.id)
+        assert row is not None
+        _device, device_token = apitokens.make(db, row, "iPhone", kind=TOKEN_DEVICE)
+    assert "iPhone" not in {entry["name"] for entry in client.get("/api/connections/keys").json()["keys"]}
+    with new_client() as device:
+        refused = device.get("/api/connections/keys", headers={"Authorization": f"Bearer {device_token}"})
+        assert refused.status_code == 403
+    # The new key works on the old routes of programs; blocked on the old way it stops, unblocked on the new it works.
+    with new_client() as program:
+        assert program.get("/api/v1/me", headers={"Authorization": f"Bearer {secret}"}).status_code == 200
+        key_id = listed["n8n"]["id"]
+        assert client.post(f"/api/admin/tokens/{key_id}/block").status_code == 204
+        assert program.get("/api/v1/me", headers={"Authorization": f"Bearer {secret}"}).status_code == 401
+        assert client.post(f"/api/connections/admin/keys/{key_id}/unblock").json()["blocked"] is False
+        assert program.get("/api/v1/me", headers={"Authorization": f"Bearer {secret}"}).status_code == 200
+        # Revoked on the old way, it is gone on both.
+        assert client.delete(f"/api/tokens/{key_id}").status_code == 204
+        assert program.get("/api/v1/me", headers={"Authorization": f"Bearer {secret}"}).status_code == 401
+    assert {entry["name"] for entry in client.get("/api/connections/keys").json()["keys"]} == {"Home Assistant"}
+
+
+def test_the_interfaces_card_switches_what_general_switched(client: TestClient, operator: Account) -> None:
+    assert client.get("/api/connections/interfaces").json() == {"api": True, "mcp": True}
+    assert client.put("/api/connections/interfaces", json={"mcp": False}).json() == {"api": True, "mcp": False}
+    assert client.get("/api/settings").json()["mcp_enabled"] is False
+    client.put("/api/settings", json={"api_enabled": False})
+    assert client.get("/api/connections/interfaces").json()["api"] is False

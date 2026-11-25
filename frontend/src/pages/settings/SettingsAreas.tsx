@@ -3,7 +3,7 @@
  * files (`AccountTab`, `AppearanceArea`, `ConnectionsTab`, `GeneralCards`, `SignInArea`, `ServerCards`, `StorageArea`,
  * `AccountsTab`, `LogCard`, `AboutArea`); an area only picks them.
  */
-import { AllTokensCard } from '../../tokens/AllTokensCard'
+import { AllKeys, Interfaces } from '../../tokens/KeysCards'
 import { AboutArea } from './AboutArea'
 import { AccountsTab } from './AccountsTab'
 import { AccountTab } from './AccountTab'
@@ -31,7 +31,7 @@ export function AreaContent({ area }: { area: AreaSlug }) {
       return (
         <>
           <AccountsTab />
-          <AllTokensCard />
+          <AllKeys />
         </>
       )
     case 'sign-in':
@@ -57,6 +57,7 @@ function ServerCardsOf({ area }: { area: 'general' | 'ocr' }) {
         <>
           <LimitsCard server={server} />
           <FeaturesCard server={server} />
+          <Interfaces />
           <LanguagesCard />
         </>
       )}

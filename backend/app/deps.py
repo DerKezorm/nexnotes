@@ -133,7 +133,8 @@ SETUP_ONLY_PATHS = {
 #: What a paired device's token never reaches (NOTES-24): tokens and connected programs, the second factor, the
 #: sign-in providers, the password, a connection's key, and everything of the operator. A lost or stolen device must
 #: not leave anything behind that outlives disconnecting it, nor take the account. Its name and picture it may change.
-DEVICE_REFUSED_PREFIXES = ("/api/tokens", "/api/admin/", "/api/oauth/", "/api/auth/totp", "/api/oidc/")
+DEVICE_REFUSED_PREFIXES = ("/api/tokens", "/api/admin/", "/api/oauth/", "/api/auth/totp", "/api/oidc/",
+                           "/api/connections")
 DEVICE_REFUSED = frozenset({("PUT", "/api/auth/password"), ("PUT", "/api/nextasks"), ("DELETE", "/api/nextasks")})
 
 
