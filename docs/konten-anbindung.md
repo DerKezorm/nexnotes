@@ -11,6 +11,28 @@ sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adres
 
 ## 0. Was gebaut ist / was fehlt
 
+### Durchgang „Einstellungen“, Teil 1 (25./26.11.2026)
+
+Nach dem Bauplan in nexlore `Development/nexapps/Baupläne/Bauplan Einstellungen.md`. Aus `bauplaene` Zweig `konten`:
+**`ui` 1.1.0, `log` 1.0.0, `sicherung` 1.0.0** (je `tools/sync.py copy`). `konten`, `oidc`, `post` stehen noch auf 1.0.0 /
+1.1.2 / 1.0.0 (Teil 2), `schluessel` fehlt noch (Teil 3).
+
+| Bereich | woher jetzt | was gewandert ist (alt → neu) |
+|---|---|---|
+| Gerüst | `SettingsLayout`, `SettingsNav`, `SettingsPage` (ui) in `pages/SettingsPage.tsx`; Titel und Zeilen der gemeinsamen Bereiche aus `areaText` | eigene `SettingsNav`/`SettingsJump` (Auswahlliste schmal) → Liste unter `/settings` auf dem Handy, Bereich mit Rückweg; Slugs unverändert, alte Pfade (`/settings/account`, `/settings/server`, `/about`) leiten weiter um |
+| Darstellung | `pages/settings/AppearanceArea.tsx`: „Aussehen“ (`ThemeSegment`), „Papier neuer Notizen“, „Notizlisten“ (`Segment`, `CheckboxRow`), „Anleitung“ | Karte „Aussehen und Papier“ → zwei Karten; Hell/Dunkel bleibt bis konten 1.1.0 im Browser (`TODO konten 1.1.0`) |
+| Verbindungen | „Geräte“ (Rows, Badge, `sm` danger „Trennen“, primary „iPhone oder iPad verbinden“), neu „Auf diesem Gerät installieren“ (`pwa/InstallCard.tsx`, nur wenn der Browser es anbietet oder auf iPhone/iPad), „nextasks“ als `Collapsible variant="card"`, API-Token/MCP unverändert (Teil 3) | eigene Faltkarte → `Collapsible` (Klappzustand weiter `fold.nextasks` je Gerät) |
+| Allgemein | `pages/settings/GeneralCards.tsx`: „Grenzen“ (`Field action`), „Funktionen für alle Konten“ (`CheckboxRow`), „Sprachen“ (`Chip`, `Field action` „Sprache hochladen“) | Proxy-Hinweis bleibt bis „Bereit fürs Internet?“ (als `Notice`); MCP/API-Schalter bis „Schnittstellen“ (schluessel) |
+| Speicher und Sicherung | Modul sicherung: `StorageArea` über `/api/server/storage`; Haken `services/backup_hooks.py` (Format unverändert: `nexnotes-backup.json`, `database/nexnotes.db`, `attachments/`, `secret.key`) | eigene `BackupsCard` → Karten „Speicher“ und „Sicherung“; neu Uhrzeit (`backup_time`, Vorgabe 03:00) und „Jeden Monat“; alte Wege `/api/backups/*` mit `x-nexnotes-password` über `legacy_router` in alter Form; vorgemerkter Restore jetzt mit Marke `nexsicherung-pending.json` |
+| Texterkennung | `OcrCard` mit `Segment multiple` (mindestens eine Sprache) | Knopfreihe mit `aria-pressed` → Segment |
+| Log | Modul log: `services/logs.py` = `configure` + `from app.vendor.nexlog import *`, `routers/logs.py` = `nexlog.api.router`, Karte `LogCard` des Moduls | Format, Datei, Schlüssel `log_mode`/`log_mode_until` unverändert; geschwärzt jetzt auch `nn_api_`, `nn_mcp_`, `nn_deck_`, `nnd_`; `GET /api/logs/level` nennt `variable` |
+| Über | `AboutPage` (ui) in `pages/settings/AboutArea.tsx`, Logo `/logo.svg` | eigene Seite → drei Karten `about`, `about-updates`, `about-built-with`; nexnotes' Satz „was hinausgeht“ bleibt |
+| Profil, Sicherheit, Anmeldung, Mail, Konten | unverändert (Teil 2) | – |
+
+Umwege, bis die Module sie selbst können (in `fragen.md` des Durchgangs): `backup_hooks.DAMAGE` nimmt `zlib.error`
+dazu; `tidy()` löscht beim Start leere Archive, die ein abgebrochener Prozess unter dem endgültigen Namen hinterließ.
+
+
 Stand 25.11.2026 spätabends, Zweig `konten`: **auf den Modulen 1.0.0** (eingefroren). Aus `bauplaene` Zweig `konten`
 (`3c55402`): `konten` 1.0.0, `ui` 1.0.0, `post` 1.0.0, `oidc` 1.1.2, kopiert mit `tools/sync.py copy`, `check` grün.
 App-Version unverändert 1.1.0 (live), kein neues Release vorbereitet. Was seit 0.3.7 dazukam, steht unten unter „Seit
