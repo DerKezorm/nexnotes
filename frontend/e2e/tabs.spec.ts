@@ -34,7 +34,9 @@ async function member(page: Page, browser: Browser, name: string, email: string)
   expect(invite.status()).toBe(201)
   const token = String((await invite.json()).link).split('/invite/')[1]
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
-  const accepted = await context.request.post(`/api/invite/${token}`, { data: { display_name: name, email, password: PASSWORD }, headers: TAB })
+  // Display names are unique per server (shared account module): every run and every test gets a name of its own.
+  const shown = `${name} ${Math.random().toString(36).slice(2, 7)}`
+  const accepted = await context.request.post(`/api/invite/${token}`, { data: { display_name: shown, email, password: PASSWORD }, headers: TAB })
   expect(accepted.ok(), await accepted.text()).toBe(true)
   return context
 }

@@ -13,7 +13,7 @@ async function member(page: Page, browser: Browser, viewport: { width: number; h
   const token = String((await invite.json()).link).split('/invite/')[1]
   const context = await browser.newContext({ storageState: { cookies: [], origins: [] }, viewport })
   const email = `sign-out-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.com`
-  const made = await context.request.post(`/api/invite/${token}`, { data: { display_name: 'Leaving Member', email, password: 'a long e2e member password' }, headers: TAB })
+  const made = await context.request.post(`/api/invite/${token}`, { data: { display_name: `Leaving Member ${email.split('@')[0]}`, email, password: 'a long e2e member password' }, headers: TAB })
   expect(made.ok()).toBe(true)
   return context
 }

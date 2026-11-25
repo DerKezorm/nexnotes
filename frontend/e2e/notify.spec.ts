@@ -13,7 +13,7 @@ async function sharedNote(page: Page, title: string, markdown: string): Promise<
   const token = String((await invite.json()).link).split('/invite/')[1]
   const context = await page.context().browser()!.newContext({ storageState: { cookies: [], origins: [] } })
   const email = `nora-${Date.now()}@example.com`
-  const made = await context.request.post(`/api/invite/${token}`, { data: { display_name: 'Nora', email, password: 'a long e2e member password' }, headers: TAB })
+  const made = await context.request.post(`/api/invite/${token}`, { data: { display_name: `Nora ${Date.now()}`, email, password: 'a long e2e member password' }, headers: TAB })
   expect(made.ok()).toBe(true)
   const member = await (await context.request.get('/api/auth/me')).json()
   await context.close()
