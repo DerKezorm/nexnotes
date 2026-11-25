@@ -117,6 +117,10 @@ def apply_pending() -> bool:
     one is set aside and the start goes on with the data from before (never half of both)."""
     config = current()
     try:
+        archives.tidy_at_start()
+    except Exception:
+        config.logger.exception("Tidying the backups folder at the start failed")
+    try:
         config.hooks.tidy()
     except Exception:
         config.logger.exception("Tidying after an earlier restore failed")

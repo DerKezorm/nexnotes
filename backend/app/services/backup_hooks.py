@@ -25,7 +25,6 @@ import shutil
 import sqlite3
 import time
 import zipfile
-import zlib
 from pathlib import Path
 from typing import Any
 
@@ -64,9 +63,9 @@ DEFAULT_KEEP = 7
 #: ``FTS5 table main.search_index_v3``, later versions as ``fts5: checksum mismatch for table "search_index_v3"``.
 SEARCH_INDEX_PROBLEM = re.compile(r'FTS5 table main\.search_index_v\d+|^fts5: .*\btable "search_index_v\d+"')
 
-#: What a damaged member raises while it unpacks: the module's list, and zlib's own error (a flipped byte in a
-#: deflated member), which the module's ``tools.DAMAGE`` does not name.
-DAMAGE = (*tools.DAMAGE, zlib.error)
+#: What a damaged member raises while it unpacks: the module's list (since sicherung 1.0.1 with zlib's own error, a
+#: flipped byte in a deflated member).
+DAMAGE = tools.DAMAGE
 
 #: How often the check reads the archive's database when the system does not let it for a moment (a virus scanner
 #: holding the fresh copy, a busy disk), and the pause between: no damage, a new copy after a pause.
@@ -263,7 +262,7 @@ class NexnotesHooks(nexsicherung.AppHooks):
                     database_ok = DATABASE_ENTRY in members and tools.read_database(
                         archive, DATABASE_ENTRY, scratch, limit=DATABASE_MAX, ignore=SEARCH_INDEX_PROBLEM,
                         tries=DATABASE_TRIES, pause=DATABASE_PAUSE_SECONDS)
-                except (BackupError, zlib.error):
+                except (BackupError, *DAMAGE):
                     database_ok = False
                 if database_ok:
                     archived = _archived_notes(scratch)
@@ -318,19 +317,8 @@ class NexnotesHooks(nexsicherung.AppHooks):
                 tools.extract(archive, MEDIA_PREFIX + rel, pending / ATTACHMENTS / rel, limit=MEMBER_MAX)
 
     def tidy(self) -> None:
-        """At every start: what an earlier restore set aside, and an empty archive a stopped process left. The module
-        names an archive before ``pack`` writes it; a process stopped in between (the container stopped mid-backup)
-        leaves that name empty, listed as unreadable for good. Before the module nothing was left (only a hidden
-        part)."""
-        folder = nexsicherung.archives.folder()
-        if folder.is_dir():
-            for path in folder.glob("nexnotes-*.zip"):
-                try:
-                    if path.is_file() and path.stat().st_size == 0 and nexsicherung.archives.known_name(path.name):
-                        path.unlink()
-                        logger.warning("An empty backup left by a stopped process was removed name=%s", path.name)
-                except OSError:
-                    continue
+        """At every start: what an earlier restore set aside. What a stopped backup left behind (a hidden part, an
+        empty archive) the module clears itself before this (``archives.tidy_at_start``, sicherung 1.0.1)."""
         root = media_root()
         if not root.parent.is_dir():
             return

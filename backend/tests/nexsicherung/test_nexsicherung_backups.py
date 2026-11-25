@@ -146,6 +146,55 @@ def test_a_damaged_backup_is_never_restored(app: Any, sicherung: Any, restarts: 
     assert restarts == [] and not sicherung.restore.pending_folder().exists()
 
 
+def test_a_member_zlib_cannot_inflate_is_damaged_never_a_500(app: Any, sicherung: Any, restarts: list) -> None:
+    app.add_content("whole")
+    client = app.operator()
+    name = _make(client, app)
+    path = sicherung.archives.path_of(name)
+    # Every deflated member starts with a block type that does not exist: zlib refuses it at the first byte
+    # (``zlib.error``), before zipfile reaches the CRC. The directory stays as it is. (An app that stores every member
+    # without deflating has nothing zlib could refuse; the test then only asks the list and the check.)
+    damaged = path.with_name(path.name.replace(".zip", "-8.zip"))
+    data = bytearray(path.read_bytes())
+    with zipfile.ZipFile(path) as archive:
+        for info in archive.infolist():
+            if info.compress_type == zipfile.ZIP_DEFLATED and info.compress_size > 0:
+                offset = info.header_offset
+                start = offset + 30 + int.from_bytes(data[offset + 26:offset + 28], "little") + int.from_bytes(
+                    data[offset + 28:offset + 30], "little")
+                data[start] = 0xFF
+    damaged.write_bytes(bytes(data))
+    assert any(item["name"] == damaged.name for item in _entries(client, app))
+    brief = client.post(f"{app.prefix}/backups/{damaged.name}/check", json={})
+    assert brief.status_code in (200, 400), brief.text
+    if brief.status_code == 200:
+        assert not brief.json()["usable"]
+    response = client.post(f"{app.prefix}/backups/{damaged.name}/restore", json={"password": app.password})
+    assert response.status_code == 400 and code_of(response) in ("backup_damaged", "backup_invalid"), response.text
+    assert restarts == [] and not sicherung.restore.pending_folder().exists()
+
+
+def test_what_a_stopped_copy_left_goes_at_the_start(app: Any, sicherung: Any) -> None:
+    client = app.operator()
+    name = _make(client, app)
+    base = sicherung.archives.folder()
+    app_name = sicherung.current().app_name
+    # Before 1.0.1 a copy took its name first; stopped while packing, the name stayed empty.
+    empty = base / f"{app_name}-2026-11-20-031500.zip"
+    empty.touch()
+    # Since 1.0.1 a copy is packed under a hidden work name; one stopped a moment ago.
+    part = base / f".{app_name}-2026-11-25-031500-1-2.zip.part"
+    part.write_bytes(b"PK half")
+    if sicherung.current().restore == "restart":
+        app.restart()
+    else:
+        # An app that restores at once calls apply_pending at its start as well (it tidies there).
+        sicherung.restore.apply_pending()
+    assert not empty.exists() and not part.exists()
+    names = [item["name"] for item in _entries(app.operator(), app)]
+    assert name in names and empty.name not in names
+
+
 def test_names_outside_the_list_are_not_found(app: Any) -> None:
     client = app.operator()
     for name in ("nonsense.zip", "..%2Fsecret.key", "x" * 90 + ".zip"):
