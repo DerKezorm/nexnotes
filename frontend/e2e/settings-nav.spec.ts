@@ -1,7 +1,8 @@
 /**
  * NOTES-2 AC-9 in real browsers: the settings in areas. The operator sees both groups of the navigation, a member only
  * "My account" (and lands on the profile from a server address), the addresses of the tabs before lead to their area,
- * and a narrow page has a choice instead of the navigation. Runs with `npm run e2e`.
+ * and a narrow page shows the list of the areas first, then one area with the way back (the ui kit's frame since the
+ * settings pass). Runs with `npm run e2e`.
  */
 import { expect, test, type Browser, type BrowserContext, type Page } from '@playwright/test'
 
@@ -24,7 +25,7 @@ test('NOTES-2 AC-9 the operator sees both groups, each area at its own address',
   await expect(nav).toBeVisible()
   await expect(nav.getByText('My account', { exact: true })).toBeVisible()
   await expect(nav.getByText('Server', { exact: true })).toBeVisible()
-  await expect(page.getByTestId('settings-jump')).toBeHidden()
+  await expect(page.getByTestId('settings-back')).toBeHidden()
   for (const name of ['Profile', 'Security', 'Appearance', 'Connections', 'General', 'Sign-in', 'Mail', 'Storage and backups', 'Text recognition', 'Accounts', 'Log']) {
     await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
   }
@@ -90,15 +91,22 @@ test('NOTES-2 AC-9 a member sees only My account and lands on the profile from a
   await context.close()
 })
 
-test('NOTES-2 AC-9 a narrow page chooses the area above the content', async ({ page }) => {
+test('NOTES-2 AC-9 a narrow page shows the list of the areas, then one area with the way back', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 })
   await page.goto('/settings')
-  await expect(page.getByTestId('settings-nav')).toBeHidden()
-  const choice = page.getByTestId('settings-jump')
-  await expect(choice).toBeVisible()
-  await choice.selectOption('ocr')
+  const nav = page.getByTestId('settings-nav')
+  await expect(nav).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toBeHidden()
+  await nav.getByRole('link', { name: 'Text recognition', exact: true }).click()
   await expect(page).toHaveURL(/\/settings\/ocr$/)
   await expect(page.locator('#ocr')).toBeVisible()
+  await expect(nav).toBeHidden()
   // Nothing wider than the screen.
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390)
+  const back = page.getByTestId('settings-back')
+  await expect(back).toBeVisible()
+  await back.click()
+  await expect(page).toHaveURL(/\/settings$/)
+  await expect(nav).toBeVisible()
+  await expect(page.locator('#ocr')).toHaveCount(0)
 })

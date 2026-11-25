@@ -1,6 +1,6 @@
 /**
- * NOTES-25 in a real browser against the real server: an API token made under Settings, Connections with folders and
- * a run-out, shown once; a program (played by `page.request`, no cookie counts and no `Origin` is sent) reads notes,
+ * NOTES-25 in a real browser against the real server: an API key made under Settings, Connections (the card "API
+ * keys" of the shared key module since the settings pass) with folders and a run-out, shown once; a program (played by `page.request`, no cookie counts and no `Origin` is sent) reads notes,
  * one note with Markdown and `etag`, searches, and ticks an item that the note open in the browser shows at once; the
  * description at /api/v1/docs loads without one request to another site; the operator's switch stops the API. The
  * page is the operator of global-setup.ts. A program makes a note, appends and replaces its text while it is open
@@ -25,21 +25,21 @@ test('NOTES-25 AC-1 AC-2 AC-7 AC-8 AC-9 AC-10 a token for one folder reads, sear
   const elsewhere = (await outside.json()).id as string
 
   await page.goto('/settings/connections')
-  await page.getByTestId('tokens-new').click()
-  const dialog = page.getByRole('dialog')
-  await dialog.getByRole('textbox').fill(`E2E program ${stamp}`)
-  await page.getByTestId('token-level-write').check()
-  await expect(page.getByTestId('token-days')).toHaveValue('90')
-  await page.getByTestId('token-scope-some').check()
-  await page.locator(`[data-testid="token-folder"][data-folder="${home}"]`).check()
-  await page.getByTestId('token-make').click()
-  await expect(page.getByTestId('tokens-made')).toContainText('only this once')
-  const token = (await page.getByTestId('tokens-secret').textContent())!.trim()
+  await page.getByTestId('api-keys-new').click()
+  await page.getByTestId('key-name').fill(`E2E program ${stamp}`)
+  await page.getByTestId('key-right-write').click()
+  await expect(page.getByTestId('key-expiry')).toHaveValue('90')
+  await page.getByTestId('key-areas-some').click()
+  await page.getByTestId(`key-area-${home}`).check()
+  await page.getByTestId('key-submit').click()
+  await expect(page.getByTestId('key-made')).toContainText('this once only')
+  const token = (await page.getByTestId('key-secret').locator('input').inputValue()).trim()
   expect(token).toMatch(/^nn_api_/)
   const auth = { Authorization: `Bearer ${token}` }
-  const row = page.getByTestId('token-row').filter({ hasText: `E2E program ${stamp}` })
-  await expect(row.getByTestId('token-meta')).toContainText('read and write · API · 1 folder')
-  await expect(row.getByTestId('token-expiry')).toContainText('Expires on')
+  const row = page.locator('[data-card="api-keys"] tr[data-testid="key-row"]').filter({ hasText: `E2E program ${stamp}` })
+  await expect(row).toContainText('Read and write')
+  await expect(row).toContainText(`E2E home ${stamp}`)
+  await expect(row).toContainText('Expires on')
 
   const listed = await (await page.request.get('/api/v1/notes', { headers: auth })).json()
   expect(listed.notes.map((note: { id: string }) => note.id)).toEqual([id])
@@ -63,8 +63,8 @@ test('NOTES-25 AC-1 AC-2 AC-7 AC-8 AC-9 AC-10 a token for one folder reads, sear
   expect(fromPage.status()).toBe(403)
 
   await page.goto('/settings/connections')
-  await row.getByTestId('token-revoke').click()
-  await page.getByTestId('tokens-revoke-confirm').click()
+  await row.getByTestId('key-revoke').click()
+  await page.getByTestId('key-revoke-dialog').getByRole('button', { name: 'Revoke' }).click()
   await expect(row).toHaveCount(0)
   expect((await page.request.get('/api/v1/me', { headers: auth })).status()).toBe(401)
 })
@@ -80,7 +80,7 @@ test('NOTES-25 AC-25 the description loads from this server only and offers no T
     if (message.type() === 'error') problems.push(message.text())
   })
   await page.goto('/settings/connections')
-  await expect(page.getByTestId('tokens-docs')).toHaveAttribute('href', '/api/v1/docs')
+  await expect(page.getByTestId('api-keys-docs')).toHaveAttribute('href', '/api/v1/docs')
   await page.goto('/api/v1/docs')
   await expect(page.locator('.swagger-ui')).toBeVisible()
   await expect(page.locator('.opblock').first()).toBeVisible()
@@ -94,16 +94,21 @@ test('NOTES-25 AC-5 the operator switches the API off and on again', async ({ pa
   const made = await page.request.post('/api/tokens', { data: { name: `E2E switch ${Date.now()}`, level: 'read' }, headers: TAB })
   const token = (await made.json()).token as string
   const auth = { Authorization: `Bearer ${token}` }
+  // The switch is in the card "Interfaces" of Server › General (the shared key module since the settings pass).
   await page.goto('/settings/general')
-  const toggle = page.getByRole('switch', { name: 'API for members' })
+  const toggle = page.locator('[data-card="interfaces"]').getByRole('checkbox', { name: 'Programming interface (API) for members' })
   await expect(toggle).toBeChecked()
-  await toggle.uncheck()
+  // The box follows the server's answer (it is held while the change is on its way).
+  await toggle.click()
+  await expect(toggle).not.toBeChecked()
   await expect.poll(async () => (await page.request.get('/api/v1/me', { headers: auth })).status()).toBe(403)
   await page.goto('/settings/connections')
-  await expect(page.getByTestId('tokens-off')).toBeVisible()
-  await expect(page.getByTestId('tokens-new')).toBeDisabled()
+  await expect(page.getByTestId('api-keys-off')).toBeVisible()
+  await expect(page.getByTestId('api-keys-new')).toBeDisabled()
   await page.goto('/settings/general')
-  await page.getByRole('switch', { name: 'API for members' }).check()
+  const again = page.locator('[data-card="interfaces"]').getByRole('checkbox', { name: 'Programming interface (API) for members' })
+  await again.click()
+  await expect(again).toBeChecked()
   await expect.poll(async () => (await page.request.get('/api/v1/me', { headers: auth })).status()).toBe(200)
 })
 
@@ -112,15 +117,16 @@ test('NOTES-25 AC-27 the operator sees the token of an account and blocks it', a
   const made = await page.request.post('/api/tokens', { data: { name, level: 'read' }, headers: TAB })
   const token = (await made.json()).token as string
   await page.goto('/settings/accounts')
-  const row = page.getByTestId('all-token-row').filter({ hasText: name })
+  const row = page.locator('[data-card="all-api-keys"] tr[data-testid="all-keys-row"]').filter({ hasText: name })
   await expect(row).toBeVisible()
   await expect(page.locator('body')).not.toContainText(token)
-  await row.getByTestId('all-token-block').click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Block' }).click()
-  await expect(row.getByTestId('all-token-blocked')).toBeVisible()
+  await row.getByTestId('all-keys-block').click()
+  await page.getByTestId('all-keys-block-dialog').getByRole('button', { name: 'Lock' }).click()
+  await expect(row).toHaveAttribute('data-blocked', 'true')
+  await expect(row.getByTestId('all-keys-unblock')).toBeVisible()
   expect((await page.request.get('/api/v1/me', { headers: { Authorization: `Bearer ${token}` } })).status()).toBe(401)
   await page.goto('/settings/connections')
-  await expect(page.getByTestId('token-row').filter({ hasText: name })).toContainText('Blocked by the operator')
+  await expect(page.locator('[data-card="api-keys"] tr[data-testid="key-row"]').filter({ hasText: name })).toContainText('Locked by the operator')
 })
 
 test('NOTES-25 AC-14 AC-16 AC-17 AC-22 a program makes a note, appends and replaces while it is open', async ({ page }) => {

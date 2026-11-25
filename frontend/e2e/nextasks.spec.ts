@@ -105,7 +105,7 @@ async function connect(page: Page): Promise<void> {
   if (now.connected && now.url === address) return
   if (now.connected) expect((await page.request.delete('/api/nextasks', { headers: TAB })).status()).toBe(204)
   await page.goto('/settings/connections')
-  const card = page.locator('#nextasks')
+  const card = page.locator('[data-card="nextasks"]')
   await card.getByLabel('Address of nextasks').fill(address)
   await card.getByLabel('API key').fill(TOKEN)
   await card.getByTestId('nextasks-connect').click()
@@ -176,11 +176,12 @@ test('NOTES-19 EC-2 EC-4 three lines become three tasks; a task deleted in nexta
 test('NOTES-19 the card folds as in nextime; areas and lists chosen and a standard list decide what the sending offers', async ({ page }) => {
   await connect(page)
   await page.goto('/settings/connections')
-  const card = page.locator('#nextasks')
-  // Folded to its head: nextasks' logo, "connected" and the address; the head opens it by keyboard.
-  const head = card.getByTestId('card-fold')
+  const card = page.locator('[data-card="nextasks"]')
+  // Folded to its head (the ui kit's Collapsible as a card): nextasks' logo, "connected" and the address; the head
+  // opens it by keyboard.
+  const head = card.locator('[data-part="collapsible-head"]')
   await expect(head).toHaveAttribute('aria-expanded', 'false')
-  await expect(card.getByTestId('card-logo')).toHaveAttribute('src', '/apps/nextasks.svg')
+  await expect(card.locator('img').first()).toHaveAttribute('src', '/apps/nextasks.svg')
   await expect(card.getByTestId('nextasks-summary')).toContainText(home!)
   await head.focus()
   await page.keyboard.press('Enter')
@@ -199,7 +200,7 @@ test('NOTES-19 the card folds as in nextime; areas and lists chosen and a standa
   await expect(card.getByLabel('Standard list')).toHaveValue(SHOPPING)
   // Kept at the server: drawn again, the card stays open (this device) and shows the same choice.
   await page.reload()
-  await expect(card.getByTestId('card-fold')).toHaveAttribute('aria-expanded', 'true')
+  await expect(card.locator('[data-part="collapsible-head"]')).toHaveAttribute('aria-expanded', 'true')
   await expect(card.getByLabel('Standard list')).toHaveValue(SHOPPING)
   // The sending offers the shopping list alone, chosen first.
   const id = await newNote(page, 'Oat milk')
