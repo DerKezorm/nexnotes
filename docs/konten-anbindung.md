@@ -12,7 +12,7 @@ sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adres
 ## 0. Was gebaut ist / was fehlt
 
 Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten`: `konten` 0.3.7 (`2b4e7e4`), `oidc` 1.1.0,
-`post` 0.1.1, kopiert mit `tools/sync.py copy`. App-Version unverändert 1.0.1.
+`post` 0.1.1, kopiert mit `tools/sync.py copy`. App-Version 1.1.0 (Release vorbereitet am 25.11.2026, noch nicht getaggt).
 
 **Gebaut (Backend):**
 

@@ -10,7 +10,7 @@ soon on iPhone and iPad.
 
 nexnotes has a calm look of its own: honey as the one accent, notes on a quiet paper, light and dark.
 
-**1.0.1** is the first public release. Keep backups all the same, see [Backup](#backup).
+**1.1.0** is the current release. Keep backups all the same, see [Backup](#backup).
 
 ![A recipe note with a photo and a checklist, beside the tiles, the folders and the list of the folder](docs/screenshots/note-dark.png)
 
@@ -78,8 +78,9 @@ view at a time and installs from the browser as an app.*
   what another app shares lands in the inbox.
 - **A guide as the first content**: every account starts with a folder "Guide" that explains nexnotes with pictures,
   in its own language.
-- **Accounts** by invitation only, a second factor (TOTP with recovery codes), profile pictures, sign-in through any
-  number of OpenID Connect providers side by side.
+- **Accounts** by invitation only, sign-in with username or email, passkeys, a second factor (TOTP with recovery
+  codes), a list of the devices you are signed in on, a forgotten password by mail, profile pictures, sign-in through
+  any number of OpenID Connect providers side by side.
 - **For the operator**: backups every night, to download, upload and restore; a log in four levels; a page that says
   what nexnotes takes on the disk; switches for read links, link previews, the API, MCP and password sign-in.
 - **Languages**: English and German, plus languages of your own as JSON files.
@@ -105,7 +106,7 @@ services:
 ```
 
 Then `docker compose up -d`. Images for `linux/amd64` and `linux/arm64` are on the GitHub Container Registry, one tag
-per release (`1.0.1`, also `1.0`) and `latest`. The [docker-compose.yml](docker-compose.yml) in this repository has the same service
+per release (`1.1.0`, also `1.1`) and `latest`. The [docker-compose.yml](docker-compose.yml) in this repository has the same service
 with every option explained; it builds from source with `docker compose up -d --build`.
 
 Open `http://<your-host>:8570`. The first account you create there becomes the operator. It needs the **setup code**
@@ -117,6 +118,12 @@ docker logs nexnotes
 
 To choose the code yourself, set `NEXNOTES_SETUP_TOKEN`. Further accounts come by invitation, under
 **Settings › Server › Accounts**.
+
+Locked out as the operator? A link to set a new password comes from inside the container:
+
+```
+docker exec -u nexnotes nexnotes python -m app.emergency reset-link <username or email>
+```
 
 ## Behind a reverse proxy
 
@@ -196,7 +203,8 @@ Make a backup first (see above). What changed is in the release notes.
 | `NEXNOTES_DATA_DIR` | `/data` | Database, attachments, backups, exports, logs, languages |
 | `NEXNOTES_PUBLIC_URL` | from the request | The address people use, see above. The setting in the interface wins when set |
 | `NEXNOTES_TRUSTED_PROXIES` | none | Reverse proxies whose `X-Forwarded-For` and `X-Forwarded-Proto` are believed, comma separated |
-| `NEXNOTES_SETUP_TOKEN` | made at start | The code the first account needs |
+| `NEXNOTES_SETUP_TOKEN` | made at start | The code the first account needs, at least 16 characters (a shorter one is ignored, the log says so) |
+| `NEXNOTES_SECOND_FACTOR_OFF` | none | Emergency only: `true` asks nobody for a second factor (passkey or code) until it is removed. The log warns while it is set |
 | `NEXNOTES_SECRET_KEY` | `secret.key`, made at the first start | Protects server-side secrets; when set, it wins over `secret.key` |
 | `NEXNOTES_OPERATOR_NETWORKS` | none | Networks the operator's settings may be changed from, comma separated. Empty: anywhere |
 | `NEXNOTES_SESSION_DAYS` | `30` | A browser stays signed in at most this many days (1 to 3650) |

@@ -3,6 +3,54 @@
 All notable changes to nexnotes. The format follows Keep a Changelog; the
 project uses semantic versioning.
 
+## 1.1.0 – 2026-11-25
+
+Accounts, sign-in and mail are built anew, the same way as in the other nex apps. Your notes are not touched.
+
+### Added
+
+- **A username of your own.** You choose it when you set nexnotes up or accept an invitation, and you can change it
+  later in your profile.
+- **Sign in with your username or your email address.**
+- **Passkeys**: sign in with your fingerprint, your face or your device's PIN, without a password. A passkey also
+  counts as the second step after the password.
+- **"Stay signed in"** on the sign-in page. Without it, nexnotes signs you out when the browser closes, after
+  12 hours at the latest.
+- **Your signed-in devices** under Security: where you are signed in, with a sign-out for each one or for all others
+  at once.
+- **Forgot your password?** nexnotes mails you a link, when the server can send mail.
+- **A mail when your account signs in somewhere new** (you can switch it off).
+- **A new email address counts once you confirm it** with the link nexnotes mails to it (when the server can send
+  mail).
+- **A profile picture from your sign-in provider**, as long as you have not set one yourself.
+- **Operator tools**: rename accounts, change display names and remove addresses in the account list, which also
+  marks addresses that two accounts share. A password link for an account can go out by mail. The mail settings take
+  a sender name, warn about a connection without encryption and show how the last mail went. Passkeys can be
+  switched off for the whole server.
+
+### Changed
+
+- The account pages (profile, security, setup, invitation, sign-in) have a new, calmer layout.
+- Wrong passwords and codes slow down whoever guesses at every door: after five failed tries, the next one has to
+  wait.
+- Mails that cannot be sent at once are tried again later.
+- Display names are unique.
+- New authenticators come with ten recovery codes instead of eight.
+
+### For the operator
+
+- **Nothing to do for an update.** Everybody stays signed in, paired devices and API tokens keep working, and
+  everybody who signed in with their email address keeps doing so. The one exception: an address that two accounts
+  share signs neither of them in; they use their username, and the account list shows which ones.
+- **The setup code is only for a new server without any account.** A running installation never asks for it. A code
+  you set yourself in `NEXNOTES_SETUP_TOKEN` needs at least 16 characters; a shorter one is ignored, and the log says
+  so.
+- **When the second factor locks people out**, set `NEXNOTES_SECOND_FACTOR_OFF=true` and restart: nobody is asked
+  for a second factor until you remove it again. The log warns while it is set.
+- **When the operator has lost the password**,
+  `docker exec -u nexnotes nexnotes python -m app.emergency reset-link <username or email>` prints a link to set a
+  new one.
+
 ## 1.0.1 – 2026-11-24
 
 The first published image.
