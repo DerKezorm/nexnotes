@@ -57,7 +57,7 @@ from ..vendor.nexkonten import login as konten_login
 from ..vendor.nexkonten import profiles, resets
 from ..vendor.nexkonten import sessions as konten_sessions
 from ..vendor.nexkonten import setup as konten_setup
-from ..vendor.nexkonten.brake import BRAKE
+from ..vendor.nexkonten.brake import BRAKE, DOOR_FORGOT, door_key
 from ..vendor.nexoidc import providers
 
 logger = logging.getLogger("nexnotes.auth")
@@ -403,6 +403,8 @@ def login(payload: LoginIn, request: Request, response: Response, db: DbSession)
             path="/api/auth",
         )
         logger.info("Password accepted, second factor waiting name=%s", account.name)
+        # The answer of 1.0.1 stays as it was; ``code: false`` is the module's ``next`` = ``passkey`` (the dialog
+        # "Session expired" reads it the same way, ``sessionExpiredParts``).
         answer: dict[str, Any] = {"second_factor": True}
         if store.passkeys_of(account.id):
             # The code step offers "Use a passkey" (only then: the answer of 1.0.1 stays as it was).
@@ -418,26 +420,25 @@ def login(payload: LoginIn, request: Request, response: Response, db: DbSession)
 #: Answered at once, the same whatever was typed: the search, the link and the mail run after the answer.
 @router.post("/auth/forgot", status_code=202, summary="Forgot your password? A link by mail (with a mail server)")
 def forgot(payload: ForgotIn, request: Request, db: DbSession) -> dict[str, Any]:
-    keys = konten_login.attempt_key(KontenStore(db), payload.name, client_ip(request))
-    wait = BRAKE.claim(keys)
-    if wait:
-        raise too_many(wait)
-    if settings_service.get(db, "password_login") and kontenpost.can_mail(db):
-        typed = payload.name
+    # The requests of one sender count at the module's brake (``forgot:<sender>``, ten free, konten 0.3.4), the same
+    # for every input and also without a mail server; the account counts in the worker (``mail:<id>``).
+    sender = client_ip(request)
+    typed = payload.name
 
-        def send(mail: nexkonten.Mail) -> None:
-            from ..db import SessionLocal
+    def send(mail: nexkonten.Mail) -> None:
+        from ..db import SessionLocal
 
-            with SessionLocal() as own:
-                if not kontenpost.queue(own, mail):
-                    raise RuntimeError("the mail did not reach the outbox")
+        with SessionLocal() as own:
+            if not kontenpost.queue(own, mail):
+                raise RuntimeError("the mail did not reach the outbox")
 
-        resets.forgot_in_background(
-            typed,
-            open_store=_own_store,
-            send=send,
-            later=_later,
-        )
+    try:
+        if settings_service.get(db, "password_login") and kontenpost.can_mail(db):
+            resets.forgot_in_background(typed, open_store=_own_store, send=send, later=_later, sender=sender)
+        else:
+            nexkonten.common.counted((door_key(DOOR_FORGOT, sender),))
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
     return {"sent": True}
 
 

@@ -250,6 +250,9 @@ def test_the_brake_slows_a_guessing_sender(client: TestClient, operator: Account
     for _ in range(totp.MAX_ATTEMPTS):
         code_step(client, "000000")
     password_step(client)
+    # The shared module counts every code of the account (``code:<account>``, konten 0.3.4): five free, the sixth
+    # wrong one waits.
+    assert code_step(client, "000000").status_code == 401
     braked = code_step(client, "000000")
     assert braked.status_code == 429 and braked.json()["detail"]["code"] == "too_many_attempts"
     assert "retry-after" in braked.headers
@@ -417,3 +420,30 @@ def test_accounts_from_a_provider_bring_their_own_second_factor(client: TestClie
     assert other.get("/api/oidc/me").status_code == 200
     with SessionLocal() as db:
         assert db.scalar(select(Account.totp_secret_enc).where(Account.name == "idp-user")) == ""
+
+
+def test_a_waiting_setup_shows_the_same_qr_code_again(client: TestClient, operator: Account) -> None:
+    """konten 0.3.4 (``factor.pending_setup``): after a reload the page gets the same secret and QR code back, until
+    a code confirms it; nothing waits before ``begin`` and after the confirmation."""
+    assert client.get("/api/auth/totp/setup").json() == {"waiting": False}
+    begun = client.post("/api/auth/totp/begin").json()
+    again = client.get("/api/auth/totp/setup").json()
+    assert again["waiting"] is True
+    assert (again["secret"], again["uri"], again["qr_svg"]) == (begun["secret"], begun["uri"], begun["qr_svg"])
+    assert again["expires_at"] == begun["expires_at"] and begun["expires_at"]
+    confirmed = client.post("/api/auth/totp/confirm", json={"code": current_code(begun["secret"]), "password": PASSWORD})
+    assert confirmed.status_code == 200, confirmed.text
+    assert client.get("/api/auth/totp/setup").json() == {"waiting": False}
+
+
+def test_turning_it_off_goes_through_the_module_with_its_brake(client: TestClient, operator: Account) -> None:
+    """konten 0.3.5 (``factor.disable_totp``): a wrong password counts at the module's brake, the right one turns
+    the factor off and the next sign-in asks no code."""
+    enrol(client)
+    wrong = client.post("/api/auth/totp/disable", json={"password": "not the password at all"})
+    assert wrong.status_code == 401 and wrong.json()["detail"]["code"] == "wrong_password"
+    done = client.post("/api/auth/totp/disable", json={"password": PASSWORD})
+    assert done.status_code == 200 and done.json()["two_factor"] is False
+    sign_out(client)
+    answer = client.post("/api/auth/login", json={"name": "tester", "password": PASSWORD})
+    assert answer.status_code == 200 and "second_factor" not in answer.json()

@@ -27,7 +27,6 @@ from .oidc_helpers import FakeProvider, configure, error_in, fresh_browser, loca
 
 provider = oidc_helpers.provider
 #: Invitations need the public address (konten 0.3.2).
-pytestmark = pytest.mark.usefixtures("public_address")
 
 GOOD = "twelve chars"  # exactly 12
 SHORT = "eleven char"  # exactly 11

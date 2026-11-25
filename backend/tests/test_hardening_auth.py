@@ -229,7 +229,6 @@ def test_the_brake_forgets_after_an_hour_and_keeps_its_table_small(monkeypatch: 
 # --- Invitations and the operator's network ---------------------------------------------------------------------------
 
 
-@pytest.mark.usefixtures("public_address")
 def test_trying_taken_addresses_on_an_invitation_is_braked(client: TestClient, operator: object) -> None:
     for name in ("anna", "bob", "carl", "dora", "emil", "fred", "gina", "hans", "ida"):
         make_account(name)

@@ -81,8 +81,8 @@ def _view(invite: Invite, db: DbSession) -> dict[str, Any]:
 
 
 def _link(db: DbSession, request: Request, token: str) -> str:
-    base = settings_service.public_url(db) or str(request.base_url).rstrip("/")
-    return f"{base}/invite/{token}"
+    """The public address, else the one the operator opened nexnotes under (konten 0.3.5, ``invites.invite_link``)."""
+    return invites.invite_link(settings_service.public_url(db), "/invite/", token, request_base=str(request.base_url))
 
 
 @router.get("/invites", summary="Open invitations (operator)")
@@ -108,7 +108,7 @@ def invite(payload: InviteIn, request: Request, operator: OperatorAccount, db: D
     try:
         email, shown = invites.invite_values(
             KontenStore(db), email=email, display_name=payload.display_name,
-            public_url=settings_service.public_url(db),
+            public_url=settings_service.public_url(db), request_base=str(request.base_url),
         )
     except nexkonten.AccountError as exc:
         raise fail(exc) from exc

@@ -497,7 +497,6 @@ def test_notes7_ac7_a_new_account_gets_open_checklists_and_recently_edited(clien
         assert left[0]["id"] == recent["id"]
 
 
-@pytest.mark.usefixtures("public_address")
 def test_notes7_ac7_an_invited_account_gets_them_too(client, operator):
     link = client.post("/api/invites", json={}).json()["link"]
     with new_client() as stranger:

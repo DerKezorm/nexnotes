@@ -21,8 +21,9 @@ from .db import SessionLocal, get_db
 from .errors import detail, error
 from .models import OPERATOR, SIGN_IN_PASSWORD, TOKEN_DEVICE, AuthSession, OidcLink, OidcProvider, utcnow
 from .models import Account as AccountRow
-from .security import SESSION_COOKIE, account_out, brake, hash_token, session_account, session_owner
+from .security import SESSION_COOKIE, account_out, hash_token, session_account, session_owner
 from .services import accounts, apitokens, logs, totp
+from .vendor.nexkonten.brake import BRAKE, DOOR_CONFIRM, door_key
 from .vendor.nexkonten.common import FRESH_SIGN_IN_MINUTES, fresh_sign_in
 
 DbSession = Annotated[Session, Depends(get_db)]
@@ -124,7 +125,9 @@ def client_ip(request: Request) -> str:
 
 
 #: What an account that must set up its second factor may still reach: itself, the way out, and the setup.
-SETUP_ONLY_PATHS = {"/api/auth/me", "/api/auth/logout", "/api/auth/totp/begin", "/api/auth/totp/confirm"}
+SETUP_ONLY_PATHS = {
+    "/api/auth/me", "/api/auth/logout", "/api/auth/totp/begin", "/api/auth/totp/setup", "/api/auth/totp/confirm",
+}
 
 
 #: What a paired device's token never reaches (NOTES-24): tokens and connected programs, the second factor, the
@@ -226,32 +229,36 @@ OperatorAccount = Annotated[AccountRow, Depends(require_operator)]
 # --- The password once more, while signed in ------------------------------------------------------------------------
 #
 # Changing the password or linking the account to a provider asks for the password again, and a wrong answer counts
-# the way it does at sign-in: otherwise a stolen cookie would be a place to guess without limit.
+# the way it does at sign-in: otherwise a stolen cookie would be a place to guess without limit. Since konten 0.3.4
+# the count is the shared module's (``confirm:<account>``, five free), the same the module's own doors use: a route
+# of nexnotes' own and one of the module never count apart.
 
 
-def _reauth_key(request: Request) -> str:
-    return "reauth:" + client_ip(request)
+def _reauth_keys(account: AccountRow) -> tuple[str, ...]:
+    return (door_key(DOOR_CONFIRM, account.id),)
 
 
 def reauth_guard(request: Request, account: AccountRow) -> None:
+    """One password typed to confirm: refused while the account is locked or its count waits; counted as a failure
+    until ``reauth_succeeded`` takes it back."""
     if accounts.is_locked(account):
         raise error("account_locked", "Too many failed attempts. Try again later.", 429)
-    wait = brake.wait_seconds(_reauth_key(request))
-    if wait:
+    wait = BRAKE.claim(_reauth_keys(account))
+    if wait > 0:
+        seconds = max(1, int(wait + 0.999))
         raise HTTPException(
             status_code=429,
-            detail=detail("too_many_attempts", "Too many attempts. Try again later.", retry_after=wait),
-            headers={"Retry-After": str(wait)},
+            detail=detail("too_many_attempts", "Too many attempts. Try again later.", retry_after=seconds),
+            headers={"Retry-After": str(seconds)},
         )
 
 
 def reauth_failed(request: Request, db: Session, account: AccountRow) -> None:
-    brake.failed(_reauth_key(request))
     accounts.note_failure(db, account)
 
 
 def reauth_succeeded(request: Request, db: Session, account: AccountRow) -> None:
-    brake.succeeded(_reauth_key(request))
+    BRAKE.succeeded(_reauth_keys(account))
     accounts.note_success(db, account)
 
 

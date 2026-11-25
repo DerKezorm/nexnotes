@@ -26,8 +26,8 @@ from ..services.accounts import AccountError
 from ..services.konten_store import KontenStore
 from ..services.oidc_store import linked_providers
 from ..vendor import nexkonten
+from ..vendor.nexkonten import invites, profiles, resets
 from ..vendor.nexkonten import login as konten_login
-from ..vendor.nexkonten import profiles, resets
 from .auth import account_view, fail
 
 logger = logging.getLogger("nexnotes.auth")
@@ -230,8 +230,9 @@ def reset_link(
             resets.reset_mail_failed(KontenStore(db), row.id)
             raise error("mail_failed", "The mail server did not take the mail.", 502)
         return {"link": None, "sent": True, "expires_at": made.expires_at.isoformat()}
-    base = settings_service.public_url(db) or str(request.base_url).rstrip("/")
-    return {"link": f"{base}/reset/{made.token}", "sent": False, "expires_at": made.expires_at.isoformat()}
+    link = invites.invite_link(settings_service.public_url(db), "/reset/", made.token,
+                               request_base=str(request.base_url))
+    return {"link": link, "sent": False, "expires_at": made.expires_at.isoformat()}
 
 
 @router.put("/{account_id}/name", summary="Give an account another username")

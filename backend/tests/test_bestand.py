@@ -341,6 +341,32 @@ def test_a_recovery_code_still_replaces_the_app(bestand, konto):
     assert ich(klient)["name"] == _name(konto)
 
 
+def test_a_no_thanks_of_1_0_1_still_holds_for_that_address(bestand):
+    """konten 0.3.4: "No, thanks" to an offered address holds for good (``Account.declined_email``); nexnotes keeps it
+    in its column of 1.0.1, ``provider_email_off``. What 1.0.1 wrote there still keeps the same address from coming
+    back; another address is offered, with the provider's name."""
+    from app.services.konten_store import KontenStore
+    from app.vendor import nexkonten
+
+    konto = OFFEN[0]
+    with SessionLocal() as db:
+        row = db.query(Account).filter(Account.name == konto["name"].lower()).one()
+        # As 1.0.1 left a declined offer: the address in ``provider_email_off``, no offer standing.
+        row.provider_email, row.provider_email_off = "", "alt@example.org"
+        db.commit()
+        account_id = row.id
+    with SessionLocal() as db:
+        store = KontenStore(db)
+        assert store.get_account(account_id).declined_email == "alt@example.org"
+        assert nexkonten.profiles.provider_email(store, account_id, "alt@example.org", provider="Pocket ID") == ""
+        assert store.get_account(account_id).offered_email == ""
+        assert nexkonten.profiles.provider_email(store, account_id, "neu@example.org", provider="Pocket ID") == "offered"
+        db.commit()
+    with SessionLocal() as db:
+        seen = KontenStore(db).get_account(account_id)
+        assert (seen.offered_email, seen.offered_email_provider) == ("neu@example.org", "Pocket ID")
+
+
 def test_a_blocked_account_still_hears_it_only_after_its_password(bestand):
     konto = next(k for k in KONTEN if k.get("gesperrt"))
     for eingabe in (_name(konto), konto["email"]):

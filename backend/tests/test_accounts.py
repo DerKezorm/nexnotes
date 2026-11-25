@@ -168,7 +168,8 @@ def test_changing_the_password_ends_the_other_sessions(client: TestClient) -> No
 def test_a_wrong_current_password_counts_like_a_wrong_sign_in(client: TestClient) -> None:
     anna = make_account("anna")
     sign_in(client, anna)
-    for _ in range(5):
+    # The shared module's count (``confirm:<account>``, konten 0.3.4): five free, the sixth wrong one waits.
+    for _ in range(6):
         client.put("/api/auth/password", json={"current": "guess guess guess", "new": GOOD})
     held = client.put("/api/auth/password", json={"current": PASSWORD, "new": GOOD})
     assert held.status_code == 429
@@ -226,7 +227,6 @@ def test_server_secrets_are_encrypted_and_bound_to_the_key(monkeypatch) -> None:
     assert decrypt_secret(sealed) == ""
 
 
-@pytest.mark.usefixtures("public_address")
 def test_an_address_is_taken_once_whatever_its_case(client: TestClient, operator: Account) -> None:
     link = client.post("/api/invites", json={}).json()["link"]
     token = link.rsplit("/", 1)[1]

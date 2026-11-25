@@ -106,6 +106,8 @@ class Account(Base):
     #: takes it only when it says so); ``provider_email_off``: the address the account said "don't ask again" to.
     provider_email: Mapped[str] = mapped_column(String(255), default="", server_default="")
     provider_email_off: Mapped[str] = mapped_column(String(255), default="", server_default="")
+    #: The name of the provider whose address is offered, as on its button (konten 0.3.4, ``offered_email_provider``).
+    provider_email_from: Mapped[str] = mapped_column(String(80), default="", server_default="")
     #: The interface language chosen under "My account"; empty: the browser's. Travels to every device.
     language: Mapped[str] = mapped_column(String(16), default="")
     #: The browser's language at the last sign-in: what a mail to the account is written in while ``language`` is

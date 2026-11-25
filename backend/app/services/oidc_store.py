@@ -120,17 +120,18 @@ def address_taken(db: Session, address: str, own_id: int) -> bool:
     return found is not None
 
 
-def from_provider(db: Session, account: Account, raw: str | None) -> None:
+def from_provider(db: Session, account: Account, raw: str | None, provider: str = "") -> None:
     """What a provider says about the address at a sign-in or a link (the caller commits), through the shared module
     (``nexkonten.profiles.provider_email``): ``email_verified`` is never read, the address finds nobody. An account
     through providers only follows it (it does not count and is not proven, and an own address stays); an account
     with a password is only offered it and takes it in its profile, with its password, like a change of address. Never
-    an address another account has, never one the account declined."""
+    an address another account has, never one the account declined ("No, thanks" holds for that address for good).
+    ``provider``: the provider's name as on its button, for "Use the address from <provider>?" (konten 0.3.4)."""
     address = clean_address(raw)
     if not address:
         return
     db.flush()
-    nexkonten.profiles.provider_email(KontenStore(db), account.id, address)
+    nexkonten.profiles.provider_email(KontenStore(db), account.id, address, provider=provider)
     db.refresh(account)
 
 
@@ -165,6 +166,7 @@ def links_gone(db: Session, account_id: int) -> None:
         account.email_confirmed = True
         account.email_proven = False
     account.provider_email = ""
+    account.provider_email_from = ""
     account.provider_email_off = ""
 
 
@@ -312,7 +314,8 @@ class SqlStore:
             return
         account = self.db.get(Account, account_id)
         if account is not None:
-            from_provider(self.db, account, email)
+            entry = self.db.get(OidcProvider, provider_id)
+            from_provider(self.db, account, email, provider=entry.label if entry is not None else "")
 
     # --- Accounts --------------------------------------------------------------------------------------------------
 

@@ -9,23 +9,22 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Path, Request, Response
+from fastapi import APIRouter, Path, Request, Response
 from pydantic import BaseModel, Field
 
 from ..deps import (
     Account,
     DbSession,
     OperatorAccount,
-    client_ip,
     confirm_operator,
     reauth_failed,
     reauth_guard,
     reauth_succeeded,
 )
-from ..errors import detail, error
+from ..errors import error
 from ..models import SIGN_IN_PASSWORD
 from ..models import Account as AccountRow
-from ..security import account_out, brake, sessions_ended
+from ..security import account_out, sessions_ended
 from ..services import accounts, kontenpost, totp
 from ..services.konten_store import KontenStore
 from ..vendor import nexkonten
@@ -76,6 +75,12 @@ def _clear_pending_cookie(response: Response) -> None:
 # --- Enrolment --------------------------------------------------------------------------------------------------------
 
 
+def _enrolment(enrolment: factor.Enrolment, name: str) -> dict[str, Any]:
+    uri = totp.provisioning_uri(enrolment.seed, name)
+    expires = enrolment.expires_at.isoformat() if enrolment.expires_at is not None else None
+    return {"secret": enrolment.seed, "uri": uri, "qr_svg": totp.qr_svg(uri), "expires_at": expires}
+
+
 @router.post("/auth/totp/begin", summary="Start enrolling an authenticator app; the seed is shown once")
 def begin(account: Account, db: DbSession) -> dict[str, Any]:
     if account.sign_in != SIGN_IN_PASSWORD:
@@ -84,9 +89,17 @@ def begin(account: Account, db: DbSession) -> dict[str, Any]:
         raise error("totp_enabled", "The second factor is on already. Turn it off first.", 409)
     # The shared module keeps the waiting seed sealed in the database (since 0.3.3): a restart between the QR code
     # and the first code loses nothing.
-    seed = factor.begin_totp(KontenStore(db), account.id, issuer="nexnotes").seed
-    uri = totp.provisioning_uri(seed, account.name)
-    return {"secret": seed, "uri": uri, "qr_svg": totp.qr_svg(uri)}
+    return _enrolment(factor.begin_totp(KontenStore(db), account.id, issuer="nexnotes"), account.name)
+
+
+@router.get("/auth/totp/setup", summary="The authenticator that waits for its first code, once more")
+def waiting_setup(account: Account, db: DbSession) -> dict[str, Any]:
+    """``factor.pending_setup`` (konten 0.3.4): the same QR code and secret as ``begin`` gave while the setup waits
+    (the page was reloaded, another tab), ``{"waiting": false}`` when nothing waits. Reading it changes nothing."""
+    held = factor.pending_setup(KontenStore(db), account.id, issuer="nexnotes")
+    if held is None or account.totp_secret_enc:
+        return {"waiting": False}
+    return {"waiting": True, **_enrolment(held, account.name)}
 
 
 @router.post("/auth/totp/confirm", summary="Finish enrolling: a code from the app and the password")
@@ -120,11 +133,22 @@ def confirm(payload: ConfirmIn, request: Request, account: Account, db: DbSessio
 
 @router.post("/auth/totp/disable", summary="Turn the second factor off; needs the password")
 def disable(payload: PasswordIn, request: Request, account: Account, db: DbSession) -> dict[str, Any]:
+    """Through the shared module only (``factor.disable_totp``, konten 0.3.5): the password counts at its brake, a
+    required factor stays (``factor_required``), a setup that waits ends too."""
     row = _row(db, account)
     if not row.totp_secret_enc:
         raise error("totp_not_enabled", "The second factor is not on.", 409)
-    _check_password(request, db, row, payload.password)
-    _reset(db, row)
+    if row.sign_in != SIGN_IN_PASSWORD:
+        raise error("oidc_account", "This account signs in through OIDC.", 409)
+    try:
+        factor.disable_totp(KontenStore(db), row.id, password=payload.password)
+    except nexkonten.AccountError as exc:
+        db.rollback()
+        raise fail(exc) from exc
+    row.totp_last_step = 0
+    db.commit()
+    totp.forget_account(row.id)
+    db.refresh(row)
     logger.info("Second factor turned off name=%s", row.name)
     return account_view(row)
 
@@ -141,14 +165,6 @@ def new_recovery_codes(payload: PasswordIn, request: Request, account: Account, 
         raise fail(exc) from exc
     db.refresh(row)
     return {"recovery_codes": codes, "account": account_view(row)}
-
-
-def _reset(db: DbSession, row: AccountRow) -> None:
-    row.totp_secret_enc = ""
-    row.totp_recovery = ""
-    row.totp_last_step = 0
-    db.commit()
-    totp.forget_account(row.id)
 
 
 class FactorResetIn(OperatorConfirmIn):
@@ -221,14 +237,6 @@ def login_code(payload: CodeIn, request: Request, response: Response, db: DbSess
     if token is None or pending is None:
         _clear_pending_cookie(response)
         raise error("second_factor_expired", "Start again with your password.", 401)
-    key = "totp:" + client_ip(request)
-    wait = brake.wait_seconds(key)
-    if wait:
-        raise HTTPException(
-            status_code=429,
-            detail=detail("too_many_attempts", "Too many attempts. Try again later.", retry_after=wait),
-            headers={"Retry-After": str(wait)},
-        )
     row = db.get(AccountRow, pending.account_id)
     if row is None or not (row.totp_secret_enc or totp.load_recovery(row.totp_recovery)):
         # Nothing a code could answer (an account with passkeys only answers with one, ``routers/passkeys``).
@@ -266,13 +274,15 @@ def login_code(payload: CodeIn, request: Request, response: Response, db: DbSess
             "The second factor cannot be checked on this installation. Ask the operator to reset it.",
             401,
         ) from None
-    except nexkonten.AccountError:
+    except nexkonten.AccountError as exc:
+        if exc.code == "too_many_attempts":
+            # The module counts every code of the account (``code:<id>``, konten 0.3.4), across waiting sign-ins.
+            raise fail(exc) from exc
         accepted = False
         method = ""
     db.refresh(row)
     used_recovery = method == "recovery"
     if not accepted:
-        brake.failed(key)
         accounts.note_failure(db, row)
         still_pending = totp.fail_pending(token) and not accounts.is_locked(row)
         logger.warning("Second factor failed name=%s", row.name)
@@ -282,7 +292,6 @@ def login_code(payload: CodeIn, request: Request, response: Response, db: DbSess
             raise error("second_factor_expired", "Too many wrong codes. Start again with your password.", 401)
         raise error("totp_code_wrong", "The code is not right.", 401)
 
-    brake.succeeded(key)
     db.commit()
     accounts.note_success(db, row)
     totp.finish_pending(token)

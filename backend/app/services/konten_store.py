@@ -168,6 +168,10 @@ class KontenStore:
             picture=picture,
             language=row.language or "",
             offered_email=self._offered(row),
+            offered_email_provider=(row.provider_email_from or "") if self._offered(row) else "",
+            # "No, thanks" of the module (0.3.4) is nexnotes' ``provider_email_off`` of 1.0.1: the same address stays
+            # declined.
+            declined_email=row.provider_email_off or "",
         )
 
     @staticmethod
@@ -181,16 +185,20 @@ class KontenStore:
             return ""
         return offer
 
-    def set_offered_email(self, account_id: AccountId, address: str) -> None:
+    def set_offered_email(self, account_id: AccountId, address: str, provider: str = "") -> None:
         row = self._row(account_id)
         if row is None:
             return
-        if address:
-            row.provider_email = address
-        else:
-            # Taken or declined: either way it is not asked again.
-            row.provider_email_off = row.provider_email or ""
-            row.provider_email = ""
+        row.provider_email = address
+        row.provider_email_from = provider[:80] if address else ""
+        self._flush()
+
+    def set_declined_email(self, account_id: AccountId, address: str) -> None:
+        """"No, thanks" for good, for exactly this address (konten 0.3.4), in the column of 1.0.1."""
+        row = self._row(account_id)
+        if row is None:
+            return
+        row.provider_email_off = address
         self._flush()
 
     def count_accounts(self) -> int:

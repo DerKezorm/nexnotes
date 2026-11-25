@@ -6,7 +6,6 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timedelta
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -15,7 +14,6 @@ from app.models import Account, Invite, utcnow
 from app.services import logs
 
 #: Invitations need the public address (konten 0.3.2).
-pytestmark = pytest.mark.usefixtures("public_address")
 
 GOOD = "a long enough password"
 
