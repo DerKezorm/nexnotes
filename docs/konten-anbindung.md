@@ -11,7 +11,7 @@ sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adres
 
 ## 0. Was gebaut ist / was fehlt
 
-Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`0752072`): `konten` 0.3.1, `oidc` 1.1.0,
+Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten`: `konten` 0.3.3 (`e2a5994`), `oidc` 1.1.0,
 `post` 0.1.1, kopiert mit `tools/sync.py copy`. App-Version unverändert 1.0.1.
 
 **Gebaut (Backend):**
@@ -22,7 +22,7 @@ Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`075207
 | Neue Spalten | `accounts.email_confirmed` (1), `email_proven` (0), `avatar_source`, `passkey_handle`, `new_sign_in_mail` (1), `new_password_origin`; `auth_sessions.uid`, `remember` (1), `stage` (`full`), `kind` (`browser`); `invites.display_name`, `invites.mailed` (0); `password_resets.origin` (`operator`) |
 | Neue Tabellen | `models_accounts.py`: `former_names`, `setup_claims`, `email_changes`, `passkeys`, `failed_unknown`, `mail_outbox` |
 | Wanderung | `services/konten_wanderung.py` aus `db.init_db` (Sicherung davor wie bisher): `uid` für alte Sitzungen, eindeutiger Index auf `lower(name)` erst nach Zählen, Indizes auf `lower(email)` und `former_names` |
-| Anmelden | `POST /api/auth/login` über `login.authenticate`, Bremse `BRAKE` mit `attempt_key` (bekannter Browser: eigener Topf, 5 frei, wie 1.0.1), Feld `remember` neu, Sitzung über `sessions.start`, Mail „Neue Anmeldung“ |
+| Anmelden | `POST /api/auth/login` über `login.authenticate`, Bremse `BRAKE` mit `attempt_key` (bekannter Browser: eigener Topf über `known_mark`, 5 frei), Feld `remember` neu, Sitzung über `sessions.start`, Mail „Neue Anmeldung“ |
 | Einrichtung | `POST /api/setup` über `setup.setup` (Feld `name` neu, sonst Vorschlag) |
 | Passwort vergessen | `POST /api/auth/forgot` (`name`), `resets.forgot_in_background`; `GET /api/auth/methods` sagt `forgot_mail`, `passkeys` |
 | Einladung | `GET/POST /api/invite/{token}` über `invite_form`/`accept_invite` (Feld `name` neu), `POST /api/invites` mit `display_name` |
@@ -30,8 +30,8 @@ Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`075207
 | Profil | `PUT /api/me/profile` (`name`, `password` neu), `POST /api/me/email/resend`, `DELETE /api/me/email/pending`, `GET/POST /api/email/{token}`, `PUT /api/me/new-sign-in-mail` |
 | Sitzungen | `GET /api/auth/sessions`, `DELETE /api/auth/sessions/{uid}`, `GET /api/auth/access`, `POST /api/auth/access/disconnect`, `POST /api/auth/access/seen` |
 | Betreiber | `PUT /api/accounts/{id}/name`, `/display-name`, `DELETE /api/accounts/{id}/email`; Liste mit `email_duplicate`; Faktor-Reset über `factor.operator_reset` (Feld `disconnect_devices`) |
-| Zweiter Faktor | Code-Schritt prüft über `factor.check_code` (alte Codes gelten); Einrichten wie 1.0.1 |
-| OIDC 1.1.0 | `services/oidc_store.py`: Namensregeln und belegte Namen aus dem Modul, Anzeigename aus dem Claim, Bild vom Anbieter im Faden, Adresse folgt bei Konten nur über Anbieter (sonst Angebot wie 1.0.1) |
+| Zweiter Faktor | Code-Schritt prüft über `factor.check_code` (alte Codes gelten); Einrichten über `factor.begin_totp`/`confirm_totp` |
+| OIDC 1.1.0 | `services/oidc_store.py`: Namensregeln und belegte Namen aus dem Modul, Anzeigename aus dem Claim, Bild vom Anbieter im Faden, Adresse über `profiles.provider_email` (Konten mit Passwort: nur angeboten) |
 | Mails | `services/post_store.py` (Store über `smtp_*` und `mail_outbox`, Minutenrunde in `main`), `services/kontenpost.py`; Einladung und Testmail über `post` sofort |
 | Alte Fehlerkennungen | `konten_store.OLD_CODES` (`invalid_email`, `name_taken`, `invalid_account_name`) |
 | Passkeys | `routers/passkeys.py`: Liste, Hinzufügen (Passwort bzw. frische Anbieteranmeldung), Entfernen, Anmelden ohne Passwort und Code, an Stelle des Codes einer wartenden Anmeldung; Betreiber-Schalter `passkeys_allowed` |
@@ -39,16 +39,31 @@ Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`075207
 | Mail-Einstellungen | `smtp_sender_name`, `mail_last_*`, `passkeys_allowed` in `GET/PUT /api/settings` |
 | Frontend | `pages/AuthPages.tsx` (Einrichtung, Anmelden mit „Angemeldet bleiben“ und Passkey, `ForgotPage`, `EmailPage`, Einladung, neues Passwort), `pages/settings/AccountTab.tsx` (Profil mit Benutzername, wartender Adresse, Passwortdialog), `pages/settings/SecurityBoxes.tsx` (Passkeys, „Wo du angemeldet bist“, „Diese Geräte haben noch Zugriff“), `AccountsTab.tsx` (Benutzername · E-Mail, doppelte Adresse, Umbenennen, Anzeigename, Adresse entfernen, Reset-Link mit Mail, Faktor-Reset mit Geräten), Server-Karten (Absendername, Warnung ohne Verschlüsselung, letzter Mailstand, Passkey-Schalter); `lib/passkeys.ts`, `lib/errors.ts` mit `accountErrorKey`/`mailErrorKey` |
 | Tests | Vertrag `tests/nexkonten` + `tests/nexpost` (216 grün, 5 übersprungen mit Grund), Test „Bestand“ ohne `xfail` und mit Teil 2 (54 grün: Mailserver, Profilbild, Sitzung von 1.0.1, Authenticator), angepasste App-Tests (Brems-Zahlen des Moduls, Setup-Code ≥ 16 Zeichen, Mailtexte von `post`), vitest `nexkonten.test.ts`, `nexpost.test.ts`, e2e-Texte („Username or email“, Setup-Code der Läufe) |
-| Läufe (25.11.2026) | Backend `pytest -q -n 2`: 1973 grün, 50 übersprungen; `pytest -m timing`: 17 grün; Frontend `vitest --maxWorkers=2`: 880 grün; `npm run build` und `npm run lint` sauber. Die `conftest.py` der Modul-Vertragstests heißen alle `conftest`; `tests/conftest.py` stellt vor jedem Test die nächstgelegene in `sys.modules` (wie nexmail) |
+| Läufe (25.11.2026, nach konten 0.3.3) | Backend `pytest -q -n 2`: 1988 grün, 47 übersprungen; Vertrag `tests/nexkonten` 206 grün, 2 übersprungen (Einladung mit festem Benutzernamen); Frontend `vitest --maxWorkers=2`: 880 grün; `tsc -b` und `npm run lint` sauber. Die `conftest.py` der Modul-Vertragstests heißen alle `conftest`; `tests/conftest.py` stellt vor jedem Test die nächstgelegene in `sys.modules` (wie nexmail); Einladungstests setzen die öffentliche Adresse (Fixture `public_address`) |
 
-**Abweichungen vom Modul (bewusst):** Ein bekannter Browser zählt in einem eigenen Topf (5 frei) statt am Absender:
-so hält auch ein Fremder hinter demselben Router den Besitzer nicht auf (wie 1.0.1, `test_haertung.py`). Konten mit
-Passwort bekommen die Adresse eines Anbieters weiter nur angeboten (wie 1.0.1); übernommen zählt sie. Das
-Einrichten der Authenticator-App bleibt nexnotes' eigenes (Codes werden über `factor.check_code` geprüft).
+**Seit konten 0.3.2/0.3.3 nachgezogen:** Ein Passkey zählt als zweiter Faktor (`Store.second_factor` über
+`factor.state`: ohne „für alle verlangen“ genügt das Passwort, mit dem Schalter ist der Passkey der zweite Schritt,
+Anmeldeantwort `code: false`, die Seite zeigt dann nur „Mit Passkey anmelden“; `totp.factor_missing` zählt Passkeys).
+Bremse: bekannter Browser über `sessions.known_mark` und `BRAKE.claim(keys, browser=…)` (der eigene Topf von 1.0.1 ist
+weg). Authenticator einrichten über `factor.begin_totp`/`confirm_totp`, der halb eingerichtete Schlüssel wartet
+versiegelt in `accounts.totp_pending`/`totp_pending_until` (Kontext `totp-pending`); neue Codes über
+`factor.new_codes` (10 statt 8). Anbieteradresse über `profiles.provider_email`; Konten mit Passwort übernehmen sie im
+Profil mit Passwort („Adresse von <Anbieter> übernehmen?“, `take_offered_email`, mit Mailserver wartet sie auf ihren
+Link), „Nein, danke“ merkt sich die Adresse weiter in `provider_email_off`. Geräteliste mit `language=`, Einladung mit
+`public_url=` (ohne öffentliche Adresse abgelehnt), frische Anmeldung 5 statt 10 Minuten (`common.fresh_sign_in`),
+Passkey-Routen mit `request_url`, Nothammer `NEXNOTES_SECOND_FACTOR_OFF` (Warnung beim Start, Feld
+`second_factor_off`, Hinweis oben in „Mein Konto“ und bei den Anmelde-Einstellungen), Betreiber-Reset mit Übersicht
+(`GET /api/accounts/{id}/totp/reset`) und Haken „Passkeys auch entfernen“ (ab Werk an), auch für Konten nur mit
+Passkey. Vertragsadapter: `required_second_factor` und `reusable_invites` aus statt `skip`.
+
+**Abweichungen vom Modul (bewusst):** Die wartende Anmeldung zwischen Passwort und Code bleibt nexnotes' eigene
+(`totp.start_pending`, Cookie `PENDING_COOKIE`; geprüft wird über `factor.check_code`), weil nexnotes eine eigene
+Sitzungsschicht hat. Geräte bleiben nach einem Reset-Link verbunden (Modul, Entscheidung 25.11.2026); NOTES-2 AC-7 sagt
+anderes und ist anzupassen.
 
 **Fehlt noch:** Sichtprüfung der geänderten Bildschirme (kein Playwright in dieser Runde), die iPhone-App
-(`login` beim Laden auffrischen, Beschriftung „Benutzername“), Passkeys beim Betreiber-Reset in der Kontenliste
-anzeigen.
+(`login` beim Laden auffrischen, Beschriftung „Benutzername“), der Dialog „Sitzung abgelaufen“ kennt keinen
+Passkey-Schritt (ein Konto nur mit Passkey bei „für alle verlangen“ meldet sich dort über die Anmeldeseite an).
 
 ## 1. Bestand heute (1.0.1)
 
