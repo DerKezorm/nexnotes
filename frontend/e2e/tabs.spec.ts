@@ -318,7 +318,7 @@ test('NOTES-8 NOTES-2 two accounts in two browser tabs: the second never sees a 
   await first.bringToFront()
   await first.evaluate(() => document.dispatchEvent(new Event('visibilitychange')))
   await expect(first).toHaveURL(/\/$/, { timeout: 15_000 })
-  await expect(first.getByRole('link', { name: /^Bea · / })).toBeVisible()
+  await expect(first.getByRole('link', { name: /^Bea\b[^·]* · / })).toBeVisible()
   await expect(first.getByTestId('folder-notice')).toContainText(/changes? of the account before (was|were) not saved yet and (is|are) lost\./)
   // The line comes back: still nothing of Jürgen's arrives.
   offline = false
