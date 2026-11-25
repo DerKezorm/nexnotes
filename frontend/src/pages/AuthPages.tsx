@@ -4,11 +4,12 @@
  * blueprint), a forgotten password, accepting an invitation, setting a new password with a link, and confirming a new
  * address. Fields, their order and their words come from the shared account module (`vendor/nexkonten`).
  */
-import { useEffect, useId, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 
 import { ApiError, authApi, emailLinkApi, invitesApi, resetApi, type InviteOffer, type Me, type Methods, type SetupState } from '../api/client'
+import { AccountButton } from '../components/AccountButton'
 import { Logo } from '../components/Logo'
 import { PasswordConfirmField } from '../components/PasswordConfirm'
 import { ProviderButtons } from '../components/ProviderButtons'
@@ -32,6 +33,8 @@ import {
   USERNAME_MAX,
   usernameProblem,
 } from '../vendor/nexkonten/konten'
+import type { ButtonName } from '../vendor/nexkonten/konten'
+import { AuthCard, Button, Checkbox, Field, Notice, TextLink } from '../vendor/nexui'
 
 export function AuthFrame({ title, text, children, footer }: { title: string; text?: string; children: ReactNode; footer?: ReactNode }) {
   useTitle(title)
@@ -42,19 +45,16 @@ export function AuthFrame({ title, text, children, footer }: { title: string; te
         <ThemeSwitcher />
       </header>
       <main className="flex flex-1 items-start justify-center px-4 pt-[6vh] pb-10">
-        <div className="w-full max-w-sm">
-          <div className="rounded-[16px] border border-ink-700 bg-ink-850 p-6 shadow-xl shadow-black/20">
-            <h1 className="text-xl font-bold tracking-tight">{title}</h1>
-            {text && <p className="mt-1 text-sm text-mist-500">{text}</p>}
-            <div className="mt-5">{children}</div>
-          </div>
-          {footer && <p className="mt-3 text-center text-xs text-mist-600">{footer}</p>}
-        </div>
+        <AuthCard title={title} subtitle={text} footer={footer}>
+          {children}
+        </AuthCard>
       </main>
     </div>
   )
 }
 
+/** A field of the screens before signing in: the shared kit's `Field` (label joined by `htmlFor`, hints by
+ * `aria-describedby`), with the value handed over as text. */
 export function AuthField({ label, value, onChange, type = 'text', autoComplete, autoFocus = false, hint, maxLength, name }: {
   label: string
   value: string
@@ -66,37 +66,36 @@ export function AuthField({ label, value, onChange, type = 'text', autoComplete,
   maxLength?: number
   name?: string
 }) {
-  const hintId = useId()
   return (
-    <div className="text-sm">
-      <label className="block">
-        <span className="font-medium">{label}</span>
-        <input
-          type={type}
-          name={name}
-          value={value}
-          autoComplete={autoComplete}
-          autoFocus={autoFocus}
-          maxLength={maxLength}
-          aria-describedby={hint ? hintId : undefined}
-          onChange={(event) => onChange(event.target.value)}
-          className="nn-field mt-1"
-        />
-      </label>
-      {hint && (
-        <span id={hintId} className="mt-1 block text-xs text-mist-500">
-          {hint}
-        </span>
-      )}
-    </div>
+    <Field
+      label={label}
+      type={type}
+      name={name}
+      value={value}
+      autoComplete={autoComplete}
+      autoFocus={autoFocus}
+      maxLength={maxLength}
+      hints={hint ? [hint] : []}
+      onChange={(event) => onChange(event.target.value)}
+    />
   )
 }
 
-function Primary({ children, busy = false }: { children: ReactNode; busy?: boolean }) {
+/** The one button of a screen, as wide as the card: kind and symbol from the module's table (`BUTTONS`). */
+function Primary({ name, children, busy = false }: { name: ButtonName; children: ReactNode; busy?: boolean }) {
   return (
-    <button type="submit" disabled={busy} className="nn-btn nn-btn-accent w-full">
+    <AccountButton name={name} type="submit" busy={busy} wide>
       {children}
-    </button>
+    </AccountButton>
+  )
+}
+
+/** A way back or on, as wide as the card (a link: the screens are pages of their own). */
+function Onward({ to, kind = 'secondary', children }: { to: string; kind?: 'primary' | 'secondary'; children: ReactNode }) {
+  return (
+    <Button kind={kind} icon={kind === 'primary' ? 'ArrowRight' : 'ArrowLeft'} href={to} wide>
+      {children}
+    </Button>
   )
 }
 
@@ -111,19 +110,11 @@ export function troubleOf(error: unknown): NonNullable<Trouble> {
 
 export function Problem({ problem, fromAddress = false }: { problem: Trouble; fromAddress?: boolean }) {
   if (!problem) return null
-  return (
-    <p role="alert" className="rounded-[9px] border border-bad-500/30 bg-bad-500/10 px-3 py-2 text-sm text-bad-500">
-      {fromAddress ? signInErrorText(problem.code) : errorText(problem.code, problem.values)}
-    </p>
-  )
+  return <Notice tone="danger">{fromAddress ? signInErrorText(problem.code) : errorText(problem.code, problem.values)}</Notice>
 }
 
 export function Warning({ children }: { children: ReactNode }) {
-  return (
-    <p role="status" className="rounded-[9px] border border-warn-500/30 bg-warn-500/10 px-3 py-2 text-sm text-warn-500">
-      {children}
-    </p>
-  )
+  return <Notice tone="warn">{children}</Notice>
 }
 
 const codeOf = (error: unknown) => troubleOf(error).code
@@ -187,7 +178,7 @@ export function SetupPage() {
   return (
     <AuthFrame title={t(SETUP_PAGE.title)} text={t(SETUP_PAGE.subtitle)} footer={footer}>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault()
           if (!name.trim()) return setProblem({ code: 'display_name_empty' })
@@ -226,11 +217,11 @@ export function SetupPage() {
         {/* No word about the second factor under the password unless one is required (konten 0.3.6): the first
             account comes before any switch of the operator. */}
         {setupNotes({ factorRequired: false }).map((note) => (
-          <p key={note} className="text-sm text-mist-300">
+          <p key={note} className="m-0 text-sm">
             {t(note)}
           </p>
         ))}
-        <Primary busy={busy}>{t('setup.submit')}</Primary>
+        <Primary name="setupSubmit" busy={busy}>{t('setup.submit')}</Primary>
       </form>
     </AuthFrame>
   )
@@ -320,7 +311,7 @@ export function LoginPage() {
     return (
       <AuthFrame title={t('auth.code.title')} text={codeAsked ? t('auth.code.text') : t('account.passkeysHint')}>
         <form
-          className="space-y-4"
+          className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
             if (code.trim()) void submit()
@@ -330,26 +321,24 @@ export function LoginPage() {
           {codeAsked && (
             <>
               <AuthField label={t('account.code')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus hint={t('account.codeHint')} />
-              <Primary busy={busy}>{t('auth.login.submit')}</Primary>
+              <Primary name="codeSubmit" busy={busy}>{t('auth.login.submit')}</Primary>
             </>
           )}
           {(passkeyStep || !codeAsked) && (
-            <button type="button" disabled={busy} className={codeAsked ? 'nn-btn nn-btn-ghost w-full' : 'nn-btn nn-btn-accent w-full'} onClick={() => void withPasskey()}>
-              {t('account.passkeySignIn')}
-            </button>
+            <AccountButton name="account.passkeySignIn" wide disabled={busy} onClick={() => void withPasskey()} />
           )}
-          <button
-            type="button"
-            className="w-full text-center text-xs text-mist-500 hover:text-mist-300"
-            onClick={() => {
-              void authApi.cancelCode().catch(() => undefined)
-              setStep('password')
-              setCode('')
-              setProblem(null)
-            }}
-          >
-            {t('auth.code.back')}
-          </button>
+          <div className="text-center">
+            <TextLink
+              onClick={() => {
+                void authApi.cancelCode().catch(() => undefined)
+                setStep('password')
+                setCode('')
+                setProblem(null)
+              }}
+            >
+              {t('auth.code.back')}
+            </TextLink>
+          </div>
         </form>
       </AuthFrame>
     )
@@ -365,7 +354,7 @@ export function LoginPage() {
     <AuthFrame title={t('auth.login.title')}>
       {passwordShown ? (
         <form
-          className="space-y-4"
+          className="flex flex-col gap-4"
           onSubmit={(event) => {
             event.preventDefault()
             void submit()
@@ -375,42 +364,31 @@ export function LoginPage() {
           <Problem problem={problem} fromAddress={fromAddress} />
           <AuthField label={t('account.login')} value={name} onChange={setName} autoComplete="username" autoFocus name="email" maxLength={EMAIL_MAX} />
           <AuthField label={t('account.password')} value={password} onChange={setPassword} type="password" autoComplete="current-password" />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={remember} onChange={(event) => setRemember(event.target.checked)} />
-            <span>{t('account.stayIn')}</span>
-          </label>
-          <Primary busy={busy}>{t('auth.login.submit')}</Primary>
-          {methods.forgot_mail ? (
-            <Link to="/forgot" className="nn-btn-quiet block text-sm">
-              {t('account.forgot')}
-            </Link>
-          ) : (
-            <>
-              <button type="button" className="nn-btn-quiet block text-sm" onClick={() => setForgot(!forgot)} aria-expanded={forgot}>
-                {t('account.forgot')}
-              </button>
-              {forgot && <p className="text-xs text-mist-500">{t('account.forgotNoMail')}</p>}
-            </>
-          )}
+          <Checkbox label={t('account.stayIn')} checked={remember} onChange={setRemember} />
+          <Primary name="signIn" busy={busy}>{t('auth.login.submit')}</Primary>
+          <div className="text-center">
+            {methods.forgot_mail ? (
+              <TextLink href="/forgot">{t('account.forgot')}</TextLink>
+            ) : (
+              <TextLink onClick={() => setForgot(!forgot)}>{t('account.forgot')}</TextLink>
+            )}
+          </div>
+          {!methods.forgot_mail && forgot && <p className="m-0 text-xs text-[var(--nexui-text-muted)]">{t('account.forgotNoMail')}</p>}
         </form>
       ) : (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {endedNote}
           <Problem problem={problem} fromAddress={fromAddress} />
         </div>
       )}
-      {passkeyShown && (
-        <button type="button" disabled={busy} className="nn-btn nn-btn-ghost mt-4 w-full" onClick={() => void withPasskey()}>
-          {t('account.passkeySignIn')}
-        </button>
-      )}
+      {passkeyShown && <AccountButton name="account.passkeySignIn" wide disabled={busy} onClick={() => void withPasskey()} />}
       <ProviderButtons providers={providers} next={next} withOr={passwordShown} />
       {!passwordShown && (
-        <button type="button" className="mt-4 w-full text-center text-xs text-mist-500 hover:text-mist-300" onClick={() => setOperatorWay(true)}>
-          {t('oidc.login.operator')}
-        </button>
+        <div className="text-center">
+          <TextLink onClick={() => setOperatorWay(true)}>{t('oidc.login.operator')}</TextLink>
+        </div>
       )}
-      <p className="mt-5 text-center text-xs text-mist-500">{t('auth.login.noAccount')}</p>
+      <p className="m-0 text-center text-xs text-[var(--nexui-text-muted)]">{t('auth.login.noAccount')}</p>
     </AuthFrame>
   )
 }
@@ -427,15 +405,11 @@ export function ForgotPage() {
     void waysIn().then(setMethods)
   }, [])
   if (methods === null) return null
-  const back = (
-    <Link to="/login" className="nn-btn nn-btn-ghost mt-4 flex w-full">
-      {t('auth.backToLogin')}
-    </Link>
-  )
+  const back = <Onward to="/login">{t('auth.backToLogin')}</Onward>
   if (!methods.forgot_mail) {
     return (
       <AuthFrame title={t('account.forgotTitle')}>
-        <p className="text-sm text-mist-400">{t('account.forgotNoMail')}</p>
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t('account.forgotNoMail')}</p>
         {back}
       </AuthFrame>
     )
@@ -443,7 +417,7 @@ export function ForgotPage() {
   if (sent) {
     return (
       <AuthFrame title={t('account.forgotTitle')}>
-        <p role="status" className="text-sm text-mist-400">{t('account.forgotSent')}</p>
+        <Notice tone="ok">{t('account.forgotSent')}</Notice>
         {back}
       </AuthFrame>
     )
@@ -451,7 +425,7 @@ export function ForgotPage() {
   return (
     <AuthFrame title={t('account.forgotTitle')}>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault()
           if (!name.trim()) return
@@ -469,7 +443,7 @@ export function ForgotPage() {
       >
         <Problem problem={problem} />
         <AuthField label={t('account.login')} value={name} onChange={setName} autoComplete="username" autoFocus maxLength={EMAIL_MAX} />
-        <Primary busy={busy}>{t('account.forgotSubmit')}</Primary>
+        <Primary name="account.forgotSubmit" busy={busy}>{t('account.forgotSubmit')}</Primary>
       </form>
       {back}
     </AuthFrame>
@@ -490,10 +464,8 @@ export function EmailPage() {
   if (state === 'invalid') {
     return (
       <AuthFrame title={t('emailLink.title')}>
-        <p className="text-sm text-mist-400">{t('account.error.email_link_invalid')}</p>
-        <Link to="/login" className="nn-btn nn-btn-ghost mt-4 flex w-full">
-          {t('auth.backToLogin')}
-        </Link>
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t('account.error.email_link_invalid')}</p>
+        <Onward to="/login">{t('auth.backToLogin')}</Onward>
       </AuthFrame>
     )
   }
@@ -501,17 +473,17 @@ export function EmailPage() {
   if (state === 'done') {
     return (
       <AuthFrame title={t('emailLink.title')}>
-        <p role="status" className="text-sm text-mist-400">{t('account.emailConfirmed')}</p>
-        <Link to="/" className="nn-btn nn-btn-accent mt-4 flex w-full">
+        <Notice tone="ok">{t('account.emailConfirmed')}</Notice>
+        <Onward to="/" kind="primary">
           {t('auth.invite.toApp')}
-        </Link>
+        </Onward>
       </AuthFrame>
     )
   }
   return (
     <AuthFrame title={t('emailLink.title')} text={email}>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault()
           setBusy(true)
@@ -527,7 +499,7 @@ export function EmailPage() {
         }}
       >
         <Problem problem={problem} />
-        <Primary busy={busy}>{t('emailLink.submit')}</Primary>
+        <Primary name="confirm" busy={busy}>{t('emailLink.submit')}</Primary>
       </form>
     </AuthFrame>
   )
@@ -558,10 +530,8 @@ export function InvitePage() {
   if (invalid) {
     return (
       <AuthFrame title={invalid === 'expired' ? t('auth.invite.expiredTitle') : t('auth.invite.invalidTitle')}>
-        <p className="text-sm text-mist-400">{invalid === 'expired' ? t('auth.invite.expiredText') : t('auth.invite.invalidText')}</p>
-        <Link to="/login" className="nn-btn nn-btn-ghost mt-4 flex w-full">
-          {t('auth.backToLogin')}
-        </Link>
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{invalid === 'expired' ? t('auth.invite.expiredText') : t('auth.invite.invalidText')}</p>
+        <Onward to="/login">{t('auth.backToLogin')}</Onward>
       </AuthFrame>
     )
   }
@@ -571,9 +541,9 @@ export function InvitePage() {
   if (offer.signed_in_as) {
     return (
       <AuthFrame title={t('auth.invite.title')} text={t('auth.invite.haveAccount', { name: offer.signed_in_as })}>
-        <Link to="/" className="nn-btn nn-btn-accent flex w-full">
+        <Onward to="/" kind="primary">
           {t('auth.invite.toApp')}
-        </Link>
+        </Onward>
       </AuthFrame>
     )
   }
@@ -584,10 +554,10 @@ export function InvitePage() {
   const passwordWay = offer.password && methods.password
   return (
     <AuthFrame title={t('auth.invite.title')} text={text}>
-      {!passwordWay && methods.providers.length === 0 && <p className="text-sm text-mist-400">{t('auth.invite.noWay')}</p>}
+      {!passwordWay && methods.providers.length === 0 && <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t('auth.invite.noWay')}</p>}
       {passwordWay && (
         <form
-          className="space-y-4"
+          className="flex flex-col gap-4"
           onSubmit={async (event) => {
             event.preventDefault()
             if (!shown.trim()) return setProblem({ code: 'display_name_empty' })
@@ -626,7 +596,7 @@ export function InvitePage() {
           <AuthField label={t('account.email')} value={email ?? offer.email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hint={t('account.emailHint')} />
           <AuthField label={t('account.newPassword')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: offer.min_password })} />
           <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
-          <Primary busy={busy}>{t('auth.invite.submit')}</Primary>
+          <Primary name="inviteSubmit" busy={busy}>{t('auth.invite.submit')}</Primary>
         </form>
       )}
       <ProviderButtons providers={methods.providers} invite={token} withOr={passwordWay} />
@@ -655,10 +625,10 @@ export function ResetPage() {
     const key = done ? 'done' : invalid
     return (
       <AuthFrame title={t(`auth.reset.${key}Title`)}>
-        <p className="text-sm text-mist-400">{t(`auth.reset.${key}Text`)}</p>
-        <Link to="/login" className={'nn-btn mt-4 flex w-full ' + (done ? 'nn-btn-accent' : 'nn-btn-ghost')}>
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(`auth.reset.${key}Text`)}</p>
+        <Onward to="/login" kind={done ? 'primary' : 'secondary'}>
           {t('auth.backToLogin')}
-        </Link>
+        </Onward>
       </AuthFrame>
     )
   }
@@ -666,7 +636,7 @@ export function ResetPage() {
   return (
     <AuthFrame title={t('account.resetTitle')} text={t('auth.reset.text', { name: offer.username || offer.name })}>
       <form
-        className="space-y-4"
+        className="flex flex-col gap-4"
         onSubmit={async (event) => {
           event.preventDefault()
           if (password.length < offer.min_password) return setProblem({ code: 'password_too_short', values: { minimum: offer.min_password } })
@@ -688,7 +658,7 @@ export function ResetPage() {
         <Problem problem={problem} />
         <AuthField label={t('account.newPassword')} value={password} onChange={setPassword} type="password" autoComplete="new-password" autoFocus hint={t('setup.passwordHint', { count: offer.min_password })} />
         <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
-        <Primary busy={busy}>{t('auth.reset.submit')}</Primary>
+        <Primary name="resetSubmit" busy={busy}>{t('auth.reset.submit')}</Primary>
       </form>
     </AuthFrame>
   )

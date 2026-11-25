@@ -18,7 +18,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { AccountTab, type AccountPart } from './pages/settings/AccountTab'
 import { APP_PAGES as SHOWN_PAGES } from './pages/settings/accountPages'
 import { AuthProvider } from './state/auth'
-import { FIELDS, kontenVariables, PAGES, pageOrder, PASSWORD_MIN, SCREENS, screenFields, suggestUsername } from './vendor/nexkonten/konten'
+import { BUTTONS, FIELDS, kontenVariables, PAGES, pageOrder, PASSWORD_MIN, SCREENS, screenFields, suggestUsername } from './vendor/nexkonten/konten'
 import type { AccountField } from './vendor/nexkonten/konten'
 import de from './vendor/nexkonten/konten.de.json'
 import en from './vendor/nexkonten/konten.en.json'
@@ -60,6 +60,20 @@ const APP_RENDER: Partial<Record<keyof typeof SCREENS, () => Promise<Shown>>> = 
     reset: { name: 'Anna', min_password: PASSWORD_MIN, expires_at: '2026-12-01T00:00:00Z' },
   }),
   profile: () => show('/settings/profile', '/settings/profile', createElement(AccountTab as ComponentType<{ part?: AccountPart }>, { part: 'profile' }), { me: ME }),
+}
+
+// nexnotes (since 0.3.8): the page "Security" of an account with a password.
+const APP_PAGE_RENDER: { security?: () => Promise<Shown> } = {
+  security: () => show('/settings/security', '/settings/security', createElement(AccountTab as ComponentType<{ part?: AccountPart }>, { part: 'security' }), { me: ME }),
+}
+
+// nexnotes (since 0.3.8): the text keys of the buttons nexnotes words itself, by their role in BUTTONS.
+const APP_BUTTON_WORDS: Partial<Record<keyof typeof BUTTONS, string>> = {
+  signIn: 'auth.login.submit',
+  setupSubmit: 'setup.submit',
+  inviteSubmit: 'auth.invite.submit',
+  resetSubmit: 'auth.reset.submit',
+  signOut: 'me.signOut.button',
 }
 
 /** An account with a password, as the server gives it (`/api/auth/me`). */
@@ -254,4 +268,43 @@ describe('the profile saves with one button (since 0.3.7)', () => {
       unmount()
     }
   })
+})
+
+/** What a button says: its text without the symbol (an `svg` has no text). */
+function said(element: Element): string {
+  return (element.textContent ?? '').replace(/\s+/g, ' ').trim()
+}
+
+describe('every button of the account pages has its kind and symbol (since 0.3.8)', () => {
+  const screens: [string, (() => Promise<Shown>) | undefined][] = [
+    ...(Object.keys(APP_SCREENS) as (keyof typeof SCREENS)[]).map((screen) => [screen, APP_RENDER[screen]] as [string, (() => Promise<Shown>) | undefined]),
+    ['security', APP_PAGE_RENDER.security],
+  ]
+  for (const [screen, render] of screens) {
+    it(`${screen}: kind and symbol as BUTTONS says, no button without them`, async () => {
+      if (!render) throw new Error(`no render for ${screen}`)
+      await i18n.changeLanguage('de')
+      const { root, unmount } = await render()
+      try {
+        const words = new Map<string, keyof typeof BUTTONS>()
+        for (const name of Object.keys(BUTTONS) as (keyof typeof BUTTONS)[]) {
+          const own = APP_BUTTON_WORDS[name]
+          const text = name.includes('.') ? i18n.t(name, { name: 'Pocket ID' }) : own && i18n.t(own)
+          if (text && !words.has(text)) words.set(text, name)
+        }
+        let found = 0
+        for (const element of Array.from(root.querySelectorAll<HTMLElement>('button, [role="button"], [data-kind]'))) {
+          const name = words.get(said(element))
+          if (!name) continue
+          found += 1
+          const spec = BUTTONS[name]
+          expect(element.getAttribute('data-kind'), `${screen}: ${said(element)}`).toBe(spec.kind)
+          expect(element.getAttribute('data-icon'), `${screen}: ${said(element)}`).toBe(spec.icon)
+        }
+        expect(found, `${screen}: no button of BUTTONS found`).toBeGreaterThan(0)
+      } finally {
+        unmount()
+      }
+    })
+  }
 })

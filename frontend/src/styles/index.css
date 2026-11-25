@@ -84,6 +84,29 @@
   --color-scrim: rgb(20 20 30 / 0.35);
 }
 
+/* The colours of the shared kit (bauplaene/ui, `src/vendor/nexui`): nexnotes' tones by name, so light mode follows by
+   itself. The kit has no colour of its own; nexmail sets the same names to its tones. */
+:root {
+  --nexui-accent: var(--color-accent-500);
+  --nexui-accent-hover: var(--color-accent-600);
+  --nexui-on-accent: var(--color-on-accent);
+  --nexui-accent-text: var(--color-accent-400);
+  --nexui-surface: var(--color-ink-850);
+  --nexui-surface-raised: var(--color-ink-800);
+  --nexui-surface-hover: var(--color-ink-700);
+  --nexui-field: var(--color-ink-900);
+  --nexui-line: var(--color-ink-700);
+  --nexui-edge: var(--color-edge);
+  --nexui-text: var(--color-mist-100);
+  --nexui-text-muted: var(--color-mist-500);
+  --nexui-danger: var(--color-bad-500);
+  --nexui-ok: var(--color-ok-500);
+  --nexui-warn: var(--color-warn-500);
+  --nexui-disabled-bg: var(--color-ink-800);
+  --nexui-disabled-text: var(--color-mist-600);
+  --nexui-scrim: var(--color-scrim);
+}
+
 @layer base {
   html {
     color-scheme: dark;

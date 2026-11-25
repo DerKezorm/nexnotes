@@ -18,7 +18,7 @@ import { SEALED_HISTORY, type SealedVersion } from '../history/sealed'
 import type { ProseNode } from '../history/api'
 import { bytes as formatBytes } from '../lib/format'
 import { onAccountChange } from '../state/account'
-import { Card } from '../pages/settings/ui'
+import { Box, Button, Card } from '../vendor/nexui'
 import { sendSealed, vaultApi, type VaultStatus } from './api'
 import { attachmentAad, contentAad, fromB64, noteKey, openAttachment, packAttachment, seal, sealedVersionAad, toB64, unseal } from './crypto'
 import { ChangePasswordDialog, ForgotDialog, LockDialog, RemoveLockDialog } from './dialogs'
@@ -237,22 +237,27 @@ export function VaultSection() {
     vaultApi.status().then(setStatus, () => setStatus(null))
   }, [dialog, changed])
   return (
-    <Card icon={KeyRound} title={t('vault.section.title')} text={t('vault.section.text')} id="vault">
-      {status && !status.set_up && <p className="text-sm text-mist-400" data-testid="vault-none">{t('vault.section.none')}</p>}
+    <Card icon={KeyRound} title={t('vault.section.title')} subtitle={t('vault.section.text')} id="vault">
+      {status && !status.set_up && (
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]" data-testid="vault-none">
+          {t('vault.section.none')}
+        </p>
+      )}
       {status?.set_up && (
-        <>
-          <p className="text-sm text-mist-300" data-testid="vault-count">
-            {t('vault.section.count', { count: status.locked_notes })}
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={() => setDialog('change')} data-testid="vault-change-open">
-              {t('vault.change.title')}
-            </button>
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={() => setDialog('forgot')} data-testid="vault-forgot-open">
-              {t('vault.forgot.link')}
-            </button>
-          </div>
-        </>
+        <Box
+          title={t('vault.section.title')}
+          hint={<span data-testid="vault-count">{t('vault.section.count', { count: status.locked_notes })}</span>}
+          actions={
+            <>
+              <Button kind="secondary" icon="KeyRound" onClick={() => setDialog('change')} testId="vault-change-open">
+                {t('vault.change.title')}
+              </Button>
+              <Button kind="secondary" icon="RefreshCw" onClick={() => setDialog('forgot')} testId="vault-forgot-open">
+                {t('vault.forgot.link')}
+              </Button>
+            </>
+          }
+        />
       )}
       {dialog === 'change' && <ChangePasswordDialog onClose={() => setDialog(null)} />}
       {dialog === 'forgot' && <ForgotDialog onClose={() => setDialog(null)} />}

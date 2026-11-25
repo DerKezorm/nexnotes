@@ -19,6 +19,7 @@ import { AuthField, Problem, troubleOf, waysIn, type Trouble } from '../pages/Au
 import { useAuth } from '../state/auth'
 import { sessionExpiredParts } from '../vendor/nexkonten/konten'
 import { Dialog } from './Dialog'
+import { AccountButton } from './AccountButton'
 import { ProviderButtons } from './ProviderButtons'
 import { SignOutWaiting, useSignOut } from './SignOut'
 
@@ -51,9 +52,9 @@ export function SessionDialog() {
             <SignOutWaiting count={leaving.waiting} onAnyway={leaving.anyway} onWait={leaving.wait} />
           ) : (
             <div className="flex justify-end">
-              <button type="button" className="nn-btn nn-btn-ghost" data-testid="session-leave" onClick={leaving.ask}>
+              <AccountButton name="signOut" testId="session-leave" onClick={leaving.ask}>
                 {t('session.leave')}
-              </button>
+              </AccountButton>
             </div>
           )}
         </div>
@@ -129,15 +130,11 @@ export function SessionDialog() {
               return <AuthField key={part} label={t('auth.code.label')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus />
             case 'signInAgain':
               return (
-                <button key={part} type="submit" disabled={busy} className="nn-btn nn-btn-accent w-full">
-                  {t('account.signInAgain')}
-                </button>
+                <AccountButton key={part} name="account.signInAgain" type="submit" disabled={busy} wide />
               )
             case 'passkeySignIn':
               return passkeysSupported() ? (
-                <button key={part} type="button" disabled={busy} className="nn-btn nn-btn-accent w-full" onClick={() => void withPasskey()}>
-                  {t('account.passkeySignIn')}
-                </button>
+                <AccountButton key={part} name="account.passkeySignIn" disabled={busy} wide onClick={() => void withPasskey()} />
               ) : null
             default:
               return null
