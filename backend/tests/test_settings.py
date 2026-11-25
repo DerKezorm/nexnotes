@@ -19,7 +19,8 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.models import Account, AuthSession, Setting
 from app.security import decrypt_secret
-from app.services import backups, mailer, search, settings_service
+from app.services import backup_hooks, backups, mailer, search, settings_service
+from app.vendor.nexsicherung import restore, tools
 
 from .conftest import PASSWORD, make_account, sign_in
 from .test_notes9 import break_index_like_before, index_problems
@@ -174,7 +175,7 @@ def test_a_backup_keeps_the_secret_key_and_a_restore_signs_everybody_out(
         client.put("/api/settings", json=MAIL)
         name = backups.create().name
         key_file.write_text("a key made later", encoding="utf-8")
-        monkeypatch.setattr(backups, "restart_soon", lambda: None)
+        monkeypatch.setattr(restore, "restart_soon", lambda: None)
         answer = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
         # The answer's text names the reason, should the restore ever be refused.
         assert answer.status_code == 202, answer.text
@@ -198,7 +199,7 @@ def test_a_backup_whose_search_index_secure_delete_broke_is_restored_and_the_ind
     try:
         break_index_like_before(client)
         name = backups.create().name
-        monkeypatch.setattr(backups, "restart_soon", lambda: None)
+        monkeypatch.setattr(restore, "restart_soon", lambda: None)
         answer = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
         assert answer.status_code == 202, answer.text
         assert backups.apply_pending() is True
@@ -228,12 +229,12 @@ def test_a_restore_is_not_refused_as_damaged_when_the_system_held_the_database_c
         return real(database, *args, **kwargs)
 
     monkeypatch.setattr(sqlite3, "connect", connect)
-    monkeypatch.setattr(backups, "DATABASE_PAUSE_SECONDS", 0.01)
-    monkeypatch.setattr(backups, "restart_soon", lambda: None)
+    monkeypatch.setattr(backup_hooks, "DATABASE_PAUSE_SECONDS", 0.01)
+    monkeypatch.setattr(restore, "restart_soon", lambda: None)
     answer = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
     assert answer.status_code == 202, answer.text
     assert len(held) == 2
-    backups._remove_tree(backups.pending_folder())
+    tools.remove_tree(backups.pending_folder())
     # Held for good: then it is refused, and says so.
     opened: list[str] = []
 
@@ -246,7 +247,7 @@ def test_a_restore_is_not_refused_as_damaged_when_the_system_held_the_database_c
     monkeypatch.setattr(sqlite3, "connect", never)
     refused = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
     assert refused.status_code == 400 and refused.json()["detail"]["code"] == "backup_damaged"
-    assert len(opened) == backups.DATABASE_TRIES
+    assert len(opened) == backup_hooks.DATABASE_TRIES
     # A database SQLite reads and finds broken is damaged at once, without trying again.
     broken = backups.folder() / "nexnotes-2000-01-01-000000.zip"
     with zipfile.ZipFile(backups.path_of(name)) as source, zipfile.ZipFile(broken, "w") as target:
@@ -277,4 +278,5 @@ def test_backups_to_keep_go_up_to_365_as_the_interface_offers(client: TestClient
     if status == 200:
         assert answer.json()["backup_keep"] == value
         with SessionLocal() as db:
-            assert backups.keep(db) == value
+            assert db is not None
+        assert backup_hooks.NexnotesHooks().load_schedule().keep == value

@@ -29,7 +29,9 @@ from app.main import app
 from app.models import OPERATOR, Account, utcnow
 from app.routers import health
 from app.security import brake
-from app.services import accounts, backups, content, settings_service, storage
+from app.services import accounts, backup_hooks, backups, content, settings_service, storage
+from app.vendor import nexsicherung
+from app.vendor.nexsicherung import restore, tools
 
 from .conftest import DATA_DIR, MEDIA, PASSWORD, SETUP_CODE, make_account, new_client
 
@@ -173,11 +175,20 @@ def test_notes1_ac4_a_backup_holds_the_database_the_attachments_and_the_settings
 def test_notes1_ac4_the_schedule_makes_one_at_night_and_keeps_only_the_newest(
     client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from datetime import datetime
+    """Every night at the time chosen (03:00 unless the operator says otherwise, the shared module sicherung): due once
+    the time has passed and no scheduled copy came since; a server that was off at night catches up."""
+    from datetime import datetime, timedelta
 
-    night = datetime.now().astimezone().replace(hour=3, minute=10)
-    assert backups.due("daily", now=night) is True
-    assert backups.due("daily", now=night.replace(hour=14)) is False
+    from app.vendor.nexsicherung import Schedule, plan
+
+    daily = Schedule("daily", "03:00", 7)
+    assert backup_hooks.NexnotesHooks().load_schedule() == daily, "nightly at 03:00, 7 kept, as before"
+    night = datetime(2026, 11, 20, 3, 10).astimezone()
+    assert plan.due(daily, None, night) is True
+    assert plan.due(daily, night, night.replace(hour=14)) is False
+    assert plan.due(daily, night, night + timedelta(days=1)) is True
+    assert plan.due(daily, night, night + timedelta(hours=23, minutes=40)) is False
+    assert plan.due(daily, night - timedelta(days=1), night.replace(hour=14)) is True, "caught up by day"
     for _ in range(3):
         backups.create(kind=backups.SCHEDULED)
     backups.prune(2)
@@ -190,17 +201,27 @@ def test_notes1_ac4_weekly_is_due_after_seven_days_at_night_not_after_six(
     from datetime import datetime, timedelta
     from types import SimpleNamespace
 
+    from app.vendor.nexsicherung import Schedule, plan
+
     # The last scheduled backup on a Sunday night at 03:10.
     made = datetime(2026, 11, 1, 3, 10).astimezone()
-    monkeypatch.setattr(backups, "entries", lambda: [SimpleNamespace(kind=backups.SCHEDULED, created=made.isoformat())])
+    weekly, daily = Schedule("weekly", "03:00", 7), Schedule("daily", "03:00", 7)
     # Six nights later a weekly backup is not due yet, a daily one is.
-    assert backups.due("weekly", now=made + timedelta(days=6)) is False
-    assert backups.due("daily", now=made + timedelta(days=6)) is True
-    # The seventh night it is; by day only a day late, for a server that sleeps at night.
-    assert backups.due("weekly", now=made + timedelta(days=7)) is True
-    assert backups.due("weekly", now=made + timedelta(days=7, hours=10)) is False
-    assert backups.due("weekly", now=made + timedelta(days=8, hours=10)) is True
-    assert backups.due("off", now=made + timedelta(days=30)) is False
+    assert plan.due(weekly, made, made + timedelta(days=6)) is False
+    assert plan.due(daily, made, made + timedelta(days=6)) is True
+    # The seventh night it is, not before its time; a server that slept at night catches up by day.
+    assert plan.due(weekly, made, made + timedelta(days=6, hours=23)) is False
+    assert plan.due(weekly, made, made + timedelta(days=7)) is True
+    assert plan.due(weekly, made, made + timedelta(days=7, hours=10)) is True
+    assert plan.due(Schedule("off", "03:00", 7), made, made + timedelta(days=30)) is False
+    # Every month: on the first at the time, not before.
+    monthly = Schedule("monthly", "03:00", 7)
+    assert plan.due(monthly, made, made + timedelta(days=29)) is False
+    assert plan.due(monthly, made, datetime(2026, 12, 1, 3, 5).astimezone()) is True
+    # The job reads the schedule from nexnotes' own settings: off makes nothing.
+    monkeypatch.setattr(backup_hooks.NexnotesHooks, "load_schedule",
+                        lambda _self: SimpleNamespace(every="off", time="03:00", keep=7))
+    assert plan.run_job() is False
 
 def test_notes1_ac5_the_check_says_what_a_restore_adds_changes_and_removes(
     client: TestClient, operator: Account
@@ -272,15 +293,16 @@ def test_notes1_ac5_the_check_names_at_most_five_titles_newest_first(client: Tes
 
 def test_notes1_ac5_a_restore_needs_the_confirmation_of_the_password(client: TestClient, operator: Account,
                                                                      monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(backups, "restart_soon", lambda *_args, **_kw: None)
+    monkeypatch.setattr(restore, "restart_soon", lambda *_args, **_kw: None)
     name = client.post("/api/backups", json={}).json()["name"]
     refused = client.post(f"/api/backups/{name}/restore", json={"password": "not it"})
     assert refused.status_code == 401
     assert not backups.pending_folder().exists()
     done = client.post(f"/api/backups/{name}/restore", json={"password": PASSWORD})
     assert done.status_code == 202 and done.json()["restarting"] is True
-    assert (backups.pending_folder() / backups.MANIFEST).is_file()
-    backups._remove_tree(backups.pending_folder())
+    assert (backups.pending_folder() / restore.MARKER).is_file()
+    assert (backups.pending_folder() / "nexnotes.db").is_file()
+    tools.remove_tree(backups.pending_folder())
 
 
 def test_notes1_ec3_a_backup_cut_off_midway_is_no_backup(client: TestClient, operator: Account,
@@ -290,9 +312,12 @@ def test_notes1_ec3_a_backup_cut_off_midway_is_no_backup(client: TestClient, ope
     def stopped(*_args: object, **_kwargs: object) -> None:
         raise KeyboardInterrupt  # the container stops in the middle
 
-    monkeypatch.setattr(backups, "_hash_file", stopped)
+    monkeypatch.setattr(tools, "sha256_file", stopped)
     with pytest.raises(KeyboardInterrupt):
         backups.create()
+    # The process ends there; the next start tidies what it left before anything lists the backups.
+    nexsicherung.archives.forget()
+    assert backups.apply_pending() is False
     assert backups.entries() == []
     assert [path.name for path in backups.folder().iterdir() if path.suffix in (".zip", ".part")] == []
 
@@ -479,7 +504,10 @@ def test_notes1_ac11_the_server_settings_show_what_nexnotes_itself_takes_by_part
         assert made.status_code == 201, made.text
         _, with_backup = _parts(client)
         archives = list((data / "backups").glob("nexnotes-*.zip"))
-        assert with_backup["backups"] == sum(path.stat().st_size for path in archives) > 0
+        assert archives and all(path.stat().st_size > 0 for path in archives)
+        # The folder holds the archives and the small file the module keeps beside them.
+        assert with_backup["backups"] == sum(path.stat().st_size for path in (data / "backups").rglob("*")
+                                             if path.is_file())
     finally:
         export.unlink(missing_ok=True)
         log.unlink(missing_ok=True)

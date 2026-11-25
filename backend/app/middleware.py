@@ -173,6 +173,8 @@ MAX_BODY = 16 * 1024 * 1024
 #: Features with uploads add their paths here.
 LARGE_BODIES: dict[str, int] = {
     "/api/backups/upload": 64 * 1024**3,
+    # The same upload on the way of the shared module sicherung (Settings, Storage and backups).
+    "/api/server/storage/backups/upload": 64 * 1024**3,
     # Attachments (NOTES-10): the operator may allow up to 100,000 MB per file.
     "/api/attachments": 100_000 * 1024**2 + 1024**2,
     # The vault (NOTES-16): an encrypted attachment or part of a lock, and a whole note saved encrypted as base64.

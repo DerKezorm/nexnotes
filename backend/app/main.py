@@ -56,7 +56,7 @@ from .routers import tokens as tokens_router
 from .routers import totp as totp_router
 from .routers import vault as vault_router
 from .security import HashingBusy, purge_sessions
-from .services import backups, cleanup, locales, logs, mounts, oidc_store, post_store, settings_service, totp
+from .services import backups, cleanup, locales, logs, oidc_store, post_store, settings_service, totp
 from .services.konten_store import KontenStore
 from .vendor import nexoidc
 from .vendor.nexkonten import factor as konten_factor
@@ -139,11 +139,15 @@ def _remember_version() -> None:
 async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logs.setup()
     settings = get_settings()
+    # The shared backup module on this data folder (a test may have moved it since the import).
+    backups.configure()
     # Said at every start while it lasts: a database on a share can lose notes.
-    mounts.warn_at_start(settings.data_dir, settings.database_path)
+    backups.warn_at_start()
     backups.apply_pending()
     _backup_before_update()
     init_db()
+    # A restore that failed at this start: the operators hear it once (the log; the page says it too).
+    backups.report_failed_restore()
     _remember_version()
     # The TLS context of the calls to providers and authentik, read once here outside the event loop (vendor/nexoidc).
     await nexoidc.warm()
