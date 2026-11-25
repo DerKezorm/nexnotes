@@ -1,6 +1,9 @@
-/** The second field of every new password, with its own message right below it when the two differ. */
+/** The second field of every new password (the module's "Repeat password", konten 0.3.7: its label is the field's name),
+ * with its own message right below it when the two differ. */
 import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
+
+import { FIELDS } from '../vendor/nexkonten/konten'
 
 export function PasswordConfirmField({ value, onChange, mismatch, labelClassName = 'font-medium' }: {
   value: string
@@ -13,7 +16,7 @@ export function PasswordConfirmField({ value, onChange, mismatch, labelClassName
   return (
     <div className="text-sm">
       <label className="block">
-        <span className={labelClassName}>{t('auth.passwordConfirm')}</span>
+        <span className={labelClassName}>{t(FIELDS.passwordRepeat.label)}</span>
         <input
           type="password"
           name="password_confirm"

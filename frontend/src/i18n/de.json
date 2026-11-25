@@ -265,7 +265,6 @@
       "title": "Bei nexnotes anmelden"
     },
     "password": "Passwort",
-    "passwordConfirm": "Passwort bestätigen",
     "reset": {
       "doneText": "Melde dich jetzt mit dem neuen Passwort an.",
       "doneTitle": "Passwort gesetzt",

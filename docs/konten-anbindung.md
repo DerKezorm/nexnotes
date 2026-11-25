@@ -11,7 +11,7 @@ sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adres
 
 ## 0. Was gebaut ist / was fehlt
 
-Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten`: `konten` 0.3.6 (`a14b60c`), `oidc` 1.1.0,
+Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten`: `konten` 0.3.7 (`2b4e7e4`), `oidc` 1.1.0,
 `post` 0.1.1, kopiert mit `tools/sync.py copy`. App-Version unverändert 1.0.1.
 
 **Gebaut (Backend):**
@@ -71,6 +71,14 @@ nexnotes' eigene Teile danach (`APP_PAGES` in `pages/settings/accountPages.ts`: 
 Tresor); wartender QR-Code nach dem Neuladen; Dialog „Sitzung abgelaufen“ nach `sessionExpiredParts` (auch Passkey;
 der Schritt kommt aus der Anmeldeantwort von 1.0.1, `code: false` = Passkey); Reset-Dialog aus `factorResetParts`;
 Einrichtung mit `SETUP_PAGE`, ohne Satz zum zweiten Faktor (`setupNotes`); vitest-Vorlage übernommen.
+
+**Seit konten 0.3.7 nachgezogen:** Profil speichert Anzeigename, Benutzername und E-Mail mit einem Knopf
+(`PAGES.profile.saveButton`), Passwort-Rückfrage nach `confirmOnSave`, nichts beim Verlassen eines Felds. Hinweise aus
+`screenFields().hints`, jeder in eigener Zeile per `aria-describedby` (`Field` mit `hints`; Benutzername:
+`usernameHintProfile` und `usernameRules`; Sprache: Hinweis außerhalb des Labels). Zweites Passwortfeld heißt wie im
+Modul „Passwort wiederholen“ (`account.passwordRepeat`, `auth.passwordConfirm` entfernt). vitest-Vorlage neu übernommen,
+`APP_RENDER` für alle sechs Bildschirme gefüllt; `@testing-library/dom` als devDependency. Läufe: Frontend
+`vitest --maxWorkers=2` 890 grün, `tsc -b` und `npm run lint` sauber; Vertrag `tests/nexkonten` 223 grün, 2 übersprungen.
 
 **Abweichungen vom Modul (bewusst):** Die wartende Anmeldung zwischen Passwort und Code bleibt nexnotes' eigene
 (`totp.start_pending`, Cookie `PENDING_COOKIE`; geprüft wird über `factor.check_code`), weil nexnotes eine eigene

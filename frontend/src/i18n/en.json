@@ -265,7 +265,6 @@
       "title": "Sign in to nexnotes"
     },
     "password": "Password",
-    "passwordConfirm": "Confirm password",
     "reset": {
       "doneText": "Sign in with your new password now.",
       "doneTitle": "Password set",

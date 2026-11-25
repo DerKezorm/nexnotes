@@ -6,13 +6,13 @@
  * of new notes; NOTES-22 AC-2 and AC-7). Each area of the settings shows its `part`; without one, all of it.
  */
 import { KeyRound, LayoutList, LogOut, Palette, ShieldCheck, UserRound } from 'lucide-react'
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { Dialog } from '../../components/Dialog'
-import { DISPLAY_NAME_MAX, EMAIL_MAX, PAGES, SECOND_FACTOR_STATE, USERNAME_MAX } from '../../vendor/nexkonten/konten'
+import { DISPLAY_NAME_MAX, EMAIL_MAX, PAGES, screenFields, SECOND_FACTOR_STATE, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { pagePart } from './accountPages'
 import { Notice, PasskeysBox, RemainingAccess, SecondFactorOffNotice, SessionsBox } from './SecurityBoxes'
 import { ACCOUNT_SECTIONS } from '../../extensions'
@@ -74,6 +74,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
   useEffect(() => {
     void languageOptions().then(setLanguages)
   }, [])
+  const languageHintId = useId()
 
   if (!me) return null
 
@@ -105,6 +106,10 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
       setMe(saved)
       if (saved.pending_email) throw new Notice(t('account.emailConfirmSent', { email: saved.pending_email }))
     }, t('me.emailTaken'))
+
+  /** The hints under a field of the profile, each joined to it by aria-describedby (konten 0.3.7, `screenFields`). */
+  const hintsOf = (field: 'displayName' | 'username' | 'email') =>
+    (screenFields('profile').find((entry) => entry.field === field)?.hints ?? []).map((key) => t(key))
 
   const saveProfile = (password: string) =>
     run(async () => {
@@ -166,26 +171,28 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
               </div>
             </div>
           </div>
-          {/* One under the other, also on a wide screen (`layout: 'stacked'`). The username is changed right in its
-              field; saving a new one or a new address asks for the password first. */}
+          {/* One under the other, also on a wide screen (`layout: 'stacked'`). One button saves display name,
+              username and email together, never leaving a field (konten 0.3.7, `PAGES.profile.save`); a new username
+              or address asks for the password first (`confirmOnSave`). */}
           <form
             className="space-y-4"
             onSubmit={(event) => {
               event.preventDefault()
-              const weighty = username.trim().toLowerCase() !== me.name || email.trim().toLowerCase() !== (me.email ?? '').toLowerCase()
+              const changed = { username: username.trim().toLowerCase() !== me.name, email: email.trim().toLowerCase() !== (me.email ?? '').toLowerCase() }
+              const weighty = PAGES.profile.confirmOnSave.some((field) => changed[field])
               // An account with a password confirms a new username or address with it; one through a provider only
               // is asked for a fresh sign-in there by the server.
               if (weighty && me.sign_in === 'password') return setConfirming(true)
               void saveProfile('')
             }}
           >
-            <Field label={t(pagePart('profile', 'displayName').title)} value={name} onChange={setName} autoComplete="name" maxLength={DISPLAY_NAME_MAX} hint={t(pagePart('profile', 'displayName').hint)} />
+            <Field label={t(pagePart('profile', 'displayName').title)} value={name} onChange={setName} autoComplete="name" maxLength={DISPLAY_NAME_MAX} hints={hintsOf('displayName')} />
             <div>
-              <Field label={t(pagePart('profile', 'username').title)} value={username} onChange={setUsername} autoComplete="username" maxLength={USERNAME_MAX} hint={`${t(pagePart('profile', 'username').hint)} ${t('account.usernameRules')}`} />
+              <Field label={t(pagePart('profile', 'username').title)} value={username} onChange={setUsername} autoComplete="username" maxLength={USERNAME_MAX} hints={hintsOf('username')} />
               {me.former_name && <p className="mt-1 text-xs text-mist-500">{t('account.formerUsername')}</p>}
             </div>
             <div>
-              <Field label={t(pagePart('profile', 'email').title)} value={email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hint={t(pagePart('profile', 'email').hint)} />
+              <Field label={t(pagePart('profile', 'email').title)} value={email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hints={hintsOf('email')} />
               {me.pending_email && (
                 <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-mist-400" data-testid="email-pending">
                   <span>{t('account.emailPending', { email: me.pending_email })}</span>
@@ -204,7 +211,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
                 disabled={busy || (name.trim() === me.display_name && email.trim() === (me.email ?? '') && username.trim().toLowerCase() === me.name)}
                 className={LOUD}
               >
-                {t('account.save')}
+                {t(PAGES.profile.saveButton)}
               </button>
             </div>
           </form>
@@ -276,30 +283,35 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
               </form>
             </Dialog>
           )}
-          <label className="block text-sm">
-            <span className="font-medium text-mist-100">{t(pagePart('profile', 'language').title)}</span>
-            <select
-              className="nn-field mt-1"
-              value={me.language}
-              data-testid="language-select"
-              onChange={(event) => {
-                const code = event.target.value
-                void run(async () => {
-                  const saved = await authApi.language(code)
-                  setMe(saved)
-                  await changeLanguage(code || browserLanguage(), !!code)
-                }, '')
-              }}
-            >
-              <option value="">{t('me.looks.browser')}</option>
-              {languages.map((option) => (
-                <option key={option.code} value={option.code}>
-                  {option.added ? `${option.name} ${t('me.looks.byOperator')}` : option.name}
-                </option>
-              ))}
-            </select>
-            <span className="mt-1 block text-xs text-mist-500">{t('me.looks.languageHint')}</span>
-          </label>
+          <div className="text-sm">
+            <label className="block">
+              <span className="font-medium text-mist-100">{t(pagePart('profile', 'language').title)}</span>
+              <select
+                className="nn-field mt-1"
+                value={me.language}
+                aria-describedby={languageHintId}
+                data-testid="language-select"
+                onChange={(event) => {
+                  const code = event.target.value
+                  void run(async () => {
+                    const saved = await authApi.language(code)
+                    setMe(saved)
+                    await changeLanguage(code || browserLanguage(), !!code)
+                  }, '')
+                }}
+              >
+                <option value="">{t('me.looks.browser')}</option>
+                {languages.map((option) => (
+                  <option key={option.code} value={option.code}>
+                    {option.added ? `${option.name} ${t('me.looks.byOperator')}` : option.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span id={languageHintId} className="mt-1 block text-xs text-mist-500">
+              {t('me.looks.languageHint')}
+            </span>
+          </div>
           <p className="text-xs text-mist-500" data-testid="profile-role">
             {t(pagePart('profile', 'role').title)}: {t(`roles.${me.role}`)}
           </p>

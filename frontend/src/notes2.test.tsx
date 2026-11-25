@@ -93,7 +93,7 @@ describe('the setup (NOTES-1)', () => {
     expect(fields.map((field) => field.closest('label')?.querySelector('span')?.textContent)).toEqual([
       // The order of the shared account module (SCREENS.setup): the username follows the display name.
       i18n.t('account.setupCode'), i18n.t('account.displayName'), i18n.t('account.username'), i18n.t('account.email'),
-      i18n.t('account.newPassword'), i18n.t('auth.passwordConfirm'),
+      i18n.t('account.newPassword'), i18n.t('account.passwordRepeat'),
     ])
     type(fields[0], 'AB12-CD34-EF56')
     type(fields[1], 'Robin')

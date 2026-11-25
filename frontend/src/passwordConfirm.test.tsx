@@ -77,9 +77,9 @@ async function submit(form: HTMLFormElement): Promise<void> {
 
 const sent = (method: string, path: string) => calls.filter((call) => call.method === method && call.path.startsWith(path))
 
-/** The two fields of the new password: both new-password, the second one named "Confirm password". */
+/** The two fields of the new password: both new-password, the second one named "Repeat password" (konten). */
 function expectPair(within: ParentNode, first: string) {
-  const confirm = field(i18n.t('auth.passwordConfirm'), within)
+  const confirm = field(i18n.t('account.passwordRepeat'), within)
   expect(field(first, within).autocomplete).toBe('new-password')
   expect(confirm.autocomplete).toBe('new-password')
   expect(confirm.type).toBe('password')
@@ -174,7 +174,7 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     await render(<AuthProvider><Routes><Route path="/settings/:tab" element={<SettingsPage />} /></Routes></AuthProvider>, '/settings/security')
     const row = box.querySelector<HTMLElement>('[data-testid="password-row"]')!
     const confirm = expectPair(row, i18n.t('me.password.new'))
-    expect(i18n.t('auth.passwordConfirm')).toBe('Passwort bestätigen')
+    expect(i18n.t('account.passwordRepeat')).toBe('Passwort wiederholen')
     type(field(i18n.t('me.password.current'), row), 'the old one!')
     type(field(i18n.t('me.password.new'), row), 'a brand new one')
     type(confirm, 'a brand new on')
