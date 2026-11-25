@@ -235,9 +235,12 @@ def test_notes2_ec6_umlauts_and_emoji_stay_and_blanks_at_the_edges_go(
     saved = client.put("/api/me/profile", json={"display_name": typed})
     assert saved.status_code == 200 and saved.json()["display_name"] == kept
     token = _invite(client)
-    made = fresh_browser().post(f"/api/invite/{token}", json={"display_name": typed, "password": GOOD}).json()
-    assert made["display_name"] == kept
-    assert client.put("/api/me/profile", json={"display_name": "   "}).status_code == 422
+    # Display names are unique since the shared account module: the invited person takes another one.
+    made = fresh_browser().post(f"/api/invite/{token}", json={"display_name": f"Neu {typed}", "password": GOOD}).json()
+    assert made["display_name"] == f"Neu {kept}"
+    # An empty display name is allowed in the profile now (the username shows, the draft): blanks only become empty.
+    emptied = client.put("/api/me/profile", json={"display_name": "   "})
+    assert emptied.status_code == 200 and emptied.json()["display_name"] == ""
 
 
 def test_notes2_ec7_an_address_another_account_has_is_refused_whatever_its_case(
@@ -246,14 +249,15 @@ def test_notes2_ec7_an_address_another_account_has_is_refused_whatever_its_case(
     make_account("anna")
     invited = client.post("/api/invites", json={"email": "ANNA@Example.com"})
     assert invited.status_code == 409 and _code(invited) == "email_taken"
-    own = client.put("/api/me/profile", json={"email": "Anna@EXAMPLE.com"})
+    # A new address asks for the own password (the shared account module).
+    own = client.put("/api/me/profile", json={"email": "Anna@EXAMPLE.com", "password": PASSWORD})
     assert own.status_code == 409 and _code(own) == "email_taken"
     token = _invite(client)
     taken = fresh_browser().post(f"/api/invite/{token}",
                                  json={"display_name": "Anna 2", "email": "anna@example.COM", "password": GOOD})
     assert taken.status_code == 409 and _code(taken) == "email_taken"
     # Its own address in another case is no conflict.
-    assert client.put("/api/me/profile", json={"email": "TESTER@example.com"}).status_code == 200
+    assert client.put("/api/me/profile", json={"email": "TESTER@example.com", "password": PASSWORD}).status_code == 200
 
 
 # --- AC-4, EC-4, EC-9: blocking ----------------------------------------------------------------------------------
@@ -407,6 +411,9 @@ ALLOWED_KEYS = {
     "id", "name", "display_name", "email", "role", "sign_in", "language", "version", "whats_new_seen", "provider_email",
     "two_factor", "password_changed_at", "created_at", "last_seen_at", "locked", "blocked", "blocked_at", "deleted_at",
     "purge_at", "has_password", "providers", "storage_used", "storage_limit", "avatar",
+    # Since the shared account module: whether the address counts, is proven, came from a provider, waits for its
+    # link, or is held by another account too (never content).
+    "email_confirmed", "email_proven", "email_source", "pending_email", "email_duplicate",
 }
 
 
@@ -540,10 +547,11 @@ def test_notes2_ac7_the_operator_gives_no_password_only_a_link_the_person_sets_o
         stranger = fresh_browser()
         assert stranger.get(f"/api/reset/{token}").json()["name"] == "Anna"
         assert stranger.post(f"/api/reset/{token}", json={"password": GOOD}).status_code == 204
-        # Every session and every paired device of the account ended; keys made by hand stay.
+        # Every browser session of the account ended. Paired devices stay since the shared account module (the
+        # draft, "Neues Passwort"): the next sign-in lists them with "Disconnect all".
         assert browser.get("/api/auth/me").status_code == 401
         device = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {device_token}"})
-        assert device.get("/api/auth/me").status_code == 401
+        assert device.get("/api/auth/me").status_code == 200
         # An MCP key counts at /api/mcp only (NOTES-20).
         mcp = TestClient(app, base_url="http://testserver", headers={"Authorization": f"Bearer {mcp_token}"})
         assert mcp.post("/api/mcp", json={"jsonrpc": "2.0", "id": 1, "method": "ping"}).status_code == 200

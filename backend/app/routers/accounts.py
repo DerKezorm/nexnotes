@@ -80,7 +80,7 @@ def _listed(db: DbSession, row: AccountRow, linked: dict[int, list[dict[str, obj
     used = content.counts(db, row.id)
     view = account_view(row, db)
     view.pop("two_factor_recovery_left", None)
-    for private in ("provider_email", "new_password_origin", "new_sign_in_mail", "former_name"):
+    for private in ("new_password_origin", "new_sign_in_mail", "former_name"):
         view.pop(private, None)
     view.pop("password_reset_notice", None)
     store = KontenStore(db)

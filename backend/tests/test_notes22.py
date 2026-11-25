@@ -16,7 +16,7 @@ from app.config import get_settings
 from app.models import Account
 from app.services import locales
 
-from .conftest import make_account, new_client
+from .conftest import PASSWORD, make_account, new_client
 
 
 @pytest.fixture
@@ -85,5 +85,6 @@ def test_notes22_ac3_the_api_answers_in_english_whatever_the_language_of_the_acc
     client: TestClient, operator: Account
 ) -> None:
     client.put("/api/me/language", json={"language": "de"})
-    refused = client.put("/api/me/profile", json={"email": "not an address"}, headers={"Accept-Language": "de-DE"})
+    refused = client.put("/api/me/profile", json={"email": "not an address", "password": PASSWORD},
+                         headers={"Accept-Language": "de-DE"})
     assert refused.json()["detail"]["message"] == "This is not an email address."

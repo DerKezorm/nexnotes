@@ -75,7 +75,9 @@ def test_notes1_ac2_the_setup_code_is_in_the_log_at_every_start_until_set_up(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     monkeypatch.setattr(get_settings(), "setup_token", "")
-    monkeypatch.setattr(accounts, "_generated_code", None)
+    from app.vendor.nexkonten import setup as konten_setup
+
+    konten_setup.forget_generated_code()
     with caplog.at_level(logging.WARNING), SessionLocal() as db:
         accounts.announce_setup_code(db)
     code = accounts.setup_code()

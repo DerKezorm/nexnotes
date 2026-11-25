@@ -34,13 +34,20 @@ Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`075207
 | OIDC 1.1.0 | `services/oidc_store.py`: Namensregeln und belegte Namen aus dem Modul, Anzeigename aus dem Claim, Bild vom Anbieter im Faden, Adresse folgt bei Konten nur über Anbieter (sonst Angebot wie 1.0.1) |
 | Mails | `services/post_store.py` (Store über `smtp_*` und `mail_outbox`, Minutenrunde in `main`), `services/kontenpost.py`; Einladung und Testmail über `post` sofort |
 | Alte Fehlerkennungen | `konten_store.OLD_CODES` (`invalid_email`, `name_taken`, `invalid_account_name`) |
-| Tests | Vertrag `tests/nexkonten` + `tests/nexpost` (216 grün, 5 übersprungen mit Grund), Test „Bestand“ ohne `xfail` (49 grün), angepasste App-Tests (Brems-Zahlen des Moduls, Setup-Code ≥ 16 Zeichen, Mailtexte von `post`) |
+| Passkeys | `routers/passkeys.py`: Liste, Hinzufügen (Passwort bzw. frische Anbieteranmeldung), Entfernen, Anmelden ohne Passwort und Code, an Stelle des Codes einer wartenden Anmeldung; Betreiber-Schalter `passkeys_allowed` |
+| Notfallbefehl | `python -m app.emergency reset-link <Benutzername oder E-Mail> [--days 1/7/30]` |
+| Mail-Einstellungen | `smtp_sender_name`, `mail_last_*`, `passkeys_allowed` in `GET/PUT /api/settings` |
+| Frontend | `pages/AuthPages.tsx` (Einrichtung, Anmelden mit „Angemeldet bleiben“ und Passkey, `ForgotPage`, `EmailPage`, Einladung, neues Passwort), `pages/settings/AccountTab.tsx` (Profil mit Benutzername, wartender Adresse, Passwortdialog), `pages/settings/SecurityBoxes.tsx` (Passkeys, „Wo du angemeldet bist“, „Diese Geräte haben noch Zugriff“), `AccountsTab.tsx` (Benutzername · E-Mail, doppelte Adresse, Umbenennen, Anzeigename, Adresse entfernen, Reset-Link mit Mail, Faktor-Reset mit Geräten), Server-Karten (Absendername, Warnung ohne Verschlüsselung, letzter Mailstand, Passkey-Schalter); `lib/passkeys.ts`, `lib/errors.ts` mit `accountErrorKey`/`mailErrorKey` |
+| Tests | Vertrag `tests/nexkonten` + `tests/nexpost` (216 grün, 5 übersprungen mit Grund), Test „Bestand“ ohne `xfail` und mit Teil 2 (54 grün: Mailserver, Profilbild, Sitzung von 1.0.1, Authenticator), angepasste App-Tests (Brems-Zahlen des Moduls, Setup-Code ≥ 16 Zeichen, Mailtexte von `post`), vitest `nexkonten.test.ts`, `nexpost.test.ts`, e2e-Texte („Username or email“, Setup-Code der Läufe) |
 
-**Fehlt noch:** Passkey-Routen (`routers/passkeys.py`: Anmelden, Hinzufügen, Entfernen, Betreiber-Schalter),
-Notfallbefehl (`python -m app.emergency reset-link <name>`), Mail-Einstellungen über `post.settings` (Absendername,
-letzter Fehler auf der Seite), Bestand-Test Teil 2 (Authenticator, Codes, Sitzungen, Bilder, SMTP), das ganze
-Frontend (Abschnitt 6), Fehlersätze für die neuen Kennungen (`test_texts.py` rot: `use_logout`, `already_set_up`),
-volle Testläufe.
+**Abweichungen vom Modul (bewusst):** Ein bekannter Browser zählt in einem eigenen Topf (5 frei) statt am Absender:
+so hält auch ein Fremder hinter demselben Router den Besitzer nicht auf (wie 1.0.1, `test_haertung.py`). Konten mit
+Passwort bekommen die Adresse eines Anbieters weiter nur angeboten (wie 1.0.1); übernommen zählt sie. Das
+Einrichten der Authenticator-App bleibt nexnotes' eigenes (Codes werden über `factor.check_code` geprüft).
+
+**Fehlt noch:** Sichtprüfung der geänderten Bildschirme (kein Playwright in dieser Runde), die iPhone-App
+(`login` beim Laden auffrischen, Beschriftung „Benutzername“), Passkeys beim Betreiber-Reset in der Kontenliste
+anzeigen.
 
 ## 1. Bestand heute (1.0.1)
 

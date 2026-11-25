@@ -84,8 +84,14 @@ def test_every_sentence_belongs_to_a_code_still_used() -> None:
     # Sent: a code the scan finds, a quoted code passed to a helper (a default argument, a code a function hands back
     # for a redirect), or one the page asks for itself (``'network'``, ``errorText('name_missing')``).
     backend, frontend = _sources(APP, (".py",)), _sources(FRONTEND, (".ts", ".tsx"))
+    # The shared account module raises its codes itself (``vendor/nexkonten``); nexnotes answers some of them under
+    # its older names (``konten_store.OLD_CODES``) and keeps their sentences for pages and scripts of before.
+    from app.services.konten_store import OLD_CODES
+    from app.vendor.nexkonten import CODES
+
+    shared = set(CODES) | set(OLD_CODES.values())
     unused = [code for code in texts("de") if code not in server_codes() and f'"{code}"' not in backend
-              and f"'{code}'" not in frontend and f"errors.{code}" not in frontend]
+              and f"'{code}'" not in frontend and f"errors.{code}" not in frontend and code not in shared]
     assert unused == []
     # Of nexlore's leftovers, one hid behind a dictionary key of the same name ("locked" of an account).
     assert "locked" not in texts("de")

@@ -274,7 +274,7 @@
       "invalidText": "Dieser Link wurde schon benutzt oder durch einen neueren ersetzt.",
       "invalidTitle": "Link nicht gültig",
       "submit": "Passwort setzen",
-      "text": "Für {{name}}. Alle Sitzungen und gekoppelten Geräte des Kontos enden; danach meldest du dich mit dem neuen Passwort an.",
+      "text": "Für {{name}}. Alle Anmeldungen im Browser enden; danach meldest du dich mit dem neuen Passwort an und siehst, welche Geräte noch Zugriff haben.",
       "title": "Neues Passwort setzen"
     }
   },
@@ -490,7 +490,6 @@
     "log_level_from_environment": "Die Stufe des Logs ist mit NEXNOTES_LOG_LEVEL fest eingestellt.",
     "mail_failed": "Der Mailserver hat die Mail nicht angenommen.",
     "mail_off": "Es ist kein Mailserver eingetragen.",
-    "name_missing": "Gib einen Namen ein.",
     "name_taken": "Dieser Name ist vergeben.",
     "network": "Der Server ist nicht erreichbar.",
     "no_offer": "Es gibt keine Adresse zum Übernehmen.",
@@ -628,7 +627,8 @@
     "no_right": "Hier darfst du nur lesen.",
     "second_factor_required": "Richte zuerst im Browser deinen zweiten Faktor ein, dann verbinde das Gerät neu.",
     "folder_id_taken": "Diesen Ordner gibt es schon unter einem anderen Konto.",
-    "smart_folder_id_taken": "Diesen intelligenten Ordner gibt es schon unter einem anderen Konto."
+    "smart_folder_id_taken": "Diesen intelligenten Ordner gibt es schon unter einem anderen Konto.",
+    "use_logout": "Diesen Browser meldest du mit „Abmelden“ ab."
   },
   "folders": {
     "section": "Ordner",

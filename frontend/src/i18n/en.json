@@ -274,7 +274,7 @@
       "invalidText": "This link has been used already or was replaced by a newer one.",
       "invalidTitle": "Link not valid",
       "submit": "Set the password",
-      "text": "For {{name}}. Every session and paired device of the account ends; afterwards you sign in with the new password.",
+      "text": "For {{name}}. Every sign-in in a browser ends; then you sign in with the new password and see which devices still have access.",
       "title": "Set a new password"
     }
   },
@@ -490,7 +490,6 @@
     "log_level_from_environment": "The log level is fixed by NEXNOTES_LOG_LEVEL.",
     "mail_failed": "The mail server did not accept the mail.",
     "mail_off": "No mail server is set up.",
-    "name_missing": "Enter a name.",
     "name_taken": "This name is taken.",
     "network": "The server cannot be reached.",
     "no_offer": "There is no address to take.",
@@ -628,7 +627,8 @@
     "no_right": "You may only read here.",
     "second_factor_required": "Set up your second factor in the browser first, then connect the device again.",
     "folder_id_taken": "A folder with this id belongs to another account.",
-    "smart_folder_id_taken": "A smart folder with this id belongs to another account."
+    "smart_folder_id_taken": "A smart folder with this id belongs to another account.",
+    "use_logout": "Sign out of this browser with Sign out."
   },
   "folders": {
     "section": "Folders",
