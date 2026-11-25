@@ -200,6 +200,16 @@ def client() -> Iterator[TestClient]:
 
 
 @pytest.fixture
+def public_address() -> str:
+    """The public address of nexnotes, set: an invitation needs it since konten 0.3.2 (``public_url_needed``)."""
+    from app.services import settings_service
+
+    with SessionLocal() as db:
+        settings_service.save(db, {"public_url": "http://testserver"})
+    return "http://testserver"
+
+
+@pytest.fixture
 def operator(client: TestClient) -> Account:
     """The signed-in operator ``tester``."""
     return _operator(client)

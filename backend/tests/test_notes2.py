@@ -26,6 +26,8 @@ from .conftest import PASSWORD, TAB, make_account, new_client, sign_in
 from .oidc_helpers import FakeProvider, configure, error_in, fresh_browser, location, sign_in_via_oidc
 
 provider = oidc_helpers.provider
+#: Invitations need the public address (konten 0.3.2).
+pytestmark = pytest.mark.usefixtures("public_address")
 
 GOOD = "twelve chars"  # exactly 12
 SHORT = "eleven char"  # exactly 11
@@ -414,6 +416,8 @@ ALLOWED_KEYS = {
     # Since the shared account module: whether the address counts, is proven, came from a provider, waits for its
     # link, or is held by another account too (never content).
     "email_confirmed", "email_proven", "email_source", "pending_email", "email_duplicate",
+    # Since konten 0.3.2: how many passkeys (a second factor too, for the operator's reset).
+    "passkeys",
 }
 
 
@@ -637,10 +641,10 @@ def test_notes2_ac7_an_operator_from_a_provider_confirms_operator_acts_with_a_fr
     anna = make_account("anna")
     # Just signed in at the provider: the act goes through without a password.
     assert boss.post(f"/api/accounts/{anna.id}/block", json={}).status_code == 204
-    # Eleven minutes later a stolen session is not enough any more.
+    # Six minutes later a stolen session is not enough any more (five since konten 0.3.2).
     with SessionLocal() as db:
         for session in db.scalars(select(AuthSession).where(AuthSession.account_id == boss_id)):
-            session.created_at = utcnow() - timedelta(minutes=11)
+            session.created_at = utcnow() - timedelta(minutes=6)
         db.commit()
     assert boss.get("/api/auth/me").status_code == 200
     for refused in (
@@ -650,7 +654,7 @@ def test_notes2_ac7_an_operator_from_a_provider_confirms_operator_acts_with_a_fr
         boss.request("DELETE", f"/api/accounts/{anna.id}", json={}),
     ):
         assert refused.status_code == 403 and _code(refused) == "fresh_sign_in_required"
-        assert refused.json()["detail"]["minutes"] == 10
+        assert refused.json()["detail"]["minutes"] == 5
         assert refused.json()["detail"]["providers"] == [{"slug": "sso", "label": "Test SSO"}]
     assert _row("anna").blocked_at is not None
     # The way back asks the provider for a new sign-in, not its running session; afterwards the act goes through.

@@ -226,6 +226,7 @@ def test_server_secrets_are_encrypted_and_bound_to_the_key(monkeypatch) -> None:
     assert decrypt_secret(sealed) == ""
 
 
+@pytest.mark.usefixtures("public_address")
 def test_an_address_is_taken_once_whatever_its_case(client: TestClient, operator: Account) -> None:
     link = client.post("/api/invites", json={}).json()["link"]
     token = link.rsplit("/", 1)[1]

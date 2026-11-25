@@ -16,6 +16,7 @@ from app.main import app
 from app.models import SIGN_IN_OIDC, Account
 from app.security import MAX_FAILURES, SESSION_COOKIE, brake, start_session
 from app.services import totp
+from app.vendor.nexkonten import factor
 
 from .conftest import PASSWORD, make_account, sign_in
 
@@ -79,7 +80,7 @@ def enrol(client: TestClient) -> tuple[str, list[str]]:
     confirmed = client.post("/api/auth/totp/confirm", json={"code": current_code(secret), "password": PASSWORD})
     assert confirmed.status_code == 200, confirmed.text
     codes = confirmed.json()["recovery_codes"]
-    assert len(codes) == totp.RECOVERY_CODES and confirmed.json()["account"]["two_factor"] is True
+    assert len(codes) == factor.RECOVERY_CODES and confirmed.json()["account"]["two_factor"] is True
     return secret, codes
 
 
@@ -156,7 +157,7 @@ def test_enrolment_needs_the_password_and_a_matching_code(client: TestClient, op
     confirmed = client.post("/api/auth/totp/confirm", json={"code": current_code(secret), "password": PASSWORD})
     assert confirmed.status_code == 200, confirmed.text
     me = client.get("/api/auth/me").json()
-    assert me["two_factor"] is True and me["two_factor_recovery_left"] == 8
+    assert me["two_factor"] is True and me["two_factor_recovery_left"] == factor.RECOVERY_CODES
     # On already: a second enrolment is refused until it is turned off.
     assert client.post("/api/auth/totp/begin").status_code == 409
     # The seed is stored sealed, not in the clear.
@@ -168,7 +169,7 @@ def test_enrolment_needs_the_password_and_a_matching_code(client: TestClient, op
 
 def test_an_enrolment_runs_out(client: TestClient, operator: Account, monkeypatch: pytest.MonkeyPatch) -> None:
     secret = client.post("/api/auth/totp/begin").json()["secret"]
-    monkeypatch.setattr(totp, "ENROLMENT_SECONDS", 0)
+    monkeypatch.setattr(factor, "ENROLMENT_SECONDS", 0)
     client.post("/api/auth/totp/begin")
     late = client.post("/api/auth/totp/confirm", json={"code": current_code(secret), "password": PASSWORD})
     assert late.status_code == 410 and late.json()["detail"]["code"] == "totp_enrolment_expired"
@@ -296,7 +297,7 @@ def test_a_recovery_code_signs_in_once(client: TestClient, operator: Account, cl
     password_step(client)
     used = code_step(client, codes[0])
     assert used.status_code == 200, used.text
-    assert used.json()["two_factor_recovery_left"] == 7
+    assert used.json()["two_factor_recovery_left"] == factor.RECOVERY_CODES - 1
     sign_out(client)
     password_step(client)
     assert code_step(client, codes[0]).status_code == 401
@@ -309,7 +310,7 @@ def test_new_recovery_codes_replace_the_old_ones(client: TestClient, operator: A
     renewed = client.post("/api/auth/totp/recovery", json={"password": PASSWORD})
     assert renewed.status_code == 200
     new = renewed.json()["recovery_codes"]
-    assert len(new) == 8 and not set(new) & set(old)
+    assert len(new) == factor.RECOVERY_CODES and not set(new) & set(old)
     sign_out(client)
     password_step(client)
     assert code_step(client, old[0]).status_code == 401

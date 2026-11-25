@@ -323,6 +323,7 @@ def test_a13_the_mail_pattern_ends_at_the_end(address: str) -> None:
     assert accounts.EMAIL_PATTERN.match("anna@example.com") is not None
 
 
+@pytest.mark.usefixtures("public_address")
 @pytest.mark.parametrize("address", ["anna\x00@example.com", "anna@exa\x1bmple.com", "anna\x7f@example.com",
                                      "anna\x85@example.com", "anna@exa\x9bmple.com"])
 def test_a13_a_mail_address_with_a_control_character_is_refused(client: TestClient, operator: Account,

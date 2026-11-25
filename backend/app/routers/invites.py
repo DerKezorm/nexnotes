@@ -106,7 +106,10 @@ def invite(payload: InviteIn, request: Request, operator: OperatorAccount, db: D
             raise error("too_many_attempts", "Too many invitation mails. Try again later.", 429)
         brake.failed(key)
     try:
-        email, shown = invites.invite_values(KontenStore(db), email=email, display_name=payload.display_name)
+        email, shown = invites.invite_values(
+            KontenStore(db), email=email, display_name=payload.display_name,
+            public_url=settings_service.public_url(db),
+        )
     except nexkonten.AccountError as exc:
         raise fail(exc) from exc
     if email:

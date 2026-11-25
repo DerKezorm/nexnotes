@@ -45,7 +45,8 @@ class RemoveIn(BaseModel):
 def _party(request: Request, db: DbSession) -> passkeys.Party:
     base = settings_service.public_url(db) or str(request.base_url).rstrip("/")
     try:
-        return passkeys.party(base)
+        # A page on localhost gets exactly its host and port; a GET without ``Origin`` counts by its own address.
+        return passkeys.party(base, origin=request.headers.get("origin", ""), request_url=str(request.url))
     except nexkonten.AccountError as exc:
         raise fail(exc) from exc
 

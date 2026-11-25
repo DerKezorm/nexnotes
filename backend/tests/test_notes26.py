@@ -154,6 +154,7 @@ def test_notes26_ac1_a_new_account_gets_the_guide_in_its_language(guide_on, clie
     assert all(note.owner_id == paula.id and note.origin == guide.ORIGIN for note in made)
 
 
+@pytest.mark.usefixtures("public_address")
 def test_notes26_ac1_an_invited_account_gets_it_too_and_its_making_does_not_wait(guide_on, client, operator):
     link = client.post("/api/invites", json={}).json()["link"]
     with new_client() as stranger:
@@ -359,6 +360,7 @@ def test_notes26_ac3_make_again_needs_a_sign_in() -> None:
 # --- When it goes wrong -------------------------------------------------------------------------------------------
 
 
+@pytest.mark.usefixtures("public_address")
 def test_notes26_ec1_a_broken_guide_never_stops_an_account_and_leaves_nothing_half(guide_on, client, operator,
                                                                                     monkeypatch) -> None:
     calls = {"count": 0}

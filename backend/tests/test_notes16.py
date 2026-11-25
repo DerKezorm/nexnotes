@@ -974,7 +974,7 @@ def test_notes16_ec2_a_new_vault_needs_the_second_factor_when_the_account_has_on
     assert again.status_code == 401
 
 
-def test_notes16_ec2_a_provider_account_signs_in_there_again_within_ten_minutes(client, operator, device,
+def test_notes16_ec2_a_provider_account_signs_in_there_again_within_five_minutes(client, operator, device,
                                                                               monkeypatch):
     from app import deps
 

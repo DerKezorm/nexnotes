@@ -59,6 +59,7 @@ from .security import HashingBusy, purge_sessions
 from .services import backups, cleanup, locales, logs, mounts, oidc_store, post_store, settings_service, totp
 from .services.konten_store import KontenStore
 from .vendor import nexoidc
+from .vendor.nexkonten import factor as konten_factor
 from .vendor.nexkonten import setup as konten_setup
 
 logger = logging.getLogger("nexnotes")
@@ -166,6 +167,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     logger.info("nexnotes %s started sqlite=%s", __version__, sqlite3.sqlite_version)
     with SessionLocal() as db:
         konten_setup.announce_setup(KontenStore(db))
+    # NEXNOTES_SECOND_FACTOR_OFF: a warning in the log while the emergency hammer holds.
+    konten_factor.announce_switched_off()
     try:
         yield
     finally:

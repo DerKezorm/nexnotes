@@ -52,7 +52,25 @@ def test_the_party_is_the_public_address_of_the_app(konten: Any) -> None:
     assert (local.rp_id, local.origin) == ("localhost", "http://localhost:5173")
     _refused(konten, lambda: konten.passkeys.party("notes.example.com"), "passkeys_off")
     _refused(konten, lambda: konten.passkeys.party("http://notes.example.com"), "passkeys_off")
+    # A page on localhost (a secure context without https) gets exactly its host and port; other origins change nothing.
+    there = konten.passkeys.party("https://notes.example.com", origin="http://localhost:5180")
+    assert (there.rp_id, there.origin) == ("localhost", "http://localhost:5180")
+    plain = konten.passkeys.party("https://notes.example.com")
+    assert konten.passkeys.party("https://notes.example.com", origin="https://evil.example.org") == plain
 
+
+
+def test_a_get_without_origin_takes_the_address_of_the_request(konten: Any) -> None:
+    """Decided while building (0.3.3): browsers send no ``Origin`` with a GET on the same page; the address of the
+    request stands in for it, by scheme, host and port, and only on localhost does it change the party."""
+    asked = "http://localhost:5180/api/passkeys/sign-in?x=1"
+    there = konten.passkeys.party("https://notes.example.com", request_url=asked)
+    assert (there.rp_id, there.origin) == ("localhost", "http://localhost:5180")
+    plain = konten.passkeys.party("https://notes.example.com")
+    assert konten.passkeys.party("https://notes.example.com", request_url="https://evil.example.org/x") == plain
+    # A given Origin wins over the address of the request.
+    given = konten.passkeys.party("https://notes.example.com", origin="https://evil.example.org", request_url=asked)
+    assert given == plain
 
 def test_adding_a_passkey_is_confirmed_with_the_password(app: Any, konten: Any) -> None:
     alex = app.seed("alex", password=SECRET)
@@ -92,7 +110,8 @@ def test_a_passkey_is_added_and_signs_in_without_a_password(app: Any, konten: An
         assert [entry.uid for entry in store.passkeys_of(alex)] == [key.uid]
         assert store.find_passkey(device.credential_id).account_id == alex
         assert konten.factor.has_factor(store, alex)
-        assert store.second_factor(alex) == konten.SECOND_FACTOR_ACTIVE
+        # Without "second factor for everybody" a passkey is a way in of its own; the password alone still signs in.
+        assert store.second_factor(alex) == konten.SECOND_FACTOR_NONE
         assert device.user_handle == store.user_handle(alex) and len(device.user_handle) >= 16
     assert _sign_in(app, konten, device).id == alex
     assert _sign_in(app, konten, device).id == alex
@@ -176,6 +195,8 @@ def test_the_operator_turns_passkeys_off_and_none_signs_in_but_none_is_deleted(a
 
 
 def test_a_blocked_account_hears_so_only_after_a_valid_answer(app: Any, konten: Any) -> None:
+    if not app.blocking:
+        return  # the app blocks no accounts (StandardAdapter.blocking)
     gone = app.seed("gone", password=SECRET, blocked=True)
     where = _where(konten)
     device = Device(where.origin, where.rp_id)
@@ -221,3 +242,48 @@ def test_the_operators_reset_takes_the_passkeys_too(app: Any, konten: Any, opera
     with app.store() as store:
         assert store.passkeys_of(alex) == [] and not konten.factor.has_factor(store, alex)
     _refused(konten, lambda: _sign_in(app, konten, device), "passkey_invalid")
+
+
+def test_the_operators_reset_shows_the_passkeys_and_removes_them_unless_asked_not_to(
+    app: Any, konten: Any, operator: tuple[Any, str]
+) -> None:
+    """Decided 25.11.2026 (0.3.3): the dialog shows the account's passkeys and offers "Remove the passkeys too",
+    ticked by default (a lost phone may carry one)."""
+    boss, boss_secret = operator
+    alex = app.seed("alex", password=SECRET)
+    device, _ = _register(app, konten, alex, name="Lost phone")
+    with app.store() as store:
+        seen = konten.factor.reset_overview(store, alex, actor_id=boss)
+        _refused(konten, lambda: konten.factor.reset_overview(store, boss, actor_id=boss), "use_account_page")
+    assert [key.name for key in seen.passkeys] == ["Lost phone"] and not seen.authenticator
+    with app.store() as store:
+        konten.factor.operator_reset(store, alex, actor_id=boss, password=boss_secret, remove_passkeys=False)
+    with app.store() as store:
+        assert len(store.passkeys_of(alex)) == 1
+    assert _sign_in(app, konten, device).id == alex
+    with app.store() as store:
+        konten.factor.operator_reset(store, alex, actor_id=boss, password=boss_secret)
+    with app.store() as store:
+        assert store.passkeys_of(alex) == []
+
+
+def test_a_passkey_counts_as_the_second_factor_where_one_is_required(app: Any, konten: Any) -> None:
+    """After the password (or the provider) the passkey is the second step; no authenticator is asked of it."""
+    alex = app.seed("alex", password=SECRET)
+    device, _ = _register(app, konten, alex)
+    with app.store() as store:
+        assert konten.common.next_step(store, store.get_account(alex)) == konten.NEXT_SESSION
+        assert konten.factor.state(store, alex) == konten.SECOND_FACTOR_NONE
+    app.switch("factor_required", True)
+    with app.store() as store:
+        assert store.second_factor(alex) == konten.SECOND_FACTOR_PASSKEY
+        assert konten.factor.state(store, alex) == konten.SECOND_FACTOR_PASSKEY
+        assert konten.common.next_step(store, store.get_account(alex)) == konten.NEXT_PASSKEY
+    waiting = konten.factor.start_waiting(alex)
+    account = _sign_in(app, konten, device)
+    done = konten.factor.finish_waiting_by_passkey(waiting, account.id)
+    assert done is not None and (done.account_id, done.method) == (alex, "passkey")
+    assert konten.factor.waiting_account(waiting) is None
+    plain = app.seed("plain", password=SECRET)
+    with app.store() as store:
+        assert konten.common.next_step(store, store.get_account(plain)) == konten.NEXT_SECOND_FACTOR_SETUP

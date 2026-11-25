@@ -77,12 +77,14 @@ def _clear_pending_cookie(response: Response) -> None:
 
 
 @router.post("/auth/totp/begin", summary="Start enrolling an authenticator app; the seed is shown once")
-def begin(account: Account) -> dict[str, Any]:
+def begin(account: Account, db: DbSession) -> dict[str, Any]:
     if account.sign_in != SIGN_IN_PASSWORD:
         raise error("oidc_account", "This account signs in through OIDC.", 409)
     if account.totp_secret_enc:
         raise error("totp_enabled", "The second factor is on already. Turn it off first.", 409)
-    seed = totp.begin_enrolment(account.id)
+    # The shared module keeps the waiting seed sealed in the database (since 0.3.3): a restart between the QR code
+    # and the first code loses nothing.
+    seed = factor.begin_totp(KontenStore(db), account.id, issuer="nexnotes").seed
     uri = totp.provisioning_uri(seed, account.name)
     return {"secret": seed, "uri": uri, "qr_svg": totp.qr_svg(uri)}
 
@@ -92,21 +94,28 @@ def confirm(payload: ConfirmIn, request: Request, account: Account, db: DbSessio
     row = _row(db, account)
     if row.totp_secret_enc:
         raise error("totp_enabled", "The second factor is on already. Turn it off first.", 409)
-    seed = totp.pending_seed(row.id)
-    if seed is None:
+    store = KontenStore(db)
+    held = store.pending_totp(row.id)
+    if held is None or held[1] <= nexkonten.common.utcnow():
         raise error("totp_enrolment_expired", "The enrolment timed out. Start again.", 410)
     _check_password(request, db, row, payload.password)
-    step = totp.verify_code(seed, payload.code)
-    if step is None:
-        raise error("totp_code_wrong", "The code is not right. Check the time on your phone and try again.", 422)
-    codes = totp.generate_recovery_codes()
-    row.totp_secret_enc = totp.seal_seed(seed)
-    row.totp_recovery = totp.recovery_hashes(codes)
-    row.totp_last_step = step
-    db.commit()
-    totp.drop_enrolment(row.id)
+    if row.totp_recovery:
+        # New codes with every new authenticator, as in 1.0.1 (the module keeps codes an account has).
+        store.set_recovery(row.id, [])
+    try:
+        done = factor.confirm_totp(store, row.id, payload.code, actor_confirmed=True)
+    except nexkonten.AccountError as exc:
+        db.rollback()
+        if exc.code == "enrolment_expired":
+            raise error("totp_enrolment_expired", "The enrolment timed out. Start again.", 410) from exc
+        if exc.code == "code_wrong":
+            raise error("totp_code_wrong", "The code is not right. Check the time on your phone and try again.",
+                        422) from exc
+        raise fail(exc) from exc
+    db.refresh(row)
     logger.info("Second factor turned on name=%s", row.name)
-    return {"recovery_codes": codes, "account": account_view(row)}
+    # ``next``: show the codes once (``show_codes``), then on.
+    return {"recovery_codes": done.codes, "next": done.next, "account": account_view(row)}
 
 
 @router.post("/auth/totp/disable", summary="Turn the second factor off; needs the password")
@@ -126,10 +135,11 @@ def new_recovery_codes(payload: PasswordIn, request: Request, account: Account, 
     if not row.totp_secret_enc:
         raise error("totp_not_enabled", "The second factor is not on.", 409)
     _check_password(request, db, row, payload.password)
-    codes = totp.generate_recovery_codes()
-    row.totp_recovery = totp.recovery_hashes(codes)
-    db.commit()
-    logger.info("Recovery codes renewed name=%s", row.name)
+    try:
+        codes = factor.new_codes(KontenStore(db), row.id, actor_confirmed=True)
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
+    db.refresh(row)
     return {"recovery_codes": codes, "account": account_view(row)}
 
 
@@ -144,6 +154,26 @@ def _reset(db: DbSession, row: AccountRow) -> None:
 class FactorResetIn(OperatorConfirmIn):
     #: The paired devices go too (the lost phone may be one of them): on from the start, the page asks.
     disconnect_devices: bool = True
+    #: The passkeys go too (a lost phone may carry one): on from the start, the page asks (since konten 0.3.3).
+    remove_passkeys: bool = True
+
+
+@router.get("/accounts/{account_id}/totp/reset", summary="Operator: what a reset of the second factor takes away")
+def operator_reset_overview(
+    account_id: Annotated[int, Path(ge=1)], operator: OperatorAccount, db: DbSession
+) -> dict[str, Any]:
+    """``factor.reset_overview``: the authenticator, the recovery codes left, the passkeys by name and the paired
+    devices, for the dialog before the reset."""
+    try:
+        seen = factor.reset_overview(KontenStore(db), account_id, actor_id=operator.id)
+    except nexkonten.AccountError as exc:
+        raise fail(exc) from exc
+    return {
+        "authenticator": seen.authenticator,
+        "recovery_codes": seen.recovery_codes,
+        "passkeys": [{"uid": key.uid, "name": key.name} for key in seen.passkeys],
+        "devices": [{"uid": entry.uid, "label": entry.label} for entry in seen.devices],
+    }
 
 
 @router.post("/accounts/{account_id}/totp/reset", summary="Operator: take the second factor of a locked-out account")
@@ -154,9 +184,9 @@ def operator_reset(
     operator: OperatorAccount,
     db: DbSession,
 ) -> dict[str, Any]:
-    """Through the shared account module (``factor.operator_reset``): the time-based code, the recovery codes and
-    the passkeys go, every browser session and waiting sign-in ends, with ``disconnect_devices`` the paired devices
-    too, and a confirmed address hears of it."""
+    """Through the shared account module (``factor.operator_reset``): the time-based code, the recovery codes and,
+    with ``remove_passkeys``, the passkeys go, every browser session and waiting sign-in ends, with
+    ``disconnect_devices`` the paired devices too, and a confirmed address hears of it."""
     # Connected: the second factor is the directory service's (or authentik's); the emergency account keeps its own.
     confirm_operator(request, db, operator, payload.current_password)
     if account_id == operator.id:
@@ -169,7 +199,8 @@ def operator_reset(
         raise error("totp_not_enabled", "The second factor is not on.", 409)
     try:
         mail = factor.operator_reset(store, row.id, actor_id=operator.id, actor_confirmed=True,
-                                     disconnect_devices=payload.disconnect_devices)
+                                     disconnect_devices=payload.disconnect_devices,
+                                     remove_passkeys=payload.remove_passkeys)
     except nexkonten.AccountError as exc:
         raise fail(exc) from exc
     totp.forget_account(row.id)

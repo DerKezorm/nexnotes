@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import ipaddress
 import logging
-from datetime import timedelta
 from functools import lru_cache
 from typing import Annotated
 
@@ -24,6 +23,7 @@ from .models import OPERATOR, SIGN_IN_PASSWORD, TOKEN_DEVICE, AuthSession, OidcL
 from .models import Account as AccountRow
 from .security import SESSION_COOKIE, account_out, brake, hash_token, session_account, session_owner
 from .services import accounts, apitokens, logs, totp
+from .vendor.nexkonten.common import FRESH_SIGN_IN_MINUTES, fresh_sign_in
 
 DbSession = Annotated[Session, Depends(get_db)]
 
@@ -257,7 +257,8 @@ def reauth_succeeded(request: Request, db: Session, account: AccountRow) -> None
 
 #: How old the session of an account that signs in through a provider may be for an operator act or another act a
 #: stolen session must not be enough for (a new vault, NOTES-16 EC-2).
-OPERATOR_FRESH_MINUTES = 10
+#: The shared module's window (``nexkonten.common.FRESH_SIGN_IN_MINUTES``, five minutes since 0.3.2).
+OPERATOR_FRESH_MINUTES = FRESH_SIGN_IN_MINUTES
 
 
 def _fresh_from_provider(request: Request, db: Session, row: AccountRow) -> None:
@@ -269,8 +270,7 @@ def _fresh_from_provider(request: Request, db: Session, row: AccountRow) -> None
     session = None
     if cookie and not _bearer(request):
         session = db.scalar(select(AuthSession).where(AuthSession.token_hash == hash_token(cookie)))
-    if (session is not None and session.account_id == row.id
-            and utcnow() - session.created_at <= timedelta(minutes=OPERATOR_FRESH_MINUTES)):
+    if session is not None and session.account_id == row.id and fresh_sign_in(session.created_at, utcnow()):
         return
     providers = [
         {"slug": entry.slug, "label": entry.label}
@@ -292,8 +292,7 @@ def confirm_fresh_session(request: Request, db: Session, account: AccountRow) ->
     session = None
     if cookie and not _bearer(request):
         session = db.scalar(select(AuthSession).where(AuthSession.token_hash == hash_token(cookie)))
-    if (session is not None and session.account_id == account.id
-            and utcnow() - session.created_at <= timedelta(minutes=OPERATOR_FRESH_MINUTES)):
+    if session is not None and session.account_id == account.id and fresh_sign_in(session.created_at, utcnow()):
         return
     raise error("fresh_sign_in_required", "Sign in again first: this needs a sign-in from the last "
                 f"{OPERATOR_FRESH_MINUTES} minutes.", 403, minutes=OPERATOR_FRESH_MINUTES, providers=[])

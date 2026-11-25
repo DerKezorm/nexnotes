@@ -83,12 +83,15 @@ def _listed(db: DbSession, row: AccountRow, linked: dict[int, list[dict[str, obj
     for private in ("new_password_origin", "new_sign_in_mail", "former_name"):
         view.pop(private, None)
     view.pop("password_reset_notice", None)
+    view.pop("second_factor_off", None)
     store = KontenStore(db)
     konto = store.get_account(row.id)
     return {
         **view,
         # The address is held by another account too (left by 1.0.1): it signs nobody in, the list says so.
         "email_duplicate": bool(konto and konten_login.duplicate_email(store, konto)),
+        # A passkey is a second factor too: the operator can reset an account that has only passkeys.
+        "passkeys": len(store.passkeys_of(row.id)),
         "locked": accounts.is_locked(row),
         "blocked": row.blocked_at is not None,
         "blocked_at": row.blocked_at.isoformat() if row.blocked_at else None,

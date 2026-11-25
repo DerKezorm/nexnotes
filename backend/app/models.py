@@ -130,6 +130,11 @@ class Account(Base):
     totp_secret_enc: Mapped[str] = mapped_column(Text, default="")
     totp_recovery: Mapped[str] = mapped_column(Text, default="")
     totp_last_step: Mapped[int] = mapped_column(Integer, default=0)
+    #: An authenticator being set up (the shared account module, since 0.3.3): its seed sealed in a context of its
+    #: own, waiting ten minutes for its first code; it survives a restart between the QR code and that code. Never a
+    #: factor while it waits.
+    totp_pending: Mapped[str] = mapped_column(Text, default="", server_default="")
+    totp_pending_until: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     #: The profile picture (``services/avatars.py``): a square WebP drawn anew, loaded only when asked for.
     avatar: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
     avatar_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)

@@ -40,7 +40,6 @@ from ..security import (
     device_of,
     end_all_sessions,
     end_session,
-    hash_token,
     server_key,
     session_account,
     session_cookie_age,
@@ -231,6 +230,9 @@ def account_view(account: AccountRow, db: Session | None = None) -> dict[str, An
         "new_password_origin": account.new_password_origin or "",
         "language": account.language,
         "two_factor": bool(account.totp_secret_enc),
+        # NEXNOTES_SECOND_FACTOR_OFF: the emergency hammer holds, no second factor is asked of anybody (the page says
+        # so plainly, ``account.secondFactorOff``).
+        "second_factor_off": nexkonten.factor.switched_off(),
         "two_factor_recovery_left": len(totp.load_recovery(account.totp_recovery)) if account.totp_secret_enc else 0,
         "password_changed_at": account.password_changed_at.isoformat() if account.password_changed_at else None,
         # The password was set through the operator's reset link; the page says so until it is put away.
@@ -251,18 +253,22 @@ def known_device(db: DbSession, request: Request, response: Response, account: A
                         samesite="lax", secure=secure_cookie(request), path="/api/auth")
 
 
-def browser_known(db: Session, request: Request, account_id: int) -> bool:
-    """The browser signed in as this account before: a mark of the shared module, or a cookie of 1.0.1
-    (``<id>.<nonce>.<mark>``, read for one version so that owners stay known)."""
+def browser_mark(db: Session, request: Request, account_id: int) -> str:
+    """The mark of a browser that signed in as this account before, "" for none: a mark of the shared module, or a
+    cookie of 1.0.1 (``<id>.<nonce>.<mark>``, read for one version so that owners stay known)."""
     cookie = request.cookies.get(DEVICE_COOKIE, "")
     if not cookie:
-        return False
+        return ""
     store = KontenStore(db)
     try:
         key = store.device_key(account_id)
     except LookupError:
-        return False
-    return konten_sessions.is_known(cookie, server_key(), key, older=lambda entry: device_of(db, entry) == account_id)
+        return ""
+    return konten_sessions.known_mark(cookie, server_key(), key, older=lambda entry: device_of(db, entry) == account_id)
+
+
+def browser_known(db: Session, request: Request, account_id: int) -> bool:
+    return bool(browser_mark(db, request, account_id))
 
 
 def sign_in(db: DbSession, request: Request, response: Response, account: AccountRow, *,
@@ -364,28 +370,29 @@ def login(payload: LoginIn, request: Request, response: Response, db: DbSession)
     behind_unknown_proxy(request)
     store = KontenStore(db)
     meant = konten_login.resolve_login(store, payload.name)
-    known = meant.id if meant is not None and browser_known(db, request, int(meant.id)) else None
+    # A browser that signed in as this account before counts in a pot of its own (the module's brake, five free):
+    # neither a stranger guessing its name nor one spraying from the same address (a household behind one router)
+    # holds it, and its own wrong passwords still wait.
+    mark = browser_mark(db, request, int(meant.id)) if meant is not None else ""
+    known = meant.id if mark and meant is not None else None
     keys = konten_login.attempt_key(store, payload.name, ip)
-    if known is not None:
-        # A browser that signed in as this account before is counted on its own (five free, as in 1.0.1): neither a
-        # stranger guessing its name nor one spraying from the same address (a household behind one router) holds
-        # it, and its own wrong passwords still wait.
-        keys = (f"browser:{hash_token(request.cookies.get(DEVICE_COOKIE, ''))[:24]}|{known}",)
-    wait = BRAKE.claim(keys)
+    wait = BRAKE.claim(keys, browser=mark)
     if wait:
         raise too_many(wait)
     try:
         konto = konten_login.authenticate(store, payload.name, payload.password, known_browser=known)
     except nexkonten.AccountError as exc:
         raise fail(exc) from exc
-    BRAKE.succeeded(keys)
+    BRAKE.succeeded(keys, browser=mark)
     account = db.get(AccountRow, int(konto.id))
     assert account is not None
     if not settings_service.get(db, "password_login") and account.role != OPERATOR:
         # The operator keeps the password as the way in when the provider is down.
         raise error("password_login_off", "Sign-in with a password is turned off.", 403)
-    if store.second_factor(account.id) == nexkonten.SECOND_FACTOR_ACTIVE:
+    step = nexkonten.common.next_step(store, konto)
+    if step in (nexkonten.NEXT_SECOND_FACTOR, nexkonten.NEXT_PASSKEY):
         # Nothing opens yet: the browser gets a short-lived cookie that names the waiting sign-in and nothing else.
+        # Where the operator asks a second factor of everybody, a passkey is one: then it is the only second step.
         response.set_cookie(
             PENDING_COOKIE,
             totp.start_pending(account.id, remember=payload.remember),
@@ -400,6 +407,9 @@ def login(payload: LoginIn, request: Request, response: Response, db: DbSession)
         if store.passkeys_of(account.id):
             # The code step offers "Use a passkey" (only then: the answer of 1.0.1 stays as it was).
             answer["passkey"] = True
+        if step == nexkonten.NEXT_PASSKEY:
+            # No authenticator: the passkey is the second step, there is no code to ask.
+            answer["code"] = False
         return answer
     konten_login.succeeded(store, account.id)
     return sign_in(db, request, response, account, remember=payload.remember, tell=True)
@@ -622,7 +632,9 @@ def set_new_sign_in_mail(payload: SwitchIn, account: Account, db: DbSession) -> 
 @router.get("/auth/sessions", summary="Where the own account is signed in: browsers and paired devices")
 def my_sessions(request: Request, account: Account, db: DbSession) -> list[dict[str, Any]]:
     current = session_uid(db, request.cookies.get(SESSION_COOKIE))
-    return konten_sessions.listing(KontenStore(db), account.id, current)
+    # Browsers by name ("Firefox on Linux") in the account's language, never the stored User-Agent.
+    language = (account.language or account.browser_language or "en")[:2].lower()
+    return konten_sessions.listing(KontenStore(db), account.id, current, language=language)
 
 
 @router.delete("/auth/sessions/{uid}", status_code=204, summary="Sign one browser or device of the own account out")

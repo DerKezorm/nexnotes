@@ -7,10 +7,10 @@ The contract tests in ``backend/tests/nexkonten/`` run the module's flows agains
 The database is the one of the test session (``tests/conftest.py`` empties it before every test and runs ``init_db``).
 ``legacy()`` loads the database that 1.0.1 itself built (``tests/bestand``).
 
-⚠️ **What nexnotes does not have is skipped, not faked:** nexnotes' invitations never fixed a username and are used
-by one person each (no spaces several may follow). A contract test that asks for such an invitation is skipped with
-that reason, as one that seeds an account whose second factor alone is required (nexnotes has the operator's switch
-for everybody, ``two_factor_required``, which the contract's ``switch`` covers).
+⚠️ **What nexnotes does not have is said, not faked:** nexnotes' invitations are used by one person each
+(``reusable_invites``), and a second factor is required only by the operator's switch for everybody
+(``two_factor_required``, the contract's ``switch``), never of one account alone (``required_second_factor``): the
+contract passes over those parts. An invitation that fixes a username is skipped with its reason.
 """
 
 from __future__ import annotations
@@ -36,6 +36,10 @@ class Adapter(StandardAdapter):
     package = "app.vendor.nexkonten"
     #: 10 wrong passwords, then 15 minutes (``security.MAX_FAILURES``, ``LOCK_MINUTES``).
     lock_after: int | None = 10
+    #: What nexnotes has (since 0.3.2 the contract passes over the rest instead of skipping it).
+    blocking: bool = True
+    required_second_factor: bool = False
+    reusable_invites: bool = False
 
     def start(self) -> None:
         from app.security import brake
@@ -81,8 +85,6 @@ class Adapter(StandardAdapter):
         from app.security import hash_password
         from app.services import totp
 
-        if second_factor == "required":
-            pytest.skip("nexnotes requires a second factor only by the operator's switch for everybody")
         with SessionLocal() as db:
             row = Account(
                 name=username,
@@ -123,8 +125,6 @@ class Adapter(StandardAdapter):
         reusable: bool = False,
     ) -> str:
         """As ``POST /api/invites`` makes it (``accounts.create_invite``)."""
-        if reusable:
-            pytest.skip("nexnotes has no invitations several people may follow")
         if username:
             pytest.skip("nexnotes' invitations never fixed a username")
         from app.db import SessionLocal

@@ -45,7 +45,16 @@ from ..models import Invite as InviteRow
 from ..models_accounts import EmailChange as EmailChangeRow
 from ..models_accounts import FailedUnknown, FormerName, SetupClaim
 from ..models_accounts import Passkey as PasskeyRow
-from ..security import LOCK_MINUTES, MAX_FAILURES, hash_password, hash_token, server_key, verify_password
+from ..security import (
+    LOCK_MINUTES,
+    MAX_FAILURES,
+    decrypt_secret,
+    encrypt_secret,
+    hash_password,
+    hash_token,
+    server_key,
+    verify_password,
+)
 from ..vendor import nexkonten
 from ..vendor.nexkonten import (
     Access,
@@ -71,6 +80,8 @@ PROVIDER = "provider"
 #: already; "Passkeys allowed" is new and on from the start.
 SWITCH_FACTOR_REQUIRED = "two_factor_required"
 SWITCH_PASSKEYS = "passkeys_allowed"
+#: The authenticator being set up is sealed apart from a confirmed one (``totp.seal_seed``).
+PENDING_TOTP_CONTEXT = "totp-pending"
 #: A paired device in the list "Where you are signed in": its uid is the token row's id with this mark in front.
 DEVICE_UID = "device-"
 
@@ -156,7 +167,31 @@ class KontenStore:
             operator=row.role == OPERATOR,
             picture=picture,
             language=row.language or "",
+            offered_email=self._offered(row),
         )
+
+    @staticmethod
+    def _offered(row: Account) -> str:
+        """The provider's address on offer (``provider_email``): not the own one, not one the account declined
+        (``provider_email_off``, kept so that the next sign-in does not ask again)."""
+        offer = row.provider_email or ""
+        if not offer or (row.email and row.email.lower() == offer.lower()):
+            return ""
+        if row.provider_email_off and row.provider_email_off.lower() == offer.lower():
+            return ""
+        return offer
+
+    def set_offered_email(self, account_id: AccountId, address: str) -> None:
+        row = self._row(account_id)
+        if row is None:
+            return
+        if address:
+            row.provider_email = address
+        else:
+            # Taken or declined: either way it is not asked again.
+            row.provider_email_off = row.provider_email or ""
+            row.provider_email = ""
+        self._flush()
 
     def count_accounts(self) -> int:
         return int(self.db.scalar(select(func.count()).select_from(Account)) or 0)
@@ -371,11 +406,16 @@ class KontenStore:
         row = self._row(account_id)
         if row is None:
             return nexkonten.SECOND_FACTOR_NONE
-        if row.totp_secret_enc or self.passkeys_of(account_id):
+        if nexkonten.factor.switched_off():
+            return nexkonten.SECOND_FACTOR_NONE
+        if row.totp_secret_enc:
+            # Also a seed that does not open any more: the second factor fails closed.
             return nexkonten.SECOND_FACTOR_ACTIVE
-        if self.factor_required() and row.sign_in == SIGN_IN_PASSWORD:
-            return nexkonten.SECOND_FACTOR_REQUIRED
-        return nexkonten.SECOND_FACTOR_NONE
+        state = nexkonten.factor.state(self, account_id)
+        if state == nexkonten.SECOND_FACTOR_REQUIRED and row.sign_in != SIGN_IN_PASSWORD:
+            # An account through a provider brings the provider's second factor.
+            return nexkonten.SECOND_FACTOR_NONE
+        return state
 
     # --- Pictures ------------------------------------------------------------------------------------------------
     def set_provider_picture(self, account_id: AccountId, picture: Picture) -> bool:
@@ -543,6 +583,21 @@ class KontenStore:
         else:
             row.totp_secret_enc = ""
             row.totp_last_step = 0
+        self.db.flush()
+
+    def pending_totp(self, account_id: AccountId) -> tuple[str, datetime] | None:
+        row = self._row(account_id)
+        if row is None or not row.totp_pending or row.totp_pending_until is None:
+            return None
+        seed = decrypt_secret(row.totp_pending, PENDING_TOTP_CONTEXT)
+        return (seed, _aware(row.totp_pending_until)) if seed else None
+
+    def set_pending_totp(self, account_id: AccountId, seed: str | None, until: datetime | None) -> None:
+        row = self._row(account_id)
+        if row is None:
+            return
+        row.totp_pending = encrypt_secret(seed, PENDING_TOTP_CONTEXT) if seed and until else ""
+        row.totp_pending_until = until if seed and until else None
         self.db.flush()
 
     def claim_step(self, account_id: AccountId, step: int) -> bool:

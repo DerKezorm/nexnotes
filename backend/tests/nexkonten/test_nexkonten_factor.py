@@ -4,6 +4,7 @@ sign-in that waits for the code; the operator's reset and switch; and what the o
 from __future__ import annotations
 
 import time
+from datetime import timedelta
 from typing import Any
 
 import pytest
@@ -53,6 +54,63 @@ def test_a_time_based_code_counts_only_once_a_code_confirmed_it_and_is_kept_seal
     raw = app.raw_text()
     assert enrolment.seed not in raw and enrolment.seed.lower() not in raw
     assert not any(entry in raw or entry.replace("-", "") in raw for entry in done.codes)
+
+
+def test_a_half_set_up_authenticator_waits_sealed_in_the_store_across_a_restart(
+    app: Any, konten: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decided while building (0.3.3): between the QR code and the first code the seed waits in the database,
+    sealed, not only in memory; a restart in between loses nothing. It is no factor until a code confirmed it, and it
+    waits ten minutes."""
+    secret = password()
+    alex = app.seed("alex", password=secret)
+    kim = app.seed("kim", password=secret)
+    with app.store() as store:
+        enrolment = konten.factor.begin_totp(store, alex, issuer=ISSUER)
+        late = konten.factor.begin_totp(store, kim, issuer=ISSUER)
+    konten.factor.forget()  # the restart: nothing is left in memory
+    raw = app.raw_text()
+    assert enrolment.seed not in raw and enrolment.seed.lower() not in raw
+    with app.store() as store:
+        assert store.totp_seed(alex) is None and not konten.factor.has_factor(store, alex)
+        assert store.pending_totp(alex)[0] == enrolment.seed
+        code = konten.factor.code_at(enrolment.seed, time.time())
+        assert konten.factor.confirm_totp(store, alex, code, password=secret).codes
+    with app.store() as store:
+        assert store.totp_seed(alex) == enrolment.seed and store.pending_totp(alex) is None
+    now = konten.common.utcnow()
+    monkeypatch.setattr(konten.common, "utcnow", lambda: now + timedelta(minutes=11))
+    with app.store() as store:
+        code = konten.factor.code_at(late.seed, time.time())
+        _refused(konten, lambda: konten.factor.confirm_totp(store, kim, code, password=secret), "enrolment_expired")
+
+
+def test_the_emergency_hammer_switches_the_second_factor_off_for_everybody(
+    app: Any, konten: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Decided 25.11.2026 (0.3.3): ``<APP>_SECOND_FACTOR_OFF`` beats every factor and "required of everybody";
+    nothing is deleted, and without it everything counts again."""
+    secret = password()
+    alex = app.seed("alex", password=secret)
+    kim = app.seed("kim", password=secret)
+    _set_up(app, konten, alex, secret)
+    app.switch("factor_required", True)
+    with app.store() as store:
+        assert konten.common.next_step(store, store.get_account(alex)) == konten.NEXT_SECOND_FACTOR
+        assert konten.common.next_step(store, store.get_account(kim)) == konten.NEXT_SECOND_FACTOR_SETUP
+    assert konten.factor.switched_off() is False
+    app_name = konten.current().app_name
+    assert konten.current().second_factor_off_env == app_name.upper().replace("-", "_") + "_SECOND_FACTOR_OFF"
+    monkeypatch.setenv(konten.current().second_factor_off_env, "1")
+    assert konten.factor.switched_off() is True
+    with app.store() as store:
+        for account_id in (alex, kim):
+            assert konten.common.next_step(store, store.get_account(account_id)) == konten.NEXT_SESSION
+            assert konten.factor.state(store, account_id) == konten.SECOND_FACTOR_NONE
+        assert store.totp_seed(alex)
+    monkeypatch.delenv(konten.current().second_factor_off_env)
+    with app.store() as store:
+        assert konten.common.next_step(store, store.get_account(alex)) == konten.NEXT_SECOND_FACTOR
 
 
 def test_a_code_counts_once_also_for_two_requests_at_the_same_moment(app: Any, konten: Any) -> None:
@@ -180,6 +238,8 @@ def test_the_waiting_sign_in_takes_the_code_and_ends_after_five_wrong_ones(app: 
 
 
 def test_a_blocked_account_gets_no_further_with_its_code(app: Any, konten: Any) -> None:
+    if not app.blocking:
+        return  # the app blocks no accounts (StandardAdapter.blocking)
     gone = app.seed("gone", password=password(), blocked=True)
     seed = konten.factor.new_seed()
     with app.store() as store:
@@ -250,3 +310,35 @@ def test_an_account_without_a_password_replaces_its_authenticator_only_after_a_f
         konten.factor.confirm_totp(store, viaprovider, code, actor_confirmed=True)
     with app.store() as store:
         assert store.totp_seed(viaprovider) == enrolment.seed
+
+
+def test_a_factor_set_up_at_sign_in_shows_its_codes_before_the_session(app: Any, konten: Any) -> None:
+    """The operator asks a second factor of everybody: the session that can only set it up gets the ten codes and
+    ``show_codes``; then a full session."""
+    alex = app.seed("alex", password=password())
+    app.switch("factor_required", True)
+    with app.store() as store:
+        assert konten.common.next_step(store, store.get_account(alex)) == konten.NEXT_SECOND_FACTOR_SETUP
+        started = konten.sessions.start(store, alex, cookie_name="s", secure=True, stage=konten.model2.STAGE_SETUP)
+        store.commit()
+    with app.store() as store:
+        enrolment = konten.factor.begin_totp(store, alex, issuer=ISSUER)
+        code = konten.factor.code_at(enrolment.seed, time.time())
+        done = konten.factor.confirm_totp(store, alex, code, actor_confirmed=True)
+    assert done.next == konten.NEXT_SHOW_CODES and len(done.codes) == konten.factor.RECOVERY_CODES
+    with app.store() as store:
+        konten.sessions.finish_setup(store, started.session)
+        store.commit()
+    with app.store() as store:
+        assert konten.sessions.current(store, started.token).stage == konten.model2.STAGE_FULL
+        fresh = konten.factor.new_codes(store, alex, actor_confirmed=True)
+    assert len(fresh) == konten.factor.RECOVERY_CODES
+
+
+def test_a_fresh_sign_in_at_the_provider_is_at_most_five_minutes_old(konten: Any) -> None:
+    now = konten.common.utcnow()
+    assert konten.common.FRESH_SIGN_IN_MINUTES == 5
+    assert konten.common.fresh_sign_in(now - timedelta(minutes=4, seconds=59), now) is True
+    assert konten.common.fresh_sign_in(now - timedelta(minutes=5, seconds=1), now) is False
+    assert konten.common.fresh_sign_in(now + timedelta(minutes=1), now) is False
+    assert konten.common.fresh_sign_in(None, now) is False

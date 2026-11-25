@@ -42,7 +42,6 @@ from ..vendor.nexoidc import (
     Link,
     Provider,
     ProviderValues,
-    protocol,
     secret_context,
 )
 from . import accounts, settings_service
@@ -104,11 +103,6 @@ def clean_name(raw: str) -> str:
     return nexkonten.names.clean_username(raw)
 
 
-def provider_only(account: Account) -> bool:
-    """The account signs in through a provider only (no password of its own here)."""
-    return account.sign_in == SIGN_IN_OIDC or not account.password_hash
-
-
 def clean_address(value: str | None) -> str:
     """A provider's address as nexnotes keeps addresses: one line, no control or format characters, the form of
     ``accounts.EMAIL_PATTERN``, at most 255 characters; "" when it is none of that."""
@@ -126,50 +120,25 @@ def address_taken(db: Session, address: str, own_id: int) -> bool:
     return found is not None
 
 
-def take_address(db: Session, account: Account, address: str) -> bool:
-    """The account takes the provider's address that it was offered (its own act, on the account page): it counts
-    from then on, follows the provider and goes with the last link. False when another account has it."""
-    if address_taken(db, address, account.id):
-        logger.warning("Provider address not taken, another account has it name=%s address=%s",
-                       account.name, protocol.masked(address))
-        return False
-    account.email = address
-    account.email_source = FROM_PROVIDER
-    account.email_confirmed = True
-    account.email_proven = False
-    account.provider_email = ""
-    return True
-
-
 def from_provider(db: Session, account: Account, raw: str | None) -> None:
-    """What a provider says about the address at a sign-in or a link (the caller commits). ``email_verified`` is
-    never read (the shared sign-in module): the address finds nobody. An account through providers only follows it
-    (``nexkonten.profiles.follow_provider_email``: it does not count and is not proven, and an own address of the
-    account stays); every other account is offered it on its account page and takes it only when it says so (then
-    it counts, the person's own act). Never an address another account has."""
+    """What a provider says about the address at a sign-in or a link (the caller commits), through the shared module
+    (``nexkonten.profiles.provider_email``): ``email_verified`` is never read, the address finds nobody. An account
+    through providers only follows it (it does not count and is not proven, and an own address stays); an account
+    with a password is only offered it and takes it in its profile, with its password, like a change of address. Never
+    an address another account has, never one the account declined."""
     address = clean_address(raw)
     if not address:
         return
-    if account.email and account.email.lower() == address.lower():
-        account.provider_email = ""
-        return
-    if provider_only(account):
-        db.flush()
-        if nexkonten.profiles.follow_provider_email(KontenStore(db), account.id, address):
-            db.refresh(account)
-            account.provider_email = ""
-        return
-    account.provider_email = address
+    db.flush()
+    nexkonten.profiles.provider_email(KontenStore(db), account.id, address)
+    db.refresh(account)
 
 
 def offered_address(db: Session, account: Account) -> str:
-    """The address the account page offers: one a provider knows, other than the own, not refused, nobody else's."""
-    offer = account.provider_email
-    if not offer or (account.email and account.email.lower() == offer.lower()):
-        return ""
-    if account.provider_email_off and account.provider_email_off.lower() == offer.lower():
-        return ""
-    return "" if address_taken(db, offer, account.id) else offer
+    """The address the profile offers ("Use the address from <provider>?"); "" for none."""
+    konto = KontenStore(db).get_account(account.id)
+    offer = konto.offered_email if konto is not None else ""
+    return "" if not offer or address_taken(db, offer, account.id) else offer
 
 
 def _own_links(db: Session, account_id: int) -> bool:
@@ -401,7 +370,7 @@ class SqlStore:
         self.db.add(row)
         self.db.flush()
         if not address and clean_address(email):
-            nexkonten.profiles.follow_provider_email(store, row.id, clean_address(email))
+            nexkonten.profiles.provider_email(store, row.id, clean_address(email))
             self.db.refresh(row)
         if invitation is not None:
             accounts.redeem(self.db, invitation, row, consumed=True, commit=False)
