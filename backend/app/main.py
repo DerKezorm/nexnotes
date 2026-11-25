@@ -141,6 +141,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     # The shared backup module on this data folder (a test may have moved it since the import).
     backups.configure()
+    # What a stopped backup left behind (a hidden part, an empty archive) goes at once (sicherung 1.0.1).
+    backups.tidy_at_start()
     # Said at every start while it lasts: a database on a share can lose notes.
     backups.warn_at_start()
     backups.apply_pending()

@@ -18,7 +18,7 @@ __all__ = [
     "ATTACHMENTS", "AUTOMATIC_KINDS", "DATABASE_ENTRY", "MANIFEST", "MANUAL", "MEDIA_NAME", "MEDIA_PREFIX", "SCHEDULED",
     "SECRET_ENTRY", "UPDATE", "BackupError", "apply_pending", "check", "configure", "create", "entries", "folder",
     "media_root", "path_of", "pending_folder", "prune", "receive", "remove", "report_failed_restore", "run_forever",
-    "stage_restore", "warn_at_start",
+    "stage_restore", "tidy_at_start", "warn_at_start",
 ]
 
 configure = backup_hooks.configure
@@ -28,6 +28,7 @@ folder = archives.folder
 path_of = archives.path_of
 prune = archives.prune
 receive = archives.receive
+tidy_at_start = archives.tidy_at_start
 remove = archives.remove
 check = restore.check
 stage_restore = restore.stage_restore

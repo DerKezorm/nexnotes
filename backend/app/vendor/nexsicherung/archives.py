@@ -6,7 +6,7 @@
 * **A copy is written under a hidden name** (``.<app>-<stamp>-….zip.part``, never listed) and takes its name only
   when whole (``tools.settle``: no name is reserved before, none overwritten); a failed one is thrown away, the older
   ones stay. A full disk says so (``backup_disk_full``, 507). What a stopped process left goes at the next start
-  (``tidy_at_start``).
+  (``tidy_at_start``, called by the app's start).
 * **Only automatic copies are pruned** (``scheduled`` and ``update``), the newest ``keep`` stay; one made by hand or
   brought in from elsewhere stays until deleted.
 * **One at a time:** while a copy is made, another one is refused (``backup_running``, 409); the schedule waits.
@@ -241,27 +241,37 @@ def tidy_leftovers() -> None:
             continue
 
 
-def tidy_at_start() -> None:
-    """At the start, before anything of the module runs (``restore.apply_pending``): the hidden work files of a copy
-    or an upload a stopped process left (``.….part``), whatever their age, and an archive under one of the module's
-    names that is empty. Versions before 1.0.1 took the name before ``pack`` wrote the copy; a process stopped in
-    between (the container stopped mid-backup) left that name empty, listed as not readable for good."""
-    base = folder()
-    if not base.is_dir():
-        return
-    pattern = current().name_pattern
-    for path in base.iterdir():
-        try:
-            if path.is_symlink() or not path.is_file():
+def tidy_at_start() -> bool:
+    """**The app calls it at its start**, right after ``configure`` (every app, ``restore="now"`` too; nexmail):
+    the hidden work files of a copy or an upload a stopped process left (``.….part``), whatever their age, and an
+    archive under one of the module's names that is empty. Versions before 1.0.1 took the name before ``pack`` wrote
+    the copy; a process stopped in between (the container stopped mid-backup) left that name empty, listed as not
+    readable for good. ``restore.apply_pending`` calls it as well; calling it again is harmless. While a copy, a
+    staging or an upload of this process is under way it leaves everything as it is (their work files are theirs)
+    and returns False."""
+    if not lock.acquire(blocking=False):
+        return False
+    try:
+        base = folder()
+        if not base.is_dir():
+            return True
+        pattern = current().name_pattern
+        for path in base.iterdir():
+            try:
+                if path.is_symlink() or not path.is_file():
+                    continue
+                if path.name.startswith(".") and path.name.endswith(".part"):
+                    path.unlink()
+                elif pattern.fullmatch(path.name) and path.stat().st_size == 0:
+                    path.unlink()
+                    forget(path.name)
+                    current().logger.warning("An empty backup left by a stopped process was removed name=%s",
+                                             path.name)
+            except OSError:
                 continue
-            if path.name.startswith(".") and path.name.endswith(".part"):
-                path.unlink()
-            elif pattern.fullmatch(path.name) and path.stat().st_size == 0:
-                path.unlink()
-                forget(path.name)
-                current().logger.warning("An empty backup left by a stopped process was removed name=%s", path.name)
-        except OSError:
-            continue
+        return True
+    finally:
+        lock.release()
 
 
 # --- Bringing one in from elsewhere ---------------------------------------------------------------------------------

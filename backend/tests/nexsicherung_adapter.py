@@ -68,6 +68,7 @@ class Adapter(StandardAdapter):
 
         engine.dispose()
         backups.configure()
+        backups.tidy_at_start()
         backups.apply_pending()
         init_db()
 

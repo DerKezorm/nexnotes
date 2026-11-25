@@ -185,14 +185,33 @@ def test_what_a_stopped_copy_left_goes_at_the_start(app: Any, sicherung: Any) ->
     # Since 1.0.1 a copy is packed under a hidden work name; one stopped a moment ago.
     part = base / f".{app_name}-2026-11-25-031500-1-2.zip.part"
     part.write_bytes(b"PK half")
-    if sicherung.current().restore == "restart":
-        app.restart()
-    else:
-        # An app that restores at once calls apply_pending at its start as well (it tidies there).
-        sicherung.restore.apply_pending()
+    # The app's own start (every app, restore = "now" too): it calls archives.tidy_at_start.
+    app.start_again()
     assert not empty.exists() and not part.exists()
     names = [item["name"] for item in _entries(app.operator(), app)]
     assert name in names and empty.name not in names
+
+
+def test_a_zlib_error_from_the_apps_own_check_is_damaged_never_a_500(
+        app: Any, sicherung: Any, restarts: list, monkeypatch: Any) -> None:
+    import zlib
+
+    app.add_content("whole")
+    client = app.operator()
+    name = _make(client, app)
+    hooks = sicherung.current().hooks
+
+    def inflate_fails(*_: Any, **__: Any) -> Any:
+        raise zlib.error("Error -3 while decompressing data: invalid block type")
+
+    # The app's check reads a member past tools.DAMAGE: the module still says damaged.
+    monkeypatch.setattr(hooks, "check", inflate_fails)
+    brief = client.post(f"{app.prefix}/backups/{name}/check", json={})
+    assert brief.status_code == 200, brief.text
+    assert brief.json()["usable"] is False
+    response = client.post(f"{app.prefix}/backups/{name}/restore", json={"password": app.password})
+    assert response.status_code == 400 and code_of(response) == "backup_damaged", response.text
+    assert restarts == [] and not sicherung.restore.pending_folder().exists()
 
 
 def test_names_outside_the_list_are_not_found(app: Any) -> None:
