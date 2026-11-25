@@ -818,17 +818,11 @@
       "submit": "Passwort ändern"
     },
     "profile": {
-      "role": "Rolle: {{role}}",
-      "saved": "Profil gespeichert.",
-      "title": "Profil"
+      "saved": "Profil gespeichert."
     },
-    "security": {
-      "title": "Anmeldung und Sicherheit"
-    },
+    "security": {},
     "sessions": {
-      "done": "Alle anderen Browser und verbundenen Geräte sind abgemeldet.",
-      "submit": "Überall sonst abmelden",
-      "text": "Meldet dich überall ab außer hier, auch auf verbundenen iPhones und iPads, etwa nach einem verlorenen Handy."
+      "done": "Alle anderen Browser und verbundenen Geräte sind abgemeldet."
     },
     "setupFirst": "Der Betreiber verlangt einen zweiten Faktor. Richte ihn hier ein, dann geht es weiter.",
     "signOut": {
@@ -839,8 +833,6 @@
     },
     "unlinked": "Nicht mehr mit {{name}} verknüpft.",
     "picture": {
-      "add": "Profilbild hochladen",
-      "change": "Anderes Bild",
       "remove": "Bild entfernen",
       "saved": "Profilbild gespeichert.",
       "removed": "Profilbild entfernt."
@@ -1185,11 +1177,8 @@
     "diskFree": "Auf dem Datenträger noch {{free}} von {{total}} frei"
   },
   "session": {
-    "again": "Wieder anmelden",
     "blockedText": "Der Betreiber hat dein Konto gesperrt. Es wird nichts mehr gespeichert. Wende dich an den Betreiber.",
     "blockedTitle": "Dein Konto ist gesperrt",
-    "expiredText": "Deine Anmeldung ist abgelaufen. Was du geschrieben hast, bleibt hier stehen und wird gespeichert, sobald du wieder angemeldet bist.",
-    "expiredTitle": "Bitte melde dich wieder an",
     "leave": "Zur Anmeldung",
     "lostChanges_one": "Jetzt ist {{name}} angemeldet. {{count}} Änderung des Kontos davor war noch nicht gespeichert und ist verloren.",
     "lostChanges_other": "Jetzt ist {{name}} angemeldet. {{count}} Änderungen des Kontos davor waren noch nicht gespeichert und sind verloren.",
@@ -1261,8 +1250,8 @@
   "setup": {
     "folder": "Datenordner {{path}}",
     "free": "{{size}} frei",
-    "passwordHint_one": "Mindestens {{count}} Zeichen. Den zweiten Faktor richtest du gleich danach ein.",
-    "passwordHint_other": "Mindestens {{count}} Zeichen. Den zweiten Faktor richtest du gleich danach ein.",
+    "passwordHint_one": "Mindestens {{count}} Zeichen.",
+    "passwordHint_other": "Mindestens {{count}} Zeichen.",
     "share": "Der Datenordner liegt auf einer Netzfreigabe (NFS oder SMB). Das kann Notizen beschädigen. Besser ein lokaler Datenträger.",
     "submit": "Konto anlegen",
     "text": "Das erste Konto verwaltet den Server. Weitere Personen lädst du danach ein.",
@@ -1682,21 +1671,14 @@
     "codesLead": "Jeder meldet dich einmal an, wenn das Handy nicht zur Hand ist. Sie werden nur jetzt gezeigt: Kopiere sie oder speichere sie als Datei und bewahre sie getrennt vom Handy auf.",
     "codesTitle": "Deine Wiederherstellungscodes",
     "confirm": "Einschalten",
-    "disable": "Ausschalten",
     "disableText": "Danach meldet dich das Passwort allein an. Gib es ein, um den zweiten Faktor auszuschalten.",
-    "enable": "Einrichten",
     "lowCodes": "Nur noch wenige Wiederherstellungscodes. Erzeuge neue, solange du dich noch anmelden kannst.",
-    "off": "Aus.",
-    "on_one": "An. Noch {{count}} Wiederherstellungscode.",
-    "on_other": "An. Noch {{count}} Wiederherstellungscodes.",
     "passwordHint": "Zeigt, dass du selbst an der Tastatur sitzt.",
     "provider": "Du meldest dich über den Anbieter an; dort gilt sein zweiter Faktor.",
     "qr": "QR-Code für die Authenticator-App",
-    "renew": "Neue Wiederherstellungscodes",
     "renewText": "Die alten Wiederherstellungscodes gelten dann nicht mehr. Gib dein Passwort ein, um neue zu erzeugen.",
     "scan": "Scanne diesen Code mit der App oder tippe den Schlüssel darunter ein. Dann gib den Code ein, den die App zeigt, und dein Passwort.",
-    "secret": "Schlüssel zum Eintippen:",
-    "title": "Zweiter Faktor"
+    "secret": "Schlüssel zum Eintippen:"
   },
   "export": {
     "menu": "Exportieren …",

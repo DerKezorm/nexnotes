@@ -106,8 +106,9 @@ export function PasskeysBox({ signedInByPassword }: { signedInByPassword: boolea
   )
 }
 
-/** "Where you are signed in": browsers and paired devices, this browser marked, each signed out alone. */
-export function SessionsBox() {
+/** "Signed-in devices" (``account.sessions``, konten 0.3.6): browsers and paired devices, this browser marked, each
+ * signed out alone; under them what "Sign out everywhere else" ends and what stays, and the button. */
+export function SessionsBox({ onEverywhere, busy = false }: { onEverywhere: () => Promise<unknown>; busy?: boolean }) {
   const { t, i18n } = useTranslation()
   const [rows, setRows] = useState<SessionEntry[] | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
@@ -143,6 +144,10 @@ export function SessionsBox() {
           </li>
         ))}
       </ul>
+      <p className="mt-2 text-xs text-mist-500">{t('account.signOutEverywhereHint')}</p>
+      <button type="button" disabled={busy} className={QUIET + ' mt-2'} data-testid="sign-out-everywhere" onClick={() => void onEverywhere().then(load)}>
+        {t('account.signOutEverywhere')}
+      </button>
       {problem && <p role="alert" className="mt-2 text-sm text-bad-500">{problem}</p>}
     </div>
   )

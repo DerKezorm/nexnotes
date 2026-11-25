@@ -417,6 +417,8 @@ ALLOWED_KEYS = {
     "email_confirmed", "email_proven", "email_source", "pending_email", "email_duplicate",
     # Since konten 0.3.2: how many passkeys (a second factor too, for the operator's reset).
     "passkeys",
+    # Since konten 0.3.4 and 0.3.6: whose address is offered, and the state of the second factor (never content).
+    "provider_email_from", "factor_state",
 }
 
 

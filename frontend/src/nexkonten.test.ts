@@ -9,7 +9,8 @@
  */
 import { describe, expect, it } from 'vitest'
 
-import { kontenVariables, SCREENS, screenFields, suggestUsername } from './vendor/nexkonten/konten'
+import { APP_PAGES as SHOWN_PAGES } from './pages/settings/accountPages'
+import { kontenVariables, PAGES, pageOrder, SCREENS, screenFields, suggestUsername } from './vendor/nexkonten/konten'
 import de from './vendor/nexkonten/konten.de.json'
 import en from './vendor/nexkonten/konten.en.json'
 // APP: the app's i18n instance after its set-up (with the module's files merged into the resources and
@@ -28,6 +29,11 @@ const APP_SCREENS: Partial<Record<keyof typeof SCREENS, readonly string[]>> = {
   profile: SCREENS.profile,
 }
 
+// APP (since 0.3.6): the parts of the app's pages "Profile" and "Security", top to bottom, by the module's part names
+// (PAGES), then the app's own parts (e.g. nexmail 'googleMicrosoft', nexnotes 'readingLinks', 'vault'), which always
+// come after the module's.
+const APP_PAGES: Record<keyof typeof PAGES, readonly string[]> = SHOWN_PAGES
+
 type Tree = { [key: string]: string | Tree }
 
 function leaves(tree: Tree, prefix = ''): [string, string][] {
@@ -39,18 +45,20 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
 
 const values = { username: 'kim', email: 'kim@example.com', provider: 'Pocket ID' }
 const fill: Record<string, string | number> = { ...kontenVariables(APP_NAME), ...values }
+/** Plural keys (``days_one``, ``recoveryLeft_other``) are asked by their base with a count that picks them. */
+const PLURAL = /_(one|other)$/
+const COUNTS: Record<string, number> = { one: 1, other: 5 }
 
 describe('the konten texts', () => {
   for (const [language, tree] of [['de', de], ['en', en]] as const) {
     it(`are all in the app in ${language}, word for word`, async () => {
       await i18n.changeLanguage(language)
       for (const [key, text] of leaves(tree as Tree)) {
-        // A plural form is asked for by its key without the ending and a count that picks it (as nexoidc.wording).
-        const plural = /_(one|other)$/.exec(key)
-        const count = plural ? (plural[1] === 'one' ? 1 : 2) : undefined
-        const asked = plural ? key.slice(0, -plural[0].length) : key
-        const filled = count === undefined ? fill : { ...fill, count }
-        const expected = text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(filled[name] ?? ''))
+        const plural = PLURAL.exec(key)
+        const count = plural ? COUNTS[plural[1] ?? 'other'] : undefined
+        const given: Record<string, string | number> = count === undefined ? { ...fill } : { ...fill, count }
+        const expected = text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(given[name] ?? ''))
+        const asked = plural ? key.replace(PLURAL, '') : key
         expect(i18n.t(asked, count === undefined ? values : { ...values, count }), key).toBe(expected)
       }
     })
@@ -66,5 +74,29 @@ describe('the konten screens', () => {
 
   it('suggest the username the server would', () => {
     expect(suggestUsername('Max Müller')).toBe('max-mueller')
+  })
+})
+
+describe('the konten pages (since 0.3.6)', () => {
+  it("show the module's parts first, in its order, and the app's own after them", () => {
+    for (const page of Object.keys(PAGES) as (keyof typeof PAGES)[]) {
+      const module = pageOrder(page)
+      const shown = APP_PAGES[page]
+      expect(shown.slice(0, module.length), page).toEqual(module)
+      for (const own of shown.slice(module.length)) expect(module, `${page}: ${own}`).not.toContain(own)
+    }
+  })
+
+  it("title every part with the module's texts", async () => {
+    await i18n.changeLanguage('de')
+    expect(i18n.t('account.sessions')).toBe('Angemeldete Geräte')
+    expect(i18n.t('account.signOutEverywhere')).toBe('Überall sonst abmelden')
+    expect(i18n.t('account.stateOff')).toBe('Aus')
+    expect(i18n.t('account.pictureUpload')).toBe('Profilbild hochladen')
+    for (const page of Object.values(PAGES)) {
+      for (const part of page.parts) {
+        for (const key of [part.title, ...part.buttons]) expect(i18n.exists(key), key).toBe(true)
+      }
+    }
   })
 })

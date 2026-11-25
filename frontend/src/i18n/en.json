@@ -818,17 +818,11 @@
       "submit": "Change password"
     },
     "profile": {
-      "role": "Role: {{role}}",
-      "saved": "Profile saved.",
-      "title": "Profile"
+      "saved": "Profile saved."
     },
-    "security": {
-      "title": "Sign-in and security"
-    },
+    "security": {},
     "sessions": {
-      "done": "Every other browser and connected device is signed out.",
-      "submit": "Sign out everywhere else",
-      "text": "Signs you out everywhere except here, connected iPhones and iPads too, for example after losing a phone."
+      "done": "Every other browser and connected device is signed out."
     },
     "setupFirst": "The operator requires a second factor. Set it up here, then you can go on.",
     "signOut": {
@@ -839,8 +833,6 @@
     },
     "unlinked": "No longer linked to {{name}}.",
     "picture": {
-      "add": "Upload a profile picture",
-      "change": "Another picture",
       "remove": "Remove picture",
       "saved": "Profile picture saved.",
       "removed": "Profile picture removed."
@@ -1185,11 +1177,8 @@
     "diskFree": "{{free}} of {{total}} still free on the disk"
   },
   "session": {
-    "again": "Sign in again",
     "blockedText": "The operator has blocked your account. Nothing more is saved. Ask the operator.",
     "blockedTitle": "Your account is blocked",
-    "expiredText": "Your sign-in has expired. What you wrote stays here and is saved as soon as you are signed in again.",
-    "expiredTitle": "Please sign in again",
     "leave": "To the sign-in",
     "lostChanges_one": "{{name}} is signed in now. {{count}} change of the account before was not saved yet and is lost.",
     "lostChanges_other": "{{name}} is signed in now. {{count}} changes of the account before were not saved yet and are lost.",
@@ -1261,8 +1250,8 @@
   "setup": {
     "folder": "Data folder {{path}}",
     "free": "{{size}} free",
-    "passwordHint_one": "At least {{count}} character. You set up the second factor right afterwards.",
-    "passwordHint_other": "At least {{count}} characters. You set up the second factor right afterwards.",
+    "passwordHint_one": "At least {{count}} character.",
+    "passwordHint_other": "At least {{count}} characters.",
     "share": "The data folder lies on a network share (NFS or SMB). That can damage notes. A local disk is better.",
     "submit": "Create account",
     "text": "The first account runs the server. You invite more people afterwards.",
@@ -1682,21 +1671,14 @@
     "codesLead": "Each one signs you in once, when the phone is not at hand. They are shown only now: copy them or save them as a file, and keep them apart from the phone.",
     "codesTitle": "Your recovery codes",
     "confirm": "Turn on",
-    "disable": "Turn off",
     "disableText": "From then on the password alone signs you in. Enter it to turn the second factor off.",
-    "enable": "Set up",
     "lowCodes": "Few recovery codes left. Create new ones while you can still sign in.",
-    "off": "Off.",
-    "on_one": "On. {{count}} recovery code left.",
-    "on_other": "On. {{count}} recovery codes left.",
     "passwordHint": "Proves it is you at the keyboard.",
     "provider": "You sign in through the provider; its second factor applies.",
     "qr": "QR code for the authenticator app",
-    "renew": "New recovery codes",
     "renewText": "The old recovery codes stop working. Enter your password to create new ones.",
     "scan": "Scan this code with the app, or type the key below into it. Then enter the code the app shows, and your password.",
-    "secret": "Key to type in:",
-    "title": "Second factor"
+    "secret": "Key to type in:"
   },
   "export": {
     "menu": "Export …",

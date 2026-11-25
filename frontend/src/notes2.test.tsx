@@ -176,8 +176,9 @@ describe('the settings (NOTES-2 AC-9)', () => {
     root = createRoot(box)
     expect(await settingsAs('operator')).toEqual(titles([...own, ...server, 'about']))
     // `/settings` is the profile: its card, not those of the other areas.
-    expect(box.textContent).toContain(i18n.t('me.profile.title'))
-    expect(box.textContent).not.toContain(i18n.t('me.security.title'))
+    // The cards are titled by the shared module (``PAGES``), the same words as the areas: found by their ids.
+    expect(box.querySelector('#profile-title')!.textContent).toBe(i18n.t('account.profile'))
+    expect(box.querySelector('#security-title')).toBeNull()
     expect(box.textContent).not.toContain(i18n.t('me.looks.title'))
   })
 })

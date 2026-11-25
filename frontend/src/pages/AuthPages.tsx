@@ -25,6 +25,8 @@ import {
   EMAIL_MAX,
   followUsername,
   normalizeUsername,
+  SETUP_PAGE,
+  setupNotes,
   STAY_SIGNED_IN_DEFAULT,
   suggestUsername,
   USERNAME_MAX,
@@ -183,7 +185,7 @@ export function SetupPage() {
         .join(' · ')
     : undefined
   return (
-    <AuthFrame title={t('account.setupTitle')} text={t('setup.text')} footer={footer}>
+    <AuthFrame title={t(SETUP_PAGE.title)} text={t(SETUP_PAGE.subtitle)} footer={footer}>
       <form
         className="space-y-4"
         onSubmit={async (event) => {
@@ -221,6 +223,13 @@ export function SetupPage() {
         <AuthField label={t('account.email')} value={email} onChange={setEmail} type="email" autoComplete="email" maxLength={EMAIL_MAX} hint={t('account.emailHint')} />
         <AuthField label={t('account.newPassword')} value={password} onChange={setPassword} type="password" autoComplete="new-password" hint={t('setup.passwordHint', { count: min })} />
         <PasswordConfirmField value={again.confirm} onChange={again.setConfirm} mismatch={again.mismatch} />
+        {/* No word about the second factor under the password unless one is required (konten 0.3.6): the first
+            account comes before any switch of the operator. */}
+        {setupNotes({ factorRequired: false }).map((note) => (
+          <p key={note} className="text-sm text-mist-300">
+            {t(note)}
+          </p>
+        ))}
         <Primary busy={busy}>{t('setup.submit')}</Primary>
       </form>
     </AuthFrame>

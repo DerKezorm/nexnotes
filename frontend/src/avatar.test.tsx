@@ -86,7 +86,7 @@ describe('NOTES-2 AC-11 profile pictures', () => {
     expect(put.body).toBe(file)
     const picture = card().querySelector<HTMLImageElement>('[data-testid="avatar-picture"]')!
     expect(picture.getAttribute('src')).toBe(`/api/avatars/7?v=${encodeURIComponent('2026-11-21T09:00:00+00:00')}`)
-    await act(async () => [...card().querySelectorAll('button')].find((button) => button.textContent === 'Remove picture')!.click())
+    await act(async () => [...card().querySelectorAll('button')].find((button) => button.textContent === 'Remove the picture')!.click())
     await settle()
     expect(calls.some((call) => call.method === 'DELETE' && call.path === '/api/auth/avatar')).toBe(true)
     expect(card().querySelector('[data-testid="avatar-picture"]')).toBeNull()

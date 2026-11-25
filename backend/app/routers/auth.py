@@ -225,11 +225,16 @@ def account_view(account: AccountRow, db: Session | None = None) -> dict[str, An
         "former_name": former_name(db, account),
         # The address a sign-in provider knows the account by, offered on the account page.
         "provider_email": offered_address(db, account) if db is not None else "",
+        # Whose address it is, as on the provider's button ("Use the address from <provider>?", konten 0.3.4).
+        "provider_email_from": (account.provider_email_from or "") if db is not None else "",
         "new_sign_in_mail": bool(account.new_sign_in_mail),
         # A password set through a link: the account page lists the ways in that stayed, until put away.
         "new_password_origin": account.new_password_origin or "",
         "language": account.language,
         "two_factor": bool(account.totp_secret_enc),
+        # "On" or "Off" beside the heading of the second factor (``SECOND_FACTOR_STATE``, konten 0.3.6).
+        "factor_state": nexkonten.factor.state(KontenStore(db), account.id) if db is not None else (
+            nexkonten.SECOND_FACTOR_ACTIVE if account.totp_secret_enc else nexkonten.SECOND_FACTOR_NONE),
         # NEXNOTES_SECOND_FACTOR_OFF: the emergency hammer holds, no second factor is asked of anybody (the page says
         # so plainly, ``account.secondFactorOff``).
         "second_factor_off": nexkonten.factor.switched_off(),

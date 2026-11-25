@@ -17,7 +17,7 @@ import { Dialog } from '../../components/Dialog'
 import { bytes, day, dayTime } from '../../lib/format'
 import { ago } from '../../lib/time'
 import { useAuth } from '../../state/auth'
-import { DISPLAY_NAME_MAX, FACTOR_RESET_DEFAULTS, INVITE_DAYS, RESET_DAYS, RESET_DAYS_DEFAULT, USERNAME_MAX } from '../../vendor/nexkonten/konten'
+import { DISPLAY_NAME_MAX, FACTOR_RESET_DEFAULTS, factorResetParts, INVITE_DAYS, RESET_DAYS, RESET_DAYS_DEFAULT, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { Button, Card, Confirm, CopyLink, Feedback, Input, Select, Toggle, useAction } from './ui'
 
 const GB = 1024 ** 3
@@ -255,16 +255,19 @@ export function AccountsTab() {
           details={
             asking.kind === 'resetFactor' ? (
               <div className="space-y-2">
-                <p className="text-sm text-mist-300">{t('account.factorResetHint')}</p>
-                {!!overview?.passkeys.length && (
-                  <>
-                    <p className="text-sm text-mist-300">
-                      {t('account.passkeys')}: {overview.passkeys.map((key) => key.name).join(', ')}
-                    </p>
-                    <Toggle label={t('account.factorResetPasskeys')} checked={removePasskeys} onChange={setRemovePasskeys} />
-                  </>
-                )}
-                <Toggle label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />
+                {/* The parts for this account (konten 0.3.4): the passkeys and their box only where it has some. */}
+                {factorResetParts({ passkeys: overview?.passkeys ?? [] }).map((part) => {
+                  if (part === 'factorResetHint') return <p key={part} className="text-sm text-mist-300">{t('account.factorResetHint')}</p>
+                  if (part === 'passkeys')
+                    return (
+                      <p key={part} className="text-sm text-mist-300">
+                        {t('account.passkeys')}: {(overview?.passkeys ?? []).map((key) => key.name).join(', ')}
+                      </p>
+                    )
+                  if (part === 'factorResetPasskeys') return <Toggle key={part} label={t('account.factorResetPasskeys')} checked={removePasskeys} onChange={setRemovePasskeys} />
+                  if (part === 'factorResetDevices') return <Toggle key={part} label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />
+                  return null
+                })}
               </div>
             ) : undefined
           }
@@ -275,7 +278,7 @@ export function AccountsTab() {
             if (asking.kind === 'block') await accountsApi.block(row.id, password)
             if (asking.kind === 'unblock') await accountsApi.unblock(row.id, password)
             if (asking.kind === 'signOut') await accountsApi.signOut(row.id)
-            if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password, disconnect, removePasskeys)
+            if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password, disconnect, removePasskeys && !!overview?.passkeys.length)
             if (asking.kind === 'removeEmail') await accountsApi.removeEmail(row.id, password)
             if (asking.kind === 'role') await accountsApi.role(row.id, row.role === 'operator' ? 'member' : 'operator', password)
             if (asking.kind === 'unlink') await oidcAdminApi.unlinkAccount(row.id, asking.provider.id, password)

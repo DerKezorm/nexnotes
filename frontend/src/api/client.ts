@@ -140,6 +140,8 @@ export type Me = {
   email: string
   /** The address a sign-in provider knows the account by, offered when it differs from the own one. */
   provider_email?: string
+  /** The provider whose address is offered, as on its button (konten 0.3.4). */
+  provider_email_from?: string
   /** Empty: the browser's language. Chosen once, it counts on every device of the account. */
   language: string
   /** The paper new notes start on (NOTES-3 AC-17). */
@@ -154,6 +156,8 @@ export type Me = {
   avatar?: string | null
   two_factor: boolean
   two_factor_recovery_left: number
+  /** The module's state of the second factor (`factor.state`): none, required, active, passkey. */
+  factor_state?: string
   /** NEXNOTES_SECOND_FACTOR_OFF holds: no second factor is asked of anybody. */
   second_factor_off?: boolean
   password_changed_at?: string | null
@@ -410,7 +414,7 @@ export const authApi = {
     api<Me>('/api/setup', { method: 'POST', body }),
   methods: () => api<Methods>('/api/auth/methods'),
   login: (name: string, password: string, remember = true) =>
-    api<Me | { second_factor: true; passkey?: boolean }>('/api/auth/login', { method: 'POST', body: { name, password, remember } }),
+    api<Me | { second_factor: true; passkey?: boolean; code?: boolean }>('/api/auth/login', { method: 'POST', body: { name, password, remember } }),
   /** "Forgot your password?": the same answer whatever was typed. */
   forgot: (name: string) => api<{ sent: boolean }>('/api/auth/forgot', { method: 'POST', body: { name } }),
   code: (code: string) => api<Me>('/api/auth/login/totp', { method: 'POST', body: { code } }),
