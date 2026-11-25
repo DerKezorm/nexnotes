@@ -11,9 +11,10 @@ sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adres
 
 ## 0. Was gebaut ist / was fehlt
 
-Stand 25.11.2026 abends, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`4f714a8`): `konten` 0.3.10, `ui` 0.1.2,
-`oidc` 1.1.1, `post` 0.1.2, kopiert mit `tools/sync.py copy`, `check` grün. App-Version unverändert 1.1.0 (live), kein
-neues Release vorbereitet. Was seit 0.3.7 dazukam, steht unten unter „Seit konten 0.3.8 bis 0.3.10“.
+Stand 25.11.2026 spätabends, Zweig `konten`: **auf den Modulen 1.0.0** (eingefroren). Aus `bauplaene` Zweig `konten`
+(`3c55402`): `konten` 1.0.0, `ui` 1.0.0, `post` 1.0.0, `oidc` 1.1.2, kopiert mit `tools/sync.py copy`, `check` grün.
+App-Version unverändert 1.1.0 (live), kein neues Release vorbereitet. Was seit 0.3.7 dazukam, steht unten unter „Seit
+konten 0.3.8 bis 0.3.10“ und „Seit 1.0.0“.
 
 **Gebaut (Backend):**
 
@@ -117,6 +118,24 @@ Modul „Passwort wiederholen“ (`account.passwordRepeat`, `auth.passwordConfir
 - **Läufe (25.11.2026 abends):** Backend `pytest -q -n 2` 2016 grün, 47 übersprungen (darin Vertrag `tests/nexkonten`
   230 grün, 2 übersprungen; Test „Bestand“ 55 grün); `pytest -m timing` 17 grün; Frontend `vitest --maxWorkers=2` 916
   grün in 72 Dateien; `npm run build`, `npm run lint`, `ruff check` sauber. Playwright nicht ausgeführt.
+
+**Seit 1.0.0 nachgezogen:**
+
+- Vertragsadapter: `forgot_through_route` (Route `POST /api/auth/forgot`, Post über `nexpost.testing.catch_mail`) und
+  `picture_status` (Route `GET /api/avatars/{id}`); `nexpost_adapter.new_sign_in_letter` (Anmeldung über die Route aus
+  einem neuen Browser).
+- Mail „Neue Anmeldung“ mit Link zur Seite Sicherheit (`kontenpost.link_for` → `<öffentliche Adresse>/settings/security`),
+  Browser und System aus dem User-Agent, nie eine Netzadresse; ohne eigene Zeitzone je Person (die des Servers).
+- **Profilbilder sieht jedes angemeldete Konto** (Entscheidung für alle Apps): `avatars.may_see` ist immer wahr für
+  Angemeldete, `SEE_RULES` und die Regel der Freigaben sind weg; NOTES-2 AC-11 und NOTES-13 AC-6 (Tests
+  `test_avatars`, `test_notes13_earlier`) entsprechend angepasst.
+- Test „Bestand“: die Vorrichtung `post` fängt mit `nexpost.testing.catch_mail()` (Prüfungen unverändert).
+- „Grenze entfernen“ mit dem Knopf `removeValue`.
+- vitest-Vorlage 1.0.0 mit dem Abschnitt „Helpers“ (die Orte `APP_*` von nexnotes eingesetzt).
+- Der Haken in `tests/conftest.py`, der je Vertragsordner `conftest` in `sys.modules` setzte, ist weg (kein Vertragstest
+  importiert mehr `conftest` beim Namen, oidc 1.1.2).
+- Lauf (25.11.2026 spätabends, Testplatz): Backend `pytest -q -n 2` 2019 grün, 47 übersprungen (Vertrag `nexkonten`,
+  `nexoidc`, `nexpost` im selben Lauf); vitest 917 grün in 72 Dateien; `npm run build`, `npm run lint`, `ruff` sauber.
 
 **Abweichungen vom Modul (bewusst):** Die wartende Anmeldung zwischen Passwort und Code bleibt nexnotes' eigene
 (`totp.start_pending`, Cookie `PENDING_COOKIE`; geprüft wird über `factor.check_code`), weil nexnotes eine eigene
