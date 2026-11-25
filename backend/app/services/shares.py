@@ -11,7 +11,8 @@ hook that asks, so no list ever shows what opening refuses or the other way roun
 - ``notes.ACCESS_RULES`` and ``notes.FOLDER_RULES`` (opening, writing, the live room, attachments, history, export),
 - ``notes_list.SHARED_NOTES`` ("Alle Notizen" and its count), ``tags.SHARED_NOTES`` (tags, search, the export),
 - ``notes_list.ITEM_EXTRAS`` and ``notes.HEAD_EXTRAS`` (the shared mark: with whom, or from whom; AC-7),
-- ``avatars.SEE_RULES`` (who sees whose picture), the counts of ``content`` and its notice when an owner goes (EC-4).
+- the counts of ``content`` and its notice when an owner goes (EC-4). (Pictures need no rule: every signed-in account
+  sees every picture, konten 1.0.0.)
 
 A right taken or lowered counts at once: every open live connection is checked again (``notes.nudge_all``) and closes
 with 4403 or 4409 (AC-5). Only the owner shares; whoever a thing is shared with cannot pass it on (AC-11).
@@ -41,7 +42,7 @@ from ..models import FOLDER_INBOX, Account, Folder, Note
 from ..models_shares import LEVELS, READ, WRITE, ReadLink, Share, ShareNotice, SharePin
 from ..notedoc.room import Access
 from ..security import Brake, account_out
-from . import avatars, content, notes, notes_list, settings_service, tags
+from . import content, notes, notes_list, settings_service, tags
 from .history import clock
 
 logger = logging.getLogger("nexnotes.shares")
@@ -691,18 +692,6 @@ def _owner_went(db: Session, account_id: int) -> None:
     notes.nudge_all()
 
 
-def sees(db: Session, viewer: Account, other_id: int) -> bool:
-    """``avatars.SEE_RULES``: the people of a share see each other's picture: owner and member, and the members of
-    the same owner's shares (they meet in the same notes, NOTES-12 AC-5)."""
-    between = select(Share.id).where(or_(and_(Share.owner_id == viewer.id, Share.account_id == other_id),
-                                         and_(Share.owner_id == other_id, Share.account_id == viewer.id)))
-    if db.scalar(between.limit(1)) is not None:
-        return True
-    mine = select(Share.owner_id).where(Share.account_id == viewer.id)
-    return db.scalar(select(Share.id).where(Share.account_id == other_id, Share.owner_id.in_(mine)).limit(1)) \
-        is not None
-
-
 def register() -> None:
     """At every start, each hook once, looked up rather than remembered (a test may have emptied a list)."""
     from . import cleanup
@@ -721,8 +710,6 @@ def register() -> None:
         notes_list.PERSONAL_PIN.append(_pin)
     if shared_select not in tags.SHARED_NOTES:
         tags.SHARED_NOTES.append(shared_select)
-    if sees not in avatars.SEE_RULES:
-        avatars.SEE_RULES.append(sees)
     if _count not in content._counters:
         content.register_counter(_count)
     if _owner_went not in content._deleted:

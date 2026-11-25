@@ -5,8 +5,8 @@ no device, no hidden second picture, no script in an SVG (an SVG is not taken at
 Kept in the database next to the account (a few kilobytes), so every backup carries it, and an account deleted for
 good takes it along.
 
-Seen by the account itself and the operator (its list of accounts). Whoever shares a note with the account sees it too:
-sharing (NOTES-13) adds its rule to ``SEE_RULES``.
+Seen by every signed-in account (decided for every nex app, konten 1.0.0: a picture is no secret among the people
+of one server); nobody signed out.
 """
 
 from __future__ import annotations
@@ -15,11 +15,10 @@ import io
 import logging
 import struct
 import threading
-from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
-from ..models import OPERATOR, Account
+from ..models import Account
 
 logger = logging.getLogger("nexnotes.accounts")
 
@@ -41,11 +40,6 @@ MESSAGES = {
     "avatar_too_large": "The picture is too large.",
     "avatar_not_a_picture": "That is not a picture nexnotes accepts (JPEG, PNG, WebP, GIF, HEIC or AVIF).",
 }
-
-#: Who else may see the picture of ``owner_id``: ``rule(db, viewer, owner_id)`` is true for a viewer it lets in.
-#: Sharing (NOTES-13) adds "shares a note with it".
-SeeRule = Callable[[Session, Account, int], bool]
-SEE_RULES: list[SeeRule] = []
 
 
 class AvatarError(ValueError):
@@ -112,7 +106,7 @@ def make(data: bytes) -> bytes:
 
 
 def may_see(db: Session, viewer: Account, owner_id: int) -> bool:
-    """The account itself, the operator, and whoever a rule of ``SEE_RULES`` lets in."""
-    if viewer.id == owner_id or viewer.role == OPERATOR:
-        return True
-    return any(rule(db, viewer, owner_id) for rule in SEE_RULES)
+    """Every signed-in account sees every picture (konten 1.0.0, ``picture_status`` of the contract); the route
+    itself lets nobody signed out in."""
+    del db, viewer, owner_id
+    return True

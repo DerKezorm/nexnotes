@@ -81,24 +81,18 @@ def test_notes2_ac11_only_pictures_come_in_and_not_too_large(client: TestClient,
     assert anna.put("/api/auth/avatar", content=photo(kind="WEBP")).status_code == 200
 
 
-def test_notes2_ac11_seen_by_the_account_and_the_operator_and_whom_a_rule_lets_in(client: TestClient, account: object) -> None:
-    """Another member sees nothing: the same 404 as for an account without a picture. Sharing (NOTES-13) will add
-    its rule; a rule added here lets exactly its viewer in."""
+def test_notes2_ac11_seen_by_every_signed_in_account_and_nobody_else(client: TestClient, account: object) -> None:
+    """Every signed-in account sees every picture (decided for every nex app, konten 1.0.0); nobody signed out. An
+    account without a picture answers 404."""
     anna, bob, carl = person("anna"), person("bob"), person("carl")
     assert anna.put("/api/auth/avatar", content=photo()).status_code == 200
     address = f"/api/avatars/{me(anna)['id']}"
     assert anna.get(address).status_code == 200  # her own
     assert client.get(address).status_code == 200  # the operator
-    assert bob.get(address).status_code == 404  # a member who shares nothing with her
+    assert bob.get(address).status_code == 200  # a member who shares nothing with her
+    assert TestClient(app).get(address).status_code == 401  # nobody signed in
     assert anna.get(f"/api/avatars/{me(carl)['id']}").status_code == 404
     assert anna.get("/api/avatars/999999").status_code == 404
-    bob_id = me(bob)["id"]
-    avatars.SEE_RULES.append(lambda _db, viewer, _owner: viewer.id == bob_id)
-    try:
-        assert bob.get(address).status_code == 200
-        assert carl.get(address).status_code == 404
-    finally:
-        avatars.SEE_RULES.clear()
     # Removed: gone for everyone.
     assert anna.delete("/api/auth/avatar").json()["avatar"] is None
     assert client.get(address).status_code == 404

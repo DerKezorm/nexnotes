@@ -277,7 +277,7 @@ def test_notes12_ac5_ac6_ec6_notes13_six_accounts_in_one_shared_note_see_each_ot
     for own, live in zip(everyone, lives, strict=True):
         wanted = set(everyone) - {own}
         assert live.pump(lambda live=live, wanted=wanted: live.names() == wanted, timeout=5), live.names()
-    # Their pictures (AC-6): the people of the note see each other's, a stranger nobody's.
+    # Their pictures (AC-6): the people of the note see each other's; since konten 1.0.0 every signed-in account does.
     stranger = make_account("fremd")
     with SessionLocal() as db:
         for member in members:
@@ -290,7 +290,7 @@ def test_notes12_ac5_ac6_ec6_notes13_six_accounts_in_one_shared_note_see_each_ot
     assert others[0].get(f"/api/avatars/{members[4].id}").status_code == 200
     assert client.get(f"/api/avatars/{members[1].id}").status_code == 200
     with new_client(stranger) as theirs:
-        assert theirs.get(f"/api/avatars/{members[1].id}").status_code == 404
+        assert theirs.get(f"/api/avatars/{members[1].id}").status_code == 200
     for each in others:
         each.close()
 
