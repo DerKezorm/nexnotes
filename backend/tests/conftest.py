@@ -48,6 +48,39 @@ MEDIA = Path(_DATA) / "attachments"
 TAB = {"X-Nexnotes-Client": "tab-tests000"}
 
 
+# The contract tests of the shared modules (``tests/nexoidc``, ``tests/nexkonten``, ``tests/nexpost``) bring their own
+# ``conftest.py`` (unchanged from the modules, guarded by checksums). pytest loads them all as ``conftest``; whichever
+# came last stands in ``sys.modules``, and ``from conftest import ...`` of a contract test then found another one's
+# (in a parallel run, depending on the order). While collecting and before every test ``sys.modules["conftest"]``
+# points to the ``conftest.py`` nearest to the test.
+_CONFTESTS: dict[Path, object] = {}
+
+
+def pytest_plugin_registered(plugin: object, manager: object) -> None:
+    path = getattr(plugin, "__file__", None)
+    if path and Path(path).name == "conftest.py":
+        _CONFTESTS[Path(path).resolve().parent] = plugin
+
+
+def _nearest_conftest(path: Path) -> None:
+    import sys
+
+    for folder in [Path(path).resolve(), *Path(path).resolve().parents]:
+        module = _CONFTESTS.get(folder)
+        if module is not None:
+            sys.modules["conftest"] = module  # type: ignore[assignment]
+            return
+
+
+def pytest_collectstart(collector: pytest.Collector) -> None:
+    if isinstance(collector, pytest.Module):
+        _nearest_conftest(collector.path)
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    _nearest_conftest(item.path)
+
+
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """A test that measures time against a limit (``@pytest.mark.timing``) says nothing beside nine other workers
     using the machine: in a parallel run (pytest-xdist) it is skipped, ``pytest -m timing`` runs them on their own."""
