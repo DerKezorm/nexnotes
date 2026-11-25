@@ -26,7 +26,7 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
   })
 }
 
-// `count` since post 1.1.0 ("Wartende Mails: {{count}}"); the module's template of 1.1.0 lacks it.
+// TODO post 1.1.0: `count` ("Wartende Mails: {{count}}"); the module's template of 1.1.0 lacks it, a fix is on its way.
 const values = { email: 'kim@example.com', when: 'today', error: 'mail_unreachable', count: '3' }
 const fill: Record<string, string> = { ...postVariables(APP_NAME), ...values }
 

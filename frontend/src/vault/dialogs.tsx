@@ -21,6 +21,7 @@ import { Dialog } from '../components/Dialog'
 import { problemText } from '../lib/errors'
 import { SignInAgain } from '../pages/settings/SignInAgain'
 import { useMe } from '../state/auth'
+import { Button, Buttons, CheckboxRow, Dialog as KitDialog, Field, Notice } from '../vendor/nexui'
 import { notesChanged } from '../notes/api'
 import { clock } from './clock'
 import { changePassword, lockNote, resetVault, setUpVault, unlockNote } from './actions'
@@ -52,11 +53,31 @@ function PasswordInput({ label, value, onChange, invalid, autoFocus, testId, des
   )
 }
 
-function Warning({ children }: { children: ReactNode }) {
+/** The same field in the ui kit's look, for the dialogs that open from the settings (plan "Einstellungen", E31): never
+ * kept by the browser either. */
+function KitPassword({ label, value, onChange, invalid, autoFocus, testId, error }: { label: string; value: string; onChange: (value: string) => void; invalid?: boolean; autoFocus?: boolean; testId: string; error?: string }) {
   return (
-    <div role="alert" className="rounded-[10px] px-3.5 py-3 text-[13.5px] leading-relaxed font-medium text-warn-500" style={{ background: 'rgb(251 146 60 / 0.14)' }} data-testid="vault-warning">
+    <Field
+      label={label}
+      type="password"
+      value={value}
+      autoComplete="new-password"
+      spellCheck={false}
+      autoFocus={autoFocus}
+      aria-invalid={invalid || undefined}
+      error={error}
+      data-testid={testId}
+      onChange={(event) => onChange(event.target.value)}
+    />
+  )
+}
+
+/** The warning of the dialogs from the settings, as the kit's notice. */
+function KitWarning({ children }: { children: ReactNode }) {
+  return (
+    <Notice tone="warn" testId="vault-warning">
       {children}
-    </div>
+    </Notice>
   )
 }
 
@@ -117,31 +138,32 @@ function SetupForm({ submitLabel, onSubmit, onCancel, busy, children }: { submit
     if (tooShort || differs || !understood) return
     onSubmit(password)
   }
+  // From the ui kit (plan "Einstellungen", E31): the same form at the first lock of a note and for a forgotten
+  // password in Settings › Security.
   return (
-    <form className="flex flex-col gap-3.5" onSubmit={submit} data-testid="vault-setup">
-      <p className="text-sm leading-relaxed text-mist-400">{t('vault.setup.text')}</p>
-      <Warning>{t('vault.setup.warning')}</Warning>
-      <PasswordInput label={t('vault.password')} value={password} onChange={setPassword} invalid={tried && tooShort} autoFocus testId="vault-password" />
-      <PasswordInput label={t('vault.repeat')} value={again} onChange={setAgain} invalid={tried && differs} testId="vault-repeat" />
-      {tried && tooShort && <p className="text-[12.5px] text-bad-500">{t('vault.tooShort', { count: MIN_LENGTH })}</p>}
-      {tried && !tooShort && differs && <p className="text-[12.5px] text-bad-500">{t('vault.differs')}</p>}
-      <label className="flex items-start gap-2.5 text-[13.5px] leading-snug text-mist-100">
-        <input type="checkbox" className="mt-0.5 h-4 w-4 accent-[var(--color-accent-500)]" checked={understood} onChange={(event) => setUnderstood(event.target.checked)} data-testid="vault-understood" />
-        {t('vault.setup.understood')}
-      </label>
-      {tried && !understood && <p className="text-[12.5px] text-bad-500">{t('vault.setup.tick')}</p>}
-      <p className="text-[12.5px] text-mist-500" data-testid="vault-title-hint">
+    <form className="flex flex-col gap-4" onSubmit={submit} data-testid="vault-setup">
+      <p className="m-0 text-sm leading-5 text-[var(--nexui-text-muted)]">{t('vault.setup.text')}</p>
+      <KitWarning>{t('vault.setup.warning')}</KitWarning>
+      <KitPassword label={t('vault.password')} value={password} onChange={setPassword} invalid={tried && tooShort} autoFocus testId="vault-password" error={tried && tooShort ? t('vault.tooShort', { count: MIN_LENGTH }) : undefined} />
+      <KitPassword label={t('vault.repeat')} value={again} onChange={setAgain} invalid={tried && differs} testId="vault-repeat" error={tried && !tooShort && differs ? t('vault.differs') : undefined} />
+      <CheckboxRow label={t('vault.setup.understood')} checked={understood} onChange={setUnderstood} testId="vault-understood" />
+      {tried && !understood && (
+        <p role="alert" className="m-0 text-sm leading-5 text-[var(--nexui-danger)]">
+          {t('vault.setup.tick')}
+        </p>
+      )}
+      <p className="m-0 text-xs leading-4 text-[var(--nexui-text-muted)]" data-testid="vault-title-hint">
         {t('vault.titleHint')}
       </p>
       {children}
-      <div className="flex justify-end gap-2">
-        <button type="button" className="nn-btn nn-btn-ghost" onClick={onCancel}>
+      <Buttons end>
+        <Button kind="secondary" icon="X" onClick={onCancel}>
           {t('common.cancel')}
-        </button>
-        <button type="submit" className="nn-btn nn-btn-accent" disabled={busy || !understood} data-testid="vault-submit">
+        </Button>
+        <Button type="submit" kind="primary" icon={Lock} disabled={busy || !understood} testId="vault-submit">
           {submitLabel}
-        </button>
-      </div>
+        </Button>
+      </Buttons>
     </form>
   )
 }
@@ -356,39 +378,40 @@ export function ChangePasswordDialog({ onClose }: { onClose: () => void }) {
       setOld('')
     }
   }
+  // Opens from Settings › Security: the ui kit's window (plan "Einstellungen", E31).
   return (
-    <Dialog title={t('vault.change.title')} onClose={onClose}>
+    <KitDialog title={t('vault.change.title')} onClose={onClose} closeLabel={t('common.close')} testId="vault-change-dialog">
       {done ? (
-        <div className="flex flex-col gap-3" data-testid="vault-changed">
-          <p className="text-sm text-mist-300">{t('vault.change.done')}</p>
-          <div className="flex justify-end">
-            <button type="button" className="nn-btn nn-btn-accent" onClick={onClose}>
+        <div className="flex flex-col gap-4" data-testid="vault-changed">
+          <p className="m-0 text-sm leading-5 text-[var(--nexui-text)]">{t('vault.change.done')}</p>
+          <Buttons end>
+            <Button kind="primary" icon="Check" onClick={onClose}>
               {t('common.close')}
-            </button>
-          </div>
+            </Button>
+          </Buttons>
         </div>
       ) : (
-        <form className="flex flex-col gap-3" onSubmit={(event) => void submit(event)} data-testid="vault-change">
-          <p className="text-sm leading-relaxed text-mist-400">{t('vault.change.text')}</p>
-          <PasswordInput label={t('vault.change.old')} value={old} onChange={setOld} autoFocus testId="vault-old" />
-          <PasswordInput label={t('vault.change.new')} value={password} onChange={setPassword} testId="vault-password" />
-          <PasswordInput label={t('vault.repeat')} value={again} onChange={setAgain} testId="vault-repeat" />
+        <form className="flex flex-col gap-4" onSubmit={(event) => void submit(event)} data-testid="vault-change">
+          <p className="m-0 text-sm leading-5 text-[var(--nexui-text-muted)]">{t('vault.change.text')}</p>
+          <KitPassword label={t('vault.change.old')} value={old} onChange={setOld} autoFocus testId="vault-old" />
+          <KitPassword label={t('vault.change.new')} value={password} onChange={setPassword} testId="vault-password" />
+          <KitPassword label={t('vault.repeat')} value={again} onChange={setAgain} testId="vault-repeat" />
           {problem && (
-            <p role="alert" className="text-[12.5px] font-medium text-bad-500">
+            <p role="alert" className="m-0 text-sm leading-5 text-[var(--nexui-danger)]">
               {problem}
             </p>
           )}
-          <div className="flex justify-end gap-2">
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={onClose}>
+          <Buttons end>
+            <Button kind="secondary" icon="X" onClick={onClose}>
               {t('common.cancel')}
-            </button>
-            <button type="submit" className="nn-btn nn-btn-accent" disabled={busy || !old} data-testid="vault-submit">
+            </Button>
+            <Button type="submit" kind="primary" icon="KeyRound" disabled={busy || !old} busy={busy} testId="vault-submit">
               {t('vault.change.submit')}
-            </button>
-          </div>
+            </Button>
+          </Buttons>
         </form>
       )}
-    </Dialog>
+    </KitDialog>
   )
 }
 
@@ -410,25 +433,26 @@ export function ForgotDialog({ onClose }: { onClose: () => void }) {
   }, [])
   const count = status?.locked_all ?? 0
   return (
-    <Dialog title={t('vault.forgot.title')} onClose={onClose}>
-      <div className="flex flex-col gap-3" data-testid="vault-forgot-dialog">
+    // Opens from Settings › Security: the ui kit's window (plan "Einstellungen", E31).
+    <KitDialog title={t('vault.forgot.title')} onClose={onClose} closeLabel={t('common.close')}>
+      <div className="flex flex-col gap-4" data-testid="vault-forgot-dialog">
         {removed !== null ? (
           <>
-            <p className="text-sm text-mist-300" data-testid="vault-forgot-done">
+            <p className="m-0 text-sm leading-5 text-[var(--nexui-text)]" data-testid="vault-forgot-done">
               {t('vault.forgot.done', { count: removed })}
             </p>
-            <div className="flex justify-end">
-              <button type="button" className="nn-btn nn-btn-accent" onClick={onClose}>
+            <Buttons end>
+              <Button kind="primary" icon="Check" onClick={onClose}>
                 {t('common.close')}
-              </button>
-            </div>
+              </Button>
+            </Buttons>
           </>
         ) : (
           status && (
             <>
-              <Warning>
+              <KitWarning>
                 <span data-testid="vault-forgot-count">{t('vault.forgot.warning', { count })}</span>
-              </Warning>
+              </KitWarning>
               <SetupForm
                 submitLabel={t('vault.forgot.submit', { count })}
                 busy={busy}
@@ -454,29 +478,30 @@ export function ForgotDialog({ onClose }: { onClose: () => void }) {
                   )
                 }}
               >
-                <fieldset className="flex flex-col gap-2.5 border-t border-ink-700 pt-3" data-testid="vault-forgot-confirm">
-                  <legend className="pt-1 text-[13px] font-semibold text-mist-100">{t('vault.forgot.confirm')}</legend>
+                <fieldset className="m-0 flex flex-col gap-3 border-0 border-t border-solid border-[var(--nexui-line)] p-0 pt-3" data-testid="vault-forgot-confirm">
+                  <legend className="pt-1 text-sm leading-5 font-medium text-[var(--nexui-text)]">{t('vault.forgot.confirm')}</legend>
                   {withPassword ? (
                     <>
-                      <PasswordInput label={t('vault.forgot.account')} value={accountPassword} onChange={setAccountPassword} testId="vault-account-password" />
+                      <KitPassword label={t('vault.forgot.account')} value={accountPassword} onChange={setAccountPassword} testId="vault-account-password" />
                       {withCode && (
-                        <label className="flex flex-col gap-1.5 text-[13px] font-semibold text-mist-100">
-                          {t('vault.forgot.code')}
-                          <input className="nn-field" value={code} inputMode="numeric" autoComplete="one-time-code" spellCheck={false} onChange={(event) => setCode(event.target.value)} data-testid="vault-account-code" />
-                        </label>
+                        <Field label={t('vault.forgot.code')} value={code} inputMode="numeric" autoComplete="one-time-code" spellCheck={false} onChange={(event) => setCode(event.target.value)} data-testid="vault-account-code" />
                       )}
                     </>
                   ) : (
-                    <p className="text-[12.5px] leading-relaxed text-mist-400">{t('vault.forgot.provider', { minutes: 10 })}</p>
+                    <p className="m-0 text-sm leading-5 text-[var(--nexui-text-muted)]">{t('vault.forgot.provider', { minutes: 10 })}</p>
                   )}
                 </fieldset>
               </SetupForm>
             </>
           )
         )}
-        {problem && <p className="text-sm text-bad-500">{problem}</p>}
+        {problem && (
+          <p role="alert" className="m-0 text-sm leading-5 text-[var(--nexui-danger)]">
+            {problem}
+          </p>
+        )}
         {refusal?.code === 'fresh_sign_in_required' && <SignInAgain providers={refusal.values.providers} />}
       </div>
-    </Dialog>
+    </KitDialog>
   )
 }

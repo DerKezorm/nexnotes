@@ -1998,7 +1998,7 @@
       "title": "Connect iPhone or iPad",
       "qr": "QR code to connect",
       "valid": "Valid for 10 minutes",
-      "renew": "new code",
+      "renew": "New code",
       "expired": "The code has expired.",
       "step1": "Open nexnotes on the iPhone or iPad.",
       "step2": "Tap “Connect server” and scan the code.",

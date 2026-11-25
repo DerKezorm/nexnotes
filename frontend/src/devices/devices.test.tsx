@@ -168,14 +168,18 @@ describe('NOTES-24 connecting an iPhone or iPad', () => {
     await render(<DevicesSection />)
     await click($('devices-connect'))
     const dialog = $('devices-connect-dialog')!
-    expect(document.body.querySelector('[role="dialog"]')?.getAttribute('aria-label')).toBe('iPhone oder iPad verbinden')
+    // The ui kit's window (plan "Einstellungen", E31): named by its title.
+    const named = document.body.querySelector('[role="dialog"]')!
+    expect(document.getElementById(named.getAttribute('aria-labelledby') ?? '')?.textContent).toBe('iPhone oder iPad verbinden')
     expect(($('devices-qr') as HTMLImageElement).src).toBe(qrSource(pairing().qr_svg.replace('p2', 'p1')))
     expect([...dialog.querySelectorAll('li')].map((item) => item.textContent)).toEqual([
       'nexnotes auf dem iPhone oder iPad öffnen.',
       '„Server verbinden“ tippen und den Code scannen.',
       'Fertig. Deine Notizen laden, und die Anmeldung wandert über deine Apple-ID auf deine anderen Geräte.',
     ])
-    expect(dialog.textContent).toContain('Gilt 10 Minuten · neu erzeugen')
+    expect(dialog.textContent).toContain('Gilt 10 Minuten')
+    const renew = $('devices-renew')!
+    expect([renew.textContent, renew.dataset.kind, renew.dataset.size, renew.dataset.icon]).toEqual(['Neu erzeugen', 'secondary', 'sm', 'RefreshCw'])
     expect($('devices-address')?.textContent).toBe('Ohne Kamera: In der App die Adresse notes.example.com eingeben und anmelden.')
   })
 

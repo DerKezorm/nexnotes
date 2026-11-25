@@ -7,10 +7,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { Dialog } from '../components/Dialog'
-import { Problem } from '../components/Field'
 import { problemText } from '../lib/errors'
-import { Button, Buttons } from '../vendor/nexui'
+import { Button, Buttons, Dialog, Notice } from '../vendor/nexui'
 import { devicesApi, qrSource, type Pairing } from './api'
 
 /** How often the dialog asks whether the code was used. */
@@ -71,36 +69,35 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
 
   const host = pairing ? new URL(pairing.address).host : ''
   return (
-    <Dialog title={t('devices.connect.title')} onClose={close} wide>
+    // Opens from Settings › Connections: the ui kit's window (plan "Einstellungen", E31).
+    <Dialog title={t('devices.connect.title')} onClose={close} closeLabel={t('common.close')} wide testId="devices-connect">
       <div className="flex flex-wrap gap-6" data-testid="devices-connect-dialog">
         <div className="flex w-[220px] flex-none flex-col items-center gap-2.5">
           <div className="h-[220px] w-[220px] rounded-[12px] bg-white p-3.5">
             {pairing && !expired && <img src={qrSource(pairing.qr_svg)} alt={t('devices.connect.qr')} className="h-full w-full" data-testid="devices-qr" />}
             {expired && (
-              <p className="flex h-full items-center justify-center text-center text-sm text-ink-900" data-testid="devices-expired">
+              <p className="m-0 flex h-full items-center justify-center text-center text-sm text-[#111]" data-testid="devices-expired">
                 {t('devices.connect.expired')}
               </p>
             )}
           </div>
-          <span className="text-xs text-mist-500">
-            {t('devices.connect.valid')} ·{' '}
-            <button type="button" className="text-accent-500 hover:underline" onClick={() => void make()} data-testid="devices-renew">
-              {t('devices.connect.renew')}
-            </button>
-          </span>
+          <span className="text-xs leading-4 text-[var(--nexui-text-muted)]">{t('devices.connect.valid')}</span>
+          <Button kind="secondary" icon="RefreshCw" size="sm" onClick={() => void make()} testId="devices-renew">
+            {t('devices.connect.renew')}
+          </Button>
         </div>
         <div className="flex min-w-[240px] flex-1 flex-col gap-3.5">
-          <ol className="list-decimal space-y-1 pl-5 text-sm leading-relaxed text-mist-300">
+          <ol className="m-0 list-decimal space-y-1 pl-5 text-sm leading-5 text-[var(--nexui-text)]">
             <li>{t('devices.connect.step1')}</li>
             <li>{t('devices.connect.step2')}</li>
             <li>{t('devices.connect.step3')}</li>
           </ol>
           {pairing && (
-            <p className="rounded-[10px] border border-ink-700 bg-ink-900 px-3.5 py-3 text-[13px] leading-relaxed text-mist-400" data-testid="devices-address">
-              {t('devices.connect.noCamera')} <strong className="text-mist-100">{host}</strong> {t('devices.connect.noCameraEnd')}
-            </p>
+            <Notice tone="ok" testId="devices-address">
+              {t('devices.connect.noCamera')} <strong>{host}</strong> {t('devices.connect.noCameraEnd')}
+            </Notice>
           )}
-          <Problem text={problem} />
+          {problem && <Notice tone="danger">{problem}</Notice>}
           <Buttons end>
             <Button kind="secondary" icon="X" onClick={close} testId="devices-close">
               {t('common.close')}
