@@ -10,13 +10,14 @@ import { expect, test, type Page } from '@playwright/test'
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-deck000000' }
 
 async function makeKey(page: Page, name: string, level: 'read' | 'write'): Promise<string> {
+  // The card "API keys" of the shared key module (since the settings pass).
   await page.goto('/settings/connections')
-  await page.getByTestId('tokens-new').click()
-  await page.getByRole('dialog').getByRole('textbox').fill(name)
-  await page.getByTestId(`token-level-${level}`).check()
-  await page.getByTestId('token-make').click()
-  await expect(page.getByTestId('tokens-made')).toContainText(name)
-  const token = (await page.getByTestId('tokens-secret').textContent())!.trim()
+  await page.getByTestId('api-keys-new').click()
+  await page.getByTestId('key-name').fill(name)
+  await page.getByTestId(`key-right-${level}`).click()
+  await page.getByTestId('key-submit').click()
+  await expect(page.getByTestId('key-made')).toContainText(name)
+  const token = (await page.getByTestId('key-secret').locator('input').inputValue()).trim()
   expect(token).toMatch(/^nn_api_/)
   return token
 }
@@ -46,10 +47,11 @@ test('NOTES-21 AC-1 AC-2 AC-5 a card reads the pinned notes, one checklist, and 
 
   // The last use shows in the list; revoked, the card is turned away at once (EC-3).
   await page.goto('/settings/connections')
-  const row = page.getByTestId('token-row').filter({ hasText: name })
-  await expect(row).not.toContainText('never used')
-  await row.getByTestId('token-revoke').click()
-  await page.getByTestId('tokens-revoke-confirm').click()
+  const row = page.locator('[data-card="api-keys"] tr[data-testid="key-row"]').filter({ hasText: name })
+  await expect(row).toBeVisible()
+  await expect(row).not.toContainText('never')
+  await row.getByTestId('key-revoke').click()
+  await page.getByTestId('key-revoke-dialog').getByRole('button', { name: 'Revoke' }).click()
   // Asked once the server confirmed the revoke (the row is gone), not while the request is still on its way.
   await expect(row).toHaveCount(0)
   expect((await page.request.get('/api/v1/me', { headers: auth })).status()).toBe(401)

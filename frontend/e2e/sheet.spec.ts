@@ -6,6 +6,17 @@ import { expect, test, type Page } from '@playwright/test'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-sheet0000' }
 
+/** Light or dark is the account's since konten 1.1.0 (every device); the browser's value only paints the first frame. */
+async function theme(page: Page, scheme: string): Promise<void> {
+  expect((await page.request.put('/api/me/theme', { data: { theme: scheme }, headers: TAB })).ok()).toBe(true)
+  await page.addInitScript((mode) => localStorage.setItem('nexnotes.theme', mode), scheme)
+}
+
+// The operator's account is shared by every file: back to "as the system" afterwards.
+test.afterEach(async ({ page }) => {
+  await page.request.put('/api/me/theme', { data: { theme: 'system' }, headers: TAB })
+})
+
 async function colors(page: Page) {
   return page.evaluate(() => {
     const sheet = document.querySelector('[data-testid="note-page"]')!
@@ -26,7 +37,7 @@ for (const scheme of ['light', 'dark'] as const) {
     const made = await page.request.post('/api/notes', { data: { title: `Sheet ${scheme}`, markdown: 'Some text on the sheet.' }, headers: TAB })
     const id = (await made.json()).id as string
     await page.emulateMedia({ colorScheme: scheme })
-    await page.addInitScript((mode) => localStorage.setItem('nexnotes.theme', mode), scheme)
+    await theme(page, scheme)
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: 900 })
       await page.goto(`/notes/${id}`)
@@ -46,7 +57,7 @@ test('NOTES-3 AC-17 each paper is the background of the text, light and dark apa
   await page.setViewportSize({ width: 1440, height: 900 })
   const seen: Record<string, string> = {}
   for (const scheme of ['light', 'dark'] as const) {
-    await page.addInitScript((mode) => localStorage.setItem('nexnotes.theme', mode), scheme)
+    await theme(page, scheme)
     for (const paper of ['blank', 'lined', 'grid', 'dots']) {
       expect((await page.request.put(`/api/notes/${id}/paper`, { data: { paper }, headers: TAB })).ok()).toBe(true)
       await page.goto(`/notes/${id}`)
