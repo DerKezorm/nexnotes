@@ -105,3 +105,37 @@ class Adapter(StandardAdapter):
         found = [letter for letter in caught.letters if letter.kind == "new_sign_in"]
         assert found, "no mail about a new sign-in"
         return found[0]
+
+    # --- post 1.1.0 --------------------------------------------------------------------------------------------------
+
+    def account(self, address: str, *, language: str, name: str, confirmed: bool) -> Any:
+        """An account of nexnotes with this address; its display name is the name its mail is written to."""
+        from app.db import SessionLocal
+        from app.models import Account
+
+        with SessionLocal() as db:
+            row = Account(name=f"contract-{len(address)}-{abs(hash(address)) % 100000}", display_name=name,
+                          email=address, email_confirmed=confirmed, language=language)
+            db.add(row)
+            db.commit()
+            return row.id
+
+    def client(self, role: str) -> Any:
+        """nexnotes' app (``/api/server/mail`` mounted in ``main``), as nobody, a member or the operator."""
+        from fastapi.testclient import TestClient
+
+        from app.db import SessionLocal
+        from app.main import app
+        from app.models import MEMBER, OPERATOR, Account
+        from app.security import SESSION_COOKIE, hash_password, start_session
+
+        browser = TestClient(app, base_url="https://notes.example.com", headers={"X-Nexnotes-Client": "tab-contract"})
+        if role == "anonymous":
+            return browser
+        with SessionLocal() as db:
+            row = Account(name=f"contract-{role}", display_name=f"Contract {role}",
+                          role=OPERATOR if role == "operator" else MEMBER, password_hash=hash_password(password()))
+            db.add(row)
+            db.commit()
+            browser.cookies.set(SESSION_COOKIE, start_session(db, row, "127.0.0.1", "contract"))
+        return browser

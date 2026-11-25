@@ -22,7 +22,21 @@ from .config import get_settings
 from .db import SessionLocal, init_db
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
-from .routers import about, api_v1, api_v1_write, auth, export, folders, health, history, invites, oidc, trash
+from .routers import (
+    about,
+    api_v1,
+    api_v1_write,
+    auth,
+    export,
+    folders,
+    health,
+    history,
+    invites,
+    oidc,
+    server_mail,
+    server_signin,
+    trash,
+)
 from .routers import accounts as accounts_router
 from .routers import app1 as app1_router
 from .routers import app1_files as app1_files_router
@@ -67,7 +81,7 @@ logger = logging.getLogger("nexnotes")
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
     health, about, locales_router, logs_router, auth, totp_router, passkeys_router, oidc, accounts_router, invites,
-    settings_router,
+    settings_router, server_signin, server_mail,
     backups_router, avatars_router,
 ]
 #: Routers of the note features (notes, folders, search, sharing ...), registered after the frame's.

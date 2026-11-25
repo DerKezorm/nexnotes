@@ -88,6 +88,11 @@ async function open(at: string): Promise<void> {
 }
 
 const byTestId = (id: string) => document.querySelector<HTMLElement>(`[data-testid="${id}"]`)
+/** The module's card "Sign out" (konten 1.1.0, `SignOutCard`). */
+const signOutCard = () => document.querySelector<HTMLElement>('[data-card="sign-out"]')
+const buttonOf = (scope: ParentNode | null | undefined, text: string) =>
+  [...(scope?.querySelectorAll<HTMLElement>('button') ?? [])].find((button) => button.textContent?.trim() === text) ?? null
+const waiting = () => document.querySelector<HTMLElement>('[role="dialog"]')
 const logouts = () => calls.filter((call) => call.method === 'POST' && call.path === '/api/auth/logout').length
 
 async function click(element: HTMLElement | null): Promise<void> {
@@ -99,27 +104,28 @@ async function click(element: HTMLElement | null): Promise<void> {
 describe('signing out (NOTES-2 AC-12)', () => {
   it('NOTES-2 AC-12 the profile has "Sign out"; it ends the session and leads to the sign-in page', async () => {
     await open('/settings/profile')
-    const card = byTestId('sign-out-card')
+    const card = signOutCard()
     expect(card).not.toBeNull()
+    expect(card?.textContent).toContain(i18n.t('account.signOutText', { things: i18n.t('settings.things') }))
     expect(document.getElementById('sign-out-title')?.textContent).toBe('Sign out')
     await click(byTestId('sign-out'))
     expect(logouts()).toBe(1)
     expect(here).toBe('/login')
-    expect(byTestId('sign-out-card')).toBeNull()
+    expect(signOutCard()).toBeNull()
   })
 
   it('NOTES-2 AC-12 the button stands only in the profile, not in the sidebar nor in the settings\' navigation', async () => {
     await open('/settings/profile')
-    const label = i18n.t('me.signOut.button')
+    const label = i18n.t('account.signOut')
     const ways = [...document.querySelectorAll<HTMLElement>('button, a, [role="menuitem"], option')].filter((element) => element.textContent?.trim() === label)
     expect(ways).toHaveLength(1)
-    expect(byTestId('sign-out-card')?.contains(ways[0])).toBe(true)
+    expect(signOutCard()?.contains(ways[0])).toBe(true)
     expect(document.querySelector('nav[aria-label="' + i18n.t('app.mainMenu') + '"]')?.textContent).not.toContain(label)
     expect(byTestId('settings-nav')?.textContent).not.toContain(label)
     act(() => root.unmount())
     root = createRoot(box)
     await open('/settings/security')
-    expect(byTestId('sign-out-card')).toBeNull()
+    expect(signOutCard()).toBeNull()
   })
 
   it('NOTES-2 AC-12 changes still waiting ask first, as in the session dialog: "Wait" keeps the session, "Sign out anyway" ends it', async () => {
@@ -128,13 +134,13 @@ describe('signing out (NOTES-2 AC-12)', () => {
       await open('/settings/profile')
       await click(byTestId('sign-out'))
       expect(logouts()).toBe(0)
-      expect(byTestId('sign-out-waiting')?.textContent).toContain(i18n.t('session.waitingText', { count: 2 }))
-      await click(byTestId('sign-out-wait'))
-      expect(byTestId('sign-out-waiting')).toBeNull()
+      expect(waiting()?.textContent).toContain(i18n.t('account.signOutPending', { count: 2 }))
+      await click(buttonOf(waiting(), i18n.t('account.waitForChanges')))
+      expect(waiting()).toBeNull()
       expect(logouts()).toBe(0)
       expect(here).toBe('/settings/profile')
       await click(byTestId('sign-out'))
-      await click(byTestId('sign-out-anyway'))
+      await click(buttonOf(waiting(), i18n.t('account.signOutAnyway')))
       expect(logouts()).toBe(1)
       expect(here).toBe('/login')
     } finally {
@@ -145,7 +151,7 @@ describe('signing out (NOTES-2 AC-12)', () => {
   it('NOTES-2 AC-12 an account from a provider is told it stays signed in there; nexnotes alone signs out', async () => {
     me = { ...ME, sign_in: 'oidc' }
     await open('/settings/profile')
-    expect(byTestId('sign-out-card')?.textContent).toContain(i18n.t('me.signOut.provider'))
+    expect(signOutCard()?.textContent).toContain(i18n.t('account.signOutProvider'))
     await click(byTestId('sign-out'))
     expect(calls.filter((call) => call.method === 'POST').map((call) => call.path)).toEqual(['/api/auth/logout'])
     expect(here).toBe('/login')

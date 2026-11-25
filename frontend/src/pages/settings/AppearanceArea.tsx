@@ -1,44 +1,46 @@
 /**
- * My account › Appearance (plan "Einstellungen", "Darstellung"): first the card "Aussehen" of every app (the kit's
- * `ThemeSegment`: light, dark, as the system), then nexnotes' own cards: the paper of new notes (NOTES-3 AC-17), how the
+ * My account › Appearance (plan "Einstellungen", "Darstellung"): first the card "Aussehen" of every app (konten's
+ * `AppearanceCard`: light, dark, as the system, at the account), then nexnotes' own cards: the paper of new notes (NOTES-3 AC-17), how the
  * lists of notes look (NOTES-6), and the guide (NOTES-26).
  */
 import { FileText, LayoutList } from 'lucide-react'
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { authApi } from '../../api/client'
 import { paperOf } from '../../editor/paper'
 import { PaperPicker } from '../../editor/PaperPicker'
+import { showNotice } from '../../folders/notice'
 import { GuideCard } from '../../guide/GuideCard'
-import { applyMode, storedMode, type Mode } from '../../lib/theme'
+import { problemText } from '../../lib/errors'
+import { applyMode } from '../../lib/theme'
 import { LookSettings } from '../../notes/list/LookSettings'
 import { useAuth } from '../../state/auth'
-import { Card, ThemeSegment, useNexuiTexts } from '../../vendor/nexui'
+import { AppearanceCard } from '../../vendor/nexkonten/AccountCards'
+import { themeOf } from '../../vendor/nexkonten/konten'
+import { Card } from '../../vendor/nexui'
 import { useAction } from './actions'
 import { Outcome } from './Outcome'
 
 /**
- * Light, dark or as the system.
- *
- * TODO konten 1.1.0: the plan keeps the choice in the account (profile field `theme`, on every device; the server takes
- * a browser's value over the first time). Until the account module brings it, the choice stays in this browser, as
- * before (`lib/theme`), although the kit's hint already speaks of every device.
+ * Light, dark or as the system, at the account on every device (konten 1.1.0, ``AppearanceCard``): shown at once, saved
+ * at the account (`PUT /api/me/theme`); a refusal puts the choice back.
  */
 function LookCard() {
-  const kit = useNexuiTexts()
-  const [mode, setMode] = useState<Mode>(storedMode())
+  const { me, setMe } = useAuth()
+  if (!me) return null
+  const before = me.theme ?? ''
   return (
-    <Card id="look" icon="Palette" title={kit.appearance}>
-      <ThemeSegment
-        value={mode}
-        onChange={(value) => {
-          applyMode(value)
-          setMode(value)
-        }}
-        testId="theme"
-      />
-    </Card>
+    <AppearanceCard
+      theme={me.theme}
+      onChange={(value) => {
+        setMe({ ...me, theme: value })
+        authApi.theme(value).then(setMe, (error: unknown) => {
+          setMe({ ...me, theme: before })
+          applyMode(themeOf(before))
+          showNotice({ text: problemText(error) })
+        })
+      }}
+    />
   )
 }
 

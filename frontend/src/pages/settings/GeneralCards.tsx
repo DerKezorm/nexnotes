@@ -9,22 +9,10 @@ import { useTranslation } from 'react-i18next'
 
 import { api, type ExtraLocale } from '../../api/client'
 import { byName, forgetAddedLanguages, templateFile } from '../../i18n'
-import { Button, Buttons, Card, CheckboxRow, Chip, Field, Notice, Segment, SelectField } from '../../vendor/nexui'
+import { Button, Buttons, Card, CheckboxRow, Chip, Field, Segment, SelectField } from '../../vendor/nexui'
 import { saveAsFile, useAction } from './actions'
 import { Outcome } from './Outcome'
 import type { Server } from './ServerCards'
-
-/** Requests come with proxy headers, but no proxy is named: the sign-in brake sees one sender for everybody. Stays until
- * "Bereit fürs Internet?" (konten 1.1.0) says it as one of its points. */
-export function ProxyHint({ server }: { server: Server }) {
-  const { t } = useTranslation()
-  if (!server.settings?.proxy_unknown) return null
-  return (
-    <Notice tone="warn" testId="proxy-hint">
-      {t('server.proxyUnknown')}
-    </Notice>
-  )
-}
 
 /** The limits (NOTES-1 AC-6): the largest attachment, how long the history and the trash keep things. */
 // eslint-disable-next-line react-refresh/only-export-components

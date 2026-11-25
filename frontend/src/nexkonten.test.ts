@@ -17,7 +17,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AccountTab, type AccountPart } from './pages/settings/AccountTab'
-import { APP_CAPS as SHOWN_CAPS, APP_OWN_ACTIONS } from './pages/settings/accountList'
+import { APP_CAPS as SHOWN_CAPS } from './pages/settings/accountList'
 import { AccountsTab } from './pages/settings/AccountsTab'
 import { APP_PAGES as SHOWN_PAGES } from './pages/settings/accountPages'
 import { AuthProvider } from './state/auth'
@@ -92,7 +92,6 @@ const APP_BUTTON_WORDS: Partial<Record<keyof typeof BUTTONS, string>> = {
   setupSubmit: 'setup.submit',
   inviteSubmit: 'auth.invite.submit',
   resetSubmit: 'auth.reset.submit',
-  signOut: 'me.signOut.button',
 }
 
 /** An account with a password, as the server gives it (`/api/auth/me`). */
@@ -145,10 +144,10 @@ async function show(path: string, at: string, page: string | ReactNode, answers:
   }
 }
 
-// nexnotes (since 0.3.9): what its server can do for the operator in the account list, and its own button in the
-// dialog "Manage" at its place (the storage limit), exactly as the page passes them to accountActions.
+// nexnotes (since 0.3.9): what its server can do for the operator in the account list, exactly as the page passes it to
+// accountActions; since konten 1.1.0 the storage limit is the module's (`capsOf`), nothing of nexnotes' own is left.
 const APP_CAPS: AccountCaps = SHOWN_CAPS
-const APP_OWN: readonly OwnAction[] = APP_OWN_ACTIONS
+const APP_OWN: readonly OwnAction[] = []
 
 // nexnotes (since 0.3.9): the operator's account list, signed in as the operator, the own account first and Kim with an
 // address, an authenticator and a provider labelled 'Pocket ID' last.
@@ -185,7 +184,7 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
 }
 
 // Every value a text of the module asks for (since 0.3.10 also name, day and providers, the words of 0.3.9).
-const values = { username: 'kim', email: 'kim@example.com', provider: 'Pocket ID', name: 'Kim', day: '25.11.2026', providers: 'Pocket ID, Entra' }
+const values = { username: 'kim', email: 'kim@example.com', provider: 'Pocket ID', name: 'Kim', day: '25.11.2026', providers: 'Pocket ID, Entra', address: 'https://notes.example.com', used: '1 GB', limit: '5 GB', things: 'Notizen', variable: 'NEXAPP_TRUSTED_PROXIES', networks: '0.0.0.0/0', proxy: '172.18.0.2', proxies: '172.18.0.0/16' }
 const fill: Record<string, string | number> = { ...kontenVariables(APP_NAME), ...values }
 /** Plural keys (``days_one``, ``recoveryLeft_other``) are asked by their base with a count that picks them. */
 const PLURAL = /_(one|other)$/

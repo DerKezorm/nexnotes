@@ -4,6 +4,7 @@
  * its sentence from `errors.<code>` in the language files.
  */
 
+import type { Readiness } from '../vendor/nexkonten/konten'
 import type { AuthentikAddress } from '../vendor/nexoidc/oidc'
 
 export class ApiError extends Error {
@@ -182,6 +183,24 @@ export type Me = {
   new_sign_in_mail?: boolean
   /** A password set through a link: the page lists what still has access, until put away. */
   new_password_origin?: string
+  /** Light, dark or as the system, at the account on every device; "" chose nothing yet (konten 1.1.0). */
+  theme?: string
+  /** A mail server and the public address: a link in a mail reaches the person (the box "Address not confirmed yet"). */
+  mail_server?: boolean
+  /** The address counts and a link proved it is the account's own (konten 1.1.0, "Address not confirmed yet"). */
+  email_proven?: boolean
+}
+
+/** Server › Sign-in (konten 1.1.0, ``signin.view``): the switches, what may change, the public address. */
+export type SignInSettingsView = {
+  password_login: boolean
+  factor_required: boolean
+  passkeys_allowed: boolean
+  password_may_go_off: boolean
+  factor_may_go_on: boolean
+  second_factor_off?: boolean
+  public_url: string
+  operator_has_password: boolean
 }
 
 export type SetupState = {
@@ -434,6 +453,12 @@ export const authApi = {
   profile: (change: { display_name?: string; email?: string; name?: string; password?: string }) =>
     api<Me>('/api/me/profile', { method: 'PUT', body: change }),
   resendEmail: () => api<Me>('/api/me/email/resend', { method: 'POST' }),
+  /** "Address not confirmed yet" › "Send link" (konten 1.1.0). */
+  proveEmail: () => api<Me>('/api/me/email/prove', { method: 'POST' }),
+  /** Light, dark or as the system, for the account on every device (konten 1.1.0). */
+  theme: (theme: string) => api<Me>('/api/me/theme', { method: 'PUT', body: { theme } }),
+  /** The browser's value of before, taken once while the account has none. */
+  adoptTheme: (theme: string) => api<{ theme: string }>('/api/me/theme/adopt', { method: 'POST', body: { theme } }),
   withdrawEmail: () => api<Me>('/api/me/email/pending', { method: 'DELETE' }),
   newSignInMail: (on: boolean) => api<Me>('/api/me/new-sign-in-mail', { method: 'PUT', body: { on } }),
   sessions: () => api<SessionEntry[]>('/api/auth/sessions'),
@@ -550,6 +575,14 @@ export const settingsApi = {
   read: () => api<ServerSettings>('/api/settings'),
   save: (change: SettingsChange) => api<ServerSettings>('/api/settings', { method: 'PUT', body: change }),
   mailTest: (to: string, language: string) => api<void>('/api/settings/mail-test', { method: 'POST', body: { to, language } }),
+}
+
+/** Server › Sign-in (konten 1.1.0): the switches with the module's rules and "Ready for the internet?". */
+export const signInApi = {
+  read: () => api<SignInSettingsView>('/api/server/sign-in'),
+  save: (change: { password_login?: boolean; factor_required?: boolean; passkeys_allowed?: boolean }, current_password = '') =>
+    api<SignInSettingsView>('/api/server/sign-in', { method: 'PUT', body: { ...change, current_password } }),
+  readiness: () => api<Readiness>('/api/server/sign-in/readiness'),
 }
 
 export const backupsApi = {

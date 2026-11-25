@@ -9,7 +9,7 @@
  * card (the password too), the providers a `Box` with a `Row` each in the card "Security", every button of the module
  * through `AccountButton` (kind and symbol from `BUTTONS`, konten 0.3.8).
  */
-import { KeyRound, LogOut, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -17,7 +17,6 @@ import { useSearchParams } from 'react-router-dom'
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { AccountButton } from '../../components/AccountButton'
 import { Avatar } from '../../components/Avatar'
-import { SignOutWaiting, useSignOut } from '../../components/SignOut'
 import { ACCOUNT_SECTIONS } from '../../extensions'
 import { browserLanguage, changeLanguage, languageOptions, type LanguageOption } from '../../i18n'
 import { confirmOf } from '../../lib/accountButton'
@@ -26,8 +25,10 @@ import { errorText, problemText, signInErrorText } from '../../lib/errors'
 import { day } from '../../lib/format'
 import { usePasswordConfirm } from '../../lib/passwordConfirm'
 import { go } from '../../lib/providers'
+import { waitingChanges } from '../../state/account'
 import { useAuth } from '../../state/auth'
-import { DISPLAY_NAME_MAX, EMAIL_MAX, FIELDS, PAGES, passwordChanged, screenFields, SECOND_FACTOR_STATE, USERNAME_MAX } from '../../vendor/nexkonten/konten'
+import { SignOutCard, UnconfirmedEmailBox } from '../../vendor/nexkonten/AccountCards'
+import { DISPLAY_NAME_MAX, EMAIL_MAX, FIELDS, PAGES, passwordChanged, screenFields, SECOND_FACTOR_STATE, showUnconfirmed, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { Badge, Box, Card, CheckboxRow, ConfirmDialog, Field, Notice, Row, Rows, SelectField } from '../../vendor/nexui'
 import { pagePart } from './accountPages'
 import { Notice as Done, PasskeysBox, RemainingAccess, SecondFactorOffNotice, SessionsBox } from './SecurityBoxes'
@@ -213,6 +214,9 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
                 }
               />
             )}
+            {showUnconfirmed({ email: me.email, emailConfirmed: me.email_confirmed, emailProven: me.email_proven, pendingEmail: me.pending_email }, Boolean(me.mail_server)) && (
+              <UnconfirmedEmailBox t={t} email={me.email} onSend={async () => setMe(await authApi.proveEmail())} errorText={problemText} />
+            )}
             <div>
               <AccountButton
                 name="account.save"
@@ -297,7 +301,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
         </Card>
       )}
 
-      {shows('profile') && <SignOutCard viaProvider={me.sign_in === 'oidc'} />}
+      {shows('profile') && <SignOut viaProvider={me.sign_in === 'oidc'} />}
 
       {shows('security') && (
         <Card id="security" icon={ShieldCheck} title={t(PAGES.security.title)}>
@@ -671,23 +675,17 @@ function SecondFactor({ me }: { me: Me }) {
 
 /**
  * "Sign out" (NOTES-2 AC-12), the one button for it, here in the profile; on a phone the settings are the same page.
- * Changes that still wait ask first, as in the session's dialog. A provider's own session stays: only nexnotes ends.
+ * The module's card (konten 1.1.0, `SignOutCard`): changes that still wait ask first ("Sign out anyway" or "Wait"); they
+ * are counted again the moment the button is pressed. A provider's own session stays: only nexnotes ends.
  */
-function SignOutCard({ viaProvider }: { viaProvider: boolean }) {
+function SignOut({ viaProvider }: { viaProvider: boolean }) {
   const { t } = useTranslation()
-  const leaving = useSignOut()
+  const { signOut } = useAuth()
+  const [pending, setPending] = useState(waitingChanges)
+  const count = () => setPending(waitingChanges())
   return (
-    <Card id="sign-out" icon={LogOut} title={t('me.signOut.title')} subtitle={t('me.signOut.text')} testId="sign-out-card">
-      {viaProvider && <p className="m-0 text-xs leading-4 text-[var(--nexui-text-muted)]">{t('me.signOut.provider')}</p>}
-      {leaving.waiting > 0 ? (
-        <SignOutWaiting count={leaving.waiting} onAnyway={leaving.anyway} onWait={leaving.wait} />
-      ) : (
-        <div>
-          <AccountButton name="signOut" testId="sign-out" onClick={leaving.ask}>
-            {t('me.signOut.button')}
-          </AccountButton>
-        </div>
-      )}
-    </Card>
+    <div className="contents" onPointerDownCapture={count} onKeyDownCapture={count}>
+      <SignOutCard t={t} things={t('settings.things')} provider={viaProvider} pending={pending} onSignOut={() => void signOut()} />
+    </div>
   )
 }

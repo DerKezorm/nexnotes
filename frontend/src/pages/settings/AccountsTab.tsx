@@ -4,14 +4,14 @@
  * and "Manage" on the right, which opens a dialog with every fact and every act in words (`MANAGE_DIALOG`: change,
  * access, end). Never a title or a word of a note (the card under the list says so).
  *
- * What nexnotes adds sits at the module's fixed places: the storage with its limit as a fact and the button "Storage
- * limit" in "Change" after "Make member" (`OwnButton` with the look `storageLimit`), with the operator's own password;
+ * The storage with its limit is the module's since konten 1.1.0 (`storageFact`, the button "Storage limit" in "Change"
+ * after "Make member", `STORAGE_LIMIT_DIALOG`), with the operator's own password;
  * deleting names the notes and the shared ones that go, then the 30 days to bring it back. The open invitations are
- * the module's card under the list (expired ones stay until withdrawn). Under them nexnotes' own card says what the
- * operator sees; "API tokens of all accounts" follows in the area (`SettingsAreas`). `?invite` in the address opens
+ * the module's card under the list (expired ones stay until withdrawn). Under them the module's "What you see" with
+ * nexnotes' sentence; "API keys of all accounts" follows in the area (`SettingsAreas`). `?invite` in the address opens
  * "Invite a person" at once (the share dialog's link when nobody on the server goes by the name typed).
  */
-import { Mail, ShieldCheck, Users } from 'lucide-react'
+import { Mail, Users } from 'lucide-react'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -22,6 +22,7 @@ import { confirmOf } from '../../lib/accountButton'
 import { copyText } from '../../lib/copy'
 import { bytes, day, dayTime } from '../../lib/format'
 import { useAuth } from '../../state/auth'
+import { WhatYouSeeCard } from '../../vendor/nexkonten/AccountCards'
 import {
   ACCOUNT_LIST,
   accountActions,
@@ -47,6 +48,8 @@ import {
   RESET_DAYS_DEFAULT,
   RESET_LINK_DIALOG,
   removeLines,
+  STORAGE_LIMIT_DIALOG,
+  storageFact,
   USERNAME_MAX,
   type AccountAction,
   type BadgeShown,
@@ -55,7 +58,7 @@ import {
   type ListedInvite,
 } from '../../vendor/nexkonten/konten'
 import { Avatar, Badge, Button, ButtonGroup, Card, CheckboxRow, ConfirmDialog, Dialog, Facts, Field, Notice, Row, Rows, SelectField, type IconName } from '../../vendor/nexui'
-import { APP_CAPS, APP_OWN_ACTIONS, listedOf } from './accountList'
+import { APP_CAPS, listedOf } from './accountList'
 import { Feedback, useAction } from './ui'
 
 const GB = 1024 ** 3
@@ -150,12 +153,8 @@ export function AccountsTab() {
         </Card>
       )}
 
-      {/* nexnotes' own card under the module's: what the operator sees and never sees. */}
-      <Card id="accounts-privacy-card" icon={ShieldCheck} title={t('accounts.privacyTitle')} testId="accounts-privacy-card">
-        <p className="m-0 text-sm text-[var(--nexui-text-muted)]" data-testid="accounts-privacy">
-          {t('accounts.privacy')}
-        </p>
-      </Card>
+      {/* The module's card under the list (konten 1.1.0), with nexnotes' sentence: what the operator sees and never sees. */}
+      <WhatYouSeeCard t={t} text={t('accounts.privacy')} />
 
       {open && (
         <ManageDialog
@@ -240,13 +239,7 @@ function ManageDialog({ row, listed, operatorHasPassword, mailServer, onClose, o
   const [resetting, setResetting] = useState(false)
   const [limiting, setLimiting] = useState(false)
 
-  const storage: FactShown = {
-    fact: 'storage',
-    label: 'accounts.storage',
-    raw: row.storage_limit
-      ? t('accounts.usedOf', { used: bytes(row.storage_used, lang), limit: bytes(row.storage_limit, lang) })
-      : t('accounts.usedNoLimit', { used: bytes(row.storage_used, lang) }),
-  }
+  const storage: FactShown = storageFact(listed, (size) => bytes(size, lang))
   const facts = accountFacts(listed, [storage]).map((fact) => ({
     label: t(fact.label),
     value: (
@@ -258,14 +251,14 @@ function ManageDialog({ row, listed, operatorHasPassword, mailServer, onClose, o
     note: fact.note ? t(fact.note) : undefined,
     testId: `fact-${fact.fact}`,
   }))
-  const groups = manageGroups(accountActions(listed, APP_CAPS, APP_OWN_ACTIONS))
+  const groups = manageGroups(accountActions(listed, APP_CAPS))
 
   const start = (act: Extract<AccountAction, { type: 'button' }>) => {
     const base = act.name.split(':')[0]
     if (base === 'account.changeUsername') return setNaming('name')
     if (base === 'account.changeDisplayName') return setNaming('display_name')
     if (base === 'account.resetLink') return setResetting(true)
-    if (base === 'storageLimit') return setLimiting(true)
+    if (base === 'account.storageLimit') return setLimiting(true)
     if (base === 'account.remove') {
       return void action.run(async () => setPending({ action: act, impact: await accountsApi.impact(row.id) }))
     }
@@ -545,8 +538,8 @@ function ResetLinkDialog({ row, name, mailServer, operatorHasPassword, onClose }
   )
 }
 
-/** nexnotes' own act: the storage limit of the account (attachments stop at it, writing goes on), with the operator's
- * own password (konten 0.3.9: everything that changes an account asks for it). */
+/** The storage limit of the account (konten 1.1.0, `STORAGE_LIMIT_DIALOG`; attachments stop at it, writing goes on,
+ * nexnotes' sentence), with the operator's own password. */
 function LimitDialog({ row, name, operatorHasPassword, onClose, onSaved }: {
   row: AccountRow
   name: string
@@ -565,7 +558,7 @@ function LimitDialog({ row, name, operatorHasPassword, onClose, onSaved }: {
       onClose()
     })
   return (
-    <Dialog title={t('accounts.limitTitle', { name })} onClose={onClose} closeLabel={t('common.close')} testId="limit-dialog">
+    <Dialog title={t(STORAGE_LIMIT_DIALOG.title, { name })} onClose={onClose} closeLabel={t('common.close')} testId="limit-dialog">
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -576,18 +569,18 @@ function LimitDialog({ row, name, operatorHasPassword, onClose, onSaved }: {
         }}
       >
         <p className="m-0 text-sm">{t('accounts.limitText')}</p>
-        <Field label={t('accounts.limitField')} type="number" min={0} value={value} onChange={(event) => setValue(event.target.value)} hints={[t('accounts.limitUsed', { used: bytes(row.storage_used, i18n.language) })]} />
+        <Field label={t(STORAGE_LIMIT_DIALOG.field)} type="number" min={0} value={value} onChange={(event) => setValue(event.target.value)} hints={[t(STORAGE_LIMIT_DIALOG.used, { used: bytes(row.storage_used, i18n.language) })]} />
         <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
         {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
         <Feedback problem={action.problem} />
         <div className="flex flex-wrap justify-end gap-2">
           {row.storage_limit !== null && (
-            <AccountButton name="removeValue" disabled={action.busy || (operatorHasPassword && !own)} onClick={() => save(null)}>
-              {t('accounts.limitRemove')}
+            <AccountButton name="account.storageLimitRemove" disabled={action.busy || (operatorHasPassword && !own)} onClick={() => save(null)}>
+              {t(STORAGE_LIMIT_DIALOG.remove)}
             </AccountButton>
           )}
-          <AccountButton name="storageLimit" type="submit" disabled={action.busy || !value || (operatorHasPassword && !own)}>
-            {t('accounts.limitSet')}
+          <AccountButton name="account.save" type="submit" disabled={action.busy || !value || (operatorHasPassword && !own)}>
+            {t(STORAGE_LIMIT_DIALOG.save)}
           </AccountButton>
         </div>
       </form>

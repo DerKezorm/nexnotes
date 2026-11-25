@@ -26,7 +26,8 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
   })
 }
 
-const values = { email: 'kim@example.com', when: 'today', error: 'mail_unreachable' }
+// `count` since post 1.1.0 ("Wartende Mails: {{count}}"); the module's template of 1.1.0 lacks it.
+const values = { email: 'kim@example.com', when: 'today', error: 'mail_unreachable', count: '3' }
 const fill: Record<string, string> = { ...postVariables(APP_NAME), ...values }
 
 describe('the post texts', () => {

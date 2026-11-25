@@ -1,11 +1,11 @@
-"""System mail through the operator's SMTP server, written and sent by the shared post module (``vendor/nexpost``).
+"""Who reads system mail in which language, and whether a mail server is set up. Every mail itself is the shared
+post module's (``vendor/nexpost`` 1.1.0, since then without a mailer of nexnotes' own): written there, sent at once
+(``outbox.deliver_now``: the invitation, "Forgot your password?"; the test mail ``outbox.test_mail``) or through
+the outbox (``services/kontenpost``, ``services/post_store``).
 
-Off until the operator enters a server: the link to copy is always enough. The invitation and the operator's test mail
-go out at once (the page shows the server's answer); the mails about an account wait in the outbox
-(``services/kontenpost``, ``services/post_store``). All go out in the language of whoever receives it: the
-receiver's account language, else their browser's at the last sign-in; else whoever sends the mail off (their account,
-their page, their browser); else the instance's, which is its first operator's; else English. The invitation names who
-invites and carries the link.
+Off until the operator enters a server: the link to copy is always enough. All go out in the language of whoever
+receives it: the receiver's account language, else their browser's at the last sign-in; else whoever sends the mail
+off (their account, their page, their browser); else the instance's, which is its first operator's; else English.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ from __future__ import annotations
 import logging
 import re
 import unicodedata
-from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -25,12 +24,6 @@ logger = logging.getLogger("nexnotes.mail")
 
 TIMEOUT = 15
 SECURITY = ("starttls", "tls", "none")
-
-
-class MailError(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
 
 
 def configured(db: Session) -> bool:
@@ -83,60 +76,12 @@ def language_for(db: Session, receiver: Account | None, *fallback: str) -> str:
     return mail_language(*languages(receiver), *fallback, *instance_languages(db))
 
 
-def _one_line(text: str) -> str:
+def one_line(text: str) -> str:
     """A name in a mail: one line, no control characters (C0, DEL, C1, line and paragraph separators)."""
     return " ".join("".join(" " if unicodedata.category(char) in {"Cc", "Zl", "Zp"} else char for char in text).split())
 
 
-def deliver_letter(db: Session, letter: object) -> None:
-    """A letter of the post module at once (``MailError`` when it did not go out): "Forgot your password?"."""
-    _deliver(db, letter)
-
-
-def _deliver(db: Session, letter: object) -> None:
-    """At once, through the shared post module (the operator waits for the answer: an invitation, the test mail)."""
-    from ..vendor import nexpost
-    from .post_store import PostStore
-
-    store = PostStore(db)
-    settings = store.mail_settings()
-    if not settings.configured:
-        raise MailError("mail_off", "No mail server is set up.")
-    try:
-        nexpost.send.deliver(settings, letter)  # type: ignore[arg-type]
-    except nexpost.MailError as exc:
-        logger.warning("Mail not sent host=%s code=%s", settings.host, exc.code)
-        nexpost.outbox._note(store, ok=False, error=exc.code)
-        db.commit()
-        raise MailError("mail_off" if exc.code == "mail_off" else "mail_failed",
-                        "The mail server did not take the mail.") from exc
-    nexpost.outbox._note(store, ok=True)
-    db.commit()
-    logger.info("Mail sent host=%s", settings.host)
-
-
-def send_invite(db: Session, to: str, link: str, *, by: str, until: date | None = None, language: str = "en",
-                days: int = 0) -> None:
-    """The invitation, at once: the shared post module's letter (logo, text and HTML) in the receiver's language."""
-    from ..vendor import nexpost
-
-    del until
-    try:
-        letter = nexpost.letters.compose(
-            "invite", to, language=language,
-            values={"by": _one_line(by), "valid": nexpost.letters.validity(language, days=days) if days else ""},
-            link=link,
-        )
-    except nexpost.MailError as exc:
-        raise MailError("invalid_email", "This is not an email address.") from exc
-    _deliver(db, letter)
-
-
-def send_test(db: Session, to: str, language: str = "en") -> None:
-    from ..vendor import nexpost
-
-    try:
-        letter = nexpost.letters.compose("test", to, language=language, values={})
-    except nexpost.MailError as exc:
-        raise MailError("invalid_email", "This is not an email address.") from exc
-    _deliver(db, letter)
+def old_code(code: str) -> str:
+    """The code nexnotes answered a failed mail with before post 1.1.0 (``mail_off`` or ``mail_failed``); the post
+    module's own reason goes with it as ``mail_code``."""
+    return "mail_off" if code == "mail_off" else "invalid_email" if code == "mail_address_invalid" else "mail_failed"

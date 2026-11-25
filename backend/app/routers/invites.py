@@ -26,7 +26,8 @@ from ..security import MIN_PASSWORD, SESSION_COOKIE, brake, hash_token, session_
 from ..services import accounts, kontenpost, mailer, settings_service
 from ..services.accounts import AccountError
 from ..services.konten_store import KontenStore
-from ..vendor import nexkonten
+from ..services.post_store import PostStore
+from ..vendor import nexkonten, nexpost
 from ..vendor.nexkonten import invites, resets
 from .auth import check_confirm, check_password, fail, sign_in
 
@@ -128,18 +129,28 @@ def invite(payload: InviteIn, request: Request, operator: OperatorAccount, db: D
     link = _link(db, request, token)
     sent = False
     if payload.send:
+        # At once, through the shared post module (post 1.1.0, ``outbox.deliver_now``): the operator sees the
+        # server's answer. In the language of whoever receives it, as before.
+        language = mailer.language_for(db, None, *mailer.languages(operator, payload.language))
         try:
-            language = mailer.language_for(db, None, *mailer.languages(operator, payload.language))
-            mailer.send_invite(db, email, link, by=operator.shown_name, until=row.expires_at.date(),
-                               language=language, days=payload.days)
+            letter = nexpost.letters.compose(
+                "invite", email, language=language,
+                values={"by": mailer.one_line(operator.shown_name),
+                        "valid": nexpost.letters.validity(language, days=payload.days) if payload.days else ""},
+                link=link,
+            )
+            nexpost.outbox.deliver_now(PostStore(db), letter)
             sent = True
             # Whoever comes through this link proved the address.
             row.mailed = True
             db.commit()
-        except mailer.MailError as exc:
+        except nexpost.MailError as exc:
+            # The server's answer can quote addresses; only its kind goes to the log.
+            logger.warning("Mail not sent kind=invite code=%s", exc.code)
             db.delete(row)
             db.commit()
-            raise error(exc.code, str(exc), 409 if exc.code == "mail_off" else 502) from exc
+            code = mailer.old_code(exc.code)
+            raise error(code, str(exc), 409 if code == "mail_off" else 502, mail_code=exc.code) from exc
     logger.info("Invitation made by=%s mailed=%s", operator.name, sent)
     return {**_view(row, db), "link": link, "sent": sent}
 

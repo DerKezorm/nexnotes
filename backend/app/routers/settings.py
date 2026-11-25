@@ -17,12 +17,14 @@ from sqlalchemy import func, select
 from ..config import get_settings
 from ..deps import DbSession, OperatorAccount, unknown_proxy_seen
 from ..errors import error
-from ..models import SIGN_IN_PASSWORD
 from ..models import Account as AccountRow
 from ..security import encrypt_secret
 from ..services import accounts, mailer, mounts, settings_service, storage
 from ..services.oidc_store import SqlStore
-from ..vendor.nexoidc import authentik, providers
+from ..services.post_store import PostStore
+from ..vendor import nexpost
+from ..vendor.nexoidc import authentik
+from . import server_signin
 
 logger = logging.getLogger("nexnotes.settings")
 
@@ -90,6 +92,8 @@ class SettingsIn(BaseModel):
     smtp_from: str | None = Field(default=None, max_length=255)
     smtp_sender_name: str | None = Field(default=None, max_length=100)
     passkeys_allowed: bool | None = None
+    #: The operator's own password: asked when the second factor for everybody goes off (konten 1.1.0).
+    current_password: str = Field(default="", max_length=200)
     upload_max_mb: int | None = Field(default=None, ge=1, le=100_000)
     history_days: int | None = None
     trash_days: int | None = None
@@ -159,9 +163,22 @@ def read(request: Request, _operator: OperatorAccount, db: DbSession) -> Setting
 
 @router.put("", response_model=SettingsOut)
 def save(payload: SettingsIn, request: Request, operator: OperatorAccount, db: DbSession) -> SettingsOut:
+    # The sign-in switches go through the rules of the shared account module, as on Server › Sign-in
+    # (``routers/server_signin.py``): the password sign-in off only with an active provider, the second factor for
+    # everybody on only with an own one and off only with the operator's password.
+    switches = {
+        name: value
+        for name, value in (("password_login", payload.password_login),
+                            ("factor_required", payload.two_factor_required),
+                            ("passkeys_allowed", payload.passkeys_allowed))
+        if value is not None
+    }
+    if switches:
+        server_signin.change(db, request, operator, current_password=payload.current_password, **switches)
     changes: dict[str, Any] = {}
     for key, value in payload.model_dump(exclude_unset=True).items():
-        if value is None or key == "confirm_address":
+        if value is None or key in ("confirm_address", "current_password", "password_login", "two_factor_required",
+                                    "passkeys_allowed"):
             continue
         if key == "public_url":
             try:
@@ -178,16 +195,6 @@ def save(payload: SettingsIn, request: Request, operator: OperatorAccount, db: D
             value = value.strip()
             if value and not accounts.EMAIL_PATTERN.match(value):
                 raise error("invalid_email", "This is not a mail address.", 422)
-        elif key == "two_factor_required" and value and operator.sign_in == SIGN_IN_PASSWORD and not (
-            operator.totp_secret_enc
-        ):
-            # Else the operator would be the first one sent to the account page, with nothing else in reach.
-            raise error("own_second_factor_first", "Set up your own second factor first.", 409)
-        elif key == "password_login" and not value:
-            if not providers.public_list(SqlStore(db)):
-                # Without an active provider nobody but the operator could sign in any more, and invitations would
-                # fail.
-                raise error("provider_first", "Set up a sign-in provider first.", 409)
         elif key == "history_days" and value not in settings_service.HISTORY_DAYS:
             raise error("invalid_input", "The input is not valid.", 422, fields=["history_days"])
         elif key == "trash_days" and value not in settings_service.TRASH_DAYS:
@@ -220,7 +227,12 @@ def mail_test(payload: TestMailIn, operator: OperatorAccount, db: DbSession) -> 
     known = db.scalar(select(AccountRow).where(func.lower(AccountRow.email) == to.lower()).limit(1))
     language = mailer.language_for(db, known, *mailer.languages(operator, payload.language))
     try:
-        mailer.send_test(db, to, language)
-    except mailer.MailError as exc:
-        # No mail server is a setting, not a failing server: no gateway error, no ERROR in the log.
-        raise error(exc.code, str(exc), 409 if exc.code == "mail_off" else 502) from exc
+        # The post module's test mail (post 1.1.0): the app's logo, the same in every app.
+        nexpost.outbox.test_mail(PostStore(db), to, language=language)
+    except nexpost.MailError as exc:
+        # No mail server is a setting, not a failing server: no gateway error, no ERROR in the log. The server's
+        # answer can quote addresses; only its kind goes to the log.
+        if exc.code != "mail_off":
+            logger.warning("Mail not sent kind=test code=%s", exc.code)
+        code = mailer.old_code(exc.code)
+        raise error(code, str(exc), 409 if code == "mail_off" else 502, mail_code=exc.code) from exc

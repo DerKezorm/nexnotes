@@ -10,19 +10,9 @@
     "countNotes_other": "{{count}} Notizen",
     "countShared_one": "{{count}} geteilte",
     "countShared_other": "{{count}} geteilte",
-    "limitField": "Grenze in GB",
-    "limitRemove": "Grenze entfernen",
-    "limitSet": "Setzen",
     "limitText": "Ist sie erreicht, geht Schreiben weiter, neue Anhänge nicht.",
-    "limitTitle": "Speichergrenze für {{name}}",
-    "limitUsed": "Belegt: {{used}}",
-    "storage": "Speicher",
-    "usedNoLimit": "{{used}} · ohne Grenze",
-    "usedOf": "{{used}} von {{limit}}",
     "withdrawn": "Einladung zurückgezogen.",
-    "storageLimit": "Speichergrenze",
     "removeNumbers": "Es hat {{notes}}, davon {{shared}}. Es ist sofort gesperrt, und was es geteilt hat, verschwindet bei den anderen.",
-    "privacyTitle": "Was du siehst",
     "privacy": "Als Betreiber siehst du Namen, Anmeldung, Speicher und Nutzung, aber nie den Titel oder ein Wort einer Notiz."
   },
   "app": {
@@ -719,12 +709,6 @@
       "done": "Alle anderen Browser und verbundenen Geräte sind abgemeldet."
     },
     "setupFirst": "Der Betreiber verlangt einen zweiten Faktor. Richte ihn hier ein, dann geht es weiter.",
-    "signOut": {
-      "button": "Abmelden",
-      "provider": "Bei deinem Anmeldeanbieter bleibst du angemeldet; nur nexnotes meldet dich ab.",
-      "text": "Beendet deine Sitzung in diesem Browser. Deine Notizen bleiben, wie sie sind.",
-      "title": "Abmelden"
-    },
     "unlinked": "Nicht mehr mit {{name}} verknüpft.",
     "picture": {
       "remove": "Bild entfernen",
@@ -925,12 +909,9 @@
     "linkPreviews": "Link-Vorschauen",
     "linkPreviewsHint": "Der Server holt Titel und Bild verlinkter Seiten.",
     "mail": "Mail",
-    "mailHint": "Für Einladungen und Links zum Zurücksetzen. Ohne Server reicht der Link zum Kopieren.",
-    "mailSent": "Die Testmail ist raus.",
-    "mailTest": "Testmail an",
+    "mailHint": "Über ihn verschickt nexnotes Einladungen, Links für ein neues Passwort und zum Bestätigen einer Adresse und Hinweise zu deinem Konto, etwa bei einer neuen Anmeldung. Ohne Server reicht der Link zum Kopieren.",
     "mcp": "MCP-Zugang",
     "mcpHint": "Mitglieder dürfen Schlüssel für KI-Werkzeuge anlegen.",
-    "none": "keine",
     "ocr": "Texterkennung",
     "ocrHint": "Sprachen, die in Bildern, Scans und PDFs gelesen werden.",
     "ocrLanguages": {
@@ -944,12 +925,6 @@
       "pt": "Portugiesisch",
       "tr": "Türkisch"
     },
-    "ownSecondFactorFirst": "Richte zuerst deinen eigenen zweiten Faktor ein (Mein Konto, Sicherheit), sonst wärst du der Erste, der nicht mehr weiterkommt. Nicht betroffen ist, wer sich über einen Anbieter anmeldet, bei dem „{{trusts}}“ an ist.",
-    "providers": {
-      "more": "Mehr",
-      "order": "{{name}} verschieben: ziehen oder die Pfeiltasten"
-    },
-    "proxyUnknown": "Anfragen kommen über einen Proxy, aber NEXNOTES_TRUSTED_PROXIES ist nicht gesetzt. Dann sieht nexnotes alle als einen Absender: Wer oft falsch rät, bremst jeden aus, der sich in einem hier noch nie benutzten Browser anmeldet. Trag die Adresse des Proxys in NEXNOTES_TRUSTED_PROXIES ein. Steht kein Proxy davor, kannst du das ignorieren.",
     "restore": "Wiederherstellen",
     "restoreChanges": "Beim Wiederherstellen kommen {{add}} dazu, {{change}} ändern sich, {{remove}} fallen weg.",
     "restoreNotes": "Notizen dazu: {{add}} · geändert: {{change}} · weg: {{remove}}.",
@@ -959,21 +934,12 @@
       "own": "Titel stehen nur bei deinen eigenen Notizen.",
       "remove": "Weg: {{titles}}"
     },
-    "secretKept": "Bleibt; nur zum Ändern tippen.",
-    "send": "Senden",
     "shareLinks": "Teilen per Link",
     "shareLinksHint": "Mitglieder dürfen Lese-Links für Personen ohne Konto anlegen.",
-    "smtpFrom": "Absender",
-    "smtpHost": "Server",
-    "smtpPort": "Port",
-    "smtpSecurity": "Verschlüsselung",
-    "smtpUser": "Benutzer",
     "template": "Vorlage herunterladen",
     "texts_one": "ein Text",
     "texts_other": "{{count}} Texte",
     "trash": "Papierkorb leeren nach",
-    "twoFactorRequired": "Zweiten Faktor verlangen",
-    "twoFactorRequiredHint": "Konten von einem Anmeldeanbieter bringen dessen eigenen mit. Ein Konto mit Passwort ist ebenfalls nicht betroffen, wenn es über einen Anbieter kommt, bei dem „{{trusts}}“ an ist.",
     "untitled": "Ohne Titel",
     "upload": "Sprache hochladen",
     "uploadMax": "Größte Datei je Anhang (MB)",

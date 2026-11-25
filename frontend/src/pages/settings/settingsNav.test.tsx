@@ -41,6 +41,15 @@ function answer(path: string): Answer | undefined {
     const address = { public_url: '', seen: 'http://localhost:3000', forwarded_proto: '', forwarded_host: '', proxy_ignored: false }
     return { status: 200, body: { ...address, callback_path: '/api/oidc/authentik/callback', redirect_uri: '', registered_redirect_uri: '', stale: false } }
   }
+  if (path === '/api/server/sign-in') {
+    return { status: 200, body: { password_login: true, factor_required: false, passkeys_allowed: true, password_may_go_off: false, factor_may_go_on: false, second_factor_off: false, public_url: '', operator_has_password: true } }
+  }
+  if (path === '/api/server/sign-in/readiness') {
+    return { status: 200, body: { state: 'bad', open: 1, points: [{ key: 'address', state: 'bad', title: 'account.ready.address.title', text: 'account.ready.address.missing', values: { app: 'nexnotes' } }] } }
+  }
+  if (path === '/api/server/mail') {
+    return { status: 200, body: { host: '', port: 587, security: 'starttls', user: '', password_set: false, sender: '', sender_name: '', sender_name_default: 'nexnotes', configured: false, warnings: [], last_ok_at: null, last_error: '', last_error_at: null, waiting: 0 } }
+  }
   if (path === '/api/server/storage') return { status: 200, body: { app: 'nexnotes', used: 1000, parts: [], complete: true, total: 1e12, disk_used: 1e11, free: 9e11, nearly_full: false, where: {}, network: [] } }
   if (path === '/api/server/storage/backups') {
     const schedule = { every: 'daily', time: '03:00', keep: 7 }
@@ -243,9 +252,10 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it.each([
     ['profile', ['profile', 'sign-out']],
     ['security', ['security']],
-    ['appearance', ['look', 'paper', 'lists', 'guide']],
+    ['appearance', ['appearance', 'paper', 'lists', 'guide']],
     ['general', ['limits', 'features', 'languages']],
-    ['sign-in', ['sign-in', 'sign-in-providers', 'sign-in-authentik']],
+    // The points of "Ready for the internet?" are boxes of their own in its card (here one, `ready-address`).
+    ['sign-in', ['sign-in-ready', 'ready-address', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
     ['storage', ['storage', 'backups']],
     ['ocr', ['ocr']],
@@ -256,8 +266,10 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   })
 
   it.each([
-    ['appearance', ['look', 'paper', 'lists', 'guide']],
+    ['appearance', ['appearance', 'paper', 'lists', 'guide']],
     ['general', ['limits', 'features', 'languages']],
+    ['sign-in', ['sign-in-ready', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
+    ['mail', ['mail']],
     ['storage', ['storage', 'backups']],
     ['ocr', ['ocr']],
     ['log', ['log']],

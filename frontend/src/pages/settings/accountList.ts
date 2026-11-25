@@ -1,27 +1,19 @@
 /** nexnotes' side of the operator's account list of the shared account module (konten 0.3.9/0.3.10): what its server
- * can do, its own act at its fixed place, and its rows as the module knows them. */
+ * can do and its rows as the module knows them. */
 import type { AccountRow } from '../../api/client'
 import { avatarUrl } from '../../lib/avatar'
-import type { AccountCaps, ListedAccount, OwnAction } from '../../vendor/nexkonten/konten'
+import { capsOf, type AccountCaps, type ListedAccount } from '../../vendor/nexkonten/konten'
 
-/** What nexnotes' server can do for the operator (`ACCOUNT_CAPS`, the module's table of 25.11.2026): everything. */
-export const APP_CAPS: AccountCaps = {
+/** What nexnotes' server can do for the operator (`ACCOUNT_CAPS`, the module's table of 25.11.2026): everything of its
+ * own, the module's standard functions and nexnotes' row of `FEATURES` (the storage limit, konten 1.1.0). */
+export const APP_CAPS: AccountCaps = capsOf('nexnotes', {
   rename: true,
-  roles: true,
   emailRemove: true,
   resetLink: true,
   factorReset: true,
   signOut: true,
   unlink: true,
-  blocking: true,
-  remove: true,
-  restore: true,
-}
-
-/** nexnotes' own act in the dialog "Manage": the storage limit, in "Change" after "Make member". */
-export const APP_OWN_ACTIONS: readonly OwnAction[] = [
-  { name: 'storageLimit', label: 'accounts.storageLimit', group: 'change', button: 'storageLimit', after: 'account.makeMember' },
-]
+})
 
 /** One row of nexnotes' answer as the module's list knows it (the names of the interface stay). */
 export function listedOf(row: AccountRow, ownId: number | undefined): ListedAccount {
@@ -45,5 +37,7 @@ export function listedOf(row: AccountRow, ownId: number | undefined): ListedAcco
     purgeAt: row.purge_at,
     lastSeenAt: row.last_seen_at,
     picture: avatarUrl(row.id, row.avatar),
+    storageLimit: row.storage_limit,
+    storageUsed: row.storage_used,
   }
 }

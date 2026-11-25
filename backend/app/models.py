@@ -152,6 +152,10 @@ class Account(Base):
     new_password_origin: Mapped[str] = mapped_column(String(16), default="", server_default="")
     #: The account's own preferences; only what it chose.
     preferences: Mapped[Any] = mapped_column(JSON, nullable=True)
+    #: Light, dark or as the system (``light``, ``dark``, ``system``; "" chose nothing yet), kept at the account on
+    #: every device since konten 1.1.0; the first load takes the browser's value of before once
+    #: (``profiles.adopt_theme``).
+    theme: Mapped[str] = mapped_column(String(16), default="", server_default="")
     #: What the device cookies of this account are signed with (``security.device_token``): drawn anew on a new
     #: password, a block or unblock, "sign out everywhere" and a reset second factor, so no browser from before counts
     #: as known any more.

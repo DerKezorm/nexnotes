@@ -62,3 +62,32 @@ export function followSystem(): void {
     // An old browser: the mode stays as it was at the start.
   }
 }
+
+/** What this browser kept before the choice moved to the account (konten 1.1.0), "" for nothing. */
+export function keptMode(): string {
+  try {
+    return localStorage.getItem(KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+/**
+ * The account's choice, on every device (plan "Einstellungen", E5): shown at once and kept here too, so that the next
+ * page load starts in it before the account is known (`public/theme.js`). An account that never chose takes what this
+ * browser kept, once (`take`, the server's `profiles.adopt_theme`), and shows what the server answers.
+ */
+export function takeAccountTheme(theme: string | undefined, take: (kept: string) => Promise<{ theme: string }>): void {
+  if (theme === 'light' || theme === 'dark' || theme === 'system') {
+    applyMode(theme)
+    return
+  }
+  const kept = keptMode()
+  if (!kept) return
+  void take(kept).then(
+    (answer) => {
+      if (answer.theme === 'light' || answer.theme === 'dark' || answer.theme === 'system') applyMode(answer.theme)
+    },
+    () => undefined,
+  )
+}

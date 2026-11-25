@@ -10,19 +10,9 @@
     "countNotes_other": "{{count}} notes",
     "countShared_one": "{{count}} shared",
     "countShared_other": "{{count}} shared",
-    "limitField": "Limit in GB",
-    "limitRemove": "Remove the limit",
-    "limitSet": "Set",
     "limitText": "Once reached, writing goes on, new attachments do not.",
-    "limitTitle": "Storage limit for {{name}}",
-    "limitUsed": "In use: {{used}}",
-    "storage": "Storage",
-    "usedNoLimit": "{{used}} · no limit",
-    "usedOf": "{{used}} of {{limit}}",
     "withdrawn": "Invitation withdrawn.",
-    "storageLimit": "Storage limit",
     "removeNumbers": "It has {{notes}}, {{shared}} of them. It is blocked at once, and what it shared disappears for the others.",
-    "privacyTitle": "What you see",
     "privacy": "As the operator you see names, sign-in, storage and use, but never the title or a word of a note."
   },
   "app": {
@@ -719,12 +709,6 @@
       "done": "Every other browser and connected device is signed out."
     },
     "setupFirst": "The operator requires a second factor. Set it up here, then you can go on.",
-    "signOut": {
-      "button": "Sign out",
-      "provider": "You stay signed in with your sign-in provider; only nexnotes signs you out.",
-      "text": "Ends your session in this browser. Your notes stay as they are.",
-      "title": "Sign out"
-    },
     "unlinked": "No longer linked to {{name}}.",
     "picture": {
       "remove": "Remove picture",
@@ -925,12 +909,9 @@
     "linkPreviews": "Link previews",
     "linkPreviewsHint": "The server fetches title and picture of linked pages.",
     "mail": "Mail",
-    "mailHint": "For invitations and reset links. Without a server, the link to copy is enough.",
-    "mailSent": "The test mail went out.",
-    "mailTest": "Test mail to",
+    "mailHint": "nexnotes sends invitations through it, links for a new password and to confirm an address, and notices about an account, such as a new sign-in. Without a server, the link to copy is enough.",
     "mcp": "MCP access",
     "mcpHint": "Members may make keys for AI tools.",
-    "none": "none",
     "ocr": "Text recognition",
     "ocrHint": "Languages read in pictures, scans and PDFs.",
     "ocrLanguages": {
@@ -944,12 +925,6 @@
       "pt": "Portuguese",
       "tr": "Turkish"
     },
-    "ownSecondFactorFirst": "Set up your own second factor first (My account, Security), or you would be the first one who cannot go on. Not affected is whoever signs in through a provider for which “{{trusts}}” is on.",
-    "providers": {
-      "more": "More",
-      "order": "Move {{name}}: drag, or the arrow keys"
-    },
-    "proxyUnknown": "Requests come through a proxy, but NEXNOTES_TRUSTED_PROXIES is not set. nexnotes then sees everybody as one sender: whoever guesses wrong often slows down everyone signing in from a browser not used here before. Put the proxy's address into NEXNOTES_TRUSTED_PROXIES. If no proxy stands in front of nexnotes, you can ignore this.",
     "restore": "Restore",
     "restoreChanges": "Restoring adds {{add}}, changes {{change}} and removes {{remove}}.",
     "restoreNotes": "Notes added: {{add}} · changed: {{change}} · removed: {{remove}}.",
@@ -959,21 +934,12 @@
       "own": "Titles are named only for your own notes.",
       "remove": "Removed: {{titles}}"
     },
-    "secretKept": "Kept; type only to change it.",
-    "send": "Send",
     "shareLinks": "Sharing by link",
     "shareLinksHint": "Members may make read links for people without an account.",
-    "smtpFrom": "Sender",
-    "smtpHost": "Server",
-    "smtpPort": "Port",
-    "smtpSecurity": "Encryption",
-    "smtpUser": "User",
     "template": "Download template",
     "texts_one": "one text",
     "texts_other": "{{count}} texts",
     "trash": "Empty the trash after",
-    "twoFactorRequired": "Require a second factor",
-    "twoFactorRequiredHint": "Accounts from a sign-in provider bring the provider's. An account with a password is not affected either when it comes in through a provider for which “{{trusts}}” is on.",
     "untitled": "Untitled",
     "upload": "Upload language",
     "uploadMax": "Largest file per attachment (MB)",

@@ -1,6 +1,6 @@
 /**
  * What each area of the settings shows, in the order of the plan "Einstellungen": only cards. The cards stay in their
- * files (`AccountTab`, `AppearanceArea`, `ConnectionsTab`, `GeneralCards`, `SignInCards`, `ServerCards`, `StorageArea`,
+ * files (`AccountTab`, `AppearanceArea`, `ConnectionsTab`, `GeneralCards`, `SignInArea`, `ServerCards`, `StorageArea`,
  * `AccountsTab`, `LogCard`, `AboutArea`); an area only picks them.
  */
 import { AllTokensCard } from '../../tokens/AllTokensCard'
@@ -10,10 +10,10 @@ import { AccountTab } from './AccountTab'
 import { AppearanceArea } from './AppearanceArea'
 import type { AreaSlug } from './areas'
 import { ConnectionsTab } from './ConnectionsTab'
-import { FeaturesCard, LanguagesCard, LimitsCard, OcrCard, ProxyHint } from './GeneralCards'
+import { FeaturesCard, LanguagesCard, LimitsCard, OcrCard } from './GeneralCards'
 import { LogCard } from './LogCard'
 import { MailCard, useServerSettings } from './ServerCards'
-import { SignInPart } from './SignInCards'
+import { SignInArea } from './SignInArea'
 import { StorageArea } from './StorageArea'
 
 export function AreaContent({ area }: { area: AreaSlug }) {
@@ -34,6 +34,10 @@ export function AreaContent({ area }: { area: AreaSlug }) {
           <AllTokensCard />
         </>
       )
+    case 'sign-in':
+      return <SignInArea />
+    case 'mail':
+      return <MailCard />
     case 'log':
       return <LogCard />
     case 'about':
@@ -43,16 +47,12 @@ export function AreaContent({ area }: { area: AreaSlug }) {
   }
 }
 
-/**
- * The server's own settings, for the operator. The hint about an unnamed proxy concerns the sign-in brake and the
- * addresses: it stands in General and in Sign-in until the card "Bereit fürs Internet?" (konten 1.1.0) takes it over.
- */
-function ServerCardsOf({ area }: { area: 'general' | 'sign-in' | 'mail' | 'ocr' }) {
+/** The server's own settings, for the operator, read once for the cards of an area. */
+function ServerCardsOf({ area }: { area: 'general' | 'ocr' }) {
   const server = useServerSettings()
   if (!server.settings) return null
   return (
     <>
-      {(area === 'general' || area === 'sign-in') && <ProxyHint server={server} />}
       {area === 'general' && (
         <>
           <LimitsCard server={server} />
@@ -60,8 +60,6 @@ function ServerCardsOf({ area }: { area: 'general' | 'sign-in' | 'mail' | 'ocr' 
           <LanguagesCard />
         </>
       )}
-      {area === 'sign-in' && <SignInPart server={server} />}
-      {area === 'mail' && <MailCard server={server} />}
       {area === 'ocr' && <OcrCard server={server} />}
     </>
   )

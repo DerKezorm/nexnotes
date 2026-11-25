@@ -19,6 +19,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ApiError, authApi, SIGNED_OUT_EVENT, type Me } from '../api/client'
 import { showNotice } from '../folders/notice'
 import i18n, { changeLanguage } from '../i18n'
+import { takeAccountTheme } from '../lib/theme'
 import { takeListLook } from '../notes/list/look'
 import { followAccount } from './account'
 
@@ -69,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMeState(next)
     // How the lists look, the same on every device of the account.
     takeListLook(next)
+    // Light or dark, the same on every device of the account (konten 1.1.0).
+    takeAccountTheme(next.theme, authApi.adoptTheme)
     setInterrupted(null)
     setEnded(false)
     setStatus('signedIn')

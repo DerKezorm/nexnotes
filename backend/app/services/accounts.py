@@ -17,6 +17,7 @@ import threading
 import unicodedata
 from datetime import timedelta
 from functools import lru_cache
+from typing import Any
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import OperationalError
@@ -355,17 +356,20 @@ def use_reset(db: Session, token: str, new: str) -> Account:
 
 
 # --- Roles, blocking, deleting ---------------------------------------------------------------------------------------
+#
+# Since konten 1.1.0 the operator's routes go through the shared module (``nexkonten.manage``: never on the own
+# account, the operator's password, always one operator who can sign in, 30 days to bring back). The functions here
+# do the same steps on the same store for nexnotes' own callers without an acting operator (tests, the housekeeping).
+
+
+def _store(db: Session) -> Any:
+    from .konten_store import KontenStore
+
+    return KontenStore(db)
 
 
 def active_operators(db: Session) -> int:
-    return int(
-        db.scalar(
-            select(func.count())
-            .select_from(Account)
-            .where(Account.role == OPERATOR, Account.blocked_at.is_(None), Account.deleted_at.is_(None))
-        )
-        or 0
-    )
+    return int(_store(db).active_operators())
 
 
 def _keep_an_operator(db: Session, account: Account) -> None:
@@ -382,90 +386,82 @@ def set_role(db: Session, account: Account, role: str) -> None:
         return
     if role == MEMBER:
         _keep_an_operator(db, account)
-    account.role = role
+    _store(db).set_operator(account.id, role == OPERATOR)
     db.commit()
     logger.info("Role changed name=%s role=%s", account.name, role)
 
 
+def _tell(db: Session, kind: str, account_id: int) -> None:
+    from ..vendor import nexkonten
+
+    _store(db).notify(nexkonten.Event(kind, account_id))
+
+
 def block(db: Session, account: Account) -> None:
-    from ..security import sessions_ended
-    from . import apitokens
+    """As ``nexkonten.manage.block``: the store shuts every way (``KontenStore.shut_out``)."""
+    from ..vendor import nexkonten
 
     if account.blocked_at is not None:
         return
     _keep_an_operator(db, account)
-    account.blocked_at = utcnow()
+    store = _store(db)
+    store.set_blocked(account.id, utcnow())
+    store.shut_out(account.id)
     db.commit()
-    # The sessions stay as they are but count for nothing (``security.account_out``): an open window hears that it
-    # is blocked instead of being sent to sign in. Live connections look again at once; device tokens go for good.
-    sessions_ended()
-    apitokens.revoke_all(db, account.id)
+    _tell(db, nexkonten.EVENT_BLOCKED, account.id)
     logger.info("Account blocked name=%s", account.name)
 
 
 def unblock(db: Session, account: Account) -> None:
+    """As ``nexkonten.manage.unblock``: the sessions from before the block do not come back to life."""
+    from ..vendor import nexkonten
+
     if account.blocked_at is None:
         return
-    from ..security import end_all_sessions
-
-    # The sessions from before the block do not come back to life.
-    end_all_sessions(db, account.id)
-    account.blocked_at = None
-    account.failed_logins = 0
-    account.locked_until = None
+    store = _store(db)
+    store.end_sessions(account.id)
+    store.set_blocked(account.id, None)
     db.commit()
-    # Its devices of before were disconnected by the block; from now on they hear so (NOTES-24).
-    from .devices import forget_blocked
-
-    forget_blocked(db, account.id)
+    _tell(db, nexkonten.EVENT_UNBLOCKED, account.id)
     logger.info("Account unblocked name=%s", account.name)
 
 
 def delete_account(db: Session, account: Account) -> None:
-    """Gone for everybody at once, blocked, and for ``DELETE_GRACE_DAYS`` days brought back by the operator."""
-    from ..security import sessions_ended
-    from . import apitokens, content
+    """Gone for everybody at once, shut out, and for ``DELETE_GRACE_DAYS`` days brought back by the operator."""
+    from ..vendor import nexkonten
 
     if account.deleted_at is not None:
         return
     _keep_an_operator(db, account)
-    account.deleted_at = utcnow()
+    store = _store(db)
+    store.set_deleted(account.id, utcnow())
+    store.shut_out(account.id)
     db.commit()
-    sessions_ended()
-    apitokens.revoke_all(db, account.id)
-    content.account_deleted(db, account.id)
+    _tell(db, nexkonten.EVENT_DELETED, account.id)
     logger.info("Account deleted name=%s (restorable for %s days)", account.name, DELETE_GRACE_DAYS)
 
 
 def restore_account(db: Session, account: Account) -> None:
-    from . import content
+    from ..vendor import nexkonten
 
     if account.deleted_at is None:
         return
     if account.deleted_at + timedelta(days=DELETE_GRACE_DAYS) <= utcnow():
         raise AccountError("not_found", "Not found.", 404)
-    from ..security import end_all_sessions
-
-    end_all_sessions(db, account.id)
-    account.deleted_at = None
+    store = _store(db)
+    store.end_sessions(account.id)
+    store.set_deleted(account.id, None)
     db.commit()
-    content.account_restored(db, account.id)
+    _tell(db, nexkonten.EVENT_RESTORED, account.id)
     logger.info("Account restored name=%s", account.name)
 
 
 def purge_deleted(db: Session) -> int:
-    """Accounts deleted more than ``DELETE_GRACE_DAYS`` days ago go for good, with everything they own."""
-    from . import content
+    """Accounts deleted more than ``DELETE_GRACE_DAYS`` days ago go for good, with everything they own, through the
+    shared module (``nexkonten.manage.purge_due``); their names stay reserved."""
+    from ..vendor import nexkonten
 
-    limit = utcnow() - timedelta(days=DELETE_GRACE_DAYS)
-    rows = list(db.scalars(select(Account).where(Account.deleted_at.is_not(None), Account.deleted_at <= limit)))
-    for row in rows:
-        content.account_purged(db, row.id)
-        db.delete(row)
-        logger.info("Deleted account removed for good name=%s", row.name)
-    if rows:
-        db.commit()
-    return len(rows)
+    return len(nexkonten.manage.purge_due(_store(db)))
 
 
 # --- Invitations ---------------------------------------------------------------------------------------------------

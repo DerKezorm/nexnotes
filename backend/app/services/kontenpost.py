@@ -43,13 +43,18 @@ def can_mail(db: Session) -> bool:
 
 def deliver_now(db: Session, mail: nexkonten.Mail) -> None:
     """At once through the mail server, never through the outbox ("Forgot your password?", konten 0.3.10): raises
-    when the mail did not go out (``mailer.MailError``, ``nexpost.MailError``), and the module then takes the link
+    when the mail did not go out (``nexpost.MailError``), and the module then takes the link
     back, so that no link stays behind that nobody got."""
     if not mailer.configured(db):
-        raise mailer.MailError("mail_off", "No mail server is set up.")
+        raise nexpost.MailError("mail_off", "No mail server is set up.")
     account = db.get(Account, int(mail.account_id)) if str(mail.account_id).isdigit() else None
     letter = nexpost.letters.from_account_mail(mail, language=mailer.language_for(db, account), link=link_for(db, mail))
-    mailer.deliver_letter(db, letter)
+    try:
+        nexpost.outbox.deliver_now(PostStore(db), letter)
+    except nexpost.MailError as exc:
+        # The server's answer can quote addresses; only its kind goes to the log.
+        logger.warning("Mail not sent kind=%s code=%s", mail.kind, exc.code)
+        raise
 
 
 def queue(db: Session, mail: nexkonten.Mail | None, *, by: str = "", where: str = "", days: int = 0) -> bool:
