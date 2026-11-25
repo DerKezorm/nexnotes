@@ -1,7 +1,9 @@
 /**
  * nexnotes as an installed app (NOTES-23): the service worker (`public/sw.js`) is signed up at the start, a new one
  * waiting is offered as "New version, reload", and the page talks to it (what was shared, forgetting the account).
- * Whether the app runs installed (`display-mode: standalone`) is known here too.
+ * Whether the app runs installed (`display-mode: standalone`) is known here too, and the browser's offer to install it
+ * (`beforeinstallprompt`, Chrome, Edge, Android) is kept for the card "Auf diesem Gerät installieren" (Settings ›
+ * Connections). iPhone and iPad have no such offer: there it is Share › Add to Home Screen.
  */
 import { useSyncExternalStore } from 'react'
 
@@ -12,9 +14,16 @@ type State = {
   update: boolean
   /** Runs as the installed app. */
   standalone: boolean
+  /** The browser offers to install the app (Chrome, Edge, Android). */
+  installable: boolean
+  /** iPhone or iPad (Share › Add to Home Screen). */
+  ios: boolean
 }
 
-let state: State = { update: false, standalone: false }
+type InstallOffer = Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }> }
+
+let state: State = { update: false, standalone: false, installable: false, ios: false }
+let offer: InstallOffer | null = null
 let waiting: ServiceWorker | null = null
 const listeners = new Set<() => void>()
 
@@ -138,6 +147,37 @@ export function startWorker(): void {
   worker()
     .then(watch)
     .catch(() => undefined)
+}
+
+export function isIos(agent = navigator.userAgent, touchPoints = navigator.maxTouchPoints ?? 0): boolean {
+  // iPadOS asks for the desktop page and says "Macintosh"; it is the Mac with a touch screen.
+  return /iPhone|iPad|iPod/.test(agent) || (/Macintosh/.test(agent) && touchPoints > 1)
+}
+
+/** The browser's offer to install, kept from the start of the page (it comes once, early). */
+export function listenForInstall(): void {
+  if (typeof window === 'undefined') return
+  set({ standalone: isStandalone(), ios: isIos() })
+  window.addEventListener('beforeinstallprompt', (event) => {
+    event.preventDefault()
+    offer = event as InstallOffer
+    set({ installable: true })
+  })
+  window.addEventListener('appinstalled', () => {
+    offer = null
+    set({ installable: false, standalone: isStandalone() })
+  })
+}
+
+/** The browser's own question to install; true when it was accepted. */
+export async function install(): Promise<boolean> {
+  if (!offer) return false
+  const asked = offer
+  offer = null
+  set({ installable: false })
+  await asked.prompt()
+  const { outcome } = await asked.userChoice
+  return outcome === 'accepted'
 }
 
 /** Takes the waiting version: the worker takes over, the page reloads. */

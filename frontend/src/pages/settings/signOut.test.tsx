@@ -116,7 +116,6 @@ describe('signing out (NOTES-2 AC-12)', () => {
     expect(byTestId('sign-out-card')?.contains(ways[0])).toBe(true)
     expect(document.querySelector('nav[aria-label="' + i18n.t('app.mainMenu') + '"]')?.textContent).not.toContain(label)
     expect(byTestId('settings-nav')?.textContent).not.toContain(label)
-    expect(byTestId('settings-jump-row')?.textContent).not.toContain(label)
     act(() => root.unmount())
     root = createRoot(box)
     await open('/settings/security')

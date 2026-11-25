@@ -1,5 +1,6 @@
 /** The two shipped languages have the same keys, the same placeholders, and no dashes as pauses. */
 
+import { NEXUI_TEXTS } from '../vendor/nexui'
 import de from './de.json'
 import en from './en.json'
 
@@ -46,8 +47,10 @@ describe('shipped languages', () => {
   })
 
   it('call the program version Version in German', () => {
-    expect(german.get('about.version')).toBe('Version')
-    expect(german.get('about.updates.current')).toBe('Das ist die neueste Version.')
+    // The page "Über nexnotes" speaks with the ui kit's words (AboutPage); nexnotes' own say the same.
+    expect(NEXUI_TEXTS.de.aboutVersion).toBe('Version')
+    expect(NEXUI_TEXTS.de.updatesCurrent).toBe('Das ist die neueste Version.')
+    expect([...german].filter(([, text]) => /Fassung/.test(text))).toEqual([])
   })
 
   it('never speak of boards, spaces or another app', () => {

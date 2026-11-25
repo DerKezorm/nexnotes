@@ -312,7 +312,7 @@ describe('the looks of the lists', () => {
     expect($('settings-list-style-tiles')!.getAttribute('aria-checked')).toBe('false')
     // The hints the same way, kind by kind (three ticks, no switches), both directions.
     const ticks = [...$('settings-list-hints')!.querySelectorAll<HTMLInputElement>('input')]
-    expect(ticks.map((tick) => [tick.type, tick.getAttribute('role'), tick.getAttribute('aria-label')])).toEqual([
+    expect(ticks.map((tick) => [tick.type, tick.getAttribute('role'), tick.labels![0].textContent])).toEqual([
       ['checkbox', null, 'Checklisten'],
       ['checkbox', null, 'Anhänge'],
       ['checkbox', null, 'Schlagwörter'],

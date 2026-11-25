@@ -10,6 +10,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { api, ApiError } from './api/client'
 import i18n from './i18n'
 import { AuthProvider, SIGNED_IN_AGAIN_EVENT } from './state/auth'
+import { areaText, NEXUI_TEXTS } from './vendor/nexui'
 
 type Answer = { status: number; body: unknown }
 let handler: (method: string, path: string, body: unknown) => Answer | undefined = () => undefined
@@ -168,8 +169,9 @@ describe('the settings (NOTES-2 AC-9)', () => {
 
   it('NOTES-2 AC-9 a member finds the areas of My account; an operator also those of the server', async () => {
     const own = ['profile', 'security', 'appearance', 'connections']
-    const server = ['general', 'signIn', 'mail', 'storage', 'ocr', 'accounts', 'log']
-    const titles = (keys: string[]) => keys.map((key) => i18n.t(`settings.areas.${key}.title`))
+    const server = ['general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log']
+    // The shared areas in the kit's words, Text recognition in nexnotes' own.
+    const titles = (keys: string[]) => keys.map((key) => (key === 'ocr' ? i18n.t('settings.areas.ocr.title') : areaText(NEXUI_TEXTS.en, key, { app: 'nexnotes' })!.title))
     // "About nexnotes" is an area of everyone's, at the end (fifth review).
     expect(await settingsAs('member')).toEqual(titles([...own, 'about']))
     act(() => root.unmount())
@@ -179,7 +181,7 @@ describe('the settings (NOTES-2 AC-9)', () => {
     // The cards are titled by the shared module (``PAGES``), the same words as the areas: found by their ids.
     expect(box.querySelector('#profile-title')!.textContent).toBe(i18n.t('account.profile'))
     expect(box.querySelector('#security-title')).toBeNull()
-    expect(box.textContent).not.toContain(i18n.t('me.looks.title'))
+    expect(box.querySelector('[data-card="look"]')).toBeNull()
   })
 })
 

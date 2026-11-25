@@ -1,10 +1,12 @@
 /**
- * The areas of the settings, each with its own address (`/settings/<slug>`): "My account" for every account, "Server"
- * for the operator only, and "About nexnotes" (`/settings/about`) for everyone at the end of the navigation, outside the
- * groups. `/settings` is the profile; the addresses of the tabs before the areas lead to their area.
+ * The areas of the settings, each with its own address (`/settings/<slug>`, plan "Einstellungen"): "Mein Konto" for
+ * every account (Profile, Security, Appearance, Connections; nexnotes sends no notifications), "Server" for the
+ * operator only (General, Sign-in, Mail, Storage and backups, then nexnotes' own Text recognition, Accounts, Log), and
+ * "Über nexnotes" (`/settings/about`) for everyone, set apart at the end. Titles and lines of the shared areas come from
+ * the ui kit (`areaText`); Text recognition keeps its own. `/settings` alone is the list on a phone and the profile
+ * beside it on a wider page; the addresses of the tabs before the areas lead to their area.
  */
-import { HardDrive, Info, KeyRound, Mail, Palette, Plug, ScanText, ScrollText, ShieldCheck, SlidersHorizontal, UserRound, Users, type LucideIcon } from 'lucide-react'
-
+import type { IconLike } from '../../vendor/nexui'
 import type { Me } from '../../api/client'
 
 type Role = Me['role']
@@ -12,29 +14,30 @@ type Role = Me['role']
 export type AreaSlug = 'profile' | 'security' | 'appearance' | 'connections' | 'general' | 'sign-in' | 'mail' | 'storage' | 'ocr' | 'accounts' | 'log' | 'about'
 export type AreaGroup = 'account' | 'server'
 
-export type Area = { slug: AreaSlug; group: AreaGroup; icon: LucideIcon; key: string }
+/** `own`: an area of nexnotes alone, its title and line under `settings.areas.<slug>` of nexnotes' words. */
+export type Area = { slug: AreaSlug; group: AreaGroup; icon: IconLike; own?: boolean }
 
-/** In the order of the navigation; `key` names the texts `settings.areas.<key>.title` and `.text`. */
+/** In the order of the navigation (plan "Einstellungen", "Reihenfolge Mein Konto" and "Reihenfolge Server"). */
 export const AREAS: Area[] = [
-  { slug: 'profile', group: 'account', icon: UserRound, key: 'profile' },
-  { slug: 'security', group: 'account', icon: ShieldCheck, key: 'security' },
-  { slug: 'appearance', group: 'account', icon: Palette, key: 'appearance' },
-  { slug: 'connections', group: 'account', icon: Plug, key: 'connections' },
-  { slug: 'general', group: 'server', icon: SlidersHorizontal, key: 'general' },
-  { slug: 'sign-in', group: 'server', icon: KeyRound, key: 'signIn' },
-  { slug: 'mail', group: 'server', icon: Mail, key: 'mail' },
-  { slug: 'storage', group: 'server', icon: HardDrive, key: 'storage' },
-  { slug: 'ocr', group: 'server', icon: ScanText, key: 'ocr' },
-  { slug: 'accounts', group: 'server', icon: Users, key: 'accounts' },
-  { slug: 'log', group: 'server', icon: ScrollText, key: 'log' },
+  { slug: 'profile', group: 'account', icon: 'UserRound' },
+  { slug: 'security', group: 'account', icon: 'ShieldCheck' },
+  { slug: 'appearance', group: 'account', icon: 'Palette' },
+  { slug: 'connections', group: 'account', icon: 'Plug' },
+  { slug: 'general', group: 'server', icon: 'SlidersHorizontal' },
+  { slug: 'sign-in', group: 'server', icon: 'KeyRound' },
+  { slug: 'mail', group: 'server', icon: 'Mail' },
+  { slug: 'storage', group: 'server', icon: 'HardDrive' },
+  { slug: 'ocr', group: 'server', icon: 'ScanText', own: true },
+  { slug: 'accounts', group: 'server', icon: 'Users' },
+  { slug: 'log', group: 'server', icon: 'ScrollText' },
 ]
 
 export const GROUPS: AreaGroup[] = ['account', 'server']
 
-/** "About nexnotes": an area of every account, below the groups (its `group` only says who may open it). */
-export const ABOUT_AREA: Area = { slug: 'about', group: 'account', icon: Info, key: 'about' }
+/** "Über nexnotes": an area of every account, below the groups (its `group` only says who may open it). */
+export const ABOUT_AREA: Area = { slug: 'about', group: 'account', icon: 'Info' }
 
-/** The area of an address, the groups' and "About nexnotes". */
+/** The area of an address, the groups' and "Über nexnotes". */
 export function findArea(slug: AreaSlug): Area | undefined {
   return slug === ABOUT_AREA.slug ? ABOUT_AREA : AREAS.find((area) => area.slug === slug)
 }
@@ -53,8 +56,9 @@ export function areaPath(slug: AreaSlug): string {
 
 /**
  * Where an address of the settings leads: the area itself, or the address to go to instead (an address of before, an
- * area the account may not open, which goes to the profile). The answer of a provider after linking (`?linked=`,
- * `?error=`) comes to `/settings` and belongs to Security, where the providers are.
+ * area the account may not open, which goes to the settings' start). `/settings` alone shows the profile (and on a
+ * phone the list). The answer of a provider after linking (`?linked=`, `?error=`) comes to `/settings` and belongs to
+ * Security, where the providers are.
  */
 export function resolveArea(asked: string | undefined, role: Role | undefined, search: string): { area: AreaSlug } | { redirect: string } {
   const allowed = areasFor(role)

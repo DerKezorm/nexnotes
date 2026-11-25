@@ -1,30 +1,9 @@
 {
   "about": {
-    "builtWith": "Built with",
-    "licence": "Licence",
-    "newer": "Version {{version}} is out",
-    "project": "Project page",
-    "releases": "Releases",
-    "releasesLink": "All versions and what changed",
-    "report": "Found a problem?",
-    "reportLink": "Report it on GitHub",
-    "source": "Source code",
     "subtitle": "Quick notes, self-hosted.",
     "updates": {
-      "checkedAt": "last checked {{when}}",
-      "current": "This is the newest version.",
-      "daily": "Check once a day",
-      "dailyHint": "Asks GitHub for the newest release. Off: only when you press the button.",
-      "none": "No release found yet.",
-      "notYet": "Not checked yet.",
-      "now": "Check now",
-      "off": "The daily check is off.",
-      "text": "Whether a newer version of nexnotes is out.",
-      "title": "Updates",
-      "toRelease": "What is new",
       "whatGoesOut": "Only the question goes out: a request to api.github.com for the newest release of nexnotes, with no names, notes or settings. It is the only call nexnotes makes on its own."
-    },
-    "version": "Version"
+    }
   },
   "accounts": {
     "countNotes_one": "{{count}} note",
@@ -719,13 +698,10 @@
     "emailTaken": "Address taken.",
     "linked": "Your account is linked to {{name}}.",
     "looks": {
-      "appearance": "Appearance",
-      "appearanceHint": "(on this device only)",
       "browser": "As the browser",
       "byOperator": "(by the operator)",
       "language": "Language",
       "languageHint": "(on all your devices)",
-      "title": "Look and paper",
       "paper": "Paper of new notes",
       "paperHint": "Each note can be changed later in its menu."
     },
@@ -931,57 +907,19 @@
   },
   "server": {
     "backupContent": "{{notes}}, {{files}}",
-    "backupMade": "Backup created.",
-    "backupNow": "Back up now",
     "builtIn": "built in",
-    "check": "Check",
-    "checkBad": "Damaged: this backup cannot be restored.",
-    "checkOk": "The backup is complete: {{notes}}, {{files}}.",
-    "confirm": {
-      "backup_restore": {
-        "text": "First the current state is backed up, then nexnotes restarts and restores the backup. Everybody signs in again afterwards.",
-        "title": "Restore this backup?",
-        "button": "Restore"
-      },
-      "backup_download": {
-        "title": "Download this backup?",
-        "text": "It contains every note, attachment and account. It is not encrypted.",
-        "button": "Download"
-      },
-      "backup_delete": {
-        "title": "Delete this backup?",
-        "text": "It cannot be brought back.",
-        "button": "Delete"
-      },
-      "backup_upload": {
-        "title": "Upload a backup?",
-        "text": "The file joins the list of backups. Nothing is restored until you confirm it there.",
-        "button": "Upload"
-      }
-    },
     "countFiles_one": "{{count}} file",
     "countFiles_other": "{{count}} files",
     "countNotes_one": "{{count}} note",
     "countNotes_other": "{{count}} notes",
-    "daily": "every night",
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
-    "deleteBackup": "Delete",
-    "download": "Download",
     "features": "Features for every account",
-    "forBackup": "{{action}}: backup of {{name}}",
     "history": "Keep the version history",
-    "keep": "Keep",
-    "kinds": {
-      "manual": "by hand",
-      "scheduled": "scheduled",
-      "update": "before a change"
-    },
     "languageAdded": "Language added. It shows in the account menu after reloading.",
     "languageCode": "Language code",
     "languages": "Languages",
     "languagesHint": "German and English are built in. Add more as a JSON file; missing texts fall back to English.",
-    "lastBackup": "Last backup: {{time}}",
     "limits": "Limits",
     "limitsHint": "You set the storage per account under “Accounts”.",
     "linkPreviews": "Link previews",
@@ -992,7 +930,6 @@
     "mailTest": "Test mail to",
     "mcp": "MCP access",
     "mcpHint": "Members may make keys for AI tools.",
-    "noBackups": "No backups yet.",
     "none": "none",
     "ocr": "Text recognition",
     "ocrHint": "Languages read in pictures, scans and PDFs.",
@@ -1007,15 +944,12 @@
       "pt": "Portuguese",
       "tr": "Turkish"
     },
-    "off": "off",
     "ownSecondFactorFirst": "Set up your own second factor first (My account, Security), or you would be the first one who cannot go on. Not affected is whoever signs in through a provider for which “{{trusts}}” is on.",
     "providers": {
       "more": "More",
       "order": "Move {{name}}: drag, or the arrow keys"
     },
     "proxyUnknown": "Requests come through a proxy, but NEXNOTES_TRUSTED_PROXIES is not set. nexnotes then sees everybody as one sender: whoever guesses wrong often slows down everyone signing in from a browser not used here before. Put the proxy's address into NEXNOTES_TRUSTED_PROXIES. If no proxy stands in front of nexnotes, you can ignore this.",
-    "remove": "Remove",
-    "restarting": "nexnotes restarts with the backup. The page reloads in a moment.",
     "restore": "Restore",
     "restoreChanges": "Restoring adds {{add}}, changes {{change}} and removes {{remove}}.",
     "restoreNotes": "Notes added: {{add}} · changed: {{change}} · removed: {{remove}}.",
@@ -1025,7 +959,6 @@
       "own": "Titles are named only for your own notes.",
       "remove": "Removed: {{titles}}"
     },
-    "schedule": "Automatically",
     "secretKept": "Kept; type only to change it.",
     "send": "Send",
     "shareLinks": "Sharing by link",
@@ -1035,7 +968,6 @@
     "smtpPort": "Port",
     "smtpSecurity": "Encryption",
     "smtpUser": "User",
-    "storage": "Storage and backups",
     "template": "Download template",
     "texts_one": "one text",
     "texts_other": "{{count}} texts",
@@ -1044,12 +976,8 @@
     "twoFactorRequiredHint": "Accounts from a sign-in provider bring the provider's. An account with a password is not affected either when it comes in through a provider for which “{{trusts}}” is on.",
     "untitled": "Untitled",
     "upload": "Upload language",
-    "uploadBackup": "Upload a backup",
     "uploadMax": "Largest file per attachment (MB)",
     "uploadMaxHint": "100 MB from the start. Counts at once.",
-    "uploaded": "uploaded",
-    "uploadedHint": "Uploaded. It is in the list now: check it first, then restore.",
-    "weekly": "every week",
     "years_one": "{{count}} year",
     "years_other": "{{count}} years",
     "localNetwork": "Connections into the local network",
@@ -1057,17 +985,7 @@
     "api": "API for members",
     "apiHint": "Members make API tokens; programs and the nexdeck card read with them. Off: every request under /api/v1/ is refused, the tokens stay.",
     "backupHolds": "A backup contains all notes with their history and trash, all attachments, the accounts with their shares, smart folders and API tokens, the settings and the server’s key. Locked notes stay encrypted in it. Not included: the log, exports, caches and your own language files, nor a key set through NEXNOTES_SECRET_KEY.",
-    "nexnotesUses": "nexnotes uses",
-    "part": "{{name}} {{size}}",
-    "parts": {
-      "database": "Database",
-      "attachments": "Attachments",
-      "backups": "Backups",
-      "exports": "Exports",
-      "other": "Log and other"
-    },
-    "diskBar": "nexnotes uses {{own}}; {{used}} of {{total}} on the disk are in use",
-    "diskFree": "{{free}} of {{total}} still free on the disk"
+    "ocrLanguagesLabel": "Languages"
   },
   "session": {
     "blockedText": "The operator has blocked your account. Nothing more is saved. Ask the operator.",
@@ -1082,60 +1000,11 @@
   },
   "settings": {
     "areas": {
-      "about": {
-        "text": "Version, licence, where it comes from and whether a newer version is out.",
-        "title": "About nexnotes"
-      },
-      "accounts": {
-        "text": "Who uses nexnotes, with role and storage, and open invitations.",
-        "title": "Accounts"
-      },
-      "appearance": {
-        "text": "How nexnotes looks on this device, and the paper of new notes.",
-        "title": "Appearance"
-      },
-      "connections": {
-        "text": "Programs and services that work with your notes.",
-        "title": "Connections"
-      },
-      "general": {
-        "text": "Limits, features for every account and added languages.",
-        "title": "General"
-      },
-      "log": {
-        "text": "What the server writes down, to look into problems.",
-        "title": "Log"
-      },
-      "mail": {
-        "text": "The mail server nexnotes sends invitations and reset links through.",
-        "title": "Mail"
-      },
       "ocr": {
         "text": "The languages nexnotes reads in pictures, scans and PDFs.",
         "title": "Text recognition"
-      },
-      "profile": {
-        "text": "Picture, name, email address and language of your account.",
-        "title": "Profile"
-      },
-      "security": {
-        "text": "Sign-in, password, second factor, read links and the vault password.",
-        "title": "Security"
-      },
-      "signIn": {
-        "text": "How everyone signs in: password, public address, second factor and providers.",
-        "title": "Sign-in"
-      },
-      "storage": {
-        "text": "The space in use and the backups of the server.",
-        "title": "Storage and backups"
       }
     },
-    "groups": {
-      "account": "My account",
-      "server": "Server"
-    },
-    "jump": "Settings page",
     "ownPassword": "Your password",
     "saved": "Saved.",
     "title": "Settings",
@@ -1986,6 +1855,13 @@
       "tooLarge": "“{{name}}” is larger than allowed ({{max_mb}} MB) and is not saved.",
       "lost": "What was shared is not here (any more): saved, cancelled or too long ago. Please share it again.",
       "toApp": "Go to nexnotes"
+    },
+    "install": {
+      "title": "Install on this device",
+      "text": "Installed, nexnotes starts like an app: in its own window without the browser's bar, with its own icon.",
+      "button": "Install as app",
+      "asked": "The browser asked. If you agreed, you find nexnotes among your apps.",
+      "ios": "On iPhone and iPad: Share › Add to Home Screen."
     }
   },
   "nextasks": {
@@ -2146,7 +2022,8 @@
       "push": "notifications on",
       "disconnect": "Disconnect",
       "disconnectTitle": "Disconnect “{{name}}”?",
-      "disconnectText": "From now on the device cannot reach your notes. To connect it again, scan a new code."
+      "disconnectText": "From now on the device cannot reach your notes. To connect it again, scan a new code.",
+      "pushOff": "Notifications off"
     },
     "kind": {
       "ios": "iOS app",

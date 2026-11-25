@@ -1,9 +1,11 @@
 /**
- * Settings, "Connections" (drawing N2-Verbindungen, the frame only). What goes here comes with its own feature: devices
- * (NOTES-24), nextasks (NOTES-19), MCP keys (NOTES-20), the vault password (NOTES-16). They register themselves in
- * `CONNECTION_SECTIONS` (`extensions.ts`); until one does, the tab says what the place is for.
+ * Settings, "Connections" (plan "Einstellungen", Verbindungen), the frame only: each card comes with its own feature and
+ * registers itself in `CONNECTION_SECTIONS` (`extensions.ts`), in the plan's order: devices (NOTES-24), installing on
+ * this device (NOTES-23), nextasks (NOTES-19), the API keys and MCP (NOTES-20, NOTES-25). Until one does, the area
+ * says what the place is for.
  */
 import { Plug } from 'lucide-react'
+import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { CONNECTION_SECTIONS } from '../../extensions'
@@ -12,11 +14,11 @@ export function ConnectionsTab() {
   const { t } = useTranslation()
   if (CONNECTION_SECTIONS.length > 0) {
     return (
-      <div className="space-y-6">
+      <>
         {CONNECTION_SECTIONS.map((section) => (
-          <div key={section.key}>{section.render()}</div>
+          <Fragment key={section.key}>{section.render()}</Fragment>
         ))}
-      </div>
+      </>
     )
   }
   return (

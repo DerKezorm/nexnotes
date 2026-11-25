@@ -13,7 +13,7 @@ import { originText } from '../folders/origin'
 import { OriginIcon } from '../folders/pages'
 import { whoText } from '../history/groups'
 import i18n from '../i18n'
-import { FeaturesCard } from '../pages/settings/ServerCards'
+import { FeaturesCard } from '../pages/settings/GeneralCards'
 import type { ApiTokenEntry, OperatorToken } from './api'
 import { AllTokensCard } from './AllTokensCard'
 import { TokensSection } from './TokensSection'
@@ -259,7 +259,9 @@ describe('NOTES-25 the operator', () => {
     const save = vi.fn(async () => undefined)
     const server = { settings: { link_previews: true, share_links: true, mcp_enabled: true, api_enabled: true, connections_local_network: false }, save }
     await render(<FeaturesCard server={server as never} />)
-    const toggle = document.querySelector<HTMLInputElement>('input[aria-label="Programmschnittstelle (API) für Mitglieder"]')!
+    const toggle = document.querySelector<HTMLInputElement>('input[data-testid="feature-api"]')!
+    expect(toggle.type).toBe('checkbox')
+    expect(toggle.labels![0].textContent).toBe('Programmschnittstelle (API) für Mitglieder')
     expect(toggle.checked).toBe(true)
     await click(toggle)
     expect(save).toHaveBeenCalledWith({ api_enabled: false })

@@ -145,6 +145,7 @@ function inside(editor: Editor, text: string): number {
 }
 
 const $ = (testId: string) => document.body.querySelector<HTMLElement>(`[data-testid="${testId}"]`)
+const foldHead = () => document.querySelector<HTMLElement>('[data-card="nextasks"] [data-part="collapsible-head"]')!
 const $$ = (testId: string) => [...document.body.querySelectorAll<HTMLElement>(`[data-testid="${testId}"]`)]
 
 async function click(element: HTMLElement | null): Promise<void> {
@@ -247,7 +248,7 @@ describe('NOTES-19 nextasks in Settings, Connections', () => {
     expect(calls.find((call) => call.method === 'PUT')!.body).toEqual({ url: 'http://nextasks.home:8510', token: 'ntk_good' })
     // Just connected here, the card stays open: "verbunden", the address, as whom.
     expect($('nextasks-connected')!.textContent).toBe('verbundennextasks.home · als Robin')
-    expect($('card-fold')).toBeNull()
+    expect(foldHead().getAttribute('aria-expanded')).toBe('true')
     // The key changed: the address stays filled in, only the key is typed.
     await click($('nextasks-change'))
     const [again, newKey] = [...document.querySelectorAll<HTMLInputElement>('[data-testid="nextasks-form"] input')]
@@ -256,7 +257,7 @@ describe('NOTES-19 nextasks in Settings, Connections', () => {
     await click($('nextasks-connect'))
     expect(calls.filter((call) => call.method === 'PUT').at(-1)!.body!.token).toBe('ntk_new')
     await click($('nextasks-disconnect'))
-    await click($('nextasks-disconnect-confirm'))
+    await click($('nextasks-disconnect-dialog')!.querySelector<HTMLElement>('button[type="submit"]')!)
     expect(calls.some((call) => call.method === 'DELETE' && call.path === '/api/nextasks')).toBe(true)
     expect($('nextasks-form')).not.toBeNull()
   })
@@ -281,24 +282,28 @@ describe('NOTES-19 the nextasks card as in nextime: folding, areas and lists, th
 
   it('NOTES-19 connected, the card is folded to its head with nextasks logo, "verbunden" and the address; opened it stays open', async () => {
     await render(<NextasksSection />)
-    const head = $('card-fold')!
+    const head = foldHead()
     expect(head.tagName).toBe('BUTTON')
     expect(head.getAttribute('aria-expanded')).toBe('false')
-    expect($('card-logo')!.getAttribute('src')).toBe('/apps/nextasks.svg')
+    // The kit's Collapsible as a card: nextasks' logo in place of the symbol, named for the comparison.
+    expect(document.querySelector('[data-card="nextasks"]')!.getAttribute('data-collapsible')).toBe('card')
+    expect(document.querySelector('[data-card="nextasks"] img')!.getAttribute('src')).toBe('/apps/nextasks.svg')
     expect($('nextasks-summary')!.textContent).toBe('verbundennextasks.home')
     expect($('nextasks-areas')).toBeNull()
     expect(calls.some((call) => call.path === '/api/nextasks/areas')).toBe(false)
     await click(head)
-    expect($('card-fold')!.getAttribute('aria-expanded')).toBe('true')
-    expect($('card-fold')!.getAttribute('aria-controls')).toBe($('nextasks-connected')!.parentElement!.id)
-    expect($('nextasks-summary')).toBeNull()
+    expect(foldHead().getAttribute('aria-expanded')).toBe('true')
+    expect(foldHead().getAttribute('aria-controls')).toBe($('nextasks-connected')!.parentElement!.id)
+    // The state stays beside the title, open as folded.
+    expect($('nextasks-summary')!.textContent).toBe('verbundennextasks.home')
+    expect([$('nextasks-change')!.dataset.kind, $('nextasks-disconnect')!.dataset.kind]).toEqual(['secondary', 'danger'])
     expect($('nextasks-address')!.textContent).toBe('nextasks.home · als Robin')
     expect($('nextasks-change')).not.toBeNull()
     // Kept on this device: drawn again, it is open.
     await act(async () => root.unmount())
     root = createRoot(box)
     await render(<NextasksSection />)
-    expect($('card-fold')!.getAttribute('aria-expanded')).toBe('true')
+    expect(foldHead().getAttribute('aria-expanded')).toBe('true')
   })
 
   it('NOTES-19 all areas are ticked from the start, their lists ticked and locked, each with symbol and colour from nextasks', async () => {

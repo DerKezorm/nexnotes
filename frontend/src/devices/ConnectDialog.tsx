@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { Dialog } from '../components/Dialog'
 import { Problem } from '../components/Field'
 import { problemText } from '../lib/errors'
+import { Button, Buttons } from '../vendor/nexui'
 import { devicesApi, qrSource, type Pairing } from './api'
 
 /** How often the dialog asks whether the code was used. */
@@ -100,11 +101,11 @@ export function ConnectDialog({ onClose }: { onClose: () => void }) {
             </p>
           )}
           <Problem text={problem} />
-          <div className="flex justify-end">
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={close} data-testid="devices-close">
+          <Buttons end>
+            <Button kind="secondary" icon="X" onClick={close} testId="devices-close">
               {t('common.close')}
-            </button>
-          </div>
+            </Button>
+          </Buttons>
         </div>
       </div>
     </Dialog>

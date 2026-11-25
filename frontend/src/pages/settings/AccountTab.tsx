@@ -2,14 +2,14 @@
  * Settings, "My account": Profile and Security as the shared account module lays them out (`PAGES`, konten 0.3.6: its
  * parts top to bottom, one under the other, with its headings, hints and buttons), then nexnotes' own parts after them
  * (`APP_PAGES`: "Sign out" of this browser, NOTES-2 AC-12; the providers; the cards of the features in
- * `ACCOUNT_SECTIONS`, the links for reading and the vault). Appearance stays nexnotes' own (this device, and the paper
- * of new notes; NOTES-22 AC-2 and AC-7). Each area of the settings shows its `part`; without one, all of it.
+ * `ACCOUNT_SECTIONS`, the links for reading and the vault). Appearance is an area of its own (`AppearanceArea.tsx`).
+ * Each area of the settings shows its `part`; without one, all of it.
  *
  * Built only from the shared kit (`vendor/nexui`, bauplaene/ui), as nexmail's pages are: every topic a `Box` in its
  * card (the password too), the providers a `Box` with a `Row` each in the card "Security", every button of the module
  * through `AccountButton` (kind and symbol from `BUTTONS`, konten 0.3.8).
  */
-import { KeyRound, LayoutList, LogOut, Palette, ShieldCheck, UserRound } from 'lucide-react'
+import { KeyRound, LogOut, ShieldCheck, UserRound } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
@@ -18,11 +18,7 @@ import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { AccountButton } from '../../components/AccountButton'
 import { Avatar } from '../../components/Avatar'
 import { SignOutWaiting, useSignOut } from '../../components/SignOut'
-import { ThemeSwitcher } from '../../components/ThemeSwitcher'
-import { paperOf } from '../../editor/paper'
-import { PaperPicker } from '../../editor/PaperPicker'
 import { ACCOUNT_SECTIONS } from '../../extensions'
-import { GuideCard } from '../../guide/GuideCard'
 import { browserLanguage, changeLanguage, languageOptions, type LanguageOption } from '../../i18n'
 import { confirmOf } from '../../lib/accountButton'
 import { copyText } from '../../lib/copy'
@@ -30,16 +26,15 @@ import { errorText, problemText, signInErrorText } from '../../lib/errors'
 import { day } from '../../lib/format'
 import { usePasswordConfirm } from '../../lib/passwordConfirm'
 import { go } from '../../lib/providers'
-import { LookSettings } from '../../notes/list/LookSettings'
 import { useAuth } from '../../state/auth'
 import { DISPLAY_NAME_MAX, EMAIL_MAX, FIELDS, PAGES, passwordChanged, screenFields, SECOND_FACTOR_STATE, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { Badge, Box, Card, CheckboxRow, ConfirmDialog, Field, Notice, Row, Rows, SelectField } from '../../vendor/nexui'
 import { pagePart } from './accountPages'
 import { Notice as Done, PasskeysBox, RemainingAccess, SecondFactorOffNotice, SessionsBox } from './SecurityBoxes'
-import { Card as OwnCard, saveAsFile } from './ui'
+import { saveAsFile } from './actions'
 
 /** The part of "My account" an area of the settings shows. */
-export type AccountPart = 'profile' | 'security' | 'appearance'
+export type AccountPart = 'profile' | 'security'
 
 export function AccountTab({ part }: { part?: AccountPart } = {}) {
   const { t, i18n } = useTranslation()
@@ -451,28 +446,6 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
         </Card>
       )}
 
-      {shows('appearance') && (
-        <OwnCard id="looks" icon={Palette} title={t('me.looks.title')}>
-          <div className="text-sm">
-            <span className="font-medium">{t('me.looks.appearance')}</span> <span className="text-xs text-mist-500">{t('me.looks.appearanceHint')}</span>
-            <div className="mt-1.5">
-              <ThemeSwitcher withWords />
-            </div>
-          </div>
-          <div className="text-sm">
-            <span className="font-medium">{t('me.looks.paper')}</span> <span className="text-xs text-mist-500">{t('me.looks.paperHint')}</span>
-            <div className="mt-1.5">
-              <PaperPicker value={paperOf(me.paper)} onChange={(paper) => void run(async () => setMe(await authApi.paper(paper)), '')} />
-            </div>
-          </div>
-        </OwnCard>
-      )}
-      {shows('appearance') && (
-        <OwnCard id="lists" icon={LayoutList} title={t('me.lists.title')}>
-          <LookSettings />
-        </OwnCard>
-      )}
-      {shows('appearance') && <GuideCard />}
       {shows('security') &&
         ACCOUNT_SECTIONS.map((section) => (
           <div key={section.key}>{section.render()}</div>

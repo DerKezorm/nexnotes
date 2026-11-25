@@ -3,7 +3,7 @@
  * components/TabRow.tsx): whoever knows one app finds the same card, row, field and tab in the other.
  */
 import { ChevronDown, type LucideIcon } from 'lucide-react'
-import { useCallback, useId, useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { ApiError } from '../../api/client'
@@ -14,6 +14,10 @@ import { errorText, problemText } from '../../lib/errors'
 import { copyText } from '../../lib/copy'
 import { useDevicePref } from '../../lib/devicePref'
 import { go, startAddress } from '../../lib/providers'
+import { useAction, type Trouble } from './actions'
+
+// eslint-disable-next-line react-refresh/only-export-components
+export { ASKED, saveAsFile, useAction, type Trouble } from './actions'
 
 /** A card of the settings: its symbol in a small box (or `logo`, an app's own mark such as nextasks'), a title and a
  * line of explanation. `foldable` names a choice of this device: the card folds to its head with the arrow on the right
@@ -225,9 +229,6 @@ export function Button({
   )
 }
 
-/** What went wrong: a code, or the server's refusal with the values its sentence needs ("({{max_mb}} MB)"). */
-export type Trouble = string | ApiError | null
-
 /** One line under a card: what went wrong, or that it worked. */
 export function Feedback({ problem, done = null }: { problem: Trouble; done?: string | null }) {
   return (
@@ -277,36 +278,6 @@ export function CopyLink({ value, label }: { value: string; label: string }) {
       </button>
     </div>
   )
-}
-
-/** What a `run` job returns when it has asked a question instead of working: no success message, no problem. */
-// eslint-disable-next-line react-refresh/only-export-components
-export const ASKED = Symbol('asked')
-
-/** Runs a change, remembers whether it worked; the card shows it with `Feedback`. */
-// eslint-disable-next-line react-refresh/only-export-components
-export function useAction() {
-  const [busy, setBusy] = useState(false)
-  const [problem, setProblem] = useState<Trouble>(null)
-  const [done, setDone] = useState<string | null>(null)
-  const run = useCallback(async (work: () => Promise<unknown>, success?: string): Promise<boolean> => {
-    setBusy(true)
-    setProblem(null)
-    setDone(null)
-    try {
-      const result = await work()
-      if (result === ASKED) return false
-      if (success) setDone(success)
-      return true
-    } catch (error) {
-      // The refusal itself, so its sentence gets the server's values, as on the account page.
-      setProblem(error instanceof ApiError ? error : 'internal_error')
-      return false
-    } finally {
-      setBusy(false)
-    }
-  }, [])
-  return { busy, problem, done, run }
 }
 
 /** "Really?" with the operator's password where the server asks for it again. */
@@ -383,16 +354,4 @@ export function TabRow<T extends string>({ tabs, active, onChange, under = false
       })}
     </div>
   )
-}
-
-// eslint-disable-next-line react-refresh/only-export-components
-export function saveAsFile(name: string, data: Blob) {
-  const url = URL.createObjectURL(data)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = name
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
 }

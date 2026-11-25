@@ -135,8 +135,15 @@ describe('NOTES-24 devices in Settings, Connections', () => {
     await render(<DevicesSection />)
     expect($$('device-name').map((element) => element.textContent)).toEqual(['iPhone von Mila', 'Mac mini'])
     const [phone, mac] = $$('device-meta').map((element) => element.textContent)
-    expect(phone).toBe('iOS-App · zuletzt vor 2 Minuten · Mitteilungen an')
+    expect(phone).toBe('iOS-App · zuletzt vor 2 Minuten')
     expect(mac).toBe('iPad-App auf dem Mac · noch nicht gemeldet')
+    // Notifications as a badge of each row: on for the phone, off for the Mac.
+    const rows = $$('device-row')
+    expect(rows.map((row) => row.querySelector('[data-tone]')!.textContent)).toEqual(['Mitteilungen an', 'Mitteilungen aus'])
+    expect(rows.map((row) => row.querySelector('[data-tone]')!.getAttribute('data-tone'))).toEqual(['on', 'off'])
+    // Each row's "Trennen" is a small red button; connecting a device is the card's primary one.
+    expect($$('device-disconnect').map((button) => [button.dataset.kind, button.dataset.size])).toEqual([['danger', 'sm'], ['danger', 'sm']])
+    expect([$('devices-connect')!.dataset.kind, $('devices-connect')!.dataset.size]).toEqual(['primary', 'md'])
   })
 
   it('NOTES-24 AC-5 disconnects a device after asking', async () => {
@@ -144,7 +151,7 @@ describe('NOTES-24 devices in Settings, Connections', () => {
     await click($$('device-disconnect')[0])
     expect(document.body.textContent).toContain('„iPhone von Mila“ trennen?')
     expect(calls.some((call) => call.method === 'DELETE')).toBe(false)
-    await click($('device-disconnect-confirm'))
+    await click($('device-disconnect-dialog')!.querySelector<HTMLElement>('button[type="submit"]'))
     expect(calls).toContainEqual({ method: 'DELETE', path: '/api/app-devices/1', body: undefined })
     expect($$('device-name').map((element) => element.textContent)).toEqual(['Mac mini'])
   })

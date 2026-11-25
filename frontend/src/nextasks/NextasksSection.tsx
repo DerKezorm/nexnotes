@@ -3,82 +3,85 @@
  * connected, it says how (AC-4); address and key are checked at once (AC-5); the key can be changed, or nextasks
  * disconnected. A nextasks with another API says so here (EC-7).
  *
- * Connected, the card folds to its head (nextasks' logo, "verbunden" and the address, the arrow), folded until opened
- * on this device; just connected it stays open. Open, it shows "Bereiche und Listen": which areas and lists the sending
- * offers, and the standard list it chooses first.
+ * A `Collapsible` card of the ui kit (plan "Einstellungen", Verbindungen 3): connected, it folds to its head (nextasks'
+ * logo, the badge "verbunden" and the address, the arrow), folded until opened on this device; just connected it stays
+ * open. Open, it shows "Bereiche und Listen": which areas and lists the sending offers, and the standard list it
+ * chooses first.
  */
-import { ListChecks } from 'lucide-react'
-import { useEffect, useId, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Check } from '../components/Check'
-import { Dialog } from '../components/Dialog'
-import { Field, Problem } from '../components/Field'
+import { useDevicePref } from '../lib/devicePref'
 import { problemText } from '../lib/errors'
-import { Card } from '../pages/settings/ui'
+import { Badge, Button, Buttons, Collapsible, ConfirmDialog, Field, Notice, SelectField, useNexuiTexts } from '../vendor/nexui'
 import { AreaMark } from './AreaMark'
 import { nextasksApi, setNextasks, type AreaChoice as AreaRow } from './api'
 import { useNextasks } from './hooks'
 
 export function NextasksSection() {
   const { t } = useTranslation()
+  const kit = useNexuiTexts()
   const status = useNextasks()
   const [editing, setEditing] = useState(false)
   // Folded from the start once connected; open while there is something to read: just connected here.
   const [fresh, setFresh] = useState(false)
   const [leaving, setLeaving] = useState(false)
+  const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState('')
+  const [folded, setFolded] = useDevicePref('fold.nextasks', (raw) => raw !== '0')
+  const foldable = Boolean(status?.connected) && !editing && !fresh
 
   const disconnect = async () => {
     setProblem('')
+    setBusy(true)
     try {
       await nextasksApi.disconnect()
       setNextasks({ connected: false, local_allowed: Boolean(status?.local_allowed) })
     } catch (error) {
       setProblem(problemText(error))
     }
+    setBusy(false)
     setLeaving(false)
   }
 
   return (
-    <Card
+    <Collapsible
+      variant="card"
       id="nextasks"
-      icon={ListChecks}
       logo="/apps/nextasks.svg"
       title={t('nextasks.section.title')}
-      text={t('nextasks.section.text')}
-      foldable={status?.connected && !editing && !fresh ? 'nextasks' : undefined}
-      summary={
+      subtitle={t('nextasks.section.text')}
+      open={!foldable || !folded}
+      onOpenChange={(open) => setFolded(open ? '0' : null)}
+      status={
         status?.connected ? (
-          <span className="flex min-w-0 items-center gap-2 text-sm" data-testid="nextasks-summary">
-            <span className="h-2 w-2 shrink-0 rounded-full bg-ok-500" aria-hidden />
-            <span className="font-medium text-ok-500">{t('nextasks.section.connected')}</span>
-            <span className="min-w-0 truncate text-mist-300">{status.host}</span>
+          <span className="flex min-w-0 items-center gap-2" data-testid="nextasks-summary">
+            <Badge tone="on">{t('nextasks.section.connected')}</Badge>
+            <span className="min-w-0 truncate text-sm text-[var(--nexui-text-muted)]">{status.host}</span>
           </span>
         ) : undefined
       }
+      testId="nextasks-card"
     >
-      <Problem text={problem} />
+      {problem && <Notice tone="danger">{problem}</Notice>}
       {status?.connected && !editing && (
         <>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-testid="nextasks-connected">
-            <span className="flex items-center gap-2 font-medium text-ok-500">
-              <span className="h-2 w-2 shrink-0 rounded-full bg-ok-500" aria-hidden />
-              {t('nextasks.section.connected')}
-            </span>
-            <span className="min-w-0 text-mist-300" data-testid="nextasks-address">
+          <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-testid="nextasks-connected">
+            <Badge tone="on">{t('nextasks.section.connected')}</Badge>
+            <span className="min-w-0 text-[var(--nexui-text-muted)]" data-testid="nextasks-address">
               {status.host} · {t('nextasks.section.as', { name: status.name || '?' })}
             </span>
-          </div>
+          </p>
           <AreaChoice />
-          <div className="flex flex-wrap gap-2">
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={() => setEditing(true)} data-testid="nextasks-change">
+          <Buttons>
+            <Button kind="secondary" icon="KeyRound" onClick={() => setEditing(true)} testId="nextasks-change">
               {t('nextasks.section.changeKey')}
-            </button>
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={() => setLeaving(true)} data-testid="nextasks-disconnect">
+            </Button>
+            <Button kind="danger" icon="Unplug" onClick={() => setLeaving(true)} testId="nextasks-disconnect">
               {t('nextasks.section.disconnect')}
-            </button>
-          </div>
+            </Button>
+          </Buttons>
         </>
       )}
       {status && (!status.connected || editing) && (
@@ -87,23 +90,26 @@ export function NextasksSection() {
           localAllowed={status.local_allowed}
           changing={status.connected}
           onCancel={status.connected ? () => setEditing(false) : undefined}
-          onDone={() => (setEditing(false), setFresh(true))}
+          onDone={() => {
+            setEditing(false)
+            setFresh(true)
+          }}
         />
       )}
       {leaving && (
-        <Dialog title={t('nextasks.section.disconnectTitle')} onClose={() => setLeaving(false)}>
-          <p className="text-sm text-mist-300">{t('nextasks.section.disconnectText')}</p>
-          <div className="mt-4 flex justify-end gap-2">
-            <button type="button" className="nn-btn nn-btn-ghost" onClick={() => setLeaving(false)}>
-              {t('common.cancel')}
-            </button>
-            <button type="button" className="nn-btn nn-btn-danger" onClick={() => void disconnect()} data-testid="nextasks-disconnect-confirm">
-              {t('nextasks.section.disconnect')}
-            </button>
-          </div>
-        </Dialog>
+        <ConfirmDialog
+          title={t('nextasks.section.disconnectTitle')}
+          text={t('nextasks.section.disconnectText')}
+          confirm={{ label: t('nextasks.section.disconnect'), kind: 'danger', icon: 'Unplug' }}
+          cancel={t('common.cancel')}
+          closeLabel={kit.close}
+          busy={busy}
+          onCancel={() => setLeaving(false)}
+          onConfirm={() => void disconnect()}
+          testId="nextasks-disconnect-dialog"
+        />
       )}
-    </Card>
+    </Collapsible>
   )
 }
 
@@ -130,28 +136,45 @@ function ConnectForm({ url: before, localAllowed, changing, onCancel, onDone }: 
 
   return (
     <form
-      className="space-y-3"
+      className="flex flex-col gap-3"
       onSubmit={(event) => {
         event.preventDefault()
         void connect()
       }}
       data-testid="nextasks-form"
     >
-      {!changing && <p className="text-sm text-mist-300" data-testid="nextasks-how">{t('nextasks.section.how')}</p>}
-      <Field label={t('nextasks.section.url')} value={url} onChange={setUrl} type="url" maxLength={500} hint={t('nextasks.section.urlHint')} />
-      <Field label={t('nextasks.section.key')} value={token} onChange={setToken} type="password" autoComplete="off" maxLength={500} hint={t('nextasks.section.keyHint')} />
-      {!localAllowed && <p className="text-xs text-mist-500" data-testid="nextasks-local">{t('nextasks.section.localOff')}</p>}
-      <Problem text={problem} />
-      <div className="flex justify-end gap-2">
+      {!changing && (
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]" data-testid="nextasks-how">
+          {t('nextasks.section.how')}
+        </p>
+      )}
+      <Field label={t('nextasks.section.url')} value={url} onChange={(event) => setUrl(event.target.value)} type="url" maxLength={500} hints={[t('nextasks.section.urlHint')]} data-testid="nextasks-url" />
+      <Field
+        label={t('nextasks.section.key')}
+        value={token}
+        onChange={(event) => setToken(event.target.value)}
+        type="password"
+        autoComplete="off"
+        maxLength={500}
+        hints={[t('nextasks.section.keyHint')]}
+        data-testid="nextasks-key"
+      />
+      {!localAllowed && (
+        <p className="m-0 text-xs text-[var(--nexui-text-muted)]" data-testid="nextasks-local">
+          {t('nextasks.section.localOff')}
+        </p>
+      )}
+      {problem && <Notice tone="danger">{problem}</Notice>}
+      <Buttons end>
         {onCancel && (
-          <button type="button" className="nn-btn nn-btn-ghost" onClick={onCancel}>
+          <Button kind="secondary" icon="X" onClick={onCancel}>
             {t('common.cancel')}
-          </button>
+          </Button>
         )}
-        <button type="submit" className="nn-btn nn-btn-accent" disabled={busy || !url.trim() || !token.trim()} data-testid="nextasks-connect">
+        <Button kind="primary" icon="Plug" type="submit" busy={busy} disabled={!url.trim() || !token.trim()} testId="nextasks-connect">
           {busy ? t('nextasks.section.checking') : t('nextasks.section.connect')}
-        </button>
-      </div>
+        </Button>
+      </Buttons>
     </form>
   )
 }
@@ -162,7 +185,6 @@ function ConnectForm({ url: before, localAllowed, changing, onCancel, onDone }: 
  * Below, the standard list among the chosen ones, chosen first in the sending; one chosen away counts as none. */
 function AreaChoice() {
   const { t } = useTranslation()
-  const standardId = useId()
   const [areas, setAreas] = useState<AreaRow[] | null>(null)
   const [standard, setStandard] = useState<string | null>(null)
   const [problem, setProblem] = useState('')
@@ -217,10 +239,10 @@ function AreaChoice() {
   const offered = chosenLists(areas ?? [])
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       <fieldset className="space-y-1.5" data-testid="nextasks-areas">
-        <legend className="mb-1 text-xs font-semibold tracking-wide text-mist-500 uppercase">{t('nextasks.section.areas')}</legend>
-        <p className="text-xs text-mist-500">{t('nextasks.section.areasHint')}</p>
+        <legend className="mb-1 text-sm font-medium text-[var(--nexui-text)]">{t('nextasks.section.areas')}</legend>
+        <p className="m-0 text-xs text-[var(--nexui-text-muted)]">{t('nextasks.section.areasHint')}</p>
         {(areas ?? []).map((area) => {
           const some = !area.whole && area.lists.some((one) => one.chosen)
           return (
@@ -250,32 +272,17 @@ function AreaChoice() {
         })}
       </fieldset>
       {areas && areas.length > 0 && (
-        <div className="space-y-1">
-          <label htmlFor={standardId} className="block text-sm font-medium text-mist-100">
-            {t('nextasks.section.standard')}
-          </label>
-          <select
-            id={standardId}
-            className="nn-field"
-            value={standard ?? ''}
-            disabled={offered.length === 0}
-            aria-describedby={`${standardId}-hint`}
-            onChange={(event) => void save(areas, event.target.value || null)}
-            data-testid="nextasks-standard"
-          >
-            <option value="">{t('nextasks.section.standardNone')}</option>
-            {offered.map((one) => (
-              <option key={one.id} value={one.id}>
-                {one.area ? `${one.area} › ${one.name}` : one.name}
-              </option>
-            ))}
-          </select>
-          <p id={`${standardId}-hint`} className="text-xs text-mist-500">
-            {t('nextasks.section.standardHint')}
-          </p>
-        </div>
+        <SelectField
+          label={t('nextasks.section.standard')}
+          value={standard ?? ''}
+          disabled={offered.length === 0}
+          hints={[t('nextasks.section.standardHint')]}
+          onChange={(event) => void save(areas, event.target.value || null)}
+          options={[{ value: '', label: t('nextasks.section.standardNone') }, ...offered.map((one) => ({ value: one.id, label: one.area ? `${one.area} › ${one.name}` : one.name }))]}
+          data-testid="nextasks-standard"
+        />
       )}
-      {problem && <Problem text={problem} />}
+      {problem && <Notice tone="danger">{problem}</Notice>}
     </div>
   )
 }

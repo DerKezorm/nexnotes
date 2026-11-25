@@ -8,11 +8,12 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 
-import { SHELL_BANNERS, SHELL_PARTS } from '../extensions'
+import { CONNECTION_SECTIONS, SHELL_BANNERS, SHELL_PARTS } from '../extensions'
 import { onAccountChange } from '../state/account'
 import { useMe } from '../state/auth'
 import { lastPlace, onPhone, rememberPlace, startLooked, startPlace } from './place'
-import { startWorker, takeUpdate, tell, usePwa } from './worker'
+import { InstallCard } from './InstallCard'
+import { listenForInstall, startWorker, takeUpdate, tell, usePwa } from './worker'
 
 export function UpdateBanner() {
   const { t } = useTranslation()
@@ -55,8 +56,14 @@ export function StartPlace() {
 
 SHELL_BANNERS.push({ key: 'pwa-update', render: () => <UpdateBanner /> })
 SHELL_PARTS.push({ key: 'pwa-start', render: () => <StartPlace /> })
+// "Auf diesem Gerät installieren" right after the devices (plan "Einstellungen", Verbindungen 2).
+if (!CONNECTION_SECTIONS.some((section) => section.key === 'install')) {
+  const devices = CONNECTION_SECTIONS.findIndex((section) => section.key === 'devices')
+  CONNECTION_SECTIONS.splice(devices + 1, 0, { key: 'install', render: () => <InstallCard /> })
+}
 
 // Signing out and another account: what was shared and anything outside the shell goes from the worker too.
 onAccountChange(() => void tell({ type: 'nexnotes-forget' }))
 
+listenForInstall()
 if (import.meta.env.PROD) startWorker()

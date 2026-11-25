@@ -16,7 +16,7 @@ const ME = {
 
 function Shown() {
   const { t } = useTranslation()
-  return <p data-testid="shown">{t('settings.groups.account')}</p>
+  return <p data-testid="shown">{t('settings.title')}</p>
 }
 
 afterEach(() => {
@@ -39,7 +39,7 @@ it('NOTES-22 AC-2 a page loading in an English browser takes the language of the
   await act(async () => root.render(<AuthProvider><Shown /></AuthProvider>))
   for (let i = 0; i < 12; i++) await act(async () => await Promise.resolve())
   expect(i18n.language).toBe('de')
-  expect(box.querySelector('[data-testid="shown"]')!.textContent).toBe('Mein Konto')
+  expect(box.querySelector('[data-testid="shown"]')!.textContent).toBe('Einstellungen')
   act(() => root.unmount())
   box.remove()
   await i18n.changeLanguage('en')

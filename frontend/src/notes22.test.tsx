@@ -136,8 +136,8 @@ describe('NOTES-22', () => {
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
     applyMode('light')
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    // Nothing of it goes to the server: the account's data carry no appearance.
-    expect(Object.keys(en.me.looks)).toContain('appearanceHint')
+    // Nothing of it goes to the server: it stays in this browser (until the account module keeps it, konten 1.1.0).
+    expect([...kept.keys()]).toEqual(['nexnotes.theme'])
   })
 
   it('NOTES-22 AC-8 as the system, the page follows when the device switches', () => {

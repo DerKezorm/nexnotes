@@ -3,16 +3,15 @@
  * makes it again as a fresh folder next to what is there ("Anleitung (2)" when the name is taken), in the language
  * of the page. The account's own changes stay as they are; nothing is updated by itself.
  */
-import { BookOpen } from 'lucide-react'
+import { FolderPlus } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { api } from '../api/client'
-import { Done, Problem } from '../components/Field'
 import { refreshFolders } from '../folders/store'
 import { problemText } from '../lib/errors'
-import { Card } from '../pages/settings/ui'
+import { Button, Card, Notice } from '../vendor/nexui'
 
 type Made = { id: string; name: string }
 
@@ -42,26 +41,23 @@ export function GuideCard() {
   }
 
   return (
-    <Card id="guide" icon={BookOpen} title={t('guide.title')} text={t('guide.text')}>
+    <Card id="guide" icon="BookOpen" title={t('guide.title')} subtitle={t('guide.text')}>
       <div aria-live="polite">
-        <Problem text={problem} />
-        <Done
-          testId="guide-made"
-          text={
-            made && (
-              <>
-                {t('guide.made', { name: made.name })}{' '}
-                <Link to={`/folder/${made.id}`} className="font-medium underline">
-                  {t('guide.open')}
-                </Link>
-              </>
-            )
-          }
-        />
+        {problem && <Notice tone="danger">{problem}</Notice>}
+        {made && (
+          <Notice tone="ok" testId="guide-made">
+            {t('guide.made', { name: made.name })}{' '}
+            <Link to={`/folder/${made.id}`} className="font-medium underline">
+              {t('guide.open')}
+            </Link>
+          </Notice>
+        )}
       </div>
-      <button type="button" className="nn-btn nn-btn-ghost" disabled={busy} onClick={() => void make()} data-testid="guide-make">
-        {busy ? t('guide.making') : t('guide.make')}
-      </button>
+      <div>
+        <Button kind="secondary" icon={FolderPlus} busy={busy} onClick={() => void make()} testId="guide-make">
+          {busy ? t('guide.making') : t('guide.make')}
+        </Button>
+      </div>
     </Card>
   )
 }

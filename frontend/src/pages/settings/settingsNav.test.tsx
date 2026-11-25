@@ -1,8 +1,9 @@
 /**
- * NOTES-2 AC-9, the settings in areas: the navigation with the groups "My account" and "Server", each area at its own
- * address, `/settings` as the profile, the addresses of the tabs before leading to their area, a member sent from a
- * server area to the profile, the current area marked with `aria-current`, the choice for a narrow page, and every
- * card of the tabs before in one area.
+ * NOTES-2 AC-9, the settings in areas (plan "Einstellungen", the frame of the ui kit): the navigation with the groups
+ * "My account" and "Server" and "About nexnotes" set apart, each area at its own address, `/settings` as the profile
+ * (and the list on a phone), the addresses of the tabs before leading to their area, a member sent from a server area
+ * to the profile, the current area marked with `aria-current`, a phone going from the list to an area and back, and
+ * every card in its area, in the plan's order. Titles and lines of the shared areas are the kit's words.
  */
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
@@ -10,7 +11,11 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import i18n from '../../i18n'
 import { AuthProvider } from '../../state/auth'
+import { areaText, NEXUI_TEXTS } from '../../vendor/nexui'
 import { resolveArea } from './areas'
+
+const KIT = NEXUI_TEXTS.en
+const title = (slug: string) => areaText(KIT, slug, { app: 'nexnotes', things: 'notes' })!.title
 
 type Answer = { status: number; body: unknown }
 let role: 'member' | 'operator' = 'operator'
@@ -35,6 +40,11 @@ function answer(path: string): Answer | undefined {
   if (path === '/api/oidc/authentik/address') {
     const address = { public_url: '', seen: 'http://localhost:3000', forwarded_proto: '', forwarded_host: '', proxy_ignored: false }
     return { status: 200, body: { ...address, callback_path: '/api/oidc/authentik/callback', redirect_uri: '', registered_redirect_uri: '', stale: false } }
+  }
+  if (path === '/api/server/storage') return { status: 200, body: { app: 'nexnotes', used: 1000, parts: [], complete: true, total: 1e12, disk_used: 1e11, free: 9e11, nearly_full: false, where: {}, network: [] } }
+  if (path === '/api/server/storage/backups') {
+    const schedule = { every: 'daily', time: '03:00', keep: 7 }
+    return { status: 200, body: { schedule, zone: 'UTC', last: null, count: 0, kept: 0, failure: null, running: false, restore_failure: null, restored: null, restore: 'restart', download_password: false, backups: [] } }
   }
   if (path === '/api/about') return { status: 200, body: { version: '0.1.0', license: 'AGPL-3.0', repo_url: 'https://example.com/nexnotes', releases_url: 'https://example.com/nexnotes/releases', project_url: '' } }
   if (path === '/api/about/updates') return { status: 200, body: { update_check: true, checked: false, latest: null, newer: false, checked_at: null, release_url: null } }
@@ -119,7 +129,7 @@ describe('the addresses of the settings (NOTES-2 AC-9)', () => {
   it('NOTES-2 AC-9 /settings/server of before opens General, with the address replaced', async () => {
     await open('/settings/server')
     expect(where()).toBe('/settings/general')
-    expect(heading()).toBe(i18n.t('settings.areas.general.title'))
+    expect(heading()).toBe(title('general'))
     expect(current()).toEqual(['settings-nav-general'])
   })
 
@@ -127,10 +137,10 @@ describe('the addresses of the settings (NOTES-2 AC-9)', () => {
     role = 'member'
     await open('/settings/accounts')
     expect(where()).toBe('/settings')
-    expect(heading()).toBe(i18n.t('settings.areas.profile.title'))
+    expect(heading()).toBe(title('profile'))
     expect(current()).toEqual(['settings-nav-profile'])
     expect($('settings-nav-accounts')).toBeNull()
-    expect(box.textContent).not.toContain(i18n.t('settings.groups.server'))
+    expect(box.querySelector('[data-group="server"]')).toBeNull()
   })
 })
 
@@ -142,8 +152,10 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     expect(nav.textContent).toContain('Tester')
     expect(nav.textContent).toContain(i18n.t('roles.operator'))
     const groups = [...nav.querySelectorAll('ul')].map((list) => box.querySelector(`#${list.getAttribute('aria-labelledby')}`)!.textContent)
-    expect(groups).toEqual([i18n.t('settings.groups.account'), i18n.t('settings.groups.server')])
-    expect(nav.querySelector('a[href="/settings/about"]')!.textContent).toBe(i18n.t('settings.areas.about.title'))
+    expect(groups).toEqual([KIT.groupAccount, KIT.groupServer])
+    expect(nav.querySelector('a[href="/settings/about"]')!.textContent).toBe('About nexnotes')
+    // Text recognition keeps its own title, nexnotes' words.
+    expect($('settings-nav-ocr')!.textContent).toBe(i18n.t('settings.areas.ocr.title'))
   })
 
   it('NOTES-2 AC-9 every entry is a link at its own address, reached by Tab; only the current one is marked', async () => {
@@ -154,34 +166,40 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     )
     for (const link of links) expect(link.tabIndex).toBe(0)
     expect(current()).toEqual(['settings-nav-sign-in'])
-    expect($('settings-nav-sign-in')!.className).toContain('nn-chosen')
-    expect($('settings-nav-mail')!.className).not.toContain('nn-chosen')
+    expect($('settings-nav-mail')!.getAttribute('aria-current')).toBeNull()
     await act(async () => $('settings-nav-mail')!.click())
     await settle()
     expect(where()).toBe('/settings/mail')
     expect(current()).toEqual(['settings-nav-mail'])
-    expect(heading()).toBe(i18n.t('settings.areas.mail.title'))
+    expect(heading()).toBe(title('mail'))
   })
 
-  it('NOTES-2 AC-9 a narrow page has a choice instead, which goes to the area chosen', async () => {
+  it('NOTES-2 AC-9 a phone goes from the list (/settings) to an area and back to the list', async () => {
     role = 'member'
-    await open('/settings/appearance')
-    // The page's own width decides: the navigation shows from 700 px, the choice below.
-    expect($('settings-nav')!.className).toMatch(/(^| )hidden( |$)/)
-    expect($('settings-nav')!.className).toContain('@min-[700px]:block')
-    expect($('settings-jump-row')!.className).toContain('@min-[700px]:hidden')
-    const select = $('settings-jump') as HTMLSelectElement
-    expect(select.value).toBe('appearance')
-    expect([...select.querySelectorAll('optgroup')].map((group) => group.label)).toEqual([i18n.t('settings.groups.account')])
-    expect([...select.options].map((option) => option.value)).toEqual(['profile', 'security', 'appearance', 'connections', 'about'])
-    expect(select.closest('label')!.querySelector('.sr-only')!.textContent).toBe(i18n.t('settings.jump'))
-    await act(async () => {
-      select.value = 'security'
-      select.dispatchEvent(new Event('change', { bubbles: true }))
-    })
+    await open('/settings')
+    // The page's own width decides: from 700 px both side by side; narrower /settings is the list ...
+    const side = () => box.querySelector('[data-part="settings-side"]')!
+    const main = () => box.querySelector('[data-part="settings-main"]')!
+    expect($('settings')!.dataset.list).toBe('true')
+    expect(side().className).toMatch(/(^| )block( |$)/)
+    expect(main().className).toMatch(/(^| )hidden( |$)/)
+    expect(main().className).toContain('@min-[700px]:flex')
+    expect([...box.querySelectorAll('[data-testid="settings-nav"] a')].map((link) => link.getAttribute('href'))).toEqual(
+      ['profile', 'security', 'appearance', 'connections', 'about'].map((slug) => `/settings/${slug}`),
+    )
+    // ... and an area shows itself with a small way back above its title.
+    await act(async () => $('settings-nav-security')!.click())
     await settle()
     expect(where()).toBe('/settings/security')
-    expect(heading()).toBe(i18n.t('settings.areas.security.title'))
+    expect($('settings')!.dataset.list).toBeUndefined()
+    expect(side().className).toMatch(/(^| )hidden( |$)/)
+    expect(side().className).toContain('@min-[700px]:block')
+    const back = $('settings-back')!
+    expect([back.getAttribute('href'), back.textContent]).toEqual(['/settings', KIT.backToList])
+    expect(back.closest('[data-part="settings-back"]')!.className).toContain('@min-[700px]:hidden')
+    await act(async () => back.click())
+    await settle()
+    expect(where()).toBe('/settings')
   })
 })
 
@@ -193,13 +211,13 @@ describe('"About nexnotes" in the settings (fifth review)', () => {
     expect(current()).toEqual(['settings-nav-about'])
     const entries = [...box.querySelectorAll('[data-testid="settings-nav"] a')]
     expect(entries.at(-1)!.getAttribute('data-testid')).toBe('settings-nav-about')
-    expect($('settings-nav-about')!.className).toContain('nn-chosen')
-    expect(heading()).toBe(i18n.t('settings.areas.about.title'))
-    expect($('settings-area-about')!.textContent).toContain(i18n.t('settings.areas.about.text'))
+    expect(heading()).toBe('About nexnotes')
+    expect($('settings-area-about')!.textContent).toContain(areaText(KIT, 'about', { app: 'nexnotes' })!.text)
     expect($('about-version')!.textContent).toBe('0.1.0')
-    expect([...box.querySelectorAll('section[id]')].map((card) => card.id)).toEqual(['about-updates'])
-    expect(box.textContent).toContain(i18n.t('about.builtWith'))
-    expect(($('settings-jump') as HTMLSelectElement).value).toBe('about')
+    expect([...box.querySelectorAll('section[data-card]')].map((card) => card.getAttribute('data-card'))).toEqual(['about', 'about-updates', 'about-built-with'])
+    expect(box.textContent).toContain(KIT.builtWith)
+    expect(box.textContent).toContain(i18n.t('about.subtitle'))
+    expect(box.querySelector('[data-card="about"] img')!.getAttribute('src')).toBe('/logo.svg')
   })
 
   it('NOTES-2 AC-9 the old address /about leads to the area, with the address replaced', async () => {
@@ -220,20 +238,37 @@ describe('"About nexnotes" in the settings (fifth review)', () => {
 
 describe('every card in its area (NOTES-2 AC-9)', () => {
   const cards = () => [...box.querySelectorAll('section[id]')].map((card) => card.id)
+  const kitCards = () => [...box.querySelectorAll('section[data-card]')].map((card) => card.getAttribute('data-card'))
 
   it.each([
     ['profile', ['profile', 'sign-out']],
     ['security', ['security']],
-    ['appearance', ['looks', 'lists', 'guide']],
+    ['appearance', ['look', 'paper', 'lists', 'guide']],
     ['general', ['limits', 'features', 'languages']],
     ['sign-in', ['sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
-    ['storage', ['backups']],
+    ['storage', ['storage', 'backups']],
     ['ocr', ['ocr']],
     ['log', ['log']],
   ])('NOTES-2 AC-9 %s shows its cards and no others', async (slug, ids) => {
     await open(`/settings/${slug}`)
     expect(cards()).toEqual(ids)
+  })
+
+  it.each([
+    ['appearance', ['look', 'paper', 'lists', 'guide']],
+    ['general', ['limits', 'features', 'languages']],
+    ['storage', ['storage', 'backups']],
+    ['ocr', ['ocr']],
+    ['log', ['log']],
+    ['about', ['about', 'about-updates', 'about-built-with']],
+  ])('plan "Einstellungen": %s is built of the kit\'s cards only, each named for the comparison', async (slug, ids) => {
+    await open(`/settings/${slug}`)
+    expect(kitCards()).toEqual(ids)
+    // No button of nexnotes' own in these areas: every one says its kind, size and symbol.
+    const buttons = [...$(`settings-area-${slug}`)!.querySelectorAll('button, a[data-kind]')].filter((button) => !button.closest('[role="radiogroup"], [role="group"][data-segment]') && !button.hasAttribute('data-chip'))
+    for (const button of buttons.filter((one) => one.hasAttribute('data-kind'))) expect([button.getAttribute('data-size'), button.getAttribute('data-icon')]).not.toContain(null)
+    expect($(`settings-area-${slug}`)!.querySelector('.nn-btn, [role="switch"], [role="tab"]')).toBeNull()
   })
 
   it('NOTES-2 AC-9 the language is set in the profile, theme and paper in Appearance', async () => {
