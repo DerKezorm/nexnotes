@@ -228,6 +228,8 @@ export type AccountRow = {
   name: string
   display_name: string
   email: string
+  /** The address counts (confirmed); true without one. */
+  email_confirmed?: boolean
   role: 'operator' | 'member'
   sign_in: 'password' | 'oidc'
   language: string
@@ -257,6 +259,8 @@ export type Invite = {
   by: string | null
   created_at: string
   expires_at: string
+  /** Run out, but not withdrawn yet: the list keeps it, marked (konten 0.3.10). */
+  expired?: boolean
 }
 
 export type InviteOffer = {
@@ -519,7 +523,9 @@ export const accountsApi = {
   unblock: (id: number, current_password: string) => api<void>(`/api/accounts/${id}/unblock`, { method: 'POST', body: { current_password } }),
   role: (id: number, role: 'operator' | 'member', current_password: string) =>
     api<AccountRow>(`/api/accounts/${id}/role`, { method: 'PUT', body: { role, current_password } }),
-  limit: (id: number, limit: number | null) => api<AccountRow>(`/api/accounts/${id}/storage-limit`, { method: 'PUT', body: { limit } }),
+  /** The storage limit, with the operator's own password (konten 0.3.9: everything that changes an account asks). */
+  limit: (id: number, limit: number | null, current_password: string) =>
+    api<AccountRow>(`/api/accounts/${id}/storage-limit`, { method: 'PUT', body: { limit, current_password } }),
   /** A one-time link with which the person sets a new password themselves; the operator never knows it. */
   resetLink: (id: number, days: number, current_password: string) =>
     api<{ link: string | null; sent?: boolean; expires_at: string }>(`/api/accounts/${id}/reset-link`, { method: 'POST', body: { days, current_password } }),

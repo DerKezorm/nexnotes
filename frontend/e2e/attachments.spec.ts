@@ -12,6 +12,8 @@ import os from 'node:os'
 import path from 'node:path'
 import zlib from 'node:zlib'
 
+import { OPERATOR } from './global-setup'
+
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-attach00' }
 
 /** A small PNG made here: a coloured square. */
@@ -89,7 +91,7 @@ async function myId(page: Page): Promise<number> {
 
 test.afterEach(async ({ page }) => {
   await settings(page, { upload_max_mb: 100, link_previews: true })
-  await page.request.put(`/api/accounts/${await myId(page)}/storage-limit`, { data: { limit: null }, headers: TAB })
+  await page.request.put(`/api/accounts/${await myId(page)}/storage-limit`, { data: { limit: null, current_password: OPERATOR.password }, headers: TAB })
 })
 
 test('NOTES-10 AC-1 AC-2 AC-3 AC-4 AC-12 choose files: a picture in its sizes and large, a PDF, a file; remove one', async ({ page }) => {
@@ -269,7 +271,7 @@ test('NOTES-10 AC-8 EC-7 a video plays in the note or, where the browser cannot,
 test('NOTES-10 AC-11 EC-1 a full storage: the orange bar, no attachment, writing goes on; the way to the largest', async ({ page }) => {
   const id = await newNote(page, 'Urlaub Ostsee')
   const used = ((await (await page.request.get('/api/attachments/limits')).json()) as { used: number }).used
-  await page.request.put(`/api/accounts/${await myId(page)}/storage-limit`, { data: { limit: used }, headers: TAB })
+  await page.request.put(`/api/accounts/${await myId(page)}/storage-limit`, { data: { limit: used, current_password: OPERATOR.password }, headers: TAB })
   await openNote(page, id)
   const bar = page.getByTestId('storage-full')
   await expect(bar).toContainText('Your storage is full:')

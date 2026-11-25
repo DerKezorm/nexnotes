@@ -397,9 +397,16 @@ def test_notes1_ac7_the_account_list_shows_used_storage_and_a_limit_to_set_or_re
     try:
         rows = {row["name"]: row for row in client.get("/api/accounts").json()}
         assert (rows["anna"]["storage_used"], rows["anna"]["storage_limit"]) == (4096, None)
-        limited = client.put(f"/api/accounts/{anna.id}/storage-limit", json={"limit": 5 * 1024**3}).json()
+        # The operator's own password once more (konten 0.3.9: everything that changes an account asks for it).
+        refused = client.put(f"/api/accounts/{anna.id}/storage-limit", json={"limit": 5 * 1024**3})
+        assert refused.status_code == 401 and refused.json()["detail"]["code"] == "wrong_password"
+        limited = client.put(
+            f"/api/accounts/{anna.id}/storage-limit", json={"limit": 5 * 1024**3, "current_password": PASSWORD}
+        ).json()
         assert limited["storage_limit"] == 5 * 1024**3
-        removed = client.put(f"/api/accounts/{anna.id}/storage-limit", json={"limit": None}).json()
+        removed = client.put(
+            f"/api/accounts/{anna.id}/storage-limit", json={"limit": None, "current_password": PASSWORD}
+        ).json()
         assert removed["storage_limit"] is None
     finally:
         content._counters.clear()

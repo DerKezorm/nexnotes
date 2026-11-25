@@ -1,88 +1,95 @@
 /**
- * Settings, "Accounts" (drawing N2-Konten): every account with its address, way of signing in, role, storage with its
- * limit and last use (NOTES-1 AC-7, NOTES-2 AC-7); never a title or a word of a note. Invite a person, block, delete
- * (30 days to bring it back), give a role, set a limit, a reset link (the person sets the new password, NOTES-2 AC-7),
- * sign out everywhere, take a provider's link. `?invite` in the address opens "Person einladen" at once (the share
- * dialog's link when nobody on the server goes by the name typed).
+ * Settings › "Accounts" (NOTES-1 AC-7, NOTES-2 AC-7), the operator's list as the shared account module lays it out
+ * (konten 0.3.9/0.3.10, `ACCOUNT_LIST`): one row per account with its picture, name, badges and "username · email",
+ * and "Manage" on the right, which opens a dialog with every fact and every act in words (`MANAGE_DIALOG`: change,
+ * access, end). Never a title or a word of a note (the card under the list says so).
+ *
+ * What nexnotes adds sits at the module's fixed places: the storage with its limit as a fact and the button "Storage
+ * limit" in "Change" after "Make member" (`OwnButton` with the look `storageLimit`), with the operator's own password;
+ * deleting names the notes and the shared ones that go, then the 30 days to bring it back. The open invitations are
+ * the module's card under the list (expired ones stay until withdrawn). Under them nexnotes' own card says what the
+ * operator sees; "API tokens of all accounts" follows in the area (`SettingsAreas`). `?invite` in the address opens
+ * "Invite a person" at once (the share dialog's link when nobody on the server goes by the name typed).
  */
-import { Menu } from '../../components/Menu'
-import { Avatar } from '../../components/Avatar'
-import { Mail, MoreHorizontal, UserPlus } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { Mail, ShieldCheck, Users } from 'lucide-react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
-import { accountsApi, invitesApi, oidcAdminApi, type AccountRow, type FactorResetOverview, type Invite, type LinkedProvider } from '../../api/client'
+import { accountsApi, invitesApi, oidcAdminApi, type AccountRow, type FactorResetOverview, type Invite } from '../../api/client'
 import { AccountButton } from '../../components/AccountButton'
 import { confirmOf } from '../../lib/accountButton'
 import { copyText } from '../../lib/copy'
 import { bytes, day, dayTime } from '../../lib/format'
-import { ago } from '../../lib/time'
 import { useAuth } from '../../state/auth'
-import { DISPLAY_NAME_MAX, FACTOR_RESET_DEFAULTS, factorResetParts, INVITE_DAYS, RESET_DAYS, RESET_DAYS_DEFAULT, USERNAME_MAX, type ButtonName } from '../../vendor/nexkonten/konten'
-import { Button, Card, CheckboxRow, ConfirmDialog, Dialog, Field, Notice, Row, Rows, SelectField } from '../../vendor/nexui'
+import {
+  ACCOUNT_LIST,
+  accountActions,
+  accountBadges,
+  accountCount,
+  accountFacts,
+  accountLine,
+  accountName,
+  accountPicture,
+  confirmLine,
+  DISPLAY_NAME_MAX,
+  FACTOR_RESET_DEFAULTS,
+  factorResetParts,
+  INVITE_DIALOG,
+  inviteFields,
+  inviteRow,
+  linkSubmit,
+  MANAGE_CONFIRM,
+  MANAGE_DIALOG,
+  manageGroups,
+  OPEN_INVITES,
+  RESET_DAYS,
+  RESET_DAYS_DEFAULT,
+  RESET_LINK_DIALOG,
+  removeLines,
+  USERNAME_MAX,
+  type AccountAction,
+  type BadgeShown,
+  type FactShown,
+  type ListedAccount,
+  type ListedInvite,
+} from '../../vendor/nexkonten/konten'
+import { Avatar, Badge, Button, ButtonGroup, Card, CheckboxRow, ConfirmDialog, Dialog, Facts, Field, Notice, Row, Rows, SelectField, type IconName } from '../../vendor/nexui'
+import { APP_CAPS, APP_OWN_ACTIONS, listedOf } from './accountList'
 import { Feedback, useAction } from './ui'
-
-/** The confirming button of each question, kind and symbol from the module's table (`BUTTONS`, konten 0.3.8). */
-const CONFIRM_BUTTON: Record<Asking['kind'], ButtonName> = {
-  block: 'blockAccount',
-  unblock: 'unblockAccount',
-  restore: 'confirm',
-  signOut: 'signOut',
-  resetFactor: 'account.factorReset',
-  role: 'confirm',
-  removeEmail: 'account.emailRemove',
-  delete: 'removeAccount',
-  unlink: 'oidc.account.unlink',
-}
-
-/** A link to hand on: the field to read it in and the button that copies it. */
-function CopyField({ value, label }: { value: string; label: string }) {
-  const { t } = useTranslation()
-  const [copied, setCopied] = useState(false)
-  return (
-    <div className="flex items-end gap-2">
-      <div className="min-w-0 flex-1">
-        <Field label={label} value={value} readOnly mono onFocus={(event) => event.target.select()} />
-      </div>
-      <AccountButton name="copy" onClick={() => void copyText(value).then(setCopied)}>
-        {copied ? t('common.copied') : t('common.copy')}
-      </AccountButton>
-    </div>
-  )
-}
 
 const GB = 1024 ** 3
 
-type Asking =
-  | { kind: 'block' | 'unblock' | 'restore' | 'signOut' | 'resetFactor' | 'role' | 'removeEmail'; row: AccountRow }
-  | { kind: 'delete'; row: AccountRow; notes: number; shared: number; days: number }
-  | { kind: 'unlink'; row: AccountRow; provider: LinkedProvider }
+/** The badges of a row or an invitation, in the kit's look; a day in nexnotes' way of writing it. */
+function Badges({ shown }: { shown: BadgeShown[] }) {
+  const { t, i18n } = useTranslation()
+  return (
+    <>
+      {shown.map((badge, index) => (
+        <Badge key={`${badge.badge}-${index}`} tone={badge.tone}>
+          {badge.label ?? t(badge.text, badge.date ? { day: day(badge.date, i18n.language) } : undefined)}
+        </Badge>
+      ))}
+    </>
+  )
+}
 
-function wayIn(row: AccountRow, t: (key: string, values?: Record<string, unknown>) => string): string {
-  if (row.providers.length > 0 && !row.has_password) return row.providers.map((entry) => entry.label).join(', ')
-  const password = row.two_factor ? t('accounts.passwordTwoFactor') : t('accounts.password')
-  return row.providers.length > 0 ? `${row.providers.map((entry) => entry.label).join(', ')} · ${password}` : password
+/** The picture of an account: its own, else the letter on the hue of its name (the same on server and iPhone). */
+function Picture({ row, size }: { row: ListedAccount; size: 32 | 48 }) {
+  const picture = accountPicture(row)
+  return <Avatar src={picture.src} letter={picture.letter} hue={picture.hue} color={picture.color} size={size} />
 }
 
 export function AccountsTab() {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const { me } = useAuth()
   const [rows, setRows] = useState<AccountRow[] | null>(null)
   const [invites, setInvites] = useState<Invite[]>([])
   const [params, setParams] = useSearchParams()
   const [inviting, setInviting] = useState(() => params.has('invite'))
-  const [menu, setMenu] = useState<{ id: number; anchor: HTMLElement } | null>(null)
-  const [asking, setAsking] = useState<Asking | null>(null)
-  const [limitFor, setLimitFor] = useState<AccountRow | null>(null)
-  const [resetFor, setResetFor] = useState<AccountRow | null>(null)
-  const [renaming, setRenaming] = useState<{ row: AccountRow; field: 'name' | 'display_name' } | null>(null)
-  const [disconnect, setDisconnect] = useState<boolean>(FACTOR_RESET_DEFAULTS.factorResetDevices)
-  const [removePasskeys, setRemovePasskeys] = useState<boolean>(FACTOR_RESET_DEFAULTS.factorResetPasskeys)
-  /** What the reset takes away, loaded when the dialog opens (``factor.reset_overview``). */
-  const [overview, setOverview] = useState<FactorResetOverview | null>(null)
+  const [managing, setManaging] = useState<number | null>(null)
+  const [withdrawing, setWithdrawing] = useState<Invite | null>(null)
   const action = useAction()
-  const lang = i18n.language
 
   const load = useCallback(() => {
     accountsApi.list().then(setRows, () => setRows([]))
@@ -91,167 +98,79 @@ export function AccountsTab() {
   useEffect(load, [load])
 
   if (!rows || !me) return null
-  const operatorPassword = me.sign_in === 'password'
-  const living = rows.filter((row) => !row.deleted_at)
+  // The operator's own account first, the others as the server orders them.
+  const ordered = [...rows.filter((row) => row.id === me.id), ...rows.filter((row) => row.id !== me.id)]
+  const listed = ordered.map((row) => listedOf(row, me.id))
+  const open = managing === null ? null : (ordered.find((row) => row.id === managing) ?? null)
 
   return (
     <div className="space-y-6">
-      <Card id="accounts" icon={UserPlus} title={t('accounts.title')} subtitle={t('accounts.lead', { count: living.length })}>
+      <Card id="accounts" icon={Users} title={t(ACCOUNT_LIST.title)} subtitle={t(ACCOUNT_LIST.subtitle, { count: accountCount(listed) })} testId="account-list">
         <div>
-          <AccountButton name="invite" onClick={() => setInviting(true)}>
-            {t('accounts.invite')}
-          </AccountButton>
+          <AccountButton name="account.invite" testId="invite-open" onClick={() => setInviting(true)} />
         </div>
-        <div className="overflow-x-auto rounded-[12px] border border-ink-700">
-          <table className="w-full min-w-[720px] text-left text-sm" data-testid="account-table">
-            <thead className="border-b border-ink-700 text-xs text-mist-500">
-              <tr>
-                <th className="px-3 py-2 font-medium">{t('accounts.person')}</th>
-                <th className="px-3 py-2 font-medium">{t('accounts.signIn')}</th>
-                <th className="px-3 py-2 font-medium">{t('accounts.role')}</th>
-                <th className="px-3 py-2 font-medium">{t('accounts.storage')}</th>
-                <th className="px-3 py-2 font-medium">{t('accounts.last')}</th>
-                <th className="px-3 py-2 font-medium">
-                  <span className="sr-only">{t('accounts.actions')}</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-ink-700">
-              {rows.map((row) => {
-                const shown = row.display_name || row.name
-                const share = row.storage_limit ? Math.min(100, Math.round((row.storage_used / row.storage_limit) * 100)) : 0
-                const out = !!row.deleted_at || row.blocked
-                return (
-                  <tr key={row.id} data-testid={`account-${row.name}`} className={out ? 'text-mist-500' : ''}>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-2.5">
-                        <Avatar accountId={row.id} name={shown} stamp={row.avatar} className="bg-ink-700 text-mist-200" />
-                        <span className="min-w-0">
-                          <span className="block truncate font-medium text-mist-100">
-                            {shown}
-                            {row.deleted_at ? ` (${t('accounts.deleted')})` : row.blocked ? ` (${t('accounts.blocked')})` : ''}
-                          </span>
-                          <span className="block truncate text-xs text-mist-500">{row.email ? `${row.name} · ${row.email}` : row.name}</span>
-                          {row.email_duplicate && <span className="block text-xs text-warn-500">{t('account.emailDuplicate')}</span>}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5">{wayIn(row, t)}</td>
-                    <td className="px-3 py-2.5">{t(`roles.${row.role}`)}</td>
-                    <td className="px-3 py-2.5">
-                      <div className="text-xs">
-                        {row.storage_limit
-                          ? t('accounts.usedOf', { used: bytes(row.storage_used, lang), limit: bytes(row.storage_limit, lang) })
-                          : t('accounts.usedNoLimit', { used: bytes(row.storage_used, lang) })}
-                      </div>
-                      <div className="mt-1 h-1.5 w-28 overflow-hidden rounded-full bg-ink-700">
-                        <div className="h-full rounded-full" style={{ width: `${row.storage_limit ? Math.max(2, share) : 2}%`, background: share > 90 ? 'var(--color-warn-500)' : 'var(--color-progress)' }} />
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs">
-                      {row.deleted_at && row.purge_at ? (
-                        <span className="text-bad-500">{t('accounts.goesOn', { day: day(row.purge_at, lang) })}</span>
-                      ) : row.blocked && row.blocked_at ? (
-                        <span className="text-bad-500">{t('accounts.blockedSince', { day: day(row.blocked_at, lang) })}</span>
-                      ) : row.last_seen_at ? (
-                        <span title={dayTime(row.last_seen_at, lang)}>{ago(new Date(row.last_seen_at).getTime(), lang)}</span>
-                      ) : (
-                        t('accounts.never')
-                      )}
-                    </td>
-                    <td className="relative px-3 py-2.5 text-right">
-                      <button
-                        type="button"
-                        aria-label={t('accounts.actionsFor', { name: shown })}
-                        aria-expanded={menu?.id === row.id}
-                        aria-haspopup="menu"
-                        className="nn-btn nn-btn-ghost h-8 w-8 px-0"
-                        data-testid="account-menu-button"
-                        onClick={(event) => setMenu(menu?.id === row.id ? null : { id: row.id, anchor: event.currentTarget })}
-                      >
-                        <MoreHorizontal className="h-4 w-4" aria-hidden />
-                      </button>
-                      {menu?.id === row.id && (
-                        <Menu anchor={menu.anchor} onClose={() => setMenu(null)} label={t('accounts.actionsFor', { name: shown })} className="text-left" testId="account-menu">
-                          {row.deleted_at ? (
-                            <MenuItem onClick={() => setAsking({ kind: 'restore', row })}>{t('accounts.restore')}</MenuItem>
-                          ) : (
-                            <>
-                              <MenuItem onClick={() => setAsking({ kind: 'role', row })}>{row.role === 'operator' ? t('accounts.makeMember') : t('accounts.makeOperator')}</MenuItem>
-                              <MenuItem onClick={() => setLimitFor(row)}>{t('accounts.setLimit')}</MenuItem>
-                              <MenuItem onClick={() => setRenaming({ row, field: 'display_name' })}>{t('accounts.changeDisplayName')}</MenuItem>
-                              <MenuItem onClick={() => setRenaming({ row, field: 'name' })}>{t('accounts.changeUsername')}</MenuItem>
-                              {row.email && <MenuItem onClick={() => setAsking({ kind: 'removeEmail', row })}>{t('account.emailRemove')}</MenuItem>}
-                              <MenuItem onClick={() => setResetFor(row)}>{t('accounts.resetLink')}</MenuItem>
-                              {(row.two_factor || !!row.passkeys) && (
-                                <MenuItem
-                                  onClick={() => {
-                                    setOverview(null)
-                                    setDisconnect(FACTOR_RESET_DEFAULTS.factorResetDevices)
-                                    setRemovePasskeys(FACTOR_RESET_DEFAULTS.factorResetPasskeys)
-                                    void accountsApi.resetOverview(row.id).then(setOverview, () => setOverview(null))
-                                    setAsking({ kind: 'resetFactor', row })
-                                  }}
-                                >
-                                  {t('accounts.resetFactor')}
-                                </MenuItem>
-                              )}
-                              <MenuItem onClick={() => setAsking({ kind: 'signOut', row })}>{t('accounts.signOut')}</MenuItem>
-                              {row.providers.map((provider) => (
-                                <MenuItem key={provider.id} onClick={() => setAsking({ kind: 'unlink', row, provider })}>
-                                  {t('accounts.unlink', { name: provider.label })}
-                                </MenuItem>
-                              ))}
-                              {row.id !== me.id && (
-                                <MenuItem onClick={() => setAsking({ kind: row.blocked ? 'unblock' : 'block', row })}>{row.blocked ? t('accounts.unblock') : t('accounts.block')}</MenuItem>
-                              )}
-                              {row.id !== me.id && (
-                                <MenuItem
-                                  danger
-                                  onClick={() =>
-                                    void action.run(async () => {
-                                      const impact = await accountsApi.impact(row.id)
-                                      setAsking({ kind: 'delete', row, ...impact })
-                                    })
-                                  }
-                                >
-                                  {t('accounts.delete')}
-                                </MenuItem>
-                              )}
-                            </>
-                          )}
-                        </Menu>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+        <Rows label={t(ACCOUNT_LIST.title)} testId="account-rows">
+          {listed.map((row) => (
+            <Row
+              key={row.id}
+              testId={`account-${row.username}`}
+              lead={<Picture row={row} size={32} />}
+              name={accountName(row)}
+              badge={<Badges shown={accountBadges(row)} />}
+              sub={accountLine(row)}
+              action={
+                <AccountButton name="account.manage" aria-label={t(ACCOUNT_LIST.manageLabel, { name: accountName(row) })} testId="account-manage" onClick={() => setManaging(Number(row.id))}>
+                  {t(ACCOUNT_LIST.manage)}
+                </AccountButton>
+              }
+            />
+          ))}
+        </Rows>
         <Feedback problem={action.problem} done={action.done} />
       </Card>
 
       {invites.length > 0 && (
-        <Card id="invites" icon={UserPlus} title={t('accounts.openInvites')}>
-          <Rows testId="invite-list">
-            {invites.map((invite) => (
-              <Row
-                key={invite.id}
-                icon={Mail}
-                name={invite.email || t('accounts.inviteNoAddress')}
-                detail={`${t(`roles.${invite.role}`)} · ${t('accounts.until', { day: day(invite.expires_at, lang) })}`}
-                action={
-                  <Button kind="danger" icon="Undo2" onClick={() => void action.run(async () => { await invitesApi.withdraw(invite.id); load() }, t('accounts.withdrawn'))}>
-                    {t('accounts.withdraw')}
-                  </Button>
-                }
-              />
-            ))}
+        <Card id="invites" icon={Mail} title={t(OPEN_INVITES.title)} testId="open-invites">
+          <Rows label={t(OPEN_INVITES.title)} testId="invite-list">
+            {invites.map((invite) => {
+              const shown = inviteRow(inviteOf(invite))
+              return (
+                <Row
+                  key={invite.id}
+                  testId="invite-row"
+                  icon={Mail}
+                  name={shown.name || t(shown.nameText)}
+                  badge={<Badges shown={shown.badges} />}
+                  sub={shown.sub || undefined}
+                  action={<AccountButton name="account.inviteWithdraw" onClick={() => setWithdrawing(invite)} />}
+                />
+              )
+            })}
           </Rows>
         </Card>
       )}
 
+      {/* nexnotes' own card under the module's: what the operator sees and never sees. */}
+      <Card id="accounts-privacy-card" icon={ShieldCheck} title={t('accounts.privacyTitle')} testId="accounts-privacy-card">
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]" data-testid="accounts-privacy">
+          {t('accounts.privacy')}
+        </p>
+      </Card>
+
+      {open && (
+        <ManageDialog
+          row={open}
+          listed={listedOf(open, me.id)}
+          operatorHasPassword={me.sign_in === 'password'}
+          mailServer={Boolean(me.mail)}
+          onClose={() => setManaging(null)}
+          onChanged={load}
+          onGone={() => {
+            setManaging(null)
+            load()
+          }}
+        />
+      )}
       {inviting && (
         <InviteDialog
           onClose={() => {
@@ -264,209 +183,237 @@ export function AccountsTab() {
           onMade={load}
         />
       )}
-      {limitFor && <LimitDialog row={limitFor} onClose={() => setLimitFor(null)} onSaved={load} />}
-      {resetFor && <ResetLinkDialog row={resetFor} askOwn={operatorPassword} onClose={() => setResetFor(null)} />}
-      {renaming && (
-        <NameDialog row={renaming.row} field={renaming.field} askOwn={operatorPassword} onClose={() => setRenaming(null)} onSaved={load} />
+      {withdrawing && (
+        <ConfirmDialog
+          title={t('account.inviteWithdraw')}
+          text={t(MANAGE_CONFIRM['account.inviteWithdraw'].text)}
+          confirm={confirmOf('account.inviteWithdraw', t('account.inviteWithdraw'))}
+          cancel={t('common.cancel')}
+          closeLabel={t('common.close')}
+          busy={action.busy}
+          onCancel={() => setWithdrawing(null)}
+          onConfirm={() =>
+            void action.run(async () => {
+              await invitesApi.withdraw(withdrawing.id)
+              setWithdrawing(null)
+              load()
+            }, t('accounts.withdrawn'))
+          }
+        />
       )}
-      {asking && <Question asking={asking} askOwn={operatorPassword} overview={overview} disconnect={disconnect} setDisconnect={setDisconnect} removePasskeys={removePasskeys} setRemovePasskeys={setRemovePasskeys} onDone={() => { setAsking(null); setMenu(null); load() }} onCancel={() => setAsking(null)} />}
     </div>
   )
 }
 
-/** "Really?" for an act on an account, with the operator's own password where the server asks for it again. */
-function Question({ asking, askOwn, overview, disconnect, setDisconnect, removePasskeys, setRemovePasskeys, onDone, onCancel }: {
-  asking: Asking
-  askOwn: boolean
-  overview: FactorResetOverview | null
-  disconnect: boolean
-  setDisconnect: (value: boolean) => void
-  removePasskeys: boolean
-  setRemovePasskeys: (value: boolean) => void
-  onDone: () => void
+/** An invitation of nexnotes' answer as the module's list knows it. */
+function inviteOf(invite: Invite): ListedInvite {
+  return {
+    id: invite.id,
+    displayName: invite.display_name ?? '',
+    email: invite.email,
+    role: invite.role,
+    expiresAt: invite.expires_at,
+    ...(invite.expired !== undefined ? { expired: invite.expired } : {}),
+  }
+}
+
+/** An act of the dialog waiting for its confirmation: the module's or nexnotes' own, by its name. */
+type Pending = { action: Extract<AccountAction, { type: 'button' }>; impact?: { notes: number; shared: number; days: number }; overview?: FactorResetOverview | null }
+
+/** The dialog "Manage" (`MANAGE_DIALOG`): the head with picture, name, badges and line; the facts with nexnotes'
+ * storage; then the groups with their buttons in words. Each act asks as `MANAGE_CONFIRM` says. */
+function ManageDialog({ row, listed, operatorHasPassword, mailServer, onClose, onChanged, onGone }: {
+  row: AccountRow
+  listed: ListedAccount
+  operatorHasPassword: boolean
+  mailServer: boolean
+  onClose: () => void
+  onChanged: () => void
+  onGone: () => void
+}) {
+  const { t, i18n } = useTranslation()
+  const lang = i18n.language
+  const name = accountName(listed)
+  const action = useAction()
+  const [pending, setPending] = useState<Pending | null>(null)
+  const [naming, setNaming] = useState<'name' | 'display_name' | null>(null)
+  const [resetting, setResetting] = useState(false)
+  const [limiting, setLimiting] = useState(false)
+
+  const storage: FactShown = {
+    fact: 'storage',
+    label: 'accounts.storage',
+    raw: row.storage_limit
+      ? t('accounts.usedOf', { used: bytes(row.storage_used, lang), limit: bytes(row.storage_limit, lang) })
+      : t('accounts.usedNoLimit', { used: bytes(row.storage_used, lang) }),
+  }
+  const facts = accountFacts(listed, [storage]).map((fact) => ({
+    label: t(fact.label),
+    value: (
+      <>
+        {fact.raw ?? (fact.date ? dayTime(fact.date, lang) : fact.text ? t(fact.text, fact.values) : '')}
+        {fact.state && <span className="text-[var(--nexui-text-muted)]"> · {t(fact.state)}</span>}
+      </>
+    ),
+    note: fact.note ? t(fact.note) : undefined,
+    testId: `fact-${fact.fact}`,
+  }))
+  const groups = manageGroups(accountActions(listed, APP_CAPS, APP_OWN_ACTIONS))
+
+  const start = (act: Extract<AccountAction, { type: 'button' }>) => {
+    const base = act.name.split(':')[0]
+    if (base === 'account.changeUsername') return setNaming('name')
+    if (base === 'account.changeDisplayName') return setNaming('display_name')
+    if (base === 'account.resetLink') return setResetting(true)
+    if (base === 'storageLimit') return setLimiting(true)
+    if (base === 'account.remove') {
+      return void action.run(async () => setPending({ action: act, impact: await accountsApi.impact(row.id) }))
+    }
+    if (base === 'account.factorReset') {
+      return void accountsApi.resetOverview(row.id).then(
+        (overview) => setPending({ action: act, overview }),
+        () => setPending({ action: act, overview: null }),
+      )
+    }
+    setPending({ action: act })
+  }
+
+  return (
+    <>
+      <Dialog title={t(MANAGE_DIALOG.title, { name })} onClose={onClose} closeLabel={t('common.close')} testId="manage-dialog">
+        <div className="flex flex-col gap-4">
+          <Rows>
+            <Row lead={<Picture row={listed} size={48} />} name={name} badge={<Badges shown={accountBadges(listed)} />} sub={accountLine(listed)} />
+          </Rows>
+          <Facts items={facts} label={t(MANAGE_DIALOG.title, { name })} testId="manage-facts" />
+          {groups.map((group) => (
+            <ButtonGroup key={group.group} title={t(group.title)} layout={group.layout} testId={`manage-${group.group}`}>
+              {group.actions.map((act) =>
+                act.type === 'button' ? (
+                  <Button key={act.name} kind={act.kind} icon={act.icon as IconName} disabled={action.busy} onClick={() => start(act)} testId={`manage-${act.name}`}>
+                    {t(act.label, act.values)}
+                  </Button>
+                ) : (
+                  <CheckboxRow key={act.name} label={t(act.label)} checked={act.checked} onChange={() => undefined} />
+                ),
+              )}
+            </ButtonGroup>
+          ))}
+          <Feedback problem={action.problem} done={action.done} />
+        </div>
+      </Dialog>
+      {pending && (
+        <ConfirmAct
+          row={row}
+          name={name}
+          pending={pending}
+          operatorHasPassword={operatorHasPassword}
+          onCancel={() => setPending(null)}
+          onDone={(gone) => {
+            setPending(null)
+            if (gone) onGone()
+            else onChanged()
+          }}
+        />
+      )}
+      {naming && <NameDialog row={row} field={naming} operatorHasPassword={operatorHasPassword} onClose={() => setNaming(null)} onSaved={onChanged} />}
+      {resetting && <ResetLinkDialog row={row} name={name} mailServer={mailServer} operatorHasPassword={operatorHasPassword} onClose={() => setResetting(false)} />}
+      {limiting && <LimitDialog row={row} name={name} operatorHasPassword={operatorHasPassword} onClose={() => setLimiting(false)} onSaved={onChanged} />}
+    </>
+  )
+}
+
+/** The question of one act: the act's own words, kind and symbol on the confirming button, the module's sentence
+ * (`MANAGE_CONFIRM`), for deleting nexnotes' numbers and how long it can come back, for the reset of the second factor
+ * its parts (`factorResetParts`); with the operator's own password where it asks for one (`confirmLine`). */
+function ConfirmAct({ row, name, pending, operatorHasPassword, onCancel, onDone }: {
+  row: AccountRow
+  name: string
+  pending: Pending
+  operatorHasPassword: boolean
   onCancel: () => void
+  onDone: (gone: boolean) => void
 }) {
   const { t } = useTranslation()
   const [password, setPassword] = useState('')
+  const [disconnect, setDisconnect] = useState<boolean>(FACTOR_RESET_DEFAULTS.factorResetDevices)
+  const [removePasskeys, setRemovePasskeys] = useState<boolean>(FACTOR_RESET_DEFAULTS.factorResetPasskeys)
   const action = useAction()
-  const row = asking.row
-  const withPassword = askOwn && asking.kind !== 'signOut'
-  const text =
-    asking.kind === 'delete'
-      ? t('accounts.confirm.delete.text', { notes: t('accounts.countNotes', { count: asking.notes }), shared: t('accounts.countShared', { count: asking.shared }), days: asking.days })
-      : asking.kind === 'unlink'
-        ? t('accounts.confirm.unlink.text', { name: asking.provider.label })
-        : asking.kind === 'role'
-          ? t(row.role === 'operator' ? 'accounts.confirm.role.toMember' : 'accounts.confirm.role.toOperator')
-          : t(`accounts.confirm.${asking.kind}.text`)
+  const act = pending.action
+  const base = act.name.split(':')[0] as keyof typeof MANAGE_CONFIRM
+  const spec = MANAGE_CONFIRM[base]
+  const asksPassword = (spec?.confirm ?? 'password') === 'password'
+  const values = { name, provider: act.values?.provider ?? '', email: row.email, app: 'nexnotes' }
+  const passkeys = pending.overview?.passkeys ?? []
+
+  const lines: ReactNode[] = []
+  if (spec?.text && base !== 'account.factorReset') lines.push(<p key="text" className="m-0 text-sm">{t(spec.text, values)}</p>)
+  if (base === 'account.remove' && pending.impact) {
+    lines.push(
+      <p key="numbers" className="m-0 text-sm" data-testid="remove-numbers">
+        {t('accounts.removeNumbers', {
+          notes: t('accounts.countNotes', { count: pending.impact.notes }),
+          shared: t('accounts.countShared', { count: pending.impact.shared }),
+        })}
+      </p>,
+    )
+    for (const line of removeLines(APP_CAPS)) {
+      lines.push(<p key={line} className="m-0 text-sm">{t(line, { count: pending.impact.days })}</p>)
+    }
+  }
+  if (base === 'account.factorReset') {
+    for (const part of factorResetParts({ passkeys })) {
+      if (part === 'factorResetHint') lines.push(<p key={part} className="m-0 text-sm">{t('account.factorResetHint')}</p>)
+      if (part === 'passkeys') lines.push(<p key={part} className="m-0 text-sm">{t('account.passkeys')}: {passkeys.map((key) => key.name).join(', ')}</p>)
+      if (part === 'factorResetPasskeys') lines.push(<CheckboxRow key={part} label={t('account.factorResetPasskeys')} checked={removePasskeys} onChange={setRemovePasskeys} />)
+      if (part === 'factorResetDevices') lines.push(<CheckboxRow key={part} label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />)
+    }
+  }
+  if (asksPassword) lines.push(<p key="confirm" className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>)
+
   return (
     <ConfirmDialog
-      title={t(`accounts.confirm.${asking.kind}.title`, { name: row.display_name || row.name })}
-      text={text}
-      confirm={confirmOf(CONFIRM_BUTTON[asking.kind], t(`accounts.confirm.${asking.kind}.button`))}
+      title={t(act.label, act.values)}
+      confirm={confirmOf(act.button, t(act.label, act.values))}
       cancel={t('common.cancel')}
       closeLabel={t('common.close')}
       busy={action.busy}
-      confirmDisabled={withPassword && !password}
+      confirmDisabled={asksPassword && operatorHasPassword && !password}
       onCancel={onCancel}
       onConfirm={() =>
         void action.run(async () => {
-          if (asking.kind === 'delete') await accountsApi.remove(row.id, password)
-          if (asking.kind === 'restore') await accountsApi.restore(row.id, password)
-          if (asking.kind === 'block') await accountsApi.block(row.id, password)
-          if (asking.kind === 'unblock') await accountsApi.unblock(row.id, password)
-          if (asking.kind === 'signOut') await accountsApi.signOut(row.id)
-          if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password, disconnect, removePasskeys && !!overview?.passkeys.length)
-          if (asking.kind === 'removeEmail') await accountsApi.removeEmail(row.id, password)
-          if (asking.kind === 'role') await accountsApi.role(row.id, row.role === 'operator' ? 'member' : 'operator', password)
-          if (asking.kind === 'unlink') await oidcAdminApi.unlinkAccount(row.id, asking.provider.id, password)
-          onDone()
+          let gone = false
+          if (base === 'account.makeOperator') await accountsApi.role(row.id, 'operator', password)
+          if (base === 'account.makeMember') await accountsApi.role(row.id, 'member', password)
+          if (base === 'account.emailRemove') await accountsApi.removeEmail(row.id, password)
+          if (base === 'account.factorReset') await accountsApi.resetSecondFactor(row.id, password, disconnect, removePasskeys && passkeys.length > 0)
+          if (base === 'account.signOutAccount') await accountsApi.signOut(row.id)
+          if (base === 'account.unlinkProvider' && act.provider) await oidcAdminApi.unlinkAccount(row.id, Number(act.provider.id), password)
+          if (base === 'account.block') await accountsApi.block(row.id, password)
+          if (base === 'account.unblock') await accountsApi.unblock(row.id, password)
+          if (base === 'account.restore') await accountsApi.restore(row.id, password)
+          if (base === 'account.remove') {
+            await accountsApi.remove(row.id, password)
+            gone = true
+          }
+          onDone(gone)
         })
       }
     >
-      {asking.kind === 'resetFactor' &&
-        // The parts for this account (konten 0.3.4): the passkeys and their box only where it has some.
-        factorResetParts({ passkeys: overview?.passkeys ?? [] }).map((part) => {
-          if (part === 'factorResetHint') return <p key={part} className="m-0 text-sm">{t('account.factorResetHint')}</p>
-          if (part === 'passkeys')
-            return (
-              <p key={part} className="m-0 text-sm">
-                {t('account.passkeys')}: {(overview?.passkeys ?? []).map((key) => key.name).join(', ')}
-              </p>
-            )
-          if (part === 'factorResetPasskeys') return <CheckboxRow key={part} label={t('account.factorResetPasskeys')} checked={removePasskeys} onChange={setRemovePasskeys} />
-          if (part === 'factorResetDevices') return <CheckboxRow key={part} label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />
-          return null
-        })}
-      {withPassword && <Field label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />}
+      {lines}
+      {asksPassword && operatorHasPassword && (
+        <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+      )}
       <Feedback problem={action.problem} />
     </ConfirmDialog>
   )
 }
 
-function MenuItem({ children, onClick, danger = false }: { children: React.ReactNode; onClick: () => void; danger?: boolean }) {
-  return (
-    <button type="button" role="menuitem" onClick={onClick} className={'nn-menu-item ' + (danger ? 'text-bad-500 not-disabled:hover:text-bad-500' : '')}>
-      <span className="truncate">{children}</span>
-    </button>
-  )
-}
-
-function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => void }) {
-  const { t, i18n } = useTranslation()
-  const { me } = useAuth()
-  const [email, setEmail] = useState('')
-  const [shownName, setShownName] = useState('')
-  const [role, setRole] = useState<'member' | 'operator'>('member')
-  const [days, setDays] = useState('7')
-  const [send, setSend] = useState(false)
-  const [made, setMade] = useState<{ link: string; sent: boolean; email: string } | null>(null)
-  const action = useAction()
-  // The switch shows only with a mail server, and counts only with an address: then the button sends (fourth review).
-  const mailing = Boolean(me?.mail) && send && Boolean(email.trim())
-  return (
-    <Dialog title={t('accounts.invite')} onClose={onClose} closeLabel={t('common.close')}>
-      {made ? (
-        <div className="flex flex-col gap-3">
-          {made.sent && (
-            <Notice tone="ok" testId="invite-sent">
-              {t('accounts.inviteSent', { email: made.email })}
-            </Notice>
-          )}
-          <p className="m-0 text-sm">{t(made.sent ? 'accounts.inviteLinkToo' : 'accounts.inviteLink')}</p>
-          <CopyField value={made.link} label={t('accounts.invite')} />
-          <div className="flex justify-end">
-            <AccountButton name="done" onClick={onClose}>
-              {t('common.done')}
-            </AccountButton>
-          </div>
-        </div>
-      ) : (
-        <form
-          className="flex flex-col gap-3"
-          onSubmit={(event) => {
-            event.preventDefault()
-            void action.run(async () => {
-              const answer = await invitesApi.make({
-                email: email.trim(),
-                display_name: shownName.trim(),
-                role,
-                days: Number(days),
-                send: mailing,
-                language: i18n.language,
-              })
-              setMade({ link: answer.link, sent: answer.sent, email: email.trim() })
-              onMade()
-            })
-          }}
-        >
-          <Field label={t('account.email')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} hints={[t('accounts.inviteEmailHint')]} />
-          <Field label={t('account.displayName')} value={shownName} onChange={(event) => setShownName(event.target.value)} maxLength={DISPLAY_NAME_MAX} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <SelectField label={t('accounts.role')} value={role} onChange={(event) => setRole(event.target.value as 'member' | 'operator')} options={[{ value: 'member', label: t('roles.member') }, { value: 'operator', label: t('roles.operator') }]} />
-            <SelectField label={t('account.validFor')} value={days} onChange={(event) => setDays(event.target.value)} options={INVITE_DAYS.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))} />
-          </div>
-          {me?.mail && <CheckboxRow label={t('accounts.sendMail')} checked={send} onChange={setSend} disabled={!email.trim()} />}
-          <Feedback problem={action.problem} />
-          <div className="flex flex-wrap justify-end gap-2">
-            <AccountButton name="cancel" onClick={onClose}>
-              {t('common.cancel')}
-            </AccountButton>
-            <AccountButton name="invite" type="submit" disabled={action.busy} testId="invite-submit">
-              {t(mailing ? 'accounts.inviteSend' : 'accounts.inviteMake')}
-            </AccountButton>
-          </div>
-        </form>
-      )}
-    </Dialog>
-  )
-}
-
-function LimitDialog({ row, onClose, onSaved }: { row: AccountRow; onClose: () => void; onSaved: () => void }) {
-  const { t, i18n } = useTranslation()
-  const [value, setValue] = useState(row.storage_limit ? String(Math.round((row.storage_limit / GB) * 10) / 10) : '')
-  const action = useAction()
-  const shown = row.display_name || row.name
-  const save = (limit: number | null) =>
-    void action.run(async () => {
-      await accountsApi.limit(row.id, limit)
-      onSaved()
-      onClose()
-    })
-  return (
-    <Dialog title={t('accounts.limitTitle', { name: shown })} onClose={onClose} closeLabel={t('common.close')}>
-      <form
-        className="flex flex-col gap-3"
-        onSubmit={(event) => {
-          event.preventDefault()
-          const gigabytes = Number(value.replace(',', '.'))
-          if (!gigabytes || gigabytes <= 0) return
-          save(Math.round(gigabytes * GB))
-        }}
-      >
-        <p className="m-0 text-sm">{t('accounts.limitText')}</p>
-        <Field label={t('accounts.limitField')} type="number" min={0} value={value} onChange={(event) => setValue(event.target.value)} hints={[t('accounts.limitUsed', { used: bytes(row.storage_used, i18n.language) })]} />
-        <Feedback problem={action.problem} />
-        <div className="flex flex-wrap justify-end gap-2">
-          {row.storage_limit !== null && (
-            <Button kind="danger" icon="X" onClick={() => save(null)}>
-              {t('accounts.limitRemove')}
-            </Button>
-          )}
-          <AccountButton name="confirm" type="submit" disabled={action.busy || !value}>
-            {t('accounts.limitSet')}
-          </AccountButton>
-        </div>
-      </form>
-    </Dialog>
-  )
-}
-
-/** Another username or display name for an account, with the operator's own password (the shared account module). */
-function NameDialog({ row, field, askOwn, onClose, onSaved }: {
+/** "Change display name" or "Change username" (the module's fields and hints), with the operator's own password. */
+function NameDialog({ row, field, operatorHasPassword, onClose, onSaved }: {
   row: AccountRow
   field: 'name' | 'display_name'
-  askOwn: boolean
+  operatorHasPassword: boolean
   onClose: () => void
   onSaved: () => void
 }) {
@@ -474,10 +421,9 @@ function NameDialog({ row, field, askOwn, onClose, onSaved }: {
   const [value, setValue] = useState(field === 'name' ? row.name : row.display_name)
   const [own, setOwn] = useState('')
   const action = useAction()
-  const shown = row.display_name || row.name
-  const label = field === 'name' ? t('account.username') : t('account.displayName')
+  const title = field === 'name' ? t('account.changeUsername') : t('account.changeDisplayName')
   return (
-    <Dialog title={field === 'name' ? t('accounts.changeUsername') : t('accounts.changeDisplayName')} onClose={onClose} closeLabel={t('common.close')}>
+    <Dialog title={title} onClose={onClose} closeLabel={t('common.close')} testId="name-dialog">
       <form
         className="flex flex-col gap-3"
         onSubmit={(event) => {
@@ -490,44 +436,65 @@ function NameDialog({ row, field, askOwn, onClose, onSaved }: {
           })
         }}
       >
-        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{shown}</p>
+        {field === 'name' && <p className="m-0 text-sm">{t('account.askChangeUsername', { name: row.display_name || row.name })}</p>}
         <Field
-          label={label}
+          label={field === 'name' ? t('account.username') : t('account.displayName')}
           value={value}
           onChange={(event) => setValue(event.target.value)}
           maxLength={field === 'name' ? USERNAME_MAX : DISPLAY_NAME_MAX}
           hints={[field === 'name' ? t('account.usernameRules') : t('account.displayNameHint')]}
         />
-        {askOwn && <Field label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
+        {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
         <Feedback problem={action.problem} />
         <div className="flex flex-wrap justify-end gap-2">
           <AccountButton name="cancel" onClick={onClose}>
             {t('common.cancel')}
           </AccountButton>
-          <AccountButton name="account.save" type="submit" disabled={action.busy || (askOwn && !own) || (field === 'name' && !value.trim())}>
-            {t('common.save')}
-          </AccountButton>
+          <AccountButton name="account.save" type="submit" disabled={action.busy || (operatorHasPassword && !own) || (field === 'name' && !value.trim())} />
         </div>
       </form>
     </Dialog>
   )
 }
 
-/** The operator never sets another account's password (NOTES-2 AC-7): a one-time link lets the person do it; with a
- * mail server and an address it goes there. */
-function ResetLinkDialog({ row, askOwn, onClose }: { row: AccountRow; askOwn: boolean; onClose: () => void }) {
+/** A link to hand on: the field to read it in and the button that copies it. */
+function CopyField({ value, label, hint }: { value: string; label: string; hint?: string }) {
+  const { t } = useTranslation()
+  const [copied, setCopied] = useState(false)
+  return (
+    <div className="flex items-end gap-2">
+      <div className="min-w-0 flex-1">
+        <Field label={label} value={value} readOnly mono hints={hint ? [hint] : undefined} onFocus={(event) => event.target.select()} />
+      </div>
+      <AccountButton name="copy" onClick={() => void copyText(value).then(setCopied)}>
+        {copied ? t('common.copied') : t('common.copy')}
+      </AccountButton>
+    </div>
+  )
+}
+
+/** "Link for a new password" (`RESET_LINK_DIALOG`, NOTES-2 AC-7): the operator never sets another account's password;
+ * with a mail server and an address that counts the link goes there, else it shows once to hand on. */
+function ResetLinkDialog({ row, name, mailServer, operatorHasPassword, onClose }: {
+  row: AccountRow
+  name: string
+  mailServer: boolean
+  operatorHasPassword: boolean
+  onClose: () => void
+}) {
   const { t } = useTranslation()
   const [days, setDays] = useState(String(RESET_DAYS_DEFAULT))
   const [own, setOwn] = useState('')
   const [link, setLink] = useState<string | null>(null)
   const [sent, setSent] = useState(false)
   const action = useAction()
-  const name = row.display_name || row.name
+  const sends = mailServer && Boolean(row.email) && row.email_confirmed !== false
   return (
-    <Dialog title={t('accounts.resetLinkFor', { name })} onClose={onClose} closeLabel={t('common.close')}>
+    <Dialog title={t(RESET_LINK_DIALOG.title)} onClose={onClose} closeLabel={t('common.close')} testId="reset-link-dialog">
       {sent ? (
         <div className="flex flex-col gap-3" data-testid="reset-link">
-          <Notice tone="ok">{t('account.resetLinkSent', { email: row.email })}</Notice>
+          <Notice tone="ok">{t(RESET_LINK_DIALOG.sent, { email: row.email, name })}</Notice>
           <div className="flex justify-end">
             <AccountButton name="done" onClick={onClose}>
               {t('common.done')}
@@ -536,8 +503,8 @@ function ResetLinkDialog({ row, askOwn, onClose }: { row: AccountRow; askOwn: bo
         </div>
       ) : link ? (
         <div className="flex flex-col gap-3" data-testid="reset-link">
-          <p className="m-0 text-sm">{t('accounts.resetLinkShown', { name })}</p>
-          <CopyField value={link} label={t('accounts.resetLink')} />
+          <p className="m-0 text-sm">{t(RESET_LINK_DIALOG.shown, { name })}</p>
+          <CopyField value={link} label={t(RESET_LINK_DIALOG.title)} />
           <div className="flex justify-end">
             <AccountButton name="done" onClick={onClose}>
               {t('common.done')}
@@ -556,17 +523,146 @@ function ResetLinkDialog({ row, askOwn, onClose }: { row: AccountRow; askOwn: bo
             })
           }}
         >
-          <p className="m-0 text-sm">{t('accounts.resetLinkText', { name })}</p>
-          <SelectField label={t('account.validFor')} value={days} onChange={(event) => setDays(event.target.value)} options={RESET_DAYS.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))} />
-          {askOwn && <Field label={t('settings.ownPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
+          <p className="m-0 text-sm">{t(RESET_LINK_DIALOG.text, { name })}</p>
+          <SelectField
+            label={t(RESET_LINK_DIALOG.days.label)}
+            value={days}
+            onChange={(event) => setDays(event.target.value)}
+            options={RESET_DAYS.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))}
+          />
+          <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
+          {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
           <Feedback problem={action.problem} />
           <div className="flex flex-wrap justify-end gap-2">
             <AccountButton name="cancel" onClick={onClose}>
               {t('common.cancel')}
             </AccountButton>
-            <AccountButton name="confirm" type="submit" disabled={action.busy || (askOwn && !own)}>
-              {t('accounts.resetLinkMake')}
+            <AccountButton name={linkSubmit(sends)} type="submit" disabled={action.busy || (operatorHasPassword && !own)} />
+          </div>
+        </form>
+      )}
+    </Dialog>
+  )
+}
+
+/** nexnotes' own act: the storage limit of the account (attachments stop at it, writing goes on), with the operator's
+ * own password (konten 0.3.9: everything that changes an account asks for it). */
+function LimitDialog({ row, name, operatorHasPassword, onClose, onSaved }: {
+  row: AccountRow
+  name: string
+  operatorHasPassword: boolean
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const { t, i18n } = useTranslation()
+  const [value, setValue] = useState(row.storage_limit ? String(Math.round((row.storage_limit / GB) * 10) / 10) : '')
+  const [own, setOwn] = useState('')
+  const action = useAction()
+  const save = (limit: number | null) =>
+    void action.run(async () => {
+      await accountsApi.limit(row.id, limit, own)
+      onSaved()
+      onClose()
+    })
+  return (
+    <Dialog title={t('accounts.limitTitle', { name })} onClose={onClose} closeLabel={t('common.close')} testId="limit-dialog">
+      <form
+        className="flex flex-col gap-3"
+        onSubmit={(event) => {
+          event.preventDefault()
+          const gigabytes = Number(value.replace(',', '.'))
+          if (!gigabytes || gigabytes <= 0) return
+          save(Math.round(gigabytes * GB))
+        }}
+      >
+        <p className="m-0 text-sm">{t('accounts.limitText')}</p>
+        <Field label={t('accounts.limitField')} type="number" min={0} value={value} onChange={(event) => setValue(event.target.value)} hints={[t('accounts.limitUsed', { used: bytes(row.storage_used, i18n.language) })]} />
+        <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
+        {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
+        <Feedback problem={action.problem} />
+        <div className="flex flex-wrap justify-end gap-2">
+          {row.storage_limit !== null && (
+            <AccountButton name="account.emailRemove" disabled={action.busy || (operatorHasPassword && !own)} onClick={() => save(null)}>
+              {t('accounts.limitRemove')}
             </AccountButton>
+          )}
+          <AccountButton name="storageLimit" type="submit" disabled={action.busy || !value || (operatorHasPassword && !own)}>
+            {t('accounts.limitSet')}
+          </AccountButton>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+/** "Invite a person" (`INVITE_DIALOG`, NOTES-2 AC-2): the address, the display name, the role, how long it holds,
+ * "Send by mail" only with a mail server and an address; afterwards always the link to copy. No username: the person
+ * picks it. */
+function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => void }) {
+  const { t, i18n } = useTranslation()
+  const { me } = useAuth()
+  const [email, setEmail] = useState('')
+  const [displayName, setDisplayName] = useState('')
+  const [role, setRole] = useState<'member' | 'operator'>(INVITE_DIALOG.role.default)
+  const [days, setDays] = useState(String(INVITE_DIALOG.days.default))
+  const [send, setSend] = useState(true)
+  const [made, setMade] = useState<{ link: string; sent: boolean; email: string; expires: string } | null>(null)
+  const action = useAction()
+  const fields = inviteFields(APP_CAPS, { mailServer: Boolean(me?.mail), email })
+  const sends = fields.includes('sendMail') && send
+  return (
+    <Dialog title={t(INVITE_DIALOG.title)} onClose={onClose} closeLabel={t('common.close')} testId="invite-dialog">
+      {made ? (
+        <div className="flex flex-col gap-3">
+          {made.sent && (
+            <Notice tone="ok" testId="invite-sent">
+              {t(INVITE_DIALOG.done.sent, { email: made.email })}
+            </Notice>
+          )}
+          <CopyField value={made.link} label={t(INVITE_DIALOG.done.link)} hint={t(INVITE_DIALOG.done.linkHint, { day: day(made.expires, i18n.language) })} />
+          <div className="flex justify-end">
+            <AccountButton name="done" onClick={onClose}>
+              {t('common.done')}
+            </AccountButton>
+          </div>
+        </div>
+      ) : (
+        <form
+          className="flex flex-col gap-3"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void action.run(async () => {
+              const answer = await invitesApi.make({ email: email.trim(), display_name: displayName.trim(), role, days: Number(days), send: sends, language: i18n.language })
+              setMade({ link: answer.link, sent: answer.sent, email: email.trim(), expires: answer.expires_at })
+              onMade()
+            })
+          }}
+        >
+          {fields.includes('email') && <Field label={t('account.email')} type="email" value={email} onChange={(event) => setEmail(event.target.value)} hints={[t(INVITE_DIALOG.emailHint)]} />}
+          {fields.includes('displayName') && <Field label={t('account.displayName')} value={displayName} onChange={(event) => setDisplayName(event.target.value)} maxLength={DISPLAY_NAME_MAX} />}
+          {fields.includes('role') && (
+            <SelectField
+              label={t(INVITE_DIALOG.role.label)}
+              value={role}
+              onChange={(event) => setRole(event.target.value as 'member' | 'operator')}
+              options={INVITE_DIALOG.role.options.map((value) => ({ value, label: t(INVITE_DIALOG.role.texts[value]) }))}
+            />
+          )}
+          {fields.includes('days') && (
+            <SelectField
+              label={t(INVITE_DIALOG.days.label)}
+              value={days}
+              onChange={(event) => setDays(event.target.value)}
+              options={INVITE_DIALOG.days.options.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))}
+            />
+          )}
+          {fields.includes('sendMail') && <CheckboxRow label={t(INVITE_DIALOG.sendMail)} checked={send} onChange={setSend} />}
+          <Feedback problem={action.problem} />
+          <div className="flex flex-wrap justify-end gap-2">
+            <AccountButton name="cancel" onClick={onClose}>
+              {t('common.cancel')}
+            </AccountButton>
+            <AccountButton name={linkSubmit(sends)} type="submit" testId="invite-submit" disabled={action.busy} />
           </div>
         </form>
       )}

@@ -27,113 +27,24 @@
     "version": "Version"
   },
   "accounts": {
-    "actions": "Actions",
-    "actionsFor": "Actions for {{name}}",
-    "block": "Block",
-    "blocked": "blocked",
-    "blockedSince": "blocked since {{day}}",
-    "confirm": {
-      "block": {
-        "button": "Block",
-        "text": "The account is signed out on every device at once and cannot get back in. Its notes stay, and what it shared stays visible to the others.",
-        "title": "Block {{name}}?"
-      },
-      "delete": {
-        "button": "Delete",
-        "text": "The account has {{notes}}, {{shared}} of them. It is blocked at once, and what it shared disappears for the others. For {{days}} days you can bring it back; after that it is deleted for good with all its notes.",
-        "title": "Delete {{name}}?"
-      },
-      "resetFactor": {
-        "button": "Reset",
-        "text": "The account then signs in with its password only and can set up a new second factor.",
-        "title": "Reset the second factor of {{name}}?"
-      },
-      "restore": {
-        "button": "Bring back",
-        "text": "The account can sign in again, with all its notes.",
-        "title": "Bring {{name}} back?"
-      },
-      "role": {
-        "button": "Change",
-        "title": "Change the role of {{name}}?",
-        "toMember": "The account becomes a member and runs nothing from now on.",
-        "toOperator": "The account becomes an operator and runs the server and the accounts from now on, without seeing anybody else's notes."
-      },
-      "signOut": {
-        "button": "Sign out",
-        "text": "Every session of this account ends. It can sign in again afterwards.",
-        "title": "Sign {{name}} out everywhere?"
-      },
-      "unblock": {
-        "button": "Unblock",
-        "text": "The account can sign in again.",
-        "title": "Unblock {{name}}?"
-      },
-      "unlink": {
-        "button": "Unlink",
-        "text": "The account no longer signs in through {{name}} afterwards.",
-        "title": "Unlink {{name}}?"
-      },
-      "removeEmail": {
-        "title": "Remove the address of {{name}}?",
-        "text": "The account then signs in with its username only. A new address is set by the person themselves.",
-        "button": "Remove address"
-      }
-    },
     "countNotes_one": "{{count}} note",
     "countNotes_other": "{{count}} notes",
     "countShared_one": "{{count}} shared",
     "countShared_other": "{{count}} shared",
-    "delete": "Delete …",
-    "deleted": "deleted",
-    "goesOn": "gone for good on {{day}}",
-    "invite": "Invite a person",
-    "inviteEmailHint": "Optional. With an address nexnotes can mail the link too.",
-    "inviteLink": "Send this link to the person. It works once and is shown only now.",
-    "inviteLinkToo": "You can also copy the link here yourself. It works once and is shown only now.",
-    "inviteMake": "Make the invitation",
-    "inviteNoAddress": "no address",
-    "inviteSend": "Send invitation",
-    "inviteSent": "Invitation sent to {{email}}.",
-    "last": "Last seen",
-    "lead_one": "{{count}} account. As the operator you see storage and use, but no notes.",
-    "lead_other": "{{count}} accounts. As the operator you see storage and use, but no notes.",
     "limitField": "Limit in GB",
     "limitRemove": "Remove the limit",
     "limitSet": "Set",
     "limitText": "Once reached, writing goes on, new attachments do not.",
     "limitTitle": "Storage limit for {{name}}",
     "limitUsed": "In use: {{used}}",
-    "makeMember": "Make member",
-    "makeOperator": "Make operator",
-    "never": "never",
-    "openInvites": "Open invitations",
-    "password": "Password",
-    "passwordTwoFactor": "Password + 2FA",
-    "person": "Person",
-    "resetFactor": "Reset the second factor",
-    "resetLink": "Reset link …",
-    "resetLinkFor": "Reset link for {{name}}",
-    "resetLinkMake": "Make the link",
-    "resetLinkShown": "Send this link to {{name}}. It works once and is shown only now.",
-    "resetLinkText": "With this link {{name}} sets a new password themselves; you never learn it. Until then the old one stays. Using the link signs the account out everywhere and ends its paired devices, and at the next sign-in it is told that its password was reset through your link.",
-    "restore": "Bring back",
-    "role": "Role",
-    "sendMail": "Send by mail",
-    "setLimit": "Storage limit …",
-    "signIn": "Sign-in",
-    "signOut": "Sign out everywhere",
     "storage": "Storage",
-    "title": "Accounts",
-    "unblock": "Unblock",
-    "unlink": "Unlink from {{name}}",
-    "until": "until {{day}}",
     "usedNoLimit": "{{used}} · no limit",
     "usedOf": "{{used}} of {{limit}}",
-    "withdraw": "Withdraw",
     "withdrawn": "Invitation withdrawn.",
-    "changeUsername": "Change username",
-    "changeDisplayName": "Change display name"
+    "storageLimit": "Storage limit",
+    "removeNumbers": "It has {{notes}}, {{shared}} of them. It is blocked at once, and what it shared disappears for the others.",
+    "privacyTitle": "What you see",
+    "privacy": "As the operator you see names, sign-in, storage and use, but never the title or a word of a note."
   },
   "app": {
     "home": "To the start",
@@ -809,8 +720,6 @@
       "paperHint": "Each note can be changed later in its menu."
     },
     "password": {
-      "change": "Change",
-      "changedAt": "last changed on {{day}}",
       "current": "Current password",
       "done": "Password changed. Other browsers and connected devices have to sign in again.",
       "new": "New password",

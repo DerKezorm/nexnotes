@@ -261,13 +261,14 @@ describe('the operator never sets another password (NOTES-2 AC-7)', () => {
     }
     const { AccountsTab } = await import('./pages/settings/AccountsTab')
     await render(<AuthProvider><AccountsTab /></AuthProvider>)
-    await act(async () => box.querySelector<HTMLButtonElement>('[aria-label="' + i18n.t('accounts.actionsFor', { name: 'Anna' }) + '"]')!.click())
-    // The menu stands over everything, outside the table's box.
-    const items = [...document.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent)
-    expect(items).toContain(i18n.t('accounts.resetLink'))
-    await act(async () => [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) => item.textContent === i18n.t('accounts.resetLink'))!.click())
+    // konten 0.3.9: "Manage" on the row opens the dialog with every act in words; "Link for a new password" is one.
+    await act(async () => box.querySelector<HTMLButtonElement>('[aria-label="' + i18n.t('account.manageTitle', { name: 'Anna' }) + '"]')!.click())
+    const manage = document.querySelector('[data-testid="manage-dialog"]')!
+    const buttons = [...manage.querySelectorAll<HTMLButtonElement>('button')]
+    expect(buttons.map((button) => button.textContent)).toContain(i18n.t('account.resetLink'))
+    await act(async () => buttons.find((button) => button.textContent === i18n.t('account.resetLink'))!.click())
     await settle()
-    const dialog = document.querySelector('[role="dialog"]')!
+    const dialog = document.querySelector('[data-testid="reset-link-dialog"]')!
     expect(dialog.querySelectorAll('input[autocomplete="new-password"]')).toHaveLength(0)
     const select = dialog.querySelector('select')!
     Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value')!.set!.call(select, '30')
@@ -366,7 +367,7 @@ describe('the invitation dialog (NOTES-2 AC-2)', () => {
   async function openDialog(): Promise<Element> {
     const { AccountsTab } = await import('./pages/settings/AccountsTab')
     await render(<AuthProvider><AccountsTab /></AuthProvider>)
-    await act(async () => [...box.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === i18n.t('accounts.invite'))!.click())
+    await act(async () => [...box.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === i18n.t('account.invite'))!.click())
     return document.querySelector('[role="dialog"]')!
   }
 
@@ -376,24 +377,26 @@ describe('the invitation dialog (NOTES-2 AC-2)', () => {
     const made: unknown[] = []
     operator(true, made)
     const dialog = await openDialog()
-    expect(submit().textContent).toBe('Make the invitation')
+    // The module's dialog (konten 0.3.9): "Send by mail" only with a mail server and an address, then ticked.
+    expect(submit().textContent).toBe(i18n.t('account.linkMake'))
+    expect(dialog.querySelector('input[type="checkbox"]')).toBeNull()
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
-    const toggle = dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!
-    await act(async () => toggle.click())
-    expect(submit().textContent).toBe('Send invitation')
-    // Without the address the tick no longer counts: the button only makes the invitation again.
+    expect(dialog.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(true)
+    expect(submit().textContent).toBe(i18n.t('account.linkSend'))
+    // Without the address the tick goes: the button only makes the link again.
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, '')
-    expect(submit().textContent).toBe('Make the invitation')
+    expect(submit().textContent).toBe(i18n.t('account.linkMake'))
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
-    expect(submit().textContent).toBe('Send invitation')
+    expect(submit().textContent).toBe(i18n.t('account.linkSend'))
     await act(async () => dialog.querySelector('form')!.requestSubmit())
     await settle()
     expect(made).toEqual([{ email: 'robin@example.com', display_name: '', role: 'member', days: 7, send: true, language: 'en' }])
-    expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe('Invitation sent to robin@example.com.')
-    expect(document.body.textContent).toContain(i18n.t('accounts.inviteLinkToo'))
+    expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe(i18n.t('account.inviteSent', { email: 'robin@example.com' }))
+    // The link to copy shows as well.
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')!.value).toBe('http://notes.test/invite/abcdefghijklmnopqrstuvwxyz')
     await act(async () => void (await i18n.changeLanguage('de')))
     try {
-      expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe('Einladung verschickt an robin@example.com.')
+      expect(document.querySelector('[data-testid="invite-sent"]')!.textContent).toBe('Die Einladung ist an robin@example.com unterwegs.')
     } finally {
       await act(async () => void (await i18n.changeLanguage('en')))
     }
@@ -405,12 +408,12 @@ describe('the invitation dialog (NOTES-2 AC-2)', () => {
     const dialog = await openDialog()
     expect(dialog.querySelector('input[type="checkbox"]')).toBeNull()
     type(dialog.querySelector<HTMLInputElement>('input[type="email"]')!, 'robin@example.com')
-    expect(submit().textContent).toBe('Make the invitation')
+    expect(submit().textContent).toBe(i18n.t('account.linkMake'))
     await act(async () => dialog.querySelector('form')!.requestSubmit())
     await settle()
     expect((made[0] as { send: boolean }).send).toBe(false)
     expect(document.querySelector('[data-testid="invite-sent"]')).toBeNull()
-    expect(document.body.textContent).toContain(i18n.t('accounts.inviteLink'))
-    expect(i18n.getFixedT('de')('accounts.inviteSend')).toBe('Einladung senden')
+    expect(document.querySelector<HTMLInputElement>('[role="dialog"] input[readonly]')!.value).toBe('http://notes.test/invite/abcdefghijklmnopqrstuvwxyz')
+    expect(document.body.textContent).toContain(i18n.t('account.inviteLink'))
   })
 })

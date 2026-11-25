@@ -255,7 +255,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it('NOTES-13 AC-1 Accounts with ?invite opens "Invite a person" at once (the share dialog leads there); closing drops it', async () => {
     await open('/settings/accounts?invite=1')
     const dialog = document.querySelector('[role="dialog"]')!
-    expect(document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')?.textContent).toBe(i18n.t('accounts.invite'))
+    expect(document.getElementById(dialog.getAttribute('aria-labelledby') ?? '')?.textContent).toBe(i18n.t('account.inviteTitle'))
     await act(async () => dialog.querySelector<HTMLButtonElement>('button[aria-label]')!.click())
     await settle()
     expect(document.querySelector('[role="dialog"]')).toBeNull()

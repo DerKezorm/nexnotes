@@ -27,113 +27,24 @@
     "version": "Version"
   },
   "accounts": {
-    "actions": "Aktionen",
-    "actionsFor": "Aktionen für {{name}}",
-    "block": "Sperren",
-    "blocked": "gesperrt",
-    "blockedSince": "gesperrt seit {{day}}",
-    "confirm": {
-      "block": {
-        "button": "Sperren",
-        "text": "Das Konto ist sofort auf allen Geräten abgemeldet und kommt nicht mehr hinein. Seine Notizen bleiben, Geteiltes bleibt für andere sichtbar.",
-        "title": "{{name}} sperren?"
-      },
-      "delete": {
-        "button": "Löschen",
-        "text": "Das Konto hat {{notes}}, davon {{shared}}. Es ist sofort gesperrt, und was es geteilt hat, verschwindet bei den anderen. {{days}} Tage lang kannst du es zurückholen, danach ist es mit allen Notizen endgültig gelöscht.",
-        "title": "{{name}} löschen?"
-      },
-      "resetFactor": {
-        "button": "Zurücksetzen",
-        "text": "Das Konto meldet sich danach nur mit dem Passwort an und kann einen neuen zweiten Faktor einrichten.",
-        "title": "Zweiten Faktor von {{name}} zurücksetzen?"
-      },
-      "restore": {
-        "button": "Zurückholen",
-        "text": "Das Konto kann sich wieder anmelden, mit allen seinen Notizen.",
-        "title": "{{name}} zurückholen?"
-      },
-      "role": {
-        "button": "Ändern",
-        "title": "Rolle von {{name}} ändern?",
-        "toMember": "Das Konto wird Mitglied und verwaltet ab sofort nichts mehr.",
-        "toOperator": "Das Konto wird Betreiber und verwaltet ab sofort Server und Konten, ohne Notizen anderer zu sehen."
-      },
-      "signOut": {
-        "button": "Abmelden",
-        "text": "Alle Sitzungen dieses Kontos enden. Es kann sich danach wieder anmelden.",
-        "title": "{{name}} überall abmelden?"
-      },
-      "unblock": {
-        "button": "Entsperren",
-        "text": "Das Konto kann sich wieder anmelden.",
-        "title": "{{name}} entsperren?"
-      },
-      "unlink": {
-        "button": "Lösen",
-        "text": "Das Konto meldet sich danach nicht mehr über {{name}} an.",
-        "title": "Verknüpfung von {{name}} lösen?"
-      },
-      "removeEmail": {
-        "title": "Adresse von {{name}} entfernen?",
-        "text": "Das Konto meldet sich danach nur noch mit dem Benutzernamen an. Eine neue Adresse setzt die Person selbst.",
-        "button": "Adresse entfernen"
-      }
-    },
     "countNotes_one": "{{count}} Notiz",
     "countNotes_other": "{{count}} Notizen",
     "countShared_one": "{{count}} geteilte",
     "countShared_other": "{{count}} geteilte",
-    "delete": "Löschen …",
-    "deleted": "gelöscht",
-    "goesOn": "endgültig weg am {{day}}",
-    "invite": "Person einladen",
-    "inviteEmailHint": "Freiwillig. Mit Adresse kann nexnotes den Link auch per Mail schicken.",
-    "inviteLink": "Schick diesen Link der Person. Er gilt einmal und wird nur jetzt angezeigt.",
-    "inviteLinkToo": "Den Link kannst du hier auch selbst kopieren. Er gilt einmal und wird nur jetzt angezeigt.",
-    "inviteMake": "Einladung anlegen",
-    "inviteNoAddress": "ohne Adresse",
-    "inviteSend": "Einladung senden",
-    "inviteSent": "Einladung verschickt an {{email}}.",
-    "last": "Zuletzt",
-    "lead_one": "{{count}} Konto. Als Betreiber siehst du Speicher und Nutzung, aber keine Notizen.",
-    "lead_other": "{{count}} Konten. Als Betreiber siehst du Speicher und Nutzung, aber keine Notizen.",
     "limitField": "Grenze in GB",
     "limitRemove": "Grenze entfernen",
     "limitSet": "Setzen",
     "limitText": "Ist sie erreicht, geht Schreiben weiter, neue Anhänge nicht.",
     "limitTitle": "Speichergrenze für {{name}}",
     "limitUsed": "Belegt: {{used}}",
-    "makeMember": "Zum Mitglied machen",
-    "makeOperator": "Zum Betreiber machen",
-    "never": "noch nie",
-    "openInvites": "Offene Einladungen",
-    "password": "Passwort",
-    "passwordTwoFactor": "Passwort + 2FA",
-    "person": "Person",
-    "resetFactor": "Zweiten Faktor zurücksetzen",
-    "resetLink": "Link zum Zurücksetzen …",
-    "resetLinkFor": "Link zum Zurücksetzen für {{name}}",
-    "resetLinkMake": "Link erstellen",
-    "resetLinkShown": "Schick diesen Link an {{name}}. Er gilt einmal und wird nur jetzt angezeigt.",
-    "resetLinkText": "Mit diesem Link setzt {{name}} selbst ein neues Passwort; du erfährst es nie. Bis dahin gilt das alte. Wer den Link benutzt, meldet das Konto überall ab und beendet seine gekoppelten Geräte, und beim nächsten Anmelden erfährt das Konto, dass sein Passwort über deinen Link zurückgesetzt wurde.",
-    "restore": "Zurückholen",
-    "role": "Rolle",
-    "sendMail": "Per Mail schicken",
-    "setLimit": "Speichergrenze …",
-    "signIn": "Anmeldung",
-    "signOut": "Überall abmelden",
     "storage": "Speicher",
-    "title": "Konten",
-    "unblock": "Entsperren",
-    "unlink": "Verknüpfung mit {{name}} lösen",
-    "until": "bis {{day}}",
     "usedNoLimit": "{{used}} · ohne Grenze",
     "usedOf": "{{used}} von {{limit}}",
-    "withdraw": "Zurückziehen",
     "withdrawn": "Einladung zurückgezogen.",
-    "changeUsername": "Benutzername ändern",
-    "changeDisplayName": "Anzeigename ändern"
+    "storageLimit": "Speichergrenze",
+    "removeNumbers": "Es hat {{notes}}, davon {{shared}}. Es ist sofort gesperrt, und was es geteilt hat, verschwindet bei den anderen.",
+    "privacyTitle": "Was du siehst",
+    "privacy": "Als Betreiber siehst du Namen, Anmeldung, Speicher und Nutzung, aber nie den Titel oder ein Wort einer Notiz."
   },
   "app": {
     "home": "Zur Startseite",
@@ -809,8 +720,6 @@
       "paperHint": "Jede Notiz lässt sich danach über ihr Menü umstellen."
     },
     "password": {
-      "change": "Ändern",
-      "changedAt": "zuletzt geändert am {{day}}",
       "current": "Jetziges Passwort",
       "done": "Passwort geändert. Andere Browser und verbundene Geräte müssen sich neu anmelden.",
       "new": "Neues Passwort",

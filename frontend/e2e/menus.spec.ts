@@ -1,27 +1,37 @@
 /**
- * The menu of a row in Settings › Accounts stands over everything: the table's box gets no scroll bar of its own and
- * every entry is on screen, at 1280 and at 390 px.
+ * Settings › Accounts as the shared account module lays it out (konten 0.3.9): one row per account with "Manage", no
+ * table and no menu. "Manage" opens a dialog that stands over everything and has every act on screen in words, at 1280
+ * and at 390 px; on the own account it offers nothing that belongs in the profile (role, block, delete, sign out
+ * everywhere).
  */
 import { expect, test } from '@playwright/test'
 
 for (const width of [1280, 390]) {
-  test(`the account menu is not cut off by the table, at ${width} px`, async ({ page }) => {
+  test(`the dialog "Manage" fits the screen and has no menu, at ${width} px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 })
     await page.goto('/settings/accounts')
-    const button = page.getByTestId('account-menu-button').first()
-    await expect(button).toBeVisible()
-    const table = page.locator('.overflow-x-auto').filter({ has: button })
-    const before = await table.evaluate((element) => ({ scroll: element.scrollHeight, client: element.clientHeight }))
-    await button.scrollIntoViewIfNeeded()
-    await button.click()
-    const menu = page.getByTestId('account-menu')
-    await expect(menu).toBeVisible()
-    const after = await table.evaluate((element) => ({ scroll: element.scrollHeight, client: element.clientHeight }))
-    expect(after.scroll).toBeLessThanOrEqual(after.client)
-    expect(after).toEqual(before)
-    expect(await menu.evaluate((element) => element.parentElement === document.body)).toBe(true)
-    for (const item of await menu.getByRole('menuitem').all()) await expect(item).toBeInViewport({ ratio: 1 })
+    const rows = page.getByTestId('account-rows')
+    await expect(rows).toBeVisible()
+    await expect(page.getByTestId('account-table')).toHaveCount(0)
+    const manage = rows.getByTestId('account-manage').first()
+    await expect(manage).toHaveText('Manage')
+    await manage.click()
+    const dialog = page.getByTestId('manage-dialog')
+    await expect(dialog).toBeVisible()
+    await expect(dialog.getByRole('menu')).toHaveCount(0)
+    // No sideways scrolling: the dialog is as wide as the screen at most.
+    const box = await dialog.boundingBox()
+    expect(box).not.toBeNull()
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width + 1)
+    for (const button of await dialog.getByRole('button').all()) {
+      await button.scrollIntoViewIfNeeded()
+      await expect(button).toBeInViewport({ ratio: 1 })
+    }
+    // The operator's own account (the first row): nothing of the profile's here.
+    for (const word of ['Make member', 'Block', 'Delete account', 'Sign out everywhere']) {
+      await expect(dialog.getByRole('button', { name: word, exact: true })).toHaveCount(0)
+    }
     await page.keyboard.press('Escape')
-    await expect(menu).toBeHidden()
+    await expect(dialog).toBeHidden()
   })
 }

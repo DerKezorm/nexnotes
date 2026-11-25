@@ -67,6 +67,8 @@ class OperatorConfirmIn(BaseModel):
 class LimitIn(BaseModel):
     #: Bytes; None removes the limit.
     limit: int | None = Field(default=None, ge=1, le=LIMIT_MAX)
+    #: The operator's own password (konten 0.3.9: everything that changes an account asks for it).
+    current_password: str = Field(default="", max_length=200)
 
 
 def _row(db: DbSession, account_id: int) -> AccountRow:
@@ -195,7 +197,9 @@ def set_role(
 
 
 @router.put("/{account_id}/storage-limit", summary="Set or remove the storage limit of an account")
-def set_limit(account_id: int, payload: LimitIn, operator: OperatorAccount, db: DbSession) -> dict[str, Any]:
+def set_limit(account_id: int, payload: LimitIn, request: Request, operator: OperatorAccount,
+              db: DbSession) -> dict[str, Any]:
+    confirm_operator(request, db, operator, payload.current_password)
     row = _row(db, account_id)
     row.storage_limit = payload.limit
     db.commit()

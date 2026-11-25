@@ -9,17 +9,35 @@
  * (APP_RENDER) and checks that every field is found by exactly its label and that the profile saves with one button;
  * this needs `@testing-library/dom` among the app's devDependencies and vitest's `environment: 'jsdom'`.
  */
-import { fireEvent, getAllByRole, getByLabelText } from '@testing-library/dom'
+import { fireEvent, getAllByRole, getByLabelText, queryByRole } from '@testing-library/dom'
 import { act, createElement, type ComponentType, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
 import { AccountTab, type AccountPart } from './pages/settings/AccountTab'
+import { APP_CAPS as SHOWN_CAPS, APP_OWN_ACTIONS } from './pages/settings/accountList'
+import { AccountsTab } from './pages/settings/AccountsTab'
 import { APP_PAGES as SHOWN_PAGES } from './pages/settings/accountPages'
 import { AuthProvider } from './state/auth'
-import { BUTTONS, FIELDS, kontenVariables, PAGES, pageOrder, PASSWORD_MIN, SCREENS, screenFields, suggestUsername } from './vendor/nexkonten/konten'
-import type { AccountField } from './vendor/nexkonten/konten'
+import {
+  ACCOUNT_NAMESPACE,
+  accountActions,
+  BUTTONS,
+  FIELDS,
+  kontenVariables,
+  MANAGE_DIALOG,
+  MANAGE_GROUPS,
+  NOT_ON_SELF,
+  PAGES,
+  pageOrder,
+  PASSWORD_MIN,
+  passwordChanged,
+  SCREENS,
+  screenFields,
+  suggestUsername,
+} from './vendor/nexkonten/konten'
+import type { AccountCaps, AccountField, ListedAccount, OwnAction } from './vendor/nexkonten/konten'
 import de from './vendor/nexkonten/konten.de.json'
 import en from './vendor/nexkonten/konten.en.json'
 // APP: the app's i18n instance after its set-up (with the module's files merged into the resources and
@@ -83,7 +101,7 @@ const ME = {
 }
 
 /** The server's answers to the pages above; reading only, anything else an empty list. */
-type Answers = { setup?: object; me?: object; invite?: object; reset?: object }
+type Answers = { setup?: object; me?: object; invite?: object; reset?: object; accounts?: object[] }
 
 /** Shows a page (one of AuthPages by name, or an element) at an address, with the server answered by a stubbed fetch,
  * and waits until it has loaded. */
@@ -100,6 +118,7 @@ async function show(path: string, at: string, page: string | ReactNode, answers:
         : asked === '/api/auth/methods' ? { password: true, providers: [], forgot_mail: true }
         : asked.startsWith('/api/invite/') ? answers.invite
         : asked.startsWith('/api/reset/') ? answers.reset
+        : asked === '/api/accounts' ? answers.accounts
         : undefined
       const status = body === undefined && asked === '/api/auth/me' ? 401 : 200
       return new Response(JSON.stringify(body ?? []), { status, headers: { 'Content-Type': 'application/json' } })
@@ -125,6 +144,31 @@ async function show(path: string, at: string, page: string | ReactNode, answers:
   }
 }
 
+// nexnotes (since 0.3.9): what its server can do for the operator in the account list, and its own button in the
+// dialog "Manage" at its place (the storage limit), exactly as the page passes them to accountActions.
+const APP_CAPS: AccountCaps = SHOWN_CAPS
+const APP_OWN: readonly OwnAction[] = APP_OWN_ACTIONS
+
+// nexnotes (since 0.3.9): the operator's account list, signed in as the operator, the own account first and Kim with an
+// address, an authenticator and a provider labelled 'Pocket ID' last.
+const APP_ACCOUNTS_RENDER: { list?: () => Promise<Shown> } = {
+  list: () => show('/settings/accounts', '/settings/accounts', createElement(AccountsTab), { me: operatorMe(), accounts: ACCOUNTS }),
+}
+
+/** The operator signed in, and the list the server gives: the operator first, Kim with everything last. */
+function operatorMe() {
+  return { ...ME, id: 1, name: 'robin', display_name: 'Robin', role: 'operator', mail: false }
+}
+const ACCOUNTS = [
+  { id: 1, name: 'robin', display_name: 'Robin', email: 'robin@example.com', role: 'operator', sign_in: 'password', language: '', two_factor: false,
+    created_at: '2026-11-01T10:00:00Z', last_seen_at: '2026-11-25T10:00:00Z', locked: false, blocked: false, blocked_at: null, deleted_at: null,
+    purge_at: null, has_password: true, providers: [], storage_used: 1024, storage_limit: null },
+  { id: 2, name: 'kim', display_name: 'Kim', email: 'kim@example.com', email_confirmed: true, role: 'member', sign_in: 'password', language: '',
+    two_factor: true, passkeys: 1, created_at: '2026-11-02T10:00:00Z', last_seen_at: null, locked: false, blocked: false, blocked_at: null,
+    deleted_at: null, purge_at: null, has_password: true, providers: [{ id: 7, slug: 'pocket', label: 'Pocket ID', managed: '' }],
+    storage_used: 2048, storage_limit: null },
+]
+
 type Tree = { [key: string]: string | Tree }
 
 function leaves(tree: Tree, prefix = ''): [string, string][] {
@@ -134,7 +178,8 @@ function leaves(tree: Tree, prefix = ''): [string, string][] {
   })
 }
 
-const values = { username: 'kim', email: 'kim@example.com', provider: 'Pocket ID' }
+// Every value a text of the module asks for (since 0.3.10 also name, day and providers, the words of 0.3.9).
+const values = { username: 'kim', email: 'kim@example.com', provider: 'Pocket ID', name: 'Kim', day: '25.11.2026', providers: 'Pocket ID, Entra' }
 const fill: Record<string, string | number> = { ...kontenVariables(APP_NAME), ...values }
 /** Plural keys (``days_one``, ``recoveryLeft_other``) are asked by their base with a count that picks them. */
 const PLURAL = /_(one|other)$/
@@ -151,6 +196,17 @@ describe('the konten texts', () => {
         const expected = text.replace(/\{\{(\w+)\}\}/g, (_, name: string) => String(given[name] ?? ''))
         const asked = plural ? key.replace(PLURAL, '') : key
         expect(i18n.t(asked, count === undefined ? values : { ...values, count }), key).toBe(expected)
+      }
+    })
+
+    it(`keep the namespace account to the module in ${language}, no text of the app's own there (since 0.3.10)`, () => {
+      const module = new Set(leaves(tree as Tree).map(([key]) => key))
+      const data = (i18n.getDataByLanguage(language) ?? {}) as Record<string, Tree>
+      for (const [namespace, resources] of Object.entries(data)) {
+        const own = namespace === ACCOUNT_NAMESPACE ? resources : resources[ACCOUNT_NAMESPACE]
+        if (own === undefined || typeof own === 'string') continue
+        const extra = leaves(own, ACCOUNT_NAMESPACE).map(([key]) => key).filter((key) => !module.has(key))
+        expect(extra, `${namespace}: the app's own keys under ${ACCOUNT_NAMESPACE}`).toEqual([])
       }
     })
   }
@@ -289,7 +345,7 @@ describe('every button of the account pages has its kind and symbol (since 0.3.8
         const words = new Map<string, keyof typeof BUTTONS>()
         for (const name of Object.keys(BUTTONS) as (keyof typeof BUTTONS)[]) {
           const own = APP_BUTTON_WORDS[name]
-          const text = name.includes('.') ? i18n.t(name, { name: 'Pocket ID' }) : own && i18n.t(own)
+          const text = name.includes('.') ? i18n.t(name, { name: 'Pocket ID', provider: 'Pocket ID' }) : own && i18n.t(own)
           if (text && !words.has(text)) words.set(text, name)
         }
         let found = 0
@@ -307,4 +363,117 @@ describe('every button of the account pages has its kind and symbol (since 0.3.8
       }
     })
   }
+})
+
+/** Every account the tests ask accountActions about: the operator's own, another with everything, blocked, deleted. */
+function sample(change: Partial<ListedAccount> = {}): ListedAccount {
+  return {
+    id: 2,
+    username: 'kim',
+    displayName: 'Kim',
+    email: 'kim@example.com',
+    emailConfirmed: true,
+    operator: false,
+    self: false,
+    hasPassword: true,
+    authenticator: true,
+    passkeys: 1,
+    providers: [{ id: 7, label: 'Pocket ID' }],
+    blocked: false,
+    lastSeenAt: null,
+    ...change,
+  }
+}
+
+/** The words of every button of BUTTONS as the app says them (the provider named 'Pocket ID'), the app's own too. */
+function buttonWords(): Map<string, keyof typeof BUTTONS> {
+  const words = new Map<string, keyof typeof BUTTONS>()
+  for (const name of Object.keys(BUTTONS) as (keyof typeof BUTTONS)[]) {
+    const own = APP_BUTTON_WORDS[name]
+    const text = name.includes('.') ? i18n.t(name, { name: 'Pocket ID', provider: 'Pocket ID' }) : own && i18n.t(own)
+    if (text && !words.has(text)) words.set(text, name)
+  }
+  for (const entry of APP_OWN) {
+    if (entry.group !== 'rights' && !words.has(i18n.t(entry.label))) words.set(i18n.t(entry.label), entry.button)
+  }
+  return words
+}
+
+/** Checks kind and symbol of every button in an element whose words are a button of BUTTONS; gives how many. */
+function checkButtons(root: HTMLElement, where: string): number {
+  const words = buttonWords()
+  let found = 0
+  for (const element of Array.from(root.querySelectorAll<HTMLElement>('button, [role="button"], [data-kind]'))) {
+    const name = words.get(said(element))
+    if (!name) continue
+    found += 1
+    expect(element.getAttribute('data-kind'), `${where}: ${said(element)}`).toBe(BUTTONS[name].kind)
+    expect(element.getAttribute('data-icon'), `${where}: ${said(element)}`).toBe(BUTTONS[name].icon)
+  }
+  return found
+}
+
+describe('the box Password says when it was changed last (since 0.3.10)', () => {
+  it('shows "Last changed on …" or that it is not known, on the page "Security"', async () => {
+    const render = APP_PAGE_RENDER.security
+    if (!render) throw new Error('APP_PAGE_RENDER.security is missing')
+    await i18n.changeLanguage('de')
+    const { root, unmount } = await render()
+    try {
+      const text = (root.textContent ?? '').replace(/\s+/g, ' ')
+      const known = i18n.t(passwordChanged('x').text, { day: '' }).trim()
+      const unknown = i18n.t(passwordChanged(null).text)
+      expect(text.includes(known) || text.includes(unknown), `"${known}" or "${unknown}"`).toBe(true)
+    } finally {
+      unmount()
+    }
+  })
+})
+
+describe('the account list and its dialog "Manage" (since 0.3.9)', () => {
+  it('never offers on the own account what belongs in the profile', () => {
+    for (const row of [sample({ self: true, operator: true }), sample({ self: true, operator: true, blocked: true })]) {
+      const names = accountActions(row, APP_CAPS, APP_OWN).map((action) => action.name.split(':')[0])
+      for (const forbidden of NOT_ON_SELF) expect(names, forbidden).not.toContain(forbidden)
+      for (const entry of APP_OWN) if (entry.notSelf) expect(names, entry.name).not.toContain(entry.name)
+    }
+  })
+
+  it("takes every button of the dialog, the app's own too, with its kind and symbol from BUTTONS", () => {
+    const rows = [sample(), sample({ blocked: true, operator: true }), sample({ deletedAt: '2026-11-25T10:00:00Z', purgeAt: '2026-12-25T10:00:00Z' })]
+    for (const row of rows) {
+      for (const action of accountActions(row, APP_CAPS, APP_OWN)) {
+        if (action.type !== 'button') continue
+        expect(action.button in BUTTONS, action.name).toBe(true)
+        expect([action.kind, action.icon], action.name).toEqual([BUTTONS[action.button].kind, BUTTONS[action.button].icon])
+      }
+    }
+  })
+
+  it('shows one row per account with "Manage", and the dialog with its groups in order, every button as BUTTONS says', async () => {
+    const render = APP_ACCOUNTS_RENDER.list
+    if (!render) throw new Error('APP_ACCOUNTS_RENDER.list is missing')
+    await i18n.changeLanguage('de')
+    const { root, unmount } = await render()
+    try {
+      expect(checkButtons(root, 'list'), 'list: no button of BUTTONS found').toBeGreaterThan(0)
+      const manage = Array.from(root.querySelectorAll<HTMLElement>('button')).filter((button) => said(button) === i18n.t('account.manage'))
+      expect(manage.length, 'one "Verwalten" per account').toBeGreaterThan(1)
+      fireEvent.click(manage[manage.length - 1] as HTMLElement)
+      await new Promise((done) => setTimeout(done, 50))
+      const title = i18n.t('account.manageTitle', { name: '' }).trim()
+      const dialog = getAllByRole(document.body, 'dialog').find((element) => (element.textContent ?? '').includes(title))
+      if (!dialog) throw new Error('the dialog "Manage" did not open')
+      expect(checkButtons(dialog, 'manage'), 'manage: no button of BUTTONS found').toBeGreaterThan(0)
+      const titles = MANAGE_GROUPS.map((group) => i18n.t(MANAGE_DIALOG.groups[group].title))
+      const shown = Array.from(dialog.querySelectorAll('h3'))
+        .map((heading) => heading.textContent ?? '')
+        .filter((text) => titles.includes(text))
+      expect(shown.length, 'the dialog shows its groups').toBeGreaterThan(0)
+      expect(shown, 'groups in their order').toEqual(titles.filter((text) => shown.includes(text)))
+      expect(queryByRole(dialog, 'menu'), 'no menu in the dialog').toBeNull()
+    } finally {
+      unmount()
+    }
+  })
 })
