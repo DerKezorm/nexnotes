@@ -189,3 +189,16 @@ export function RemainingAccess({ onDone }: { onDone: () => void }) {
     </div>
   )
 }
+
+/** The emergency hammer is down (``NEXNOTES_SECOND_FACTOR_OFF``, the shared module's ``NOTICES``): said plainly at the
+ * top of the own account and of the operator's sign-in settings, as long as the server says so. */
+export function SecondFactorOffNotice({ on }: { on?: boolean }) {
+  const { t } = useTranslation()
+  if (!on) return null
+  return (
+    <div role="note" className="rounded-[12px] border border-warn-500/40 bg-warn-500/10 px-4 py-3 text-sm" data-testid="second-factor-off">
+      <p className="font-medium text-warn-500">{t('account.secondFactorOff')}</p>
+      <p className="mt-1 text-mist-300">{t('account.secondFactorOffHint')}</p>
+    </div>
+  )
+}

@@ -12,12 +12,12 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 
-import { accountsApi, invitesApi, oidcAdminApi, type AccountRow, type Invite, type LinkedProvider } from '../../api/client'
+import { accountsApi, invitesApi, oidcAdminApi, type AccountRow, type FactorResetOverview, type Invite, type LinkedProvider } from '../../api/client'
 import { Dialog } from '../../components/Dialog'
 import { bytes, day, dayTime } from '../../lib/format'
 import { ago } from '../../lib/time'
 import { useAuth } from '../../state/auth'
-import { DISPLAY_NAME_MAX, INVITE_DAYS, RESET_DAYS, RESET_DAYS_DEFAULT, USERNAME_MAX } from '../../vendor/nexkonten/konten'
+import { DISPLAY_NAME_MAX, FACTOR_RESET_DEFAULTS, INVITE_DAYS, RESET_DAYS, RESET_DAYS_DEFAULT, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { Button, Card, Confirm, CopyLink, Feedback, Input, Select, Toggle, useAction } from './ui'
 
 const GB = 1024 ** 3
@@ -45,7 +45,10 @@ export function AccountsTab() {
   const [limitFor, setLimitFor] = useState<AccountRow | null>(null)
   const [resetFor, setResetFor] = useState<AccountRow | null>(null)
   const [renaming, setRenaming] = useState<{ row: AccountRow; field: 'name' | 'display_name' } | null>(null)
-  const [disconnect, setDisconnect] = useState(true)
+  const [disconnect, setDisconnect] = useState<boolean>(FACTOR_RESET_DEFAULTS.factorResetDevices)
+  const [removePasskeys, setRemovePasskeys] = useState<boolean>(FACTOR_RESET_DEFAULTS.factorResetPasskeys)
+  /** What the reset takes away, loaded when the dialog opens (``factor.reset_overview``). */
+  const [overview, setOverview] = useState<FactorResetOverview | null>(null)
   const action = useAction()
   const lang = i18n.language
 
@@ -149,7 +152,19 @@ export function AccountsTab() {
                               <MenuItem onClick={() => setRenaming({ row, field: 'name' })}>{t('accounts.changeUsername')}</MenuItem>
                               {row.email && <MenuItem onClick={() => setAsking({ kind: 'removeEmail', row })}>{t('account.emailRemove')}</MenuItem>}
                               <MenuItem onClick={() => setResetFor(row)}>{t('accounts.resetLink')}</MenuItem>
-                              {row.two_factor && <MenuItem onClick={() => setAsking({ kind: 'resetFactor', row })}>{t('accounts.resetFactor')}</MenuItem>}
+                              {(row.two_factor || !!row.passkeys) && (
+                                <MenuItem
+                                  onClick={() => {
+                                    setOverview(null)
+                                    setDisconnect(FACTOR_RESET_DEFAULTS.factorResetDevices)
+                                    setRemovePasskeys(FACTOR_RESET_DEFAULTS.factorResetPasskeys)
+                                    void accountsApi.resetOverview(row.id).then(setOverview, () => setOverview(null))
+                                    setAsking({ kind: 'resetFactor', row })
+                                  }}
+                                >
+                                  {t('accounts.resetFactor')}
+                                </MenuItem>
+                              )}
                               <MenuItem onClick={() => setAsking({ kind: 'signOut', row })}>{t('accounts.signOut')}</MenuItem>
                               {row.providers.map((provider) => (
                                 <MenuItem key={provider.id} onClick={() => setAsking({ kind: 'unlink', row, provider })}>
@@ -239,7 +254,18 @@ export function AccountsTab() {
           onCancel={() => setAsking(null)}
           details={
             asking.kind === 'resetFactor' ? (
-              <Toggle label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />
+              <div className="space-y-2">
+                <p className="text-sm text-mist-300">{t('account.factorResetHint')}</p>
+                {!!overview?.passkeys.length && (
+                  <>
+                    <p className="text-sm text-mist-300">
+                      {t('account.passkeys')}: {overview.passkeys.map((key) => key.name).join(', ')}
+                    </p>
+                    <Toggle label={t('account.factorResetPasskeys')} checked={removePasskeys} onChange={setRemovePasskeys} />
+                  </>
+                )}
+                <Toggle label={t('account.factorResetDevices')} checked={disconnect} onChange={setDisconnect} />
+              </div>
             ) : undefined
           }
           onConfirm={async (password) => {
@@ -249,7 +275,7 @@ export function AccountsTab() {
             if (asking.kind === 'block') await accountsApi.block(row.id, password)
             if (asking.kind === 'unblock') await accountsApi.unblock(row.id, password)
             if (asking.kind === 'signOut') await accountsApi.signOut(row.id)
-            if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password, disconnect)
+            if (asking.kind === 'resetFactor') await accountsApi.resetSecondFactor(row.id, password, disconnect, removePasskeys)
             if (asking.kind === 'removeEmail') await accountsApi.removeEmail(row.id, password)
             if (asking.kind === 'role') await accountsApi.role(row.id, row.role === 'operator' ? 'member' : 'operator', password)
             if (asking.kind === 'unlink') await oidcAdminApi.unlinkAccount(row.id, asking.provider.id, password)

@@ -12,7 +12,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api, authApi, type Me, type MyProvider } from '../../api/client'
 import { Dialog } from '../../components/Dialog'
 import { DISPLAY_NAME_MAX, EMAIL_MAX, USERNAME_MAX } from '../../vendor/nexkonten/konten'
-import { Notice, PasskeysBox, RemainingAccess, SessionsBox } from './SecurityBoxes'
+import { Notice, PasskeysBox, RemainingAccess, SecondFactorOffNotice, SessionsBox } from './SecurityBoxes'
 import { ACCOUNT_SECTIONS } from '../../extensions'
 import { Avatar } from '../../components/Avatar'
 import { Done, Field, Problem } from '../../components/Field'
@@ -50,6 +50,8 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
   /** A new username or address asks for the own password first (the shared account module). */
   const [confirming, setConfirming] = useState(false)
   const [own, setOwn] = useState('')
+  /** Taking the offered address of a provider asks for the own password first. */
+  const [taking, setTaking] = useState(false)
   const [providers, setProviders] = useState<MyProvider[] | null>(null)
   const loadProviders = () => authApi.myProviders().then(setProviders, () => setProviders([]))
   useEffect(() => {
@@ -92,6 +94,16 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
     }
   }
 
+  /** The provider whose address is offered: the account's linked one (nexnotes keeps the address, not its source). */
+  const offerFrom = providers?.find((entry) => entry.linked)?.label ?? t('oidc.authentik.step.provider')
+  const takeOffer = (password: string) =>
+    run(async () => {
+      const saved = await authApi.takeProviderEmail(password)
+      setEmail(saved.email)
+      setMe(saved)
+      if (saved.pending_email) throw new Notice(t('account.emailConfirmSent', { email: saved.pending_email }))
+    }, t('me.emailTaken'))
+
   const saveProfile = (password: string) =>
     run(async () => {
       const before = me.pending_email ?? ''
@@ -113,6 +125,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
 
   return (
     <div className="space-y-5">
+      <SecondFactorOffNotice on={me.second_factor_off} />
       {me.new_password_origin && <RemainingAccess onDone={() => void refresh()} />}
       <div aria-live="polite">
         <Problem text={problem} />
@@ -158,7 +171,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
           >
             <Field label={t('account.displayName')} value={name} onChange={setName} autoComplete="name" maxLength={DISPLAY_NAME_MAX} hint={t('account.displayNameHint')} />
             <div>
-              <Field label={t('account.username')} value={username} onChange={setUsername} autoComplete="username" maxLength={USERNAME_MAX} hint={t('account.usernameRules')} />
+              <Field label={t('account.username')} value={username} onChange={setUsername} autoComplete="username" maxLength={USERNAME_MAX} hint={`${t('account.usernameHintProfile')} ${t('account.usernameRules')}`} />
               {me.former_name && <p className="mt-1 text-xs text-mist-500">{t('account.formerUsername')}</p>}
             </div>
             <div className="sm:col-span-2">
@@ -211,16 +224,47 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
           <p className="text-xs text-mist-500">{t('me.profile.role', { role: t(`roles.${me.role}`) })}</p>
           {me.provider_email && (
             <div data-testid="mail-offer" className="rounded-[12px] border border-accent-700/40 bg-[var(--color-accent-wash)] px-3.5 py-3 text-sm">
-              <p className="text-mist-200">{t('me.emailOffer', { address: me.provider_email })}</p>
+              {/* The shared account module (0.3.3): an account with a password is only offered the address, and takes
+                  it like a change of address, with its password. */}
+              <p className="font-medium text-mist-100">{t('account.providerEmailOffer', { provider: offerFrom })}</p>
+              <p className="text-mist-300">{me.provider_email}</p>
               <div className="mt-2 flex flex-wrap gap-2">
-                <button type="button" disabled={busy} className={LOUD} onClick={() => void run(() => authApi.takeProviderEmail(), t('me.emailTaken'))}>
-                  {t('me.emailTake')}
+                <button
+                  type="button"
+                  disabled={busy}
+                  className={LOUD}
+                  onClick={() => (me.sign_in === 'password' ? setTaking(true) : void takeOffer(''))}
+                >
+                  {t('account.providerEmailTake')}
                 </button>
                 <button type="button" disabled={busy} className={PLAIN} onClick={() => void run(() => authApi.declineProviderEmail(), t('me.emailDeclined'))}>
-                  {t('me.emailDecline')}
+                  {t('account.providerEmailDismiss')}
                 </button>
               </div>
             </div>
+          )}
+          {taking && (
+            <Dialog title={t('account.confirmWithPassword')} onClose={() => setTaking(false)}>
+              <form
+                className="space-y-3"
+                onSubmit={(event) => {
+                  event.preventDefault()
+                  setTaking(false)
+                  void takeOffer(own)
+                  setOwn('')
+                }}
+              >
+                <Field label={t('account.currentPassword')} value={own} onChange={setOwn} type="password" autoComplete="current-password" autoFocus />
+                <div className="flex justify-end gap-2">
+                  <button type="button" className={PLAIN} onClick={() => setTaking(false)}>
+                    {t('common.cancel')}
+                  </button>
+                  <button type="submit" disabled={!own} className={LOUD}>
+                    {t('account.providerEmailTake')}
+                  </button>
+                </div>
+              </form>
+            </Dialog>
           )}
           <label className="block text-sm">
             <span className="font-medium">{t('me.looks.language')}</span> <span className="text-xs text-mist-500">{t('me.looks.languageHint')}</span>

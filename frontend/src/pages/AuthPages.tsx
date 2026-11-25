@@ -239,6 +239,8 @@ export function LoginPage() {
   // After a provider that is not trusted with the second factor the server parked the sign-in: the code step.
   const [step, setStep] = useState<'password' | 'code'>(params.get('step') === 'code' ? 'code' : 'password')
   const [passkeyStep, setPasskeyStep] = useState(false)
+  /** False when a passkey is the only second step (no authenticator: there is no code to ask). */
+  const [codeAsked, setCodeAsked] = useState(true)
   const [code, setCode] = useState('')
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<Trouble>(params.get('error') ? { code: params.get('error')! } : null)
@@ -269,12 +271,13 @@ export function LoginPage() {
     setProblem(null)
     setFromAddress(false)
     try {
-      let answer: Me | { second_factor: true; passkey?: boolean }
+      let answer: Me | { second_factor: true; passkey?: boolean; code?: boolean }
       if (step === 'code') answer = await authApi.code(code.trim())
       else answer = await authApi.login(name.trim(), password, remember)
       if ('second_factor' in answer) {
         setPassword('')
         setPasskeyStep(Boolean(answer.passkey) && passkeysSupported())
+        setCodeAsked(answer.code !== false)
         setStep('code')
         return
       }
@@ -306,7 +309,7 @@ export function LoginPage() {
 
   if (step === 'code') {
     return (
-      <AuthFrame title={t('auth.code.title')} text={t('auth.code.text')}>
+      <AuthFrame title={t('auth.code.title')} text={codeAsked ? t('auth.code.text') : t('account.passkeysHint')}>
         <form
           className="space-y-4"
           onSubmit={(event) => {
@@ -315,10 +318,14 @@ export function LoginPage() {
           }}
         >
           <Problem problem={problem} fromAddress={fromAddress} />
-          <AuthField label={t('account.code')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus hint={t('account.codeHint')} />
-          <Primary busy={busy}>{t('auth.login.submit')}</Primary>
-          {passkeyStep && (
-            <button type="button" disabled={busy} className="nn-btn nn-btn-ghost w-full" onClick={() => void withPasskey()}>
+          {codeAsked && (
+            <>
+              <AuthField label={t('account.code')} value={code} onChange={setCode} autoComplete="one-time-code" autoFocus hint={t('account.codeHint')} />
+              <Primary busy={busy}>{t('auth.login.submit')}</Primary>
+            </>
+          )}
+          {(passkeyStep || !codeAsked) && (
+            <button type="button" disabled={busy} className={codeAsked ? 'nn-btn nn-btn-ghost w-full' : 'nn-btn nn-btn-accent w-full'} onClick={() => void withPasskey()}>
               {t('account.passkeySignIn')}
             </button>
           )}

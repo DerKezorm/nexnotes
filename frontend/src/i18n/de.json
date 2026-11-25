@@ -795,10 +795,7 @@
     "title": "Notizen"
   },
   "me": {
-    "emailDecline": "Nicht mehr fragen",
     "emailDeclined": "nexnotes fragt nicht mehr nach dieser Adresse.",
-    "emailOffer": "Ein Anmeldeanbieter kennt dich als {{address}}. Soll nexnotes diese Adresse nehmen?",
-    "emailTake": "Übernehmen",
     "emailTaken": "Adresse übernommen.",
     "linked": "Dein Konto ist mit {{name}} verknüpft.",
     "looks": {
@@ -1145,7 +1142,7 @@
     "texts_other": "{{count}} Texte",
     "trash": "Papierkorb leeren nach",
     "twoFactorRequired": "Zweiten Faktor verlangen",
-    "twoFactorRequiredHint": "Jedes Konto, das sich mit Passwort anmeldet, muss ihn einrichten, bevor es weiterkommt. Konten von einem Anmeldeanbieter bringen dessen eigenen mit. Ein Konto mit Passwort ist ebenfalls nicht betroffen, wenn es über einen Anbieter kommt, bei dem „{{trusts}}“ an ist.",
+    "twoFactorRequiredHint": "Konten von einem Anmeldeanbieter bringen dessen eigenen mit. Ein Konto mit Passwort ist ebenfalls nicht betroffen, wenn es über einen Anbieter kommt, bei dem „{{trusts}}“ an ist.",
     "untitled": "Ohne Titel",
     "upload": "Sprache hochladen",
     "uploadBackup": "Sicherung hochladen",

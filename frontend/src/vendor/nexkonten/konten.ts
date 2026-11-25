@@ -55,6 +55,7 @@ export const ACCOUNT_ERROR_CODES = [
   'avatar_too_large',
   'avatar_not_a_picture',
   'avatars_busy',
+  'public_url_needed',
 ] as const
 
 export type AccountErrorCode = (typeof ACCOUNT_ERROR_CODES)[number]
@@ -131,6 +132,28 @@ export const SCREENS = {
 
 export type AccountScreen = keyof typeof SCREENS
 
+/** The parts of the account pages, top to bottom, each titled with ``account.<part>``. ``providerEmailOffer``
+ * (since 0.3.3) shows only while the account has ``offered_email``: "Use the address from <provider>?" with
+ * ``account.providerEmailTake`` and ``account.providerEmailDismiss`` (``{{provider}}`` the provider's label). "Mail me about a new sign-in"
+ * sits under security next to the signed-in devices, not in the profile. ``operatorSignIn``: the operator's switches,
+ * each with its hint (``account.factorRequiredSwitchHint``). */
+export const SECTIONS = {
+  profile: ['picture', 'displayName', 'username', 'email', 'providerEmailOffer', 'language'],
+  security: ['secondFactor', 'recoveryCodes', 'passkeys', 'sessions', 'newSignInMail', 'signOutEverywhere'],
+  operatorSignIn: ['factorRequiredSwitch', 'passkeysAllowed'],
+  /** Since 0.3.3: the operator's dialog "Reset the second factor" (``factor.reset_overview``): the account's
+   * passkeys by name, then the two boxes, both ticked by default. */
+  operatorFactorReset: ['factorResetHint', 'passkeys', 'factorResetPasskeys', 'factorResetDevices'],
+} as const satisfies Record<string, readonly string[]>
+
+/** The boxes of the operator's dialog "Reset the second factor" and how they start. */
+export const FACTOR_RESET_DEFAULTS = { factorResetPasskeys: true, factorResetDevices: true } as const
+
+/** Since 0.3.3: notices shown plainly at the top of every account page and of the operator's settings while the
+ * server says so. ``secondFactorOff``: the emergency hammer is down (``factor.switched_off()``), with its hint
+ * ``account.secondFactorOffHint``. */
+export const NOTICES = ['secondFactorOff'] as const
+
 export interface ScreenOptions {
   /** The app's own autocomplete of a field, e.g. { login: 'username webauthn' } where passkeys sign in too. */
   autoComplete?: Partial<Record<AccountField, string>>
@@ -142,7 +165,9 @@ export function screenFields(screen: AccountScreen, options: ScreenOptions = {})
     const spec = FIELDS[field]
     const optional = (screen === 'profile' || screen === 'operatorInvite') && field === 'displayName'
     const autoComplete = options.autoComplete?.[field] ?? spec.autoComplete
-    return { ...spec, field, autoComplete, required: optional ? false : spec.required }
+    // In the profile the username is changed right there: its hint says only what it is for.
+    const hint = screen === 'profile' && field === 'username' ? 'account.usernameHintProfile' : spec.hint
+    return { ...spec, field, autoComplete, hint, required: optional ? false : spec.required }
   })
 }
 
@@ -154,7 +179,7 @@ export const RESET_DAYS = [1, 7, 30] as const
 export const RESET_DAYS_DEFAULT = 1
 
 /** What the app starts after setup, an invitation or a new password (the server's next). */
-export const NEXT_STEPS = ['session', 'second_factor', 'second_factor_setup', 'sign_in'] as const
+export const NEXT_STEPS = ['session', 'second_factor', 'second_factor_setup', 'sign_in', 'passkey', 'show_codes'] as const
 
 export function normalizeUsername(raw: string): string {
   return raw.trim().toLowerCase()
@@ -205,11 +230,22 @@ export function usernameProblem(raw: string): string {
   return usernameValid(normalizeUsername(raw)) ? '' : 'account.usernameRules'
 }
 
-/** The default variables of i18next for the texts of this module: the app's name as its container is called and
- * the environment variable of the setup code. */
-export function kontenVariables(app: string): { app: string; setupTokenEnv: string; minimum: number } {
+/** The default variables of i18next for the texts of this module: the app's name as its container is called, the
+ * environment variables of the setup code and of the emergency hammer (since 0.3.3). */
+export function kontenVariables(app: string): {
+  app: string
+  setupTokenEnv: string
+  secondFactorOffEnv: string
+  minimum: number
+} {
   const name = app.trim().toLowerCase()
-  return { app: name, setupTokenEnv: `${name.toUpperCase().replace(/-/g, '_')}_SETUP_TOKEN`, minimum: PASSWORD_MIN }
+  const env = name.toUpperCase().replace(/-/g, '_')
+  return {
+    app: name,
+    setupTokenEnv: `${env}_SETUP_TOKEN`,
+    secondFactorOffEnv: `${env}_SECOND_FACTOR_OFF`,
+    minimum: PASSWORD_MIN,
+  }
 }
 
 // --- Since 0.3.0: second factor, sessions, passkeys, pictures ------------------------------------------------------

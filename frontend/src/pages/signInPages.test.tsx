@@ -167,7 +167,7 @@ describe('the account page', () => {
       if (path === '/api/oidc/me') return { status: 200, body: mine }
       if (path === '/api/locales') return { status: 200, body: [] }
       if (path === '/api/oidc/entra/link' && method === 'POST') return { status: 200, body: { url: 'https://login.example.com/authorize' } }
-      if (path === '/api/oidc/me/address') return { status: 200, body: { email: 'alex@example.com' } }
+      if (path === '/api/oidc/me/address') return { status: 200, body: { ...me, ...change, email: 'alex@example.com', provider_email: '' } }
       if (path === '/api/auth/me') return { status: 200, body: { ...me, ...change } }
       return undefined
     }
@@ -227,10 +227,19 @@ describe('the account page', () => {
     expect(box.textContent).toContain(i18n.t('oidc.account.only', { name: 'Microsoft' }))
   })
 
-  it('offers the address a provider knows; taking it asks the server', async () => {
-    await account('/account', [], { provider_email: 'alex@example.com' })
-    expect(box.querySelector('[data-testid="mail-offer"]')?.textContent).toContain('alex@example.com')
-    await click(i18n.t('me.emailTake'))
-    expect(calls.some((call) => call.method === 'POST' && call.path === '/api/oidc/me/address')).toBe(true)
+  it('offers the address a provider knows; taking it asks the own password, then the server', async () => {
+    await account('/account', [{ slug: 'entra', label: 'Microsoft', linked: true, managed: '' }], { provider_email: 'alex@example.com' })
+    const offer = box.querySelector('[data-testid="mail-offer"]')?.textContent ?? ''
+    expect(offer).toContain(i18n.t('account.providerEmailOffer', { provider: 'Microsoft' }))
+    expect(offer).toContain('alex@example.com')
+    await click(i18n.t('account.providerEmailTake'))
+    expect(calls.some((call) => call.path === '/api/oidc/me/address')).toBe(false)
+    const field = document.querySelector<HTMLInputElement>('input[autocomplete="current-password"]')!
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, 'secret words')
+    act(() => void field.dispatchEvent(new Event('input', { bubbles: true })))
+    await act(async () => field.form!.requestSubmit())
+    await settle()
+    const taken = calls.find((call) => call.method === 'POST' && call.path === '/api/oidc/me/address')
+    expect(taken?.body).toEqual({ password: 'secret words' })
   })
 })

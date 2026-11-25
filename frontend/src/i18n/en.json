@@ -795,10 +795,7 @@
     "title": "Notes"
   },
   "me": {
-    "emailDecline": "Don't ask again",
     "emailDeclined": "nexnotes no longer asks about this address.",
-    "emailOffer": "A sign-in provider knows you as {{address}}. Should nexnotes take this address?",
-    "emailTake": "Take it",
     "emailTaken": "Address taken.",
     "linked": "Your account is linked to {{name}}.",
     "looks": {
@@ -1145,7 +1142,7 @@
     "texts_other": "{{count}} texts",
     "trash": "Empty the trash after",
     "twoFactorRequired": "Require a second factor",
-    "twoFactorRequiredHint": "Every account that signs in with a password must set one up before it gets further. Accounts from a sign-in provider bring the provider's. An account with a password is not affected either when it comes in through a provider for which “{{trusts}}” is on.",
+    "twoFactorRequiredHint": "Accounts from a sign-in provider bring the provider's. An account with a password is not affected either when it comes in through a provider for which “{{trusts}}” is on.",
     "untitled": "Untitled",
     "upload": "Upload language",
     "uploadBackup": "Upload a backup",

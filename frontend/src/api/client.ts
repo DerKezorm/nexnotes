@@ -154,6 +154,8 @@ export type Me = {
   avatar?: string | null
   two_factor: boolean
   two_factor_recovery_left: number
+  /** NEXNOTES_SECOND_FACTOR_OFF holds: no second factor is asked of anybody. */
+  second_factor_off?: boolean
   password_changed_at?: string | null
   created_at?: string
   last_seen_at?: string | null
@@ -203,6 +205,13 @@ export type Methods = {
   forgot_mail?: boolean
 }
 /** An active provider and whether the own account is linked to it. */
+/** The operator's dialog "Reset the second factor": what the account has. */
+export type FactorResetOverview = {
+  authenticator: boolean
+  recovery_codes: number
+  passkeys: { uid: string; name: string }[]
+  devices: { uid: string; label: string }[]
+}
 export type MyProvider = ProviderButton & { linked: boolean; managed: string }
 /** A provider an account is linked to, as a mark in the operator's account list. */
 export type LinkedProvider = { id: number; slug: string; label: string; managed: string }
@@ -219,6 +228,8 @@ export type AccountRow = {
   sign_in: 'password' | 'oidc'
   language: string
   two_factor: boolean
+  /** Passkeys of the account (a second factor too, since konten 0.3.2). */
+  passkeys?: number
   created_at: string
   last_seen_at: string | null
   locked: boolean
@@ -431,7 +442,7 @@ export const authApi = {
     api<{ url: string }>(`/api/oidc/${encodeURIComponent(slug)}/link`, { method: 'POST', body: { password } }),
   unlink: (slug: string) => api<void>(`/api/oidc/${encodeURIComponent(slug)}/link`, { method: 'DELETE' }),
   /** Takes the address a provider knows the account by, or stops the page from offering it. */
-  takeProviderEmail: () => api<{ email: string }>('/api/oidc/me/address', { method: 'POST' }),
+  takeProviderEmail: (password = '') => api<Me>('/api/oidc/me/address', { method: 'POST', body: { password } }),
   declineProviderEmail: () => api<void>('/api/oidc/me/address', { method: 'DELETE' }),
   /** The browser's clock, so the log can warn when the server's is far off. */
   clock: () => api<{ now: number; drift: number }>('/api/health/clock', { method: 'POST', body: { now: Date.now() } }),
@@ -516,8 +527,13 @@ export const accountsApi = {
   removeEmail: (id: number, current_password: string) =>
     api<AccountRow>(`/api/accounts/${id}/email`, { method: 'DELETE', body: { current_password } }),
   signOut: (id: number) => api<void>(`/api/accounts/${id}/sign-out`, { method: 'POST' }),
-  resetSecondFactor: (id: number, current_password: string, disconnect_devices = true) =>
-    api<void>(`/api/accounts/${id}/totp/reset`, { method: 'POST', body: { current_password, disconnect_devices } }),
+  /** What a reset of the second factor would take away (the shared module's ``factor.reset_overview``). */
+  resetOverview: (id: number) => api<FactorResetOverview>(`/api/accounts/${id}/totp/reset`),
+  resetSecondFactor: (id: number, current_password: string, disconnect_devices = true, remove_passkeys = true) =>
+    api<void>(`/api/accounts/${id}/totp/reset`, {
+      method: 'POST',
+      body: { current_password, disconnect_devices, remove_passkeys },
+    }),
 }
 
 export const settingsApi = {
