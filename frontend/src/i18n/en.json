@@ -1821,9 +1821,13 @@
     "install": {
       "title": "Install on this device",
       "text": "Installed, nexnotes starts like an app: in its own window without the browser's bar, with its own icon.",
-      "button": "Install as app",
+      "button": "Install",
       "asked": "The browser asked. If you agreed, you find nexnotes among your apps.",
-      "ios": "On iPhone and iPad: Share › Add to Home Screen."
+      "ios": "On iPhone and iPad: Share › Add to Home Screen.",
+      "installed": "nexnotes runs as an installed app on this device already.",
+      "safari": "In Safari on the Mac: File › Add to Dock.",
+      "firefox": "Firefox cannot install web apps. Open nexnotes in another browser for it, such as Chrome, Edge or Safari.",
+      "other": "If your browser offers no button here, installing is in its menu, such as “Install app” or “Add to Home screen”."
     }
   },
   "nextasks": {

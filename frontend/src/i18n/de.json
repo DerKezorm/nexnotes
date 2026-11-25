@@ -1821,9 +1821,13 @@
     "install": {
       "title": "Auf diesem Gerät installieren",
       "text": "Installiert startet nexnotes wie eine App: im eigenen Fenster ohne Browserleiste und mit eigenem Symbol.",
-      "button": "Als App installieren",
+      "button": "Installieren",
       "asked": "Der Browser hat gefragt. Hast du zugestimmt, findest du nexnotes bei deinen Apps.",
-      "ios": "Auf iPhone und iPad: Teilen › Zum Home-Bildschirm."
+      "ios": "Auf iPhone und iPad: Teilen › Zum Home-Bildschirm.",
+      "installed": "nexnotes läuft auf diesem Gerät schon als installierte App.",
+      "safari": "In Safari auf dem Mac: Ablage › Zum Dock hinzufügen.",
+      "firefox": "Firefox kann Web-Apps nicht installieren. Öffne nexnotes dafür in einem anderen Browser, etwa Chrome, Edge oder Safari.",
+      "other": "Bietet dein Browser hier keinen Knopf an, findest du das Installieren in seinem Menü, etwa unter „App installieren“ oder „Zum Startbildschirm hinzufügen“."
     }
   },
   "nextasks": {
