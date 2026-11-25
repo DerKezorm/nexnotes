@@ -76,3 +76,32 @@ class Adapter(StandardAdapter):
             ),
             queued=0,
         )
+
+    def new_sign_in_letter(self, where: str, sender: str) -> Any:
+        """A member with a confirmed address signs in through ``POST /api/auth/login`` from a browser it never used
+        (User-Agent ``where``, address ``sender``); the letter caught on its way into the outbox."""
+        from fastapi.testclient import TestClient
+
+        from app.db import SessionLocal
+        from app.main import app
+        from app.models import MEMBER, Account
+        from app.security import brake, hash_password
+        from app.services import settings_service
+        from app.vendor.nexpost import testing
+
+        secret = password()
+        with SessionLocal() as db:
+            settings_service.save(db, {"smtp_host": "smtp.example.com", "smtp_from": "notes@example.com",
+                                       "public_url": "https://notes.example.com"})
+            db.add(Account(name="kim", display_name="Kim", email="kim@example.com", email_confirmed=True,
+                           role=MEMBER, password_hash=hash_password(secret)))
+            db.commit()
+        brake.forget()
+        browser = TestClient(app, base_url="https://notes.example.com", client=(sender, 50000),
+                             headers={"X-Nexnotes-Client": "tab-contract", "User-Agent": where})
+        with testing.catch_mail() as caught:
+            answer = browser.post("/api/auth/login", json={"name": "kim", "password": secret})
+        assert answer.status_code == 200, answer.text
+        found = [letter for letter in caught.letters if letter.kind == "new_sign_in"]
+        assert found, "no mail about a new sign-in"
+        return found[0]

@@ -153,11 +153,13 @@ def anbieter():
 
 class Postfach:
     """The system mail that went into the outbox during the test (the shared post module sends it from there), or out
-    at once (``nexpost.send.deliver``: "Forgot your password?" since konten 0.3.10), as a list of ``{"an", "text"}``."""
+    at once (``nexpost.send.deliver``: "Forgot your password?" since konten 0.3.10, caught by
+    ``nexpost.testing.catch_mail``), as a list of ``{"an", "text"}``."""
 
-    def __init__(self) -> None:
+    def __init__(self, gefangen) -> None:
         self.start = self._last()
-        self.sofort: list[dict] = []
+        self.gefangen = gefangen
+        self.ab = 0
 
     @staticmethod
     def _last() -> int:
@@ -176,7 +178,8 @@ class Postfach:
         with SessionLocal() as db:
             rows = db.scalars(select(MailOutbox).where(MailOutbox.id > self.start).order_by(MailOutbox.id))
             liegen = [{"an": json.loads(row.letter)["to"], "text": json.loads(row.letter)["text"]} for row in rows]
-        return liegen + self.sofort
+        sofort = [{"an": brief.to, "text": brief.text} for brief in self.gefangen.sent[self.ab:]]
+        return liegen + sofort
 
     def __iter__(self):
         return iter(self._mails())
@@ -192,7 +195,7 @@ class Postfach:
 
     def clear(self) -> None:
         self.start = self._last()
-        self.sofort.clear()
+        self.ab = len(self.gefangen.sent)
 
 
 @pytest.fixture
@@ -200,16 +203,14 @@ def post(monkeypatch):
     """A mail server counts as set up; what is mailed is read from the outbox. "Forgot your password?" does its work
     before the answer here (it runs after the answer otherwise)."""
     from app.routers import auth as auth_router
-    from app.vendor.nexpost import send
+    from app.vendor.nexpost import testing
 
     monkeypatch.setattr(auth_router, "FORGOT_AT_ONCE", True)
     with SessionLocal() as db:
         settings_service.save(db, {"smtp_host": "smtp.example.com", "smtp_from": "notes@example.com"})
-    postfach = Postfach()
-    # What goes out at once is caught here instead of at the mail server of the fixture (there is none).
-    monkeypatch.setattr(send, "deliver", lambda _settings, letter: postfach.sofort.append(
-        {"an": letter.to, "text": letter.text}))
-    return postfach
+    # What goes out at once is caught instead of sent (the fixture has no mail server); the outbox fills as ever.
+    with testing.catch_mail() as gefangen:
+        yield Postfach(gefangen)
 
 
 def browser() -> TestClient:

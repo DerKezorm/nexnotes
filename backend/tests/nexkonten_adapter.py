@@ -362,6 +362,55 @@ class Adapter(StandardAdapter):
             account = package.login.resolve_login(store, typed)
         return 200, account.id if account is not None else None
 
+    def forgot_through_route(self, typed: str, *, mail_fails: bool) -> tuple[list[str], int]:
+        """``POST /api/auth/forgot`` with a mail server and the public address, the work after the answer run at once
+        (``FORGOT_AT_ONCE``); the mail caught with ``nexpost.testing.catch_mail``."""
+        from fastapi.testclient import TestClient
+        from sqlalchemy import func, select
+
+        from app.db import SessionLocal
+        from app.main import app
+        from app.models_accounts import MailOutbox
+        from app.routers import auth as auth_router
+        from app.security import brake
+        from app.services import settings_service
+        from app.vendor.nexpost import testing
+
+        with SessionLocal() as db:
+            settings_service.save(db, {"smtp_host": "smtp.example.com", "smtp_from": "notes@example.com",
+                                       "public_url": "https://notes.example.com"})
+            before = int(db.scalar(select(func.count()).select_from(MailOutbox)) or 0)
+        brake.forget()
+        was, auth_router.FORGOT_AT_ONCE = auth_router.FORGOT_AT_ONCE, True
+        try:
+            browser = TestClient(app, base_url="https://notes.example.com",
+                                 headers={"X-Nexnotes-Client": "tab-contract"})
+            with testing.catch_mail(fail=mail_fails) as caught:
+                answer = browser.post("/api/auth/forgot", json={"name": typed})
+        finally:
+            auth_router.FORGOT_AT_ONCE = was
+        assert answer.status_code == 202, answer.text
+        with SessionLocal() as db:
+            after = int(db.scalar(select(func.count()).select_from(MailOutbox)) or 0)
+        return [letter.to for letter in caught.sent], after - before
+
+    def picture_status(self, owner: Any, viewer: Any | None) -> int:
+        """``GET /api/avatars/{owner}``, signed in as ``viewer`` (a session of its own) or as nobody."""
+        from fastapi.testclient import TestClient
+
+        from app.db import SessionLocal
+        from app.main import app
+        from app.models import Account
+        from app.security import SESSION_COOKIE, start_session
+
+        browser = TestClient(app, base_url="https://notes.example.com", headers={"X-Nexnotes-Client": "tab-contract"})
+        if viewer is not None:
+            with SessionLocal() as db:
+                row = db.get(Account, viewer)
+                assert row is not None
+                browser.cookies.set(SESSION_COOKIE, start_session(db, row, "127.0.0.1", "contract"))
+        return browser.get(f"/api/avatars/{owner}").status_code
+
     def listed_invites(self) -> list[dict[str, Any]]:
         """``GET /api/invites`` as the operator's list reads it (``email``, ``expired``)."""
         from fastapi.testclient import TestClient

@@ -22,9 +22,14 @@ PAGES = {
     nexkonten.MAIL_RESET: "/reset/",
     nexkonten.MAIL_CONFIRM_EMAIL: "/email/",
 }
+#: The page Security, where the mail "New sign-in" leads (its button "See signed-in devices", post 1.0.0).
+SECURITY_PAGE = "/settings/security"
 
 
 def link_for(db: Session, mail: nexkonten.Mail) -> str:
+    if mail.kind == nexkonten.MAIL_NEW_SIGN_IN:
+        base = settings_service.public_url(db)
+        return f"{base}{SECURITY_PAGE}" if base else ""
     page = PAGES.get(mail.kind)
     if not page or not mail.token:
         return ""
