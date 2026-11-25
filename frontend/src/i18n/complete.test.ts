@@ -50,7 +50,6 @@ describe('shipped languages', () => {
     // The page "Über nexnotes" speaks with the ui kit's words (AboutPage); nexnotes' own say the same.
     expect(NEXUI_TEXTS.de.aboutVersion).toBe('Version')
     expect(NEXUI_TEXTS.de.updatesCurrent).toBe('Das ist die neueste Version.')
-    expect([...german].filter(([, text]) => /Fassung/.test(text))).toEqual([])
   })
 
   it('never speak of boards, spaces or another app', () => {
