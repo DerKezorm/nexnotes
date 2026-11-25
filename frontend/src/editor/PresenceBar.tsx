@@ -19,7 +19,7 @@ export function PresenceBar({ presence }: { presence: Presence }) {
           {shown.map((person, index) => (
             <span key={person.accountId} title={person.name} data-testid="presence-person" className={'flex rounded-full ' + (index ? '-ml-2' : '')}>
               {/* The picture where the server shows it, with a border in the person's color; else the initial. */}
-              <Avatar accountId={person.accountId} name={person.name} stamp={person.avatar} size={30} ring={person.color} className="bg-ink-800 text-mist-100" />
+              <Avatar accountId={person.accountId} name={person.name} stamp={person.avatar} size={30} ring={person.color} />
             </span>
           ))}
           {more > 0 && (

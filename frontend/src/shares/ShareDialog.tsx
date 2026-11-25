@@ -179,7 +179,7 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ShareKind; id:
                 {offered.map((person) => (
                   <li key={person.id} role="option" aria-selected={false}>
                     <button type="button" className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-ink-800" onClick={() => add(person)} data-testid="share-found">
-                      <Avatar accountId={person.id} name={person.name} stamp={person.avatar} size={26} className="bg-ink-600 text-mist-100" />
+                      <Avatar accountId={person.id} name={person.name} stamp={person.avatar} size={26} />
                       <span className="flex min-w-0 flex-col">
                         <span className="truncate text-sm">{person.name}</span>
                         <span className="truncate text-xs text-mist-500">{person.email}</span>
@@ -210,7 +210,7 @@ export function ShareDialog({ kind, id, title, onClose }: { kind: ShareKind; id:
           </div>
           {sharing?.people.map((person) => (
             <div key={person.id} className="flex items-center gap-2.5" data-testid="share-person">
-              <Avatar accountId={person.id} name={person.name} stamp={person.avatar} size={32} className="bg-ink-600 text-mist-100" />
+              <Avatar accountId={person.id} name={person.name} stamp={person.avatar} size={32} />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm">{person.name}</span>
                 <span className="truncate text-xs text-mist-500">{person.email}</span>

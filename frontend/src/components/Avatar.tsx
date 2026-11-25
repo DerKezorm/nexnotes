@@ -1,25 +1,25 @@
 /**
  * A person's profile picture (NOTES-2 AC-11), or the first letter of the name where there is none or the server does
- * not show it to this viewer. The address carries the time the picture was set, so a new one is a new address.
+ * not show it to this viewer. The address carries the time the picture was set, so a new one is a new address. The
+ * letter stands on the hue of the name as the account module draws it everywhere (server, iPhone, the operator's
+ * list); saturation, lightness and the letter's colour come from the kit's variables.
  */
 import { useState } from 'react'
 
-import { avatarUrl, initialOf } from '../lib/avatar'
+import { avatarUrl } from '../lib/avatar'
+import { avatarPlaceholder } from '../vendor/nexkonten/konten'
 
 export function Avatar({
   accountId,
   name,
   stamp,
   size = 28,
-  className = 'bg-accent-500 text-on-accent',
   ring,
 }: {
   accountId: number
   name: string
   stamp?: string | null
   size?: number
-  /** The look of the letter's circle. */
-  className?: string
   /** A border in a person's color (the others in a note). */
   ring?: string
 }) {
@@ -40,9 +40,15 @@ export function Avatar({
         data-testid="avatar-picture"
       />
     )
+  const { letter, hue } = avatarPlaceholder(name)
   return (
-    <span aria-hidden className={'flex shrink-0 items-center justify-center rounded-full text-xs font-bold ' + className} style={style} data-testid="avatar-initial">
-      {initialOf(name)}
+    <span
+      aria-hidden
+      className="flex shrink-0 items-center justify-center rounded-full text-xs font-bold"
+      style={{ ...style, background: `hsl(${hue} var(--nexui-avatar-saturation) var(--nexui-avatar-lightness))`, color: 'var(--nexui-avatar-text)' }}
+      data-testid="avatar-initial"
+    >
+      {letter}
     </span>
   )
 }

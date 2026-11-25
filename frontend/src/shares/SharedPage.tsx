@@ -100,7 +100,7 @@ export function SharedPage() {
       {data?.groups.map((group) => (
         <section key={group.owner.id} className="flex max-w-[900px] flex-col gap-1.5" data-testid="shared-group">
           <h2 className="flex items-center gap-2.5 text-sm font-semibold">
-            <Avatar accountId={group.owner.id} name={group.owner.name} stamp={group.owner.avatar} size={26} className="bg-ink-600 text-mist-100" />
+            <Avatar accountId={group.owner.id} name={group.owner.name} stamp={group.owner.avatar} size={26} />
             {t('shares.page.from', { name: group.owner.name })}
           </h2>
           {group.items.map((item) => (
