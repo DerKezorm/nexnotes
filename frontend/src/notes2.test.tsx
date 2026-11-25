@@ -342,7 +342,7 @@ describe('an operator from a provider confirms with a fresh sign-in there', () =
   it('NOTES-2 AC-7 a refusal for an old sign-in offers the operator\'s providers, asking them for a new sign-in', async () => {
     const assign = vi.fn()
     vi.stubGlobal('location', { ...window.location, assign, pathname: '/settings/accounts', search: '' })
-    const { Feedback } = await import('./pages/settings/ui')
+    const { Outcome: Feedback } = await import('./pages/settings/Outcome')
     await render(<Feedback problem={new ApiError(403, 'fresh_sign_in_required', { minutes: 10, providers: [{ slug: 'sso', label: 'Pocket ID' }] })} />)
     expect(box.textContent).toContain(i18n.t('errors.fresh_sign_in_required', { minutes: 10 }))
     const button = box.querySelector<HTMLButtonElement>('[data-testid="sign-in-again"] button')!

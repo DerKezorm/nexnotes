@@ -59,7 +59,8 @@ import {
 } from '../../vendor/nexkonten/konten'
 import { Avatar, Badge, Button, ButtonGroup, Card, CheckboxRow, ConfirmDialog, Dialog, Facts, Field, Notice, Row, Rows, SelectField, type IconName } from '../../vendor/nexui'
 import { APP_CAPS, listedOf } from './accountList'
-import { Feedback, useAction } from './ui'
+import { useAction } from './actions'
+import { Outcome } from './Outcome'
 
 const GB = 1024 ** 3
 
@@ -129,7 +130,7 @@ export function AccountsTab() {
             />
           ))}
         </Rows>
-        <Feedback problem={action.problem} done={action.done} />
+        <Outcome problem={action.problem} done={action.done} />
       </Card>
 
       {invites.length > 0 && (
@@ -292,7 +293,7 @@ function ManageDialog({ row, listed, operatorHasPassword, mailServer, onClose, o
               )}
             </ButtonGroup>
           ))}
-          <Feedback problem={action.problem} done={action.done} />
+          <Outcome problem={action.problem} done={action.done} />
         </div>
       </Dialog>
       {pending && (
@@ -397,7 +398,7 @@ function ConfirmAct({ row, name, pending, operatorHasPassword, onCancel, onDone 
       {asksPassword && operatorHasPassword && (
         <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
       )}
-      <Feedback problem={action.problem} />
+      <Outcome problem={action.problem} />
     </ConfirmDialog>
   )
 }
@@ -439,7 +440,7 @@ function NameDialog({ row, field, operatorHasPassword, onClose, onSaved }: {
         />
         <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
         {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
-        <Feedback problem={action.problem} />
+        <Outcome problem={action.problem} />
         <div className="flex flex-wrap justify-end gap-2">
           <AccountButton name="cancel" onClick={onClose}>
             {t('common.cancel')}
@@ -525,7 +526,7 @@ function ResetLinkDialog({ row, name, mailServer, operatorHasPassword, onClose }
           />
           <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
           {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
-          <Feedback problem={action.problem} />
+          <Outcome problem={action.problem} />
           <div className="flex flex-wrap justify-end gap-2">
             <AccountButton name="cancel" onClick={onClose}>
               {t('common.cancel')}
@@ -572,7 +573,7 @@ function LimitDialog({ row, name, operatorHasPassword, onClose, onSaved }: {
         <Field label={t(STORAGE_LIMIT_DIALOG.field)} type="number" min={0} value={value} onChange={(event) => setValue(event.target.value)} hints={[t(STORAGE_LIMIT_DIALOG.used, { used: bytes(row.storage_used, i18n.language) })]} />
         <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
         {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
-        <Feedback problem={action.problem} />
+        <Outcome problem={action.problem} />
         <div className="flex flex-wrap justify-end gap-2">
           {row.storage_limit !== null && (
             <AccountButton name="account.storageLimitRemove" disabled={action.busy || (operatorHasPassword && !own)} onClick={() => save(null)}>
@@ -650,7 +651,7 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
             />
           )}
           {fields.includes('sendMail') && <CheckboxRow label={t(INVITE_DIALOG.sendMail)} checked={send} onChange={setSend} />}
-          <Feedback problem={action.problem} />
+          <Outcome problem={action.problem} />
           <div className="flex flex-wrap justify-end gap-2">
             <AccountButton name="cancel" onClick={onClose}>
               {t('common.cancel')}

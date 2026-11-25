@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-import { Toggle } from '../pages/settings/ui'
+import { CheckboxRow } from '../vendor/nexui'
 
 type Files = {
   readFileSync: (file: string, encoding: string) => string
@@ -72,12 +72,13 @@ describe('on and off', () => {
 
     it('is a checkbox with its name, ticked by a click anywhere on the row', () => {
       let value = false
-      const draw = () => root.render(<Toggle label="Link previews" hint="Fetch a title" checked={value} onChange={(next) => ((value = next), draw())} testId="row" />)
+      // The settings' row since the settings pass: the ui kit's CheckboxRow.
+      const draw = () => root.render(<CheckboxRow label="Link previews" hint="Fetch a title" checked={value} onChange={(next) => ((value = next), draw())} testId="row" />)
       act(draw)
       const tick = box.querySelector<HTMLInputElement>('[data-testid="row"]')!
       expect(tick.type).toBe('checkbox')
       expect(tick.getAttribute('role')).toBeNull()
-      expect(tick.getAttribute('aria-label')).toBe('Link previews')
+      expect(tick.labels![0]!.textContent).toBe('Link previews')
       expect(tick.checked).toBe(false)
       act(() => box.querySelector('label')!.click())
       expect(value).toBe(true)
