@@ -538,7 +538,17 @@
     "second_factor_required": "Richte zuerst im Browser deinen zweiten Faktor ein, dann verbinde das Gerät neu.",
     "folder_id_taken": "Diesen Ordner gibt es schon unter einem anderen Konto.",
     "smart_folder_id_taken": "Diesen intelligenten Ordner gibt es schon unter einem anderen Konto.",
-    "use_logout": "Diesen Browser meldest du mit „Abmelden“ ab."
+    "use_logout": "Diesen Browser meldest du mit „Abmelden“ ab.",
+    "archive_password_needed": "Diese Sicherung ist verschlüsselt. Gib ihr Passwort ein.",
+    "archive_password_short": "Das Passwort der Datei braucht mindestens 8 Zeichen.",
+    "archive_password_wrong": "Das Passwort der Sicherung stimmt nicht.",
+    "backup_disk_full": "Der Datenträger ist voll. Die älteren Sicherungen bleiben.",
+    "backup_running": "Es läuft schon eine Sicherung.",
+    "backup_too_large": "Die Datei ist größer als erlaubt.",
+    "backup_write_failed": "Die Sicherung ließ sich nicht schreiben. Die älteren Sicherungen bleiben.",
+    "keep_invalid": "Zwischen 1 und 365.",
+    "schedule_invalid": "Aus, jede Nacht, jede Woche oder jeden Monat.",
+    "time_invalid": "Bitte eine Uhrzeit wie 03:00."
   },
   "folders": {
     "section": "Ordner",
@@ -920,7 +930,6 @@
     "key": "Strg K"
   },
   "server": {
-    "allLevels": "Alle Stufen",
     "backupContent": "{{notes}}, {{files}}",
     "backupMade": "Sicherung erstellt.",
     "backupNow": "Jetzt sichern",
@@ -958,7 +967,6 @@
     "days_one": "{{count}} Tag",
     "days_other": "{{count}} Tagen",
     "deleteBackup": "Löschen",
-    "detail": "Ausführlichkeit",
     "download": "Herunterladen",
     "features": "Funktionen für alle Konten",
     "forBackup": "{{action}}: Backup vom {{name}}",
@@ -974,18 +982,10 @@
     "languages": "Sprachen",
     "languagesHint": "Deutsch und Englisch sind eingebaut. Weitere als JSON-Datei hinzufügen, fehlende Texte fallen auf Englisch zurück.",
     "lastBackup": "Letztes Backup: {{time}}",
-    "level": "Stufe",
     "limits": "Grenzen",
     "limitsHint": "Speicher je Konto setzt du unter „Konten“.",
     "linkPreviews": "Link-Vorschauen",
     "linkPreviewsHint": "Der Server holt Titel und Bild verlinkter Seiten.",
-    "log": "Log",
-    "logClear": "Protokoll leeren",
-    "logClearText": "Jede Zeile geht. Neue kommen wie bisher.",
-    "logEmpty": "Nichts im Log.",
-    "logHint": "Vier Stufen. Die beiden tiefen schalten sich nach einer Stunde selbst ab. Nie Inhalte von Notizen, Passwörter oder Schlüssel.",
-    "logSearch": "Im Text suchen …",
-    "logUntil": "Um {{time}} zurück auf normal.",
     "mail": "Mail",
     "mailHint": "Für Einladungen und Links zum Zurücksetzen. Ohne Server reicht der Link zum Kopieren.",
     "mailSent": "Die Testmail ist raus.",
@@ -1014,7 +1014,6 @@
       "order": "{{name}} verschieben: ziehen oder die Pfeiltasten"
     },
     "proxyUnknown": "Anfragen kommen über einen Proxy, aber NEXNOTES_TRUSTED_PROXIES ist nicht gesetzt. Dann sieht nexnotes alle als einen Absender: Wer oft falsch rät, bremst jeden aus, der sich in einem hier noch nie benutzten Browser anmeldet. Trag die Adresse des Proxys in NEXNOTES_TRUSTED_PROXIES ein. Steht kein Proxy davor, kannst du das ignorieren.",
-    "refresh": "Aktualisieren",
     "remove": "Entfernen",
     "restarting": "nexnotes startet mit der Sicherung neu. Die Seite lädt gleich neu.",
     "restore": "Wiederherstellen",
@@ -1053,20 +1052,6 @@
     "weekly": "jede Woche",
     "years_one": "{{count}} Jahr",
     "years_other": "{{count}} Jahren",
-    "levels": {
-      "quiet": "Ruhig",
-      "normal": "Normal",
-      "detailed": "Ausführlich (1 Stunde)",
-      "trace": "Alles (1 Stunde)"
-    },
-    "logAll": "Alle",
-    "logLevelHint": "Ein Filter zeigt immer auch die höheren Stufen: „WARNING“ enthält also die Fehler.",
-    "logTime": "Zeit",
-    "logSource": "Quelle",
-    "logRequest": "Nr. / Konto",
-    "logMessage": "Meldung",
-    "logMore": "Ältere laden",
-    "logRequestHint": "Nur diese Anfrage zeigen",
     "localNetwork": "Verbindungen ins eigene Netz",
     "localNetworkHint": "Mitglieder dürfen ihr nextasks auch unter einer Adresse im eigenen Netz (LAN, VPN) verbinden. Dann kann jedes Mitglied nexnotes Adressen dort ansprechen lassen.",
     "api": "Programmschnittstelle (API) für Mitglieder",
@@ -1153,7 +1138,8 @@
     "jump": "Seite der Einstellungen",
     "ownPassword": "Dein Passwort",
     "saved": "Gespeichert.",
-    "title": "Einstellungen"
+    "title": "Einstellungen",
+    "things": "Notizen"
   },
   "setup": {
     "folder": "Datenordner {{path}}",

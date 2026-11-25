@@ -538,7 +538,17 @@
     "second_factor_required": "Set up your second factor in the browser first, then connect the device again.",
     "folder_id_taken": "A folder with this id belongs to another account.",
     "smart_folder_id_taken": "A smart folder with this id belongs to another account.",
-    "use_logout": "Sign out of this browser with Sign out."
+    "use_logout": "Sign out of this browser with Sign out.",
+    "archive_password_needed": "This backup is encrypted. Enter its password.",
+    "archive_password_short": "The file's password needs at least 8 characters.",
+    "archive_password_wrong": "The backup's password is wrong.",
+    "backup_disk_full": "The disk is full. The older backups stay.",
+    "backup_running": "A backup is running already.",
+    "backup_too_large": "The file is larger than allowed.",
+    "backup_write_failed": "The backup could not be written. The older backups stay.",
+    "keep_invalid": "Between 1 and 365.",
+    "schedule_invalid": "Off, every night, every week or every month.",
+    "time_invalid": "Enter a time such as 03:00."
   },
   "folders": {
     "section": "Folders",
@@ -920,7 +930,6 @@
     "key": "Ctrl K"
   },
   "server": {
-    "allLevels": "All levels",
     "backupContent": "{{notes}}, {{files}}",
     "backupMade": "Backup created.",
     "backupNow": "Back up now",
@@ -958,7 +967,6 @@
     "days_one": "{{count}} day",
     "days_other": "{{count}} days",
     "deleteBackup": "Delete",
-    "detail": "Detail",
     "download": "Download",
     "features": "Features for every account",
     "forBackup": "{{action}}: backup of {{name}}",
@@ -974,18 +982,10 @@
     "languages": "Languages",
     "languagesHint": "German and English are built in. Add more as a JSON file; missing texts fall back to English.",
     "lastBackup": "Last backup: {{time}}",
-    "level": "Level",
     "limits": "Limits",
     "limitsHint": "You set the storage per account under “Accounts”.",
     "linkPreviews": "Link previews",
     "linkPreviewsHint": "The server fetches title and picture of linked pages.",
-    "log": "Log",
-    "logClear": "Clear log",
-    "logClearText": "Every line is removed. New ones come as before.",
-    "logEmpty": "Nothing in the log.",
-    "logHint": "Four levels. The two deep ones switch themselves off after an hour. Never the content of notes, passwords or keys.",
-    "logSearch": "Search in the text …",
-    "logUntil": "Back to normal at {{time}}.",
     "mail": "Mail",
     "mailHint": "For invitations and reset links. Without a server, the link to copy is enough.",
     "mailSent": "The test mail went out.",
@@ -1014,7 +1014,6 @@
       "order": "Move {{name}}: drag, or the arrow keys"
     },
     "proxyUnknown": "Requests come through a proxy, but NEXNOTES_TRUSTED_PROXIES is not set. nexnotes then sees everybody as one sender: whoever guesses wrong often slows down everyone signing in from a browser not used here before. Put the proxy's address into NEXNOTES_TRUSTED_PROXIES. If no proxy stands in front of nexnotes, you can ignore this.",
-    "refresh": "Refresh",
     "remove": "Remove",
     "restarting": "nexnotes restarts with the backup. The page reloads in a moment.",
     "restore": "Restore",
@@ -1053,20 +1052,6 @@
     "weekly": "every week",
     "years_one": "{{count}} year",
     "years_other": "{{count}} years",
-    "levels": {
-      "quiet": "Quiet",
-      "normal": "Normal",
-      "detailed": "Detailed (1 hour)",
-      "trace": "Everything (1 hour)"
-    },
-    "logAll": "All",
-    "logLevelHint": "A filter always shows the higher levels too: WARNING includes the errors.",
-    "logTime": "Time",
-    "logSource": "Source",
-    "logRequest": "No. / account",
-    "logMessage": "Message",
-    "logMore": "Load older",
-    "logRequestHint": "Show only this request",
     "localNetwork": "Connections into the local network",
     "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there.",
     "api": "API for members",
@@ -1153,7 +1138,8 @@
     "jump": "Settings page",
     "ownPassword": "Your password",
     "saved": "Saved.",
-    "title": "Settings"
+    "title": "Settings",
+    "things": "notes"
   },
   "setup": {
     "folder": "Data folder {{path}}",
