@@ -185,10 +185,12 @@ describe('the account page', () => {
       `Microsoft${i18n.t('oidc.account.notLinked')}${i18n.t('oidc.account.link')}`,
     ])
     await click(i18n.t('oidc.account.link'))
-    const field = rows[1].querySelector<HTMLInputElement>('input[type="password"]')!
+    // The password is asked in a dialog of the shared kit (ConfirmDialog), as in nexmail.
+    const dialog = document.querySelector<HTMLElement>('[role="dialog"]')!
+    const field = dialog.querySelector<HTMLInputElement>('input[type="password"]')!
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, 'secret words')
     act(() => void field.dispatchEvent(new Event('input', { bubbles: true })))
-    await act(async () => rows[1].querySelector('form')!.requestSubmit())
+    await act(async () => dialog.querySelector('form')!.requestSubmit())
     await settle()
     expect(calls.find((call) => call.path === '/api/oidc/entra/link')?.body).toEqual({ password: 'secret words' })
     expect(assigned).toEqual(['https://login.example.com/authorize'])
@@ -199,12 +201,11 @@ describe('the account page', () => {
     expect(box.textContent).toContain(i18n.t('me.linked', { name: 'Microsoft' }))
   })
 
-  it('says that the profile is saved, and that a provider is linked, in one green line, no box, as the cards do', async () => {
+  it('says that the profile is saved, and that a provider is linked, in one green notice of the shared kit, as nexmail does', async () => {
     await account('/account?linked=entra', [{ slug: 'entra', label: 'Microsoft', linked: true, managed: '' }])
     const plain = (line: Element | null) => {
       expect(line).not.toBeNull()
-      expect(line!.className).toContain('text-ok-500')
-      expect(line!.className).not.toMatch(/\b(?:border|bg-|rounded)/)
+      expect(line!.className).toContain('var(--nexui-ok)')
       return line!.textContent
     }
     expect(plain(box.querySelector('[role="status"]'))).toBe(i18n.t('me.linked', { name: 'Microsoft' }))

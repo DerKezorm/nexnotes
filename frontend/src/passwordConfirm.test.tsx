@@ -65,9 +65,10 @@ function type(field: HTMLInputElement, value: string) {
 }
 
 function field(label: string, within: ParentNode = box): HTMLInputElement {
-  const found = [...within.querySelectorAll('label')].find((node) => node.querySelector('span')?.textContent === label)
+  // The shared kit's fields: the label stands beside its field and names it by `for` (bauplaene/ui).
+  const found = [...within.querySelectorAll('label')].find((node) => node.textContent === label)
   if (!found) throw new Error(`no field "${label}"`)
-  return found.querySelector('input')!
+  return (found.control as HTMLInputElement | null) ?? found.querySelector('input')!
 }
 
 async function submit(form: HTMLFormElement): Promise<void> {
@@ -172,7 +173,10 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     }
     const { SettingsPage } = await import('./pages/SettingsPage')
     await render(<AuthProvider><Routes><Route path="/settings/:tab" element={<SettingsPage />} /></Routes></AuthProvider>, '/settings/security')
-    const row = box.querySelector<HTMLElement>('[data-testid="password-row"]')!
+    // "Change password" in its box opens the dialog with the three fields (the shared kit's ConfirmDialog).
+    await act(async () => box.querySelector<HTMLButtonElement>('[data-testid="password-change"]')!.click())
+    await settle()
+    const row = document.querySelector<HTMLElement>('[role="dialog"]')!
     const confirm = expectPair(row, i18n.t('me.password.new'))
     expect(i18n.t('account.passwordRepeat')).toBe('Passwort wiederholen')
     type(field(i18n.t('me.password.current'), row), 'the old one!')
@@ -185,8 +189,8 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     expect(sent('PUT', '/api/auth/password').map((call) => call.body)).toEqual([
       { current: 'the old one!', new: 'a brand new one', password_confirm: 'a brand new one' },
     ])
-    // Changed: both fields are empty again, and no old message is left.
-    expect(confirm.value).toBe('')
-    expect(row.querySelector('[aria-invalid]')).toBeNull()
+    // Changed: the dialog is closed (its fields with it), the page says so.
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(box.textContent).toContain(i18n.t('me.password.done'))
   })
 })

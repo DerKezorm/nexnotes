@@ -3,7 +3,7 @@
  *
  * `Notice`: a framed message, `warn` (something needs doing), `danger` (it failed), `ok` (it worked); a title in its
  * colour, the words under it. `AuthCard`: the card in the middle of the sign-in, setup, invitation and password screens
- * (16 px corners, 24 px inside, at most 384 px wide), with its title, a line under it and the form; `OrLine` the "or"
+ * (16 px corners, 24 px inside, at most 384 px wide, `wide` 576 px for the recovery codes), with its title, a line under it and the form; `OrLine` the "or"
  * between the form and the providers.
  */
 import type { ReactNode } from 'react'
@@ -20,9 +20,9 @@ export function Notice({ tone, title, children, testId }: { tone: NoticeTone; ti
   )
 }
 
-export function AuthCard({ title, subtitle, children, footer }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode }) {
+export function AuthCard({ title, subtitle, children, footer, wide = false }: { title: string; subtitle?: ReactNode; children: ReactNode; footer?: ReactNode; wide?: boolean }) {
   return (
-    <div className="w-full max-w-sm tracking-normal">
+    <div className={`w-full tracking-normal ${wide ? 'max-w-xl' : 'max-w-sm'}`}>
       <div className="rounded-[16px] border border-solid border-[var(--nexui-line)] bg-[var(--nexui-surface)] p-6 text-[var(--nexui-text)] shadow-xl shadow-black/20">
         <h1 className={`${PLAIN} text-xl leading-7 font-bold text-[var(--nexui-text)]`}>{title}</h1>
         {subtitle && <div className={`${PLAIN} mt-1 text-sm leading-5 ${MUTED}`}>{subtitle}</div>}

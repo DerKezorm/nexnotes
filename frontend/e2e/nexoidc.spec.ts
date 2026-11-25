@@ -60,8 +60,10 @@ test('sign-in through the provider button ends in a session', async ({ page, bro
   const row = ossie.getByTestId('my-providers').locator('li').filter({ hasText: 'Stand-in 33' })
   await expect(row).toContainText('Not linked')
   await row.getByRole('button', { name: 'Link' }).click()
-  await row.getByLabel('Password').fill(PASSWORD)
-  await row.getByRole('button', { name: 'Link' }).click()
+  // The password is asked in a dialog of the shared kit (bauplaene/ui), as in nexmail.
+  const asking = ossie.getByRole('dialog')
+  await asking.getByLabel('Password').fill(PASSWORD)
+  await asking.getByRole('button', { name: 'Link' }).click()
   // The provider answers at /settings; the page goes on to Security, where the providers are.
   await expect(ossie).toHaveURL(/\/settings\/security\?linked=standin33/)
   // The provider by the name on its button, not by the short name in the address.

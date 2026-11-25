@@ -90,7 +90,7 @@ describe('the setup (NOTES-1)', () => {
     expect(box.textContent).toContain(i18n.t('account.setupCodeHint'))
     expect(box.textContent).toContain('412 GB')
     const fields = [...box.querySelectorAll('input')]
-    expect(fields.map((field) => field.closest('label')?.querySelector('span')?.textContent)).toEqual([
+    expect(fields.map((field) => field.labels?.[0]?.textContent)).toEqual([
       // The order of the shared account module (SCREENS.setup): the username follows the display name.
       i18n.t('account.setupCode'), i18n.t('account.displayName'), i18n.t('account.username'), i18n.t('account.email'),
       i18n.t('account.newPassword'), i18n.t('account.passwordRepeat'),
