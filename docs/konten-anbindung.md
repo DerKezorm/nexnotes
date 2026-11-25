@@ -11,8 +11,9 @@ sichtbar und änderbar, „Passwort vergessen“ bekommt den Weg per Mail, Adres
 
 ## 0. Was gebaut ist / was fehlt
 
-Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten`: `konten` 0.3.7 (`2b4e7e4`), `oidc` 1.1.0,
-`post` 0.1.1, kopiert mit `tools/sync.py copy`. App-Version 1.1.0 (Release vorbereitet am 25.11.2026, noch nicht getaggt).
+Stand 25.11.2026 abends, Zweig `konten`. Module aus `bauplaene` Zweig `konten` (`4f714a8`): `konten` 0.3.10, `ui` 0.1.2,
+`oidc` 1.1.1, `post` 0.1.2, kopiert mit `tools/sync.py copy`, `check` grün. App-Version unverändert 1.1.0 (live), kein
+neues Release vorbereitet. Was seit 0.3.7 dazukam, steht unten unter „Seit konten 0.3.8 bis 0.3.10“.
 
 **Gebaut (Backend):**
 
@@ -22,9 +23,9 @@ Stand 25.11.2026, Zweig `konten`. Module aus `bauplaene` Zweig `konten`: `konten
 | Neue Spalten | `accounts.email_confirmed` (1), `email_proven` (0), `avatar_source`, `passkey_handle`, `new_sign_in_mail` (1), `new_password_origin`; `auth_sessions.uid`, `remember` (1), `stage` (`full`), `kind` (`browser`); `invites.display_name`, `invites.mailed` (0); `password_resets.origin` (`operator`) |
 | Neue Tabellen | `models_accounts.py`: `former_names`, `setup_claims`, `email_changes`, `passkeys`, `failed_unknown`, `mail_outbox` |
 | Wanderung | `services/konten_wanderung.py` aus `db.init_db` (Sicherung davor wie bisher): `uid` für alte Sitzungen, eindeutiger Index auf `lower(name)` erst nach Zählen, Indizes auf `lower(email)` und `former_names` |
-| Anmelden | `POST /api/auth/login` über `login.authenticate`, Bremse `BRAKE` mit `attempt_key` (bekannter Browser: eigener Topf über `known_mark`, 5 frei), Feld `remember` neu, Sitzung über `sessions.start`, Mail „Neue Anmeldung“ |
+| Anmelden | `POST /api/auth/login` über `login.sign_in` (Bremse im Modul seit 0.3.10; bekannter Browser: eigener Topf über nexnotes' Gerätezeichen, 5 frei), Feld `remember` neu, Sitzung über `sessions.start`, Mail „Neue Anmeldung“ |
 | Einrichtung | `POST /api/setup` über `setup.setup` (Feld `name` neu, sonst Vorschlag) |
-| Passwort vergessen | `POST /api/auth/forgot` (`name`), `resets.forgot_in_background`; `GET /api/auth/methods` sagt `forgot_mail`, `passkeys` |
+| Passwort vergessen | `POST /api/auth/forgot` (`name`), `resets.forgot_in_background`, Mail sofort über `kontenpost.deliver_now` (nie über die Outbox, seit 0.3.10); `GET /api/auth/methods` sagt `forgot_mail`, `passkeys` |
 | Einladung | `GET/POST /api/invite/{token}` über `invite_form`/`accept_invite` (Feld `name` neu), `POST /api/invites` mit `display_name`; Link über `invites.invite_link(..., request_base=…)`: ohne öffentliche Adresse die, unter der der Betreiber nexnotes geöffnet hat (auch der Reset-Link des Betreibers) |
 | Reset-Link | `GET/POST /api/reset/{token}` über `reset_state`/`use_reset`; Betreiber `POST /api/accounts/{id}/reset-link` über `resets.reset_link` (Mail oder Link, `sent`) |
 | Profil | `PUT /api/me/profile` (`name`, `password` neu), `POST /api/me/email/resend`, `DELETE /api/me/email/pending`, `GET/POST /api/email/{token}`, `PUT /api/me/new-sign-in-mail` |
@@ -79,6 +80,43 @@ Einrichtung mit `SETUP_PAGE`, ohne Satz zum zweiten Faktor (`setupNotes`); vites
 Modul „Passwort wiederholen“ (`account.passwordRepeat`, `auth.passwordConfirm` entfernt). vitest-Vorlage neu übernommen,
 `APP_RENDER` für alle sechs Bildschirme gefüllt; `@testing-library/dom` als devDependency. Läufe: Frontend
 `vitest --maxWorkers=2` 890 grün, `tsc -b` und `npm run lint` sauber; Vertrag `tests/nexkonten` 223 grün, 2 übersprungen.
+
+**Seit konten 0.3.8 bis 0.3.10 nachgezogen (ui 0.1.2, oidc 1.1.1, post 0.1.2):**
+
+- **Anmelden** über `login.sign_in(store, name, password, sender=client_ip, browser=<Gerätezeichen>, known_browser=…)`:
+  Wartet nur der Topf des Kontos oder der Eingabe, antwortet die Anmeldung wie bei falschem Passwort (401,
+  `wrong_credentials`), 429 nur bei vollem Absendertopf (30). „5 frei“ heißt genau 5 an jeder Tür. Der geänderte
+  Bremstest (`test_the_brake_holds_a_guesser_back`) prüft wieder das Modulverhalten (fünf Fehlversuche, dann auch das
+  richtige Passwort 401); die Härtungstests, die nach wenigen Versuchen 429 erwarteten, rechnen mit 401 bzw. füllen den
+  Absendertopf mit verschiedenen Namen.
+- **Fehler** mit `account_code` neben der alten Kennung, wo `OLD_CODES` umbenennt (`routers/auth.fail`); die Seite nimmt
+  `accountErrorKeyOf` (`lib/errors.ts`).
+- **Store:** `password_changed_at` aus der Spalte von 1.0.1 in `get_account` (Bestand ohne Datum: „Zuletzt geändert:
+  unbekannt“); `list_access` mit `ACCESS_DEVICE`, `ACCESS_API_KEY`, `ACCESS_PASSKEY`.
+- **Sicherheit:** Kasten Passwort mit `passwordChanged(...)` („Zuletzt geändert am …“ bzw. „unbekannt“).
+- **Passwort vergessen** schickt sofort (`kontenpost.deliver_now` → `mailer.deliver_letter` → `nexpost.send.deliver`);
+  geht die Mail nicht hinaus, nimmt das Modul den Link zurück. Der Test „Bestand“ las die Post aus der Outbox; seine
+  Vorrichtung `post` fängt jetzt auch sofort Gesendetes ab (Prüfungen unverändert).
+- **Einladungen:** `GET /api/invites` liefert auch abgelaufene, mit `expired`, bis sie zurückgenommen sind.
+- **Speichergrenze** (`PUT /api/accounts/{id}/storage-limit`) verlangt jetzt das eigene Passwort (`current_password`,
+  bzw. frische Anbieteranmeldung), wie alles, was ein Konto ändert (konten 0.3.9).
+- **Kontenliste aus konten 0.3.9** (`pages/settings/AccountsTab.tsx`, `accountList.ts`): je Konto eine Zeile mit Bild
+  (`Avatar` aus `ui`, Avatar-Variablen hell und dunkel in `styles/index.css`), Name, Marken und „Benutzername · E-Mail“,
+  rechts „Verwalten“; das Fenster mit Angaben (dazu nexnotes' Speicher mit Grenze) und den Gruppen Ändern, Zugang,
+  Beenden. Keine Tabelle, kein Menü. Schalter `APP_CAPS`: alles an (`rename`, `roles`, `emailRemove`, `resetLink`,
+  `factorReset`, `signOut`, `unlink`, `blocking`, `remove`, `restore`). Eigener Knopf „Speichergrenze“ in „Ändern“ nach
+  „Zum Mitglied machen“, mit eigenem Passwort. Löschen nennt Notizen und geteilte, dann die 30 Tage zum Zurückholen;
+  gelöschte Konten zeigen nur „Zurückholen“. Am eigenen Konto kein Rollenwechsel, kein Sperren, Löschen, Passwort-Link,
+  Faktor-Reset, Überall abmelden, Lösen (`NOT_ON_SELF`). Offene Einladungen als Karte des Moduls (abgelaufene mit
+  „Abgelaufen“, Zurücknehmen mit Rückfrage), Einladen und Passwort-Link aus `INVITE_DIALOG`/`RESET_LINK_DIALOG`. Darunter
+  nexnotes' eigene Karte „Was du siehst“ und, wie bisher, „API-Token aller Konten“.
+- **vitest-Vorlage** mit den Blöcken von 0.3.9 und 0.3.10 (`values`, Namensraum `account`, „Zuletzt geändert“,
+  Kontenliste mit `APP_CAPS`, `APP_OWN`, `APP_ACCOUNTS_RENDER.list`); unter `account.*` keine eigenen Schlüssel.
+- **Playwright** (nicht ausgeführt): `e2e/menus.spec.ts` prüft jetzt das Fenster „Verwalten“ statt des Menüs,
+  `e2e/attachments.spec.ts` setzt die Speichergrenze mit dem Passwort des Betreibers.
+- **Läufe (25.11.2026 abends):** Backend `pytest -q -n 2` 2016 grün, 47 übersprungen (darin Vertrag `tests/nexkonten`
+  230 grün, 2 übersprungen; Test „Bestand“ 55 grün); `pytest -m timing` 17 grün; Frontend `vitest --maxWorkers=2` 916
+  grün in 72 Dateien; `npm run build`, `npm run lint`, `ruff check` sauber. Playwright nicht ausgeführt.
 
 **Abweichungen vom Modul (bewusst):** Die wartende Anmeldung zwischen Passwort und Code bleibt nexnotes' eigene
 (`totp.start_pending`, Cookie `PENDING_COOKIE`; geprüft wird über `factor.check_code`), weil nexnotes eine eigene
