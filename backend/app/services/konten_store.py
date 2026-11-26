@@ -286,6 +286,8 @@ class KontenStore:
             password_changed_at=utcnow() if new.password else None,
             language=new.language or "",
             whats_new_seen=__version__,
+            # A new account starts with "system" (konten 1.1.0, E45); only accounts of before have none.
+            theme=new.theme,
             # The limit new accounts start with (Bauplan E44, Server › General › Limits).
             storage_limit=_new_account_limit(self.db),
         )

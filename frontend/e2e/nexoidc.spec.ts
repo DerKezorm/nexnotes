@@ -1,4 +1,4 @@
-// Vorlage nexoidc 1.0.14
+// Vorlage nexoidc 1.2.0
 /**
  * The oidc tests of the end-to-end run (copied once from the shared sign-in module, then nexnotes' file).
  *

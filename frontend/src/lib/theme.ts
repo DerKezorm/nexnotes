@@ -82,9 +82,9 @@ export function takeAccountTheme(theme: string | undefined, take: (kept: string)
     applyMode(theme)
     return
   }
-  const kept = keptMode()
-  if (!kept) return
-  void take(kept).then(
+  // Only an account of before has no theme: it takes, once, what this browser really kept, raw (never what the
+  // browser prefers), and without one the server takes nexnotes' default of before (konten 1.1.0, E45).
+  void take(keptMode()).then(
     (answer) => {
       if (answer.theme === 'light' || answer.theme === 'dark' || answer.theme === 'system') applyMode(answer.theme)
     },

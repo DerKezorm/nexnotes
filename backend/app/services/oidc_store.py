@@ -369,6 +369,8 @@ class SqlStore:
             email_confirmed=True,
             email_proven=bool(address and invitation is not None and invitation.mailed),
             whats_new_seen=__version__,
+            # A new account through a provider starts with "system" too (konten 1.1.0, E45).
+            theme="system",
             storage_limit=settings_service.new_account_storage_limit(self.db),
         )
         self.db.add(row)
