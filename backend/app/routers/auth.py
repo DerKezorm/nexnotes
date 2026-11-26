@@ -756,7 +756,7 @@ class PaperDefaultIn(BaseModel):
 
 
 @router.put("/me/paper", summary="The paper new notes of the own account start on (NOTES-3 AC-17)")
-def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession) -> dict[str, Any]:
+def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession, request: Request) -> dict[str, Any]:
     row = db.get(AccountRow, account.id)
     assert row is not None
     paper = notes_service.check_paper(payload.paper)
@@ -764,7 +764,7 @@ def set_default_paper(payload: PaperDefaultIn, account: Account, db: DbSession) 
     preferences["paper"] = paper
     row.preferences = preferences
     db.commit()
-    return me(row, db)
+    return me(row, db, request)
 
 
 class HintKindsIn(BaseModel):
@@ -784,12 +784,12 @@ class ListLookIn(BaseModel):
 
 @router.put("/me/list-look", summary="How every list of notes of the own account looks: list, cards, compact or tiles, "
                                      "with which hints (checklists, attachments, tags)")
-def set_list_look(payload: ListLookIn, account: Account, db: DbSession) -> dict[str, Any]:
+def set_list_look(payload: ListLookIn, account: Account, db: DbSession, request: Request) -> dict[str, Any]:
     row = db.get(AccountRow, account.id)
     assert row is not None
     kinds = payload.hint_kinds.model_dump() if payload.hint_kinds is not None else None
     notes_list.set_list_look(db, row, payload.style, payload.hints, kinds)
-    return me(row, db)
+    return me(row, db, request)
 
 
 @router.put("/me/theme", summary="Light, dark or as the system, for the own account on every device")
