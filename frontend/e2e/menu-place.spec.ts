@@ -2,7 +2,7 @@
  * Every menu of nexnotes stays whole inside the window (found 27.11.2026 on a screen with the task bar below): the menu
  * of a note low in the list opens upward or moves up, also when the note's own entries and the paper come a moment
  * later; the paper fits the menu's width, so the menu never scrolls sideways; a menu of the selection bar low in a note
- * opens above the bar. At 1080 px height and in a narrow window.
+ * opens above the bar. At 1080 px height, in a narrow window and at 420 px width.
  */
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
@@ -31,6 +31,8 @@ test.beforeAll(async ({ request }) => {
 for (const size of [
   { width: 1920, height: 1080 },
   { width: 900, height: 700 },
+  // A narrow window: the color circles fit the menu too.
+  { width: 420, height: 860 },
 ]) {
   test(`the menu of the lowest note in the list stays inside the window, paper without sideways scrolling, ${size.width}×${size.height}`, async ({ page }) => {
     await page.setViewportSize(size)
@@ -45,16 +47,24 @@ for (const size of [
       scroller.scrollTop = scroller.scrollHeight
       for (let at: HTMLElement | null = element; at; at = at.parentElement) at.scrollTop = at.scrollHeight
     })
-    const shown = await rows.evaluateAll((all) =>
-      all
-        .map((row, index) => {
-          const box = row.getBoundingClientRect()
-          const seen = document.elementFromPoint(box.left + 20, box.bottom - 4)
-          return { index, whole: box.top >= 0 && box.bottom <= window.innerHeight && Boolean(seen && row.contains(seen)) }
-        })
-        .filter((row) => row.whole),
-    )
-    const lowest = rows.nth(shown[shown.length - 1].index)
+    // The virtual list draws its rows anew after the scroll: wait until the lowest whole one stands low on screen.
+    const lowestShown = () =>
+      rows.evaluateAll((all) =>
+        all
+          .map((row, index) => {
+            const box = row.getBoundingClientRect()
+            const seen = document.elementFromPoint(box.left + 20, box.bottom - 4)
+            return { index, whole: box.top >= 0 && box.bottom <= window.innerHeight && Boolean(seen && row.contains(seen)) }
+          })
+          .filter((row) => row.whole)
+          .map((row) => row.index)
+          .at(-1) ?? -1,
+      )
+    await expect.poll(async () => {
+      const at = await lowestShown()
+      return at < 0 ? 0 : ((await rows.nth(at).boundingBox())?.y ?? 0)
+    }).toBeGreaterThan(size.height * 0.5)
+    const lowest = rows.nth(await lowestShown())
     const box = (await lowest.boundingBox())!
     expect(box.y + box.height).toBeGreaterThan(size.height * 0.6)
     await lowest.click({ button: 'right', position: { x: 20, y: box.height - 4 } })

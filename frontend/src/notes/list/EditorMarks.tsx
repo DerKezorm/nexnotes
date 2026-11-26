@@ -73,21 +73,25 @@ export function NoteColorRow({ noteId, head, onDone }: { noteId: string; head: H
   )
 }
 
-/** None, or one of the folders' twelve colors (the fixed row of NOTES-6 AC-8). */
+/** None, or one of the folders' twelve colors (the fixed row of NOTES-6 AC-8). Each circle is 24 px inside its button;
+ * on a phone or a narrow window a button is 44 px to tap (`styles/index.css`), so the row wraps instead of running out
+ * of the menu, which never scrolls sideways. */
 export function ColorSwatches({ current, onChoose }: { current: string; onChoose: (color: string) => void }) {
   const { t } = useTranslation()
   return (
-    <div className="grid grid-cols-7 gap-1.5" role="group" aria-label={t('noteList.menu.color')}>
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label={t('noteList.menu.color')} data-testid="color-swatches">
       <button
         type="button"
         role="menuitemradio"
         aria-checked={current === ''}
         aria-label={t('noteList.menu.noColor')}
         title={t('noteList.menu.noColor')}
-        className="flex h-6 w-6 items-center justify-center rounded-full border border-edge text-mist-500"
+        className="flex h-6 w-6 items-center justify-center rounded-full"
         onClick={() => onChoose('')}
       >
-        {current === '' ? <Check aria-hidden className="h-3.5 w-3.5" /> : <span aria-hidden className="h-px w-3 rotate-45 bg-mist-500" />}
+        <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full border border-edge text-mist-500">
+          {current === '' ? <Check aria-hidden className="h-3.5 w-3.5" /> : <span aria-hidden className="h-px w-3 rotate-45 bg-mist-500" />}
+        </span>
       </button>
       {FOLDER_COLORS.map((entry) => (
         <button
@@ -98,10 +102,11 @@ export function ColorSwatches({ current, onChoose }: { current: string; onChoose
           aria-label={t(`folders.colors.${entry.key}`)}
           title={t(`folders.colors.${entry.key}`)}
           className="flex h-6 w-6 items-center justify-center rounded-full"
-          style={{ background: entry.hex }}
           onClick={() => onChoose(entry.key)}
         >
-          {current === entry.key && <Check aria-hidden className="h-3.5 w-3.5 text-on-accent" strokeWidth={3} />}
+          <span aria-hidden className="flex h-6 w-6 items-center justify-center rounded-full" style={{ background: entry.hex }} data-swatch={entry.key}>
+            {current === entry.key && <Check aria-hidden className="h-3.5 w-3.5 text-on-accent" strokeWidth={3} />}
+          </span>
         </button>
       ))}
     </div>
