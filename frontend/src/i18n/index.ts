@@ -19,7 +19,6 @@ import { initReactI18next } from 'react-i18next'
 
 import { kontenVariables } from '../vendor/nexkonten/konten'
 import { ownLanguages, type LanguageOption } from '../vendor/nexsprachen/languages'
-import type { Texts as SprachenTexts } from '../vendor/nexsprachen/sprachen'
 import kontenDe from '../vendor/nexkonten/konten.de.json'
 import kontenEn from '../vendor/nexkonten/konten.en.json'
 import { postVariables } from '../vendor/nexpost/post'
@@ -59,7 +58,7 @@ export const own = ownLanguages({ base: '/api/locales' })
 export const BUILT_IN = Object.entries(SHIPPED).map(([code, entry]) => ({ code, name: entry.name }))
 
 /** The English texts, for the template the card "Sprachen" hands out (the server has none). */
-export const TEMPLATE_TEXTS = en as SprachenTexts
+export const TEMPLATE_TEXTS = en
 
 /** Shipped texts first, the operator's file on top. False when there is nothing for this code at all. */
 async function loadTexts(code: string): Promise<boolean> {

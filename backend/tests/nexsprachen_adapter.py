@@ -61,6 +61,21 @@ class Adapter(StandardAdapter):
         locales.forget()
         shutil.rmtree(self._folder, ignore_errors=True)
 
+    def offered_template(self) -> dict[str, Any]:
+        """The page makes the template (``TEMPLATE_TEXTS`` in ``frontend/src/i18n/index.ts``): nexnotes' English
+        texts with those of the shared modules it lays over them (sign-in, accounts, mail), through the module's
+        rules (``texts_only``), with ``_meta``."""
+        import json
+
+        from app.vendor import nexsprachen
+
+        src = Path(__file__).resolve().parents[2] / "frontend" / "src"
+        english: dict[str, Any] = {}
+        for part in ("i18n/en.json", "vendor/nexoidc/oidc.en.json", "vendor/nexkonten/konten.en.json",
+                     "vendor/nexpost/post.en.json"):
+            english.update(json.loads((src / part).read_text(encoding="utf-8")))
+        return {"_meta": {"name": "x"}, **nexsprachen.texts_only(english)}
+
     def restart(self) -> None:
         """nexnotes started again on the same data, as in production: its start (the lifespan of the app: the
         folder, ``tidy_at_start``) runs once more."""
