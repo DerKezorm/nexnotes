@@ -331,6 +331,23 @@ anderes und ist anzupassen.
 **Fehlt noch:** Sichtprüfung der geänderten Bildschirme (kein Playwright in dieser Runde), die iPhone-App
 (`login` beim Laden auffrischen, Beschriftung „Benutzername“), e2e-Läufe (Texte geprüft, nicht ausgeführt).
 
+### Durchgang „Module“ (26.11.2026)
+
+Aus `bauplaene` Zweig `einst-module` (bis `de70ac2`), je `tools/sync.py copy`, `check` grün. Fragen und Modulfehler in
+`einst-fragen/nexnotes-module.md`.
+
+| Modul | Fassung | was nexnotes dafür gebaut hat | alte Wege (bleiben) | Umwege |
+|---|---|---|---|---|
+| ui | 1.1.1 | `AboutPage showUpdates` (Mitglieder ohne Karte „Aktualisierungen“) | – | – |
+| schluessel | 1.1.0 | `CONFIG`: Extra `mcp` an API-Schlüsseln ausgedient (`retired_options`), Art `mcp` wieder anlegbar mit Ordnern, Programme zählen mit; Vorlage `nexschluessel.test.tsx` 1.1.0 | `POST /api/tokens` setzt `mcp: true` weiter (`retired=True`, Entscheidung 12) | – |
+| sicherung | 1.0.4 | nichts (keine App-Tests mit altem Wortlaut oder „Jetzt sichern“ ohne Bestätigen); neuer Vertragstest herunterladen → hochladen → prüfen grün | `/api/backups/*` | – |
+| updates | 0.1.1 | `services/updates.py` = `configure` + Modulnamen, `routers/about.py` = `nexupdates.api.router` (Zusammenfassungen von vorher, E53), Einrichtung mit „Nach neuen Versionen sehen“ (`UpdateSetupRow`, `SetupIn.update_check` → `at_setup`), `AboutArea` mit `useUpdates`; keine Glocke, also kein Blick im Hintergrund (U19) | `/api/about`, `/api/about/updates` (Mitglied: alte Form leer + `hidden`, U21), Schalter `update_check` | drei Vertragstests „Glocke“ übersprungen (`tests/conftest.py` `WITHOUT_A_BELL`, `TODO updates 0.1.1`) |
+| mcp | 1.1.0 | `services/mcp.py`: Werkzeuge als `nexmcp.Tool` (Namen, Schemas unverändert; Gruppen read/change, `trash_note` risky), `CONFIG` (403 `mcp_off`, 4 MB, `nn_mcp_`/`nnr_`, Codes `nnc_`); `services/mcp_store.py` (Store über `api_tokens`, `oauth_*`, neu `mcp_tool_rights`, `mcp_requests`; Spalten `api_tokens.refreshed_at`, `oauth_codes.folder_ids`/`resource`); Wanderung: „MCP-Zugang“ einer Bestands-Datenbank bleibt an, neue Installation aus (Entscheidung 5); Oberfläche: Zustimmung, `/mcp/requests/<id>`, „Rechte je Werkzeug“, „Wartende Rückfragen“, Betreiber-Einstellungen in „Schnittstellen“ | `/api/mcp` (gleiche Status, Kennungen), `/api/oauth/register|authorize|token`, Schlüssel `nn_mcp_`, `nn_api_` mit Haken, Programme samt `refresh_old_hash`, `/api/tokens` | `routers/oauth.py`: Hüllen für `GET`/`POST /api/oauth/authorize` (`ConsentIn`, `approve` und `allow`) und `/api/oauth/token` (JSON und Formular), `TODO mcp 1.1.0` |
+| verbinden | 0.1.1 | `models_verbinden.py` (`vb_*`), `services/verbinden_store.py` (Zugang `nnx_`/`nnxr_`/`nnxc_`, Einstellungen `connect.*`, Altes über `nextasks_connections`), `routers/verbinden.py`; Gastgeber: `/api/v1` nimmt Verbindungs-Token mit Zweck `notes.add` (Recht und Ordner wie ein API-Token, Schalter „Verbindungen“ statt API-Schalter); Gast: nextasks-Abrufe über `nexverbinden.call`, wenn verbunden; Karten aller Partner (`connect/AppsArea.tsx`), nextasks' Schlüssel als „Von Hand verbinden“, „Bereiche und Listen“ auch bei Verbindung per Klick; Betreiber-Karte „Andere nex-Apps“ unter Allgemein; Seiten `/connect/app`, `/connect/return`; Widerrufe alle 5 Minuten, endgültiges Löschen beendet Verbindungen | `PUT`/`DELETE /api/nextasks`, `GET /api/nextasks` (dazu `by`), API-Token an `/api/v1` | – |
+
+Dazu: `PROGRAM_PATHS` des Tab-Wächters um `/api/oauth/revoke`, `/api/connect/token|revoke|retire` (Test
+`tests/test_program_paths.py`); Geräte erreichen `/api/connect/` nicht (`DEVICE_REFUSED_PREFIXES`).
+
 ## 1. Bestand heute (1.0.1)
 
 ### Datenmodell (`backend/app/models.py`)
