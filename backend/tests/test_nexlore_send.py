@@ -96,6 +96,8 @@ def test_a_locked_note_and_one_of_somebody_else_never_go(client, operator, lore)
     with SessionLocal() as db:
         db.get(Note, note["id"]).locked = True
         db.commit()
+    # Two checks keep it away, the route's and the one of every change by the server (``notes.change``); with both
+    # taken out this turns red (200, the note in nexlore), with one of them it stays green.
     locked = client.post("/api/nexlore/send", json={"note_id": note["id"], "space": "Wissen"})
     assert locked.status_code == 409 and locked.json()["detail"]["code"] == "note_locked"
     gone = client.post("/api/nexlore/send", json={"note_id": "no-such-note", "space": "Wissen"})
