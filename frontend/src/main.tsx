@@ -25,6 +25,8 @@ import './devices/register'
 import './nextasks/register'
 // The cards of the other nex apps (module verbinden), in the place of nextasks' card of before.
 import './connect/register'
+// A note into nexlore over its connection (module verbinden).
+import './nexlore/register'
 // The consent page of connecting AI programs (NOTES-20).
 import './mcp/register'
 // API tokens for programs, AI tools and the nexdeck card (NOTES-25), in Settings, Connections.

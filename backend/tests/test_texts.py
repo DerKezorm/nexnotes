@@ -107,8 +107,18 @@ def test_no_api_message_is_the_code_spelt_out() -> None:
         assert (text[0].isupper() or text.startswith("nexnotes")) and text.lower().rstrip(".") != code.replace("_", " "), code
 
 
+#: Files that speak of another nex app on purpose: the partner of a connection (module verbinden, Runde 2 V19).
+PARTNER_FILES = {APP / "routers" / "nexlore.py"}
+
+
 def test_no_other_app_speaks_in_the_server() -> None:
-    assert re.findall(r"nexcanvas|nexlore|\bboards?\b|Give an address", _sources(APP, (".py",))) == []
+    own = "\n".join(path.read_text(encoding="utf-8") for path in sorted(APP.rglob("*.py"))
+                    if path not in PARTNER_FILES and not SHARED & set(path.parts))
+    # The router of the partner is mounted by its module name (``main.py``), the only other mention.
+    own = own.replace("from .routers import nexlore as nexlore_router", "").replace("nexlore_router", "")
+    assert re.findall(r"nexcanvas|nexlore|\bboards?\b|Give an address", own) == []
+    # The partner files name no app but their partner.
+    assert all("nexcanvas" not in path.read_text(encoding="utf-8") for path in PARTNER_FILES)
 
 
 def test_the_public_address_refusal_names_no_other_app(client: TestClient, operator: Account) -> None:

@@ -55,6 +55,7 @@ from .routers import backups as backups_router
 from .routers import guide as guide_router
 from .routers import logs as logs_router
 from .routers import mcp as mcp_router
+from .routers import nexlore as nexlore_router
 from .routers import nextasks as nextasks_router
 from .routers import notes as notes_router
 from .routers import notes_list as notes_list_router
@@ -102,7 +103,7 @@ FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, searc
                          mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router,
                          app_pairing_router, app1_router, app1_member_router, app1_smart_router, app1_trash_router,
                          app1_files_router, app1_share_router, app1_import_router, app_links_router,
-                         verbinden_router]
+                         verbinden_router, nexlore_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:

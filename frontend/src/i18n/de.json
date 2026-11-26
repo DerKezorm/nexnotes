@@ -510,7 +510,10 @@
     "keep_invalid": "Zwischen 1 und 365.",
     "schedule_invalid": "Aus, jede Nacht, jede Woche oder jeden Monat.",
     "time_invalid": "Bitte eine Uhrzeit wie 03:00.",
-    "restore_options_invalid": "Diese Antworten passen nicht zu den Fragen beim Wiederherstellen."
+    "restore_options_invalid": "Diese Antworten passen nicht zu den Fragen beim Wiederherstellen.",
+    "nexlore_not_connected": "nexlore ist nicht verbunden. Verbinde es unter Mein Konto › Verbindungen.",
+    "nexlore_unreachable": "nexlore ist gerade nicht erreichbar. Versuch es gleich noch einmal.",
+    "nexlore_refused": "nexlore nimmt diese Verbindung nicht mehr an. Verbinde es unter Mein Konto › Verbindungen neu."
   },
   "folders": {
     "section": "Ordner",
@@ -1948,5 +1951,14 @@
   "emailLink": {
     "title": "Neue Adresse bestätigen",
     "submit": "Bestätigen"
+  },
+  "nexlore": {
+    "menu": "An nexlore",
+    "title": "Notiz an nexlore",
+    "text": "Die Notiz kommt als neue Notiz in einen Bereich von nexlore, mit Titel und Text. Hier bleibt sie, wie sie ist.",
+    "space": "Bereich in nexlore",
+    "send": "Senden",
+    "sent": "Liegt jetzt in nexlore: {{path}}",
+    "none": "nexlore bietet keinen Bereich an."
   }
 }

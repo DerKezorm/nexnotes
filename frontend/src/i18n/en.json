@@ -510,7 +510,10 @@
     "keep_invalid": "Between 1 and 365.",
     "schedule_invalid": "Off, every night, every week or every month.",
     "time_invalid": "Enter a time such as 03:00.",
-    "restore_options_invalid": "These answers do not fit the questions of the restore."
+    "restore_options_invalid": "These answers do not fit the questions of the restore.",
+    "nexlore_not_connected": "nexlore is not connected. Connect it under My account › Connections.",
+    "nexlore_unreachable": "nexlore cannot be reached right now. Try again in a moment.",
+    "nexlore_refused": "nexlore no longer takes this connection. Connect it anew under My account › Connections."
   },
   "folders": {
     "section": "Folders",
@@ -1948,5 +1951,14 @@
   "emailLink": {
     "title": "Confirm the new address",
     "submit": "Confirm"
+  },
+  "nexlore": {
+    "menu": "To nexlore",
+    "title": "Note to nexlore",
+    "text": "The note goes into a space of nexlore as a new note, with its title and text. Here it stays as it is.",
+    "space": "Space in nexlore",
+    "send": "Send",
+    "sent": "Now in nexlore: {{path}}",
+    "none": "nexlore offers no space."
   }
 }

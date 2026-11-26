@@ -53,8 +53,9 @@ describe('shipped languages', () => {
   })
 
   it('never speak of boards, spaces or another app', () => {
-    // nexnotes has no areas of its own; nextasks' areas ("Bereiche und Listen" in its card) are nextasks' word.
-    const foreign = [...german, ...english].filter(([key, text]) => /\bboards?\b|Whiteboard|nexcanvas|nexsuite/i.test(text) || (/\bBereich/i.test(text) && !key.startsWith('nextasks.')))
+    // nexnotes has no areas of its own; nextasks' areas ("Bereiche und Listen" in its card) and nexlore's spaces (a note
+    // into nexlore, module verbinden) are their word.
+    const foreign = [...german, ...english].filter(([key, text]) => /\bboards?\b|Whiteboard|nexcanvas|nexsuite/i.test(text) || (/\bBereich/i.test(text) && !key.startsWith('nextasks.') && !key.startsWith('nexlore.')))
     expect(foreign.map(([key, text]) => `${key}: ${text}`)).toEqual([])
   })
 })
