@@ -252,26 +252,25 @@ def test_forgot_password_mails_at_once_and_a_mail_that_fails_takes_its_link(
     from app.models import PasswordReset
     from app.models_accounts import MailOutbox
     from app.routers import auth as auth_router
-    from app.vendor import nexpost
+    from app.vendor.nexpost import testing
 
     anna = make_account("anna")
     monkeypatch.setattr(auth_router, "FORGOT_AT_ONCE", True)
     with SessionLocal() as db:
         settings_service.save(db, {"smtp_host": "smtp.example.com", "smtp_from": "notes@example.com",
                                    "public_url": "https://notes.example.com"})
-    sent: list[str] = []
-    monkeypatch.setattr(nexpost.send, "deliver", lambda _settings, letter: sent.append(letter.to))
-    assert client.post("/api/auth/forgot", json={"name": "anna"}).status_code == 202
-    assert sent == ["anna@example.com"]
+    # The module's catcher (post 1.1.0, E44) instead of an own patch of ``send.deliver``: it catches every way out
+    # and fails the test if one reached a real mail server.
+    with testing.catch_mail() as caught:
+        assert client.post("/api/auth/forgot", json={"name": "anna"}).status_code == 202
+    assert [letter.to for letter in caught.sent] == ["anna@example.com"] and caught.queued == []
     with SessionLocal() as db:
         assert db.scalar(select(MailOutbox)) is None
         assert db.scalar(select(PasswordReset).where(PasswordReset.account_id == anna.id)) is not None
 
-    def refuse(_settings: object, _letter: object) -> None:
-        raise nexpost.MailError("mail_unreachable", "The mail server cannot be reached.")
-
-    monkeypatch.setattr(nexpost.send, "deliver", refuse)
-    assert client.post("/api/auth/forgot", json={"name": "anna"}).status_code == 202
+    with testing.catch_mail(fail=True) as caught:
+        assert client.post("/api/auth/forgot", json={"name": "anna"}).status_code == 202
+    assert [letter.to for letter in caught.refused] == ["anna@example.com"]
     with SessionLocal() as db:
         assert db.scalar(select(MailOutbox)) is None
         assert db.scalar(select(PasswordReset).where(PasswordReset.account_id == anna.id)) is None
