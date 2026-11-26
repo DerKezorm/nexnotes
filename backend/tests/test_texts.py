@@ -40,7 +40,7 @@ RAISED = re.compile(
 #: ``mail.error.*``, the key module's, checked in ``frontend/src/nexkonten.test.ts``, ``nexpost.test.ts`` and
 #: ``nexschluessel.test.tsx``; the languages module's in ``nexsprachen.test.tsx``) and name other apps in their comments;
 #: they are not nexnotes' to word.
-SHARED = {"nexkonten", "nexpost", "nexschluessel", "nexsprachen"}
+SHARED = {"nexkonten", "nexpost", "nexschluessel", "nexsprachen", "nexupdates"}
 
 
 def _sources(folder: Path, suffixes: tuple[str, ...]) -> str:

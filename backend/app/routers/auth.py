@@ -47,7 +47,18 @@ from ..security import (
     sessions_ended,
     start_session,
 )
-from ..services import accounts, kontenpost, locales, mailer, mounts, notes_list, settings_service, storage, totp
+from ..services import (
+    accounts,
+    kontenpost,
+    locales,
+    mailer,
+    mounts,
+    notes_list,
+    settings_service,
+    storage,
+    totp,
+    updates,
+)
 from ..services import notes as notes_service
 from ..services.accounts import AccountError
 from ..services.konten_store import KontenStore
@@ -82,6 +93,8 @@ class SetupIn(BaseModel):
     code: str = Field(default="", max_length=200)
     #: The username (since the shared account module); left out, a suggestion from the display name.
     name: str | None = Field(default=None, max_length=64)
+    #: "Nach neuen Versionen sehen" of the setup (module updates, U1); left out, nothing is stored (on).
+    update_check: bool | None = None
 
 
 class LoginIn(BaseModel):
@@ -359,6 +372,9 @@ def setup(payload: SetupIn, request: Request, response: Response, db: DbSession)
         raise fail(exc) from exc
     account = db.get(AccountRow, int(done.account.id))
     assert account is not None
+    if payload.update_check is not None:
+        # U1: the answer of the setup, stored only while nothing is (an installation from before keeps its value).
+        updates.at_setup(payload.update_check)
     return sign_in(db, request, response, account)
 
 

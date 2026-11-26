@@ -71,7 +71,7 @@ from .routers import tokens as tokens_router
 from .routers import totp as totp_router
 from .routers import vault as vault_router
 from .security import HashingBusy, purge_sessions
-from .services import backups, cleanup, locales, logs, oidc_store, post_store, settings_service, totp
+from .services import backups, cleanup, locales, logs, oidc_store, post_store, settings_service, totp, updates
 from .services.konten_store import KontenStore
 from .vendor import nexoidc
 from .vendor.nexkonten import factor as konten_factor
@@ -175,6 +175,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # A restore that failed at this start: the operators hear it once (the log; the page says it too).
     backups.report_failed_restore()
     _remember_version()
+    # The update check on this data (module updates); no bell, so no look in the background (U19).
+    updates.configure()
     # The TLS context of the calls to providers and authentik, read once here outside the event loop (vendor/nexoidc).
     await nexoidc.warm()
     private.tighten_all()

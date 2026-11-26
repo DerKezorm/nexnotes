@@ -1,4 +1,5 @@
-"""The about page and the update check (block X2), after nexmail.
+"""The about page and the update check (block X2), after nexmail; since the module updates (``vendor/nexupdates``,
+its contract tests in ``tests/nexupdates``) only the operator sees the answer (U2, U15).
 
 The check is a side matter: when GitHub is slow, gone or answers rubbish, the page shows no answer and nothing else
 changes. No test here reaches GitHub; the conftest points the address at a port that refuses.
@@ -30,7 +31,7 @@ def answers(monkeypatch: pytest.MonkeyPatch, tag: str | None) -> list[int]:
         asked.append(1)
         return tag
 
-    monkeypatch.setattr(updates, "_ask", ask)
+    monkeypatch.setattr(updates.check, "ask", ask)
     return asked
 
 
@@ -61,14 +62,23 @@ def test_the_about_page_names_version_licence_and_where_it_comes_from(client: Te
     assert about["project_url"] == "https://github.com/DerKezorm/nexnotes"
 
 
-def test_every_account_sees_the_answer_and_only_the_operator_switches_or_asks(
+def test_only_the_operator_sees_the_answer_and_only_the_operator_switches_or_asks(
     client: TestClient, account: Account, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    answers(monkeypatch, "v99.0.0")
+    """U2, U15, U21: the operator sees the answer; a member gets the same form with every field empty and ``hidden``,
+    and its look asks nothing."""
+    asked = answers(monkeypatch, "v99.0.0")
     anna = new_client(make_account("anna"))
-    seen = anna.get("/api/about/updates").json()
+    hidden = anna.get("/api/about/updates")
+    assert hidden.status_code == 200
+    assert hidden.json() == {"update_check": False, "checked": False, "latest": None, "newer": False,
+                             "checked_at": None, "release_url": None, "hidden": True}
+    assert asked == []
+    seen = client.get("/api/about/updates").json()
     assert (seen["update_check"], seen["checked"], seen["latest"], seen["newer"]) == (True, True, "v99.0.0", True)
     assert seen["release_url"] == "https://github.com/DerKezorm/nexnotes/releases/tag/v99.0.0"
+    assert seen["hidden"] is False
+    assert anna.get("/api/about/updates").json()["latest"] is None
     assert anna.post("/api/about/updates/check").status_code == 403
     assert anna.put("/api/about/updates", json={"update_check": False}).status_code == 403
     # Without an account: nothing.
@@ -85,9 +95,9 @@ def test_on_by_default_asked_once_a_day_and_again_when_a_day_is_over(
     client.get("/api/about/updates")
     assert len(asked) == 1
     # A day later the next look asks again.
-    old = updates._known
+    old = updates.check._known
     assert old is not None and old.checked_at is not None
-    updates._known = updates.State(
+    updates.check._known = updates.State(
         current=old.current, latest=old.latest, checked_at=old.checked_at - timedelta(hours=25)
     )
     client.get("/api/about/updates")
@@ -144,7 +154,10 @@ def test_a_failure_at_github_breaks_nothing(
         def get(self, *args: object, **kwargs: object) -> httpx.Response:
             raise failure
 
-    monkeypatch.setattr(updates.httpx, "Client", Broken)
+        def stream(self, *args: object, **kwargs: object) -> httpx.Response:
+            raise failure
+
+    monkeypatch.setattr(updates.check.httpx, "Client", Broken)
     answer = client.get("/api/about/updates")
     assert answer.status_code == 200
     assert (answer.json()["checked"], answer.json()["latest"], answer.json()["newer"]) == (True, None, False)
@@ -161,17 +174,17 @@ def test_a_private_repository_or_an_error_page_is_no_answer(
         return make  # type: ignore[return-value]
 
     # While the repository is private GitHub says "not found".
-    monkeypatch.setattr(updates.httpx, "Client", transport(404, {"message": "Not Found"}))
+    monkeypatch.setattr(updates.check.httpx, "Client", transport(404, {"message": "Not Found"}))
     assert client.post("/api/about/updates/check").json()["latest"] is None
-    monkeypatch.setattr(updates.httpx, "Client", transport(200, {"tag_name": "v9.9.9"}))
+    monkeypatch.setattr(updates.check.httpx, "Client", transport(200, {"tag_name": "v9.9.9"}))
     shown = client.post("/api/about/updates/check").json()
     assert (shown["latest"], shown["newer"]) == ("v9.9.9", True)
     # An error page is no answer, whatever it carries; what the last good check found stays (review before 1.0.0).
-    monkeypatch.setattr(updates.httpx, "Client", transport(503, {"tag_name": "v1.2.3"}))
+    monkeypatch.setattr(updates.check.httpx, "Client", transport(503, {"tag_name": "v1.2.3"}))
     assert client.post("/api/about/updates/check").json()["latest"] == "v9.9.9"
     updates.forget()
     assert client.post("/api/about/updates/check").json()["latest"] is None
-    monkeypatch.setattr(updates.httpx, "Client", transport(200, ["not", "a", "release"]))
+    monkeypatch.setattr(updates.check.httpx, "Client", transport(200, ["not", "a", "release"]))
     assert client.post("/api/about/updates/check").json()["latest"] is None
 
 
@@ -185,11 +198,14 @@ def test_the_question_goes_to_the_releases_of_nexnotes_and_carries_nothing_else(
             seen.append(request)
             return httpx.Response(200, json={"tag_name": "v0.0.1"})
 
-        return REAL_CLIENT(transport=httpx.MockTransport(handle))
+        # The client as the module makes it (its headers, no proxy), only the network replaced.
+        return REAL_CLIENT(**{**kwargs, "transport": httpx.MockTransport(handle)})  # type: ignore[arg-type]
 
-    monkeypatch.setattr(updates.httpx, "Client", make)
+    monkeypatch.setattr(updates.check.httpx, "Client", make)
     monkeypatch.setattr(updates, "get_settings", lambda: type("S", (), {"update_url": ""})())
     client.post("/api/about/updates/check")
     assert [str(request.url) for request in seen] == ["https://api.github.com/repos/DerKezorm/nexnotes/releases/latest"]
     assert seen[0].method == "GET" and seen[0].content == b""
     assert "cookie" not in seen[0].headers and "authorization" not in seen[0].headers
+    # The module's neutral name, without the version of this server (U10).
+    assert seen[0].headers["user-agent"] == "nex-update-check"

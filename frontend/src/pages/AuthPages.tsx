@@ -36,6 +36,7 @@ import {
 } from '../vendor/nexkonten/konten'
 import type { ButtonName } from '../vendor/nexkonten/konten'
 import { AuthCard, Button, Checkbox, Field, Notice, TextLink } from '../vendor/nexui'
+import { UpdateSetupRow } from '../vendor/nexupdates/UpdateSetupRow'
 
 export function AuthFrame({ title, text, children, footer }: { title: string; text?: string; children: ReactNode; footer?: ReactNode }) {
   useTitle(title)
@@ -156,6 +157,8 @@ export function SetupPage() {
   const [password, setPassword] = useState('')
   const again = usePasswordConfirm(password)
   const [code, setCode] = useState('')
+  // "Nach neuen Versionen sehen", ticked from the start (module updates, U1).
+  const [updateCheck, setUpdateCheck] = useState(true)
   const [busy, setBusy] = useState(false)
   const [problem, setProblem] = useState<Trouble>(null)
   useEffect(() => {
@@ -198,6 +201,7 @@ export function SetupPage() {
                 password_confirm: again.confirm,
                 code: code.trim(),
                 language: i18n.language,
+                update_check: updateCheck,
               }),
             )
           } catch (error) {
@@ -222,6 +226,7 @@ export function SetupPage() {
             {t(note)}
           </p>
         ))}
+        <UpdateSetupRow app="nexnotes" checked={updateCheck} onChange={setUpdateCheck} language={i18n.language} />
         <Primary name="setupSubmit" busy={busy}>{t('setup.submit')}</Primary>
       </form>
     </AuthFrame>

@@ -1,9 +1,6 @@
 {
   "about": {
-    "subtitle": "Schnelle Notizen, selbst gehostet.",
-    "updates": {
-      "whatGoesOut": "Hinaus geht nur die Frage: eine Anfrage an api.github.com nach der neuesten Veröffentlichung von nexnotes, ohne Namen, Notizen oder Einstellungen. Es ist der einzige Ruf, den nexnotes von sich aus macht."
-    }
+    "subtitle": "Schnelle Notizen, selbst gehostet."
   },
   "accounts": {
     "countNotes_one": "{{count}} Notiz",

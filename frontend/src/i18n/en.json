@@ -1,9 +1,6 @@
 {
   "about": {
-    "subtitle": "Quick notes, self-hosted.",
-    "updates": {
-      "whatGoesOut": "Only the question goes out: a request to api.github.com for the newest release of nexnotes, with no names, notes or settings. It is the only call nexnotes makes on its own."
-    }
+    "subtitle": "Quick notes, self-hosted."
   },
   "accounts": {
     "countNotes_one": "{{count}} note",

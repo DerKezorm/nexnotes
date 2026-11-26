@@ -117,8 +117,9 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     expect(box.textContent).not.toContain(i18n.t('errors.password_mismatch'))
     await submit(box.querySelector('form')!)
     expect(sent('POST', '/api/setup').map((call) => call.body)).toEqual([
-      // The username follows the display name until somebody types into it (the shared account module).
-      { display_name: 'Robin', name: 'robin', email: '', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34', language: 'en' },
+      // The username follows the display name until somebody types into it (the shared account module); "Nach neuen
+      // Versionen sehen" goes along ticked (module updates, U1).
+      { display_name: 'Robin', name: 'robin', email: '', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34', language: 'en', update_check: true },
     ])
   })
 

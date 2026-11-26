@@ -3,21 +3,17 @@
  * whether a newer one is out, and what it is built with. An area of the settings (`/settings/about`, last in the
  * navigation, for every account); the old address `/about` leads there.
  *
- * The switch for the daily check stands here, where its answer shows, and the page says what goes out: the question
- * to GitHub is the one call nexnotes makes by itself. Every account sees the answer; switching and asking now belong
- * to the operator, because the question goes out for the whole installation.
+ * The state of the check comes from the shared module updates (`vendor/nexupdates`, `useUpdates`). Only the operator
+ * sees the card "Aktualisierungen", switches the daily check and asks now (U2, U15): the question goes out for the
+ * whole installation. A member sees its own version and nothing of the check. The card says what goes out.
  */
-import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api, ApiError } from '../../api/client'
-import { errorText, problemText } from '../../lib/errors'
+import { tabId } from '../../api/client'
 import { moment } from '../../lib/time'
 import { useAuth } from '../../state/auth'
 import { AboutPage, Notice, type BuiltWith } from '../../vendor/nexui'
-
-type About = { version: string; license: string; repo_url: string; releases_url: string; project_url: string }
-type Updates = { update_check: boolean; checked: boolean; latest: string | null; newer: boolean; checked_at: string | null; release_url: string | null }
+import { useUpdates, useUpdatesTexts, whatGoesOut, type Fetcher } from '../../vendor/nexupdates/updates'
 
 const PARTS: BuiltWith[] = [
   { name: 'FastAPI', url: 'https://fastapi.tiangolo.com', licence: 'MIT' },
@@ -38,78 +34,40 @@ const PARTS: BuiltWith[] = [
   { name: 'Noto Emoji', url: 'https://fonts.google.com/noto/specimen/Noto+Emoji', licence: 'OFL-1.1' },
 ]
 
-/** The refusal itself, so that its sentence gets the values the server sent along. */
-function sentence(error: unknown): string {
-  return error instanceof ApiError ? problemText(error) : errorText('internal_error')
+/** nexnotes' own client for the module: every request names its tab (changes are refused without it). */
+const fetcher: Fetcher = (path, init) => {
+  const headers = new Headers(init.headers)
+  headers.set('X-Nexnotes-Client', tabId())
+  return fetch(path, { credentials: 'same-origin', ...init, headers })
 }
 
 export function AboutArea() {
   const { t, i18n } = useTranslation()
   const { me } = useAuth()
-  const [about, setAbout] = useState<About | null>(null)
-  const [updates, setUpdates] = useState<Updates | null>(null)
-  const [problem, setProblem] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const operator = me?.role === 'operator'
+  const texts = useUpdatesTexts(i18n.language)
+  const state = useUpdates({ fetcher, operator, when: (iso) => moment(iso, i18n.language), language: i18n.language })
 
-  const load = useCallback(() => {
-    api<About>('/api/about').then(setAbout, (error: unknown) => setProblem(sentence(error)))
-    // The answer is a side matter: when it does not come, the page simply shows none.
-    api<Updates>('/api/about/updates').then(setUpdates, () => setUpdates(null))
-  }, [])
-  useEffect(load, [load])
-
-  async function checkNow() {
-    setBusy(true)
-    try {
-      setUpdates(await api<Updates>('/api/about/updates/check', { method: 'POST' }))
-      setProblem(null)
-    } catch (error) {
-      setProblem(sentence(error))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  async function switchCheck(on: boolean) {
-    if (updates) setUpdates({ ...updates, update_check: on })
-    try {
-      setUpdates(await api<Updates>('/api/about/updates', { method: 'PUT', body: { update_check: on } }))
-    } catch (error) {
-      setProblem(sentence(error))
-      load()
-    }
-  }
-
-  if (!about) return problem ? <Notice tone="danger">{problem}</Notice> : null
+  if (!state.about) return state.problem ? <Notice tone="danger">{state.problem}</Notice> : null
   return (
     <AboutPage
       app="nexnotes"
       logo="/logo.svg"
       tagline={t('about.subtitle')}
-      version={about.version}
-      licence={{ name: about.license, href: 'https://www.gnu.org/licenses/agpl-3.0.html' }}
-      source={about.repo_url}
-      releases={about.releases_url}
-      project={about.project_url || null}
-      updates={
-        updates
-          ? {
-              checkDaily: updates.update_check,
-              checked: updates.checked,
-              latest: updates.latest,
-              newer: updates.newer,
-              checkedAt: updates.checked_at ? moment(updates.checked_at, i18n.language) : null,
-              releaseUrl: updates.release_url,
-            }
-          : null
-      }
-      operator={me?.role === 'operator'}
-      onDaily={(on) => void switchCheck(on)}
-      onCheck={() => void checkNow()}
-      checking={busy}
+      version={state.about.version}
+      licence={{ name: state.about.license, href: 'https://www.gnu.org/licenses/agpl-3.0.html' }}
+      source={state.about.repo_url}
+      releases={state.about.releases_url}
+      project={state.about.project_url || null}
+      updates={state.updates}
+      showUpdates={state.showUpdates}
+      operator={operator}
+      onDaily={state.onDaily}
+      onCheck={state.onCheck}
+      checking={state.checking}
       builtWith={PARTS}
-      problem={problem}
-      texts={{ updatesWhatGoesOut: t('about.updates.whatGoesOut') }}
+      problem={state.problem}
+      texts={{ updatesWhatGoesOut: whatGoesOut(texts, 'nexnotes') }}
     />
   )
 }
