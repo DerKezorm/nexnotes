@@ -1,17 +1,17 @@
 /**
  * Server › General (plan "Einstellungen", "Allgemein"), the cards in their order: "Grenzen" (the largest attachment with
  * its own save, how long the history and the trash keep things), "Funktionen für alle Konten" (the switches),
- * "Schnittstellen" (the module schluessel's, placed by `SettingsAreas`), "Sprachen"
- * (built in, the operator's own as chips, the template, upload by code). And Server › Text recognition, nexnotes' own
+ * "Schnittstellen" (the module schluessel's, placed by `SettingsAreas`), "Sprachen" (the module sprachen's). And Server › Text recognition, nexnotes' own
  * area: the languages it reads as a segment of several. Built only from the ui kit.
  */
-import { useCallback, useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { api, type ExtraLocale } from '../../api/client'
-import { byName, forgetAddedLanguages, templateFile } from '../../i18n'
-import { Button, Buttons, Card, CheckboxRow, Chip, Field, Segment, SelectField } from '../../vendor/nexui'
-import { saveAsFile, useAction } from './actions'
+import { tabId } from '../../api/client'
+import { own, TEMPLATE_TEXTS } from '../../i18n'
+import { LanguagesCard as SharedLanguagesCard } from '../../vendor/nexsprachen/LanguagesCard'
+import type { Fetcher } from '../../vendor/nexsprachen/sprachen'
+import { Button, Card, CheckboxRow, Field, Segment, SelectField } from '../../vendor/nexui'
 import { Outcome } from './Outcome'
 import type { Server } from './ServerCards'
 
@@ -132,65 +132,17 @@ export function FeaturesCard({ server }: { server: Server }) {
   )
 }
 
-/** The operator's own languages (NOTES-22 AC-5): files in the data folder, or uploaded here. */
+/** nexnotes' way to the server for the card "Sprachen": every request names its tab (changes are refused without). */
+const sprachenFetch: Fetcher = (path, init) => {
+  const headers = new Headers(init.headers)
+  headers.set('X-Nexnotes-Client', tabId())
+  return fetch(path, { credentials: 'same-origin', ...init, headers })
+}
+
+/** The operator's own languages (NOTES-22 AC-5): the card of the module sprachen (E51), the template made on the page
+ * from the English texts; after a change the menus ask the server again. */
 export function LanguagesCard() {
-  const { t } = useTranslation()
-  const [list, setList] = useState<ExtraLocale[]>([])
-  const [code, setCode] = useState('')
-  const action = useAction()
-  const load = useCallback(() => {
-    api<ExtraLocale[]>('/api/locales').then((rows) => setList(rows.sort(byName)), () => undefined)
-  }, [])
-  useEffect(load, [load])
-  const upload = (chosen: File) =>
-    void action.run(async () => {
-      await api(`/api/locales/${encodeURIComponent(code)}`, { method: 'PUT', raw: chosen })
-      forgetAddedLanguages()
-      load()
-    }, t('server.languageAdded'))
-  return (
-    <Card id="languages" icon="Globe" title={t('server.languages')} subtitle={t('server.languagesHint')}>
-      <div className="flex flex-wrap gap-2" data-testid="languages-list">
-        <Chip>{`Deutsch · ${t('server.builtIn')}`}</Chip>
-        <Chip>{`English · ${t('server.builtIn')}`}</Chip>
-        {list.map((entry) => (
-          <Chip
-            key={entry.code}
-            name={entry.name}
-            disabled={action.busy}
-            testId={`language-${entry.code}`}
-            onRemove={() =>
-              void action.run(async () => {
-                await api(`/api/locales/${entry.code}`, { method: 'DELETE' })
-                forgetAddedLanguages()
-                load()
-              })
-            }
-          >
-            {`${entry.name} (${entry.code}) · ${t('server.texts', { count: entry.keys })}`}
-          </Chip>
-        ))}
-      </div>
-      <Buttons>
-        <Button kind="secondary" icon="Download" onClick={() => saveAsFile('nexnotes-language-template.json', templateFile())} testId="language-template">
-          {t('server.template')}
-        </Button>
-      </Buttons>
-      <Field
-        label={t('server.languageCode')}
-        value={code}
-        onChange={(event) => setCode(event.target.value.trim())}
-        placeholder="nl"
-        data-testid="language-code"
-        action={
-          <Button kind="secondary" icon="Upload" disabled={!code} busy={action.busy} accept="application/json,.json" onFile={upload} testId="language-upload">
-            {t('server.upload')}
-          </Button>
-        }
-      />
-      <Outcome problem={action.problem} done={action.done} />
-    </Card>
-  )
+  return <SharedLanguagesCard app="nexnotes" base="/api/locales" template={TEMPLATE_TEXTS} onChange={own.forget} fetcher={sprachenFetch} />
 }
 
 /** The languages text recognition reads (NOTES-1 AC-8, NOTES-11): German and English from the start. */

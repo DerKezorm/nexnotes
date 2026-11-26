@@ -1,6 +1,6 @@
 /**
  * Languages. English and German ship with the app; the operator can add more as JSON files, which the
- * server offers under `/api/locales`.
+ * server offers under `/api/locales` (the shared module sprachen, `vendor/nexsprachen`, since E51).
  *
  * English is always loaded and is the fallback: an added language may be incomplete, and whatever it leaves out
  * appears in English instead of as a raw key. An added file for `en` or `de` is laid over the shipped texts, so a
@@ -18,6 +18,8 @@ import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
 import { kontenVariables } from '../vendor/nexkonten/konten'
+import { ownLanguages, type LanguageOption } from '../vendor/nexsprachen/languages'
+import type { Texts as SprachenTexts } from '../vendor/nexsprachen/sprachen'
 import kontenDe from '../vendor/nexkonten/konten.de.json'
 import kontenEn from '../vendor/nexkonten/konten.en.json'
 import { postVariables } from '../vendor/nexpost/post'
@@ -42,72 +44,33 @@ export const SHIPPED: Record<string, { name: string; texts: Texts }> = {
   de: { name: 'Deutsch', texts: de },
 }
 
-export type LanguageOption = { code: string; name: string; added: boolean }
+export type { LanguageOption } from '../vendor/nexsprachen/languages'
+export { byName } from '../vendor/nexsprachen/languages'
 
 const FALLBACK = 'en'
 const STORAGE_KEY = 'nexnotes.language'
 const CODE = /^[a-z]{2,3}(?:-(?:[A-Z]{2}|[A-Z][a-z]{3}))?$/
 
-type AddedEntry = { code: string; name: string; keys: number }
+/** The operator's own languages (module sprachen 1.0.0, E51): asked for once per page load under `/api/locales`;
+ * `own.forget` after one was added or removed. */
+export const own = ownLanguages({ base: '/api/locales' })
 
-let addedList: Promise<AddedEntry[]> | null = null
+/** The languages nexnotes ships, code and name in itself, in the order of `SHIPPED`. */
+export const BUILT_IN = Object.entries(SHIPPED).map(([code, entry]) => ({ code, name: entry.name }))
 
-/** The languages the operator added. An empty list when the server is not reachable: the app still works. */
-export function addedLanguages(): Promise<AddedEntry[]> {
-  addedList ??= fetch('/api/locales', { headers: { Accept: 'application/json' } })
-    .then((response) => (response.ok ? response.json() : []))
-    .then((list: unknown) =>
-      Array.isArray(list) ? list.filter((entry): entry is AddedEntry => !!entry && typeof entry.code === 'string' && CODE.test(entry.code)) : [],
-    )
-    .catch(() => [])
-  return addedList
-}
-
-/** After the operator added or removed one: ask the server again. */
-export function forgetAddedLanguages(): void {
-  addedList = null
-}
-
-async function fetchAdded(code: string): Promise<Texts | null> {
-  if (!CODE.test(code)) return null
-  try {
-    const response = await fetch(`/api/locales/${encodeURIComponent(code)}`, { headers: { Accept: 'application/json' } })
-    if (!response.ok) return null
-    const texts: unknown = await response.json()
-    return texts && typeof texts === 'object' && !Array.isArray(texts) ? (texts as Texts) : null
-  } catch {
-    return null
-  }
-}
+/** The English texts, for the template the card "Sprachen" hands out (the server has none). */
+export const TEMPLATE_TEXTS = en as SprachenTexts
 
 /** Shipped texts first, the operator's file on top. False when there is nothing for this code at all. */
 async function loadTexts(code: string): Promise<boolean> {
-  let found = code in SHIPPED
-  const added = await addedLanguages()
-  if (added.some((entry) => entry.code === code)) {
-    const texts = await fetchAdded(code)
-    if (texts) {
-      i18n.addResourceBundle(code, 'translation', texts, true, true)
-      found = true
-    }
-  }
-  return found
+  const texts = await own.texts(code)
+  if (texts) i18n.addResourceBundle(code, 'translation', texts, true, true)
+  return code in SHIPPED || texts !== null
 }
 
-/**
- * Languages in the order of their names, the same everywhere in the family: Deutsch, English, and every added one
- * in its place among them, never simply at the end.
- */
-export function byName(a: { name: string }, b: { name: string }): number {
-  return a.name.localeCompare(b.name)
-}
-
-export async function languageOptions(): Promise<LanguageOption[]> {
-  const options: LanguageOption[] = Object.entries(SHIPPED).map(([code, entry]) => ({ code, name: entry.name, added: false }))
-  for (const entry of await addedLanguages()) {
-    if (!(entry.code in SHIPPED)) options.push({ code: entry.code, name: entry.name || entry.code, added: true })
-  }
-  return options.sort(byName)
+/** The choices of the language menus (profile, sign-in): Deutsch, English and every added one in its place by name. */
+export function languageOptions(): Promise<LanguageOption[]> {
+  return own.options(BUILT_IN)
 }
 
 function storedLanguage(): string | null {
@@ -166,12 +129,6 @@ export async function changeLanguage(code: string, remember = true): Promise<boo
   }
   await i18n.changeLanguage(code)
   return true
-}
-
-/** The English texts as a file to translate, with the `_meta` entry the server reads the name from. */
-export function templateFile(): Blob {
-  const template = { _meta: { name: 'Name of the language in itself, for example Español' }, ...en }
-  return new Blob([JSON.stringify(template, null, 2) + '\n'], { type: 'application/json' })
 }
 
 export default i18n
