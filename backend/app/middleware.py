@@ -164,8 +164,9 @@ API_PREFIX = "/api/v1/"
 #: ``Authorization`` and picks its token up without a cookie, so no other site can make a browser act there.
 API_PREFIXES = (API_PREFIX, "/api/app/1/")
 #: Routes programs call without a tab and, at first, without a token: MCP (it refuses every request with an
-#: ``Origin`` itself, NOTES-20 EC-4) and a connector registering and trading its code (OAuth, NOTES-20 AC-7).
-PROGRAM_PATHS = frozenset({"/api/mcp", "/api/oauth/register", "/api/oauth/token"})
+#: ``Origin`` itself, NOTES-20 EC-4) and a connector registering, trading its code and revoking its token (OAuth,
+#: NOTES-20 AC-7, RFC 7009 since the module mcp).
+PROGRAM_PATHS = frozenset({"/api/mcp", "/api/oauth/register", "/api/oauth/token", "/api/oauth/revoke"})
 #: Largest body an ordinary request may carry.
 MAX_BODY = 16 * 1024 * 1024
 #: Where a larger body is expected, with its own limit checked while streaming. An upload's limit is the operator's

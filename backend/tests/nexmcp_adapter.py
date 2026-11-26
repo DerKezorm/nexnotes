@@ -106,7 +106,8 @@ class Adapter(StandardAdapter):
         from app.security import SESSION_COOKIE, start_session
 
         if role not in self.clients:
-            browser = TestClient(app, base_url="https://notes.example.com", headers=TAB)
+            # A program sends no tab header; a browser session does.
+            browser = TestClient(app, base_url="https://notes.example.com", headers={} if role == "anonymous" else TAB)
             if role != "anonymous":
                 with SessionLocal() as db:
                     row = db.get(Account, self.ids[role])
