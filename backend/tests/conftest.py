@@ -41,6 +41,7 @@ from app.models import MEMBER, OPERATOR, Account, Base, Setting  # noqa: E402
 from app.routers import health  # noqa: E402
 from app.security import SESSION_COOKIE, brake, hash_password, start_session  # noqa: E402
 from app.services import storage, totp, updates  # noqa: E402
+from app.services.mcp import forget as mcp_brakes_forget  # noqa: E402
 
 DATA_DIR = _DATA
 #: The attachments folder (``services/backups.media_root``).
@@ -115,7 +116,12 @@ def clean_db(schema: None) -> Iterator[None]:
         for table in reversed(Base.metadata.sorted_tables):
             db.execute(delete(table))
         db.execute(delete(Setting))
+        # The tests start where every installation of before stands after the update: "MCP-Zugang" on, as nexnotes
+        # had it from the start (module mcp, decision 5 keeps it so). A new installation starts off: the tests of
+        # that (``test_notes20_mcp_starts_off_on_a_new_installation``, the module's contract tests) take this away.
+        db.add(Setting(key="mcp_enabled", value=True))
         db.commit()
+    mcp_brakes_forget()
     assert MEDIA.resolve().is_relative_to(Path(_DATA).resolve())
     shutil.rmtree(MEDIA, ignore_errors=True)
     MEDIA.mkdir(parents=True)

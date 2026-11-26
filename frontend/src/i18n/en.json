@@ -457,12 +457,7 @@
     "webpush_failed": "The browser's push service did not take the test notification. Try again later.",
     "key_invalid": "This MCP key is not valid (any more).",
     "mcp_off": "The operator has switched MCP off.",
-    "oauth_client": "This program is not registered here. Start connecting in the program again.",
-    "oauth_pkce": "The program does not sign in the safe way (PKCE). It cannot connect.",
-    "oauth_redirect": "This return address is not registered for the program.",
-    "oauth_response_type": "The program asks in a way nexnotes does not speak.",
     "origin_refused": "This interface is for programs, not for web pages.",
-    "protocol_version": "This MCP version is not spoken here.",
     "slow_down": "Too many requests in a short time. Wait a minute.",
     "smart_folder_exists": "There is already a smart folder named “{{name}}”. Choose another name.",
     "smart_folder_name_invalid": "A smart folder needs a name of at most {{maximum}} characters.",
@@ -1664,19 +1659,24 @@
   },
   "mcp": {
     "dialog": {
-      "right": "Right",
       "read": "Read only",
       "readHint": "Search, read, list folders and tags.",
       "write": "Read and write",
       "writeHint": "Also make notes, add to them, tick items off, move them, make folders and put notes into the trash."
     },
-    "consent": {
-      "title": "Connect “{{name}}”?",
-      "text": "The program then works with your notes as you: never more than you may. Afterwards you go back to {{host}}.",
-      "allow": "Allow",
-      "deny": "Deny",
-      "broken": "This connection request is incomplete. Start connecting in the program again.",
-      "later": "You find the program under My account › Connections › AI tools (MCP), and revoke it there."
+    "tools": {
+      "search_notes": "Search notes",
+      "read_note": "Read a note",
+      "list_notes": "List notes",
+      "list_folders": "List folders",
+      "list_tags": "List tags",
+      "list_smart_folders": "List smart folders",
+      "create_note": "Create a note",
+      "append_to_note": "Add to a note",
+      "check_item": "Tick an item",
+      "move_note": "Move a note",
+      "create_folder": "Create a folder",
+      "trash_note": "Put a note into the trash"
     }
   },
   "smart": {

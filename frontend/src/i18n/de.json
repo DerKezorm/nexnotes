@@ -457,12 +457,7 @@
     "webpush_failed": "Der Mitteilungsdienst des Browsers hat die Probemeldung nicht angenommen. Versuch es später noch einmal.",
     "key_invalid": "Dieser MCP-Schlüssel gilt nicht (mehr).",
     "mcp_off": "Der Betreiber hat MCP abgeschaltet.",
-    "oauth_client": "Dieses Programm ist hier nicht angemeldet. Starte das Verbinden im Programm noch einmal.",
-    "oauth_pkce": "Das Programm meldet sich nicht auf dem sicheren Weg an (PKCE). Es kann sich nicht verbinden.",
-    "oauth_redirect": "Diese Rücksprungadresse ist für das Programm nicht hinterlegt.",
-    "oauth_response_type": "Das Programm fragt auf eine Art, die nexnotes nicht spricht.",
     "origin_refused": "Diese Schnittstelle ist für Programme, nicht für Webseiten.",
-    "protocol_version": "Diese MCP-Fassung spricht nexnotes nicht.",
     "slow_down": "Zu viele Anfragen in kurzer Zeit. Warte eine Minute.",
     "smart_folder_exists": "Einen intelligenten Ordner „{{name}}“ gibt es schon. Wähle einen anderen Namen.",
     "smart_folder_name_invalid": "Gib dem intelligenten Ordner einen Namen mit höchstens {{maximum}} Zeichen.",
@@ -1664,19 +1659,24 @@
   },
   "mcp": {
     "dialog": {
-      "right": "Recht",
       "read": "Nur lesen",
       "readHint": "Suchen, lesen, Ordner und Schlagwörter auflisten.",
       "write": "Lesen und schreiben",
       "writeHint": "Dazu Notizen anlegen, ergänzen, abhaken, verschieben, Ordner anlegen und Notizen in den Papierkorb legen."
     },
-    "consent": {
-      "title": "„{{name}}“ verbinden?",
-      "text": "Das Programm arbeitet dann als du mit deinen Notizen, nie mit mehr, als du darfst. Danach geht es zurück zu {{host}}.",
-      "allow": "Erlauben",
-      "deny": "Ablehnen",
-      "broken": "Diese Anfrage zum Verbinden ist unvollständig. Starte das Verbinden im Programm noch einmal.",
-      "later": "Du findest das Programm unter Mein Konto › Verbindungen › KI-Werkzeuge (MCP) und widerrufst es dort."
+    "tools": {
+      "search_notes": "Notizen durchsuchen",
+      "read_note": "Notiz lesen",
+      "list_notes": "Notizen auflisten",
+      "list_folders": "Ordner auflisten",
+      "list_tags": "Schlagwörter auflisten",
+      "list_smart_folders": "Intelligente Ordner auflisten",
+      "create_note": "Notiz anlegen",
+      "append_to_note": "An Notiz anhängen",
+      "check_item": "Eintrag abhaken",
+      "move_note": "Notiz verschieben",
+      "create_folder": "Ordner anlegen",
+      "trash_note": "Notiz in den Papierkorb legen"
     }
   },
   "smart": {

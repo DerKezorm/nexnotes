@@ -84,8 +84,9 @@ def make(body: TokenIn, account: Account, db: DbSession) -> dict[str, Any]:
             raise error("invalid_input", "The input is not valid.", 422, fields=["folders"])
     # Made by the shared key module (schluessel 1.0.0) over the same table: the same prefix, hash and columns.
     try:
+        # retired: this older way still sets "also for AI tools" as before (MCP decision 12, schluessel 1.1.0).
         made = keys.make(KeyStore(db), CONFIG, account.id, kind="api", name=name, right=body.level,
-                         areas=folders, options={"mcp": body.mcp}, days=body.days)
+                         areas=folders, options={"mcp": body.mcp}, days=body.days, retired=True)
     except KeyRefused as exc:
         values = {key: value for key, value in exc.as_dict().items() if key not in ("code", "message")}
         raise error(exc.public_code, exc.message, exc.status, **values) from exc

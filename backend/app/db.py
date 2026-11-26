@@ -97,6 +97,10 @@ def init_db() -> None:
     from .services import konten_wanderung
 
     konten_wanderung.run(engine, added=added)
+    # MCP access stays on where it was on from the start (module mcp, decision 5); a new installation starts off.
+    from .services import mcp_store
+
+    mcp_store.migrate(engine, added)
 
 
 def _sql_literal(value: Any) -> str:

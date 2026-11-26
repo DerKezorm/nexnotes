@@ -19,6 +19,9 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     const signed = await context.post('/api/auth/login', { data: OPERATOR })
     if (!signed.ok()) throw new Error(`sign-in failed: ${signed.status()}`)
   }
+  // "MCP-Zugang" starts off on a new installation since the module mcp (decision 5); the MCP specs need it on.
+  const mcp = await context.put('/api/settings', { data: { mcp_enabled: true } })
+  if (!mcp.ok()) throw new Error(`switching MCP on failed: ${mcp.status()}`)
   await context.storageState({ path: process.env.NEXNOTES_E2E_STATE! })
   await context.dispose()
 }

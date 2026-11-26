@@ -131,14 +131,18 @@ def test_keys_of_the_old_ways_and_the_new_ones_are_the_same_keys(client: TestCli
 
     old = client.post("/api/tokens", json={"name": "Home Assistant", "level": "read", "days": 30})
     assert old.status_code == 201 and old.json()["token"].startswith("nn_api_")
-    new = client.post("/api/connections/keys", json={"kind": "api", "name": "n8n", "right": "write",
-                                                     "options": {"mcp": True}})
+    # The extra "also for AI tools" is retired on the new way (MCP decision 6, schluessel 1.1.0); the old way above
+    # still sets it (decision 12, test_notes20).
+    retired = client.post("/api/connections/keys", json={"kind": "api", "name": "n8n", "right": "write",
+                                                         "options": {"mcp": True}})
+    assert retired.status_code == 422 and retired.json()["detail"]["code"] == "option_retired"
+    new = client.post("/api/connections/keys", json={"kind": "api", "name": "n8n", "right": "write"})
     assert new.status_code == 201, new.text
     secret = new.json()["secret"]
     assert secret.startswith("nn_api_")
     listed = {entry["name"]: entry for entry in client.get("/api/connections/keys").json()["keys"]}
     assert set(listed) == {"Home Assistant", "n8n"}
-    assert listed["n8n"]["options"] == {"mcp": True} and listed["Home Assistant"]["right"] == "read"
+    assert listed["n8n"]["options"] == {"mcp": False} and listed["Home Assistant"]["right"] == "read"
     assert {entry["name"] for entry in client.get("/api/tokens").json()["tokens"]} == {"Home Assistant", "n8n"}
     # A paired iPhone in the same table is never a key of the module, and a device never manages keys.
     with SessionLocal() as db:

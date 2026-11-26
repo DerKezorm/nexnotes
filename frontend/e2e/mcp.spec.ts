@@ -1,6 +1,7 @@
 /**
- * NOTES-20 in a real browser against the real server: a key (since NOTES-25 an API token with "Also for AI tools
- * (MCP)") made under Settings, Connections, shown once with
+ * NOTES-20 in a real browser against the real server: a key (since the module mcp again an MCP key made by hand in the
+ * card "AI tools (MCP)"; API tokens no longer offer "Also for AI tools") made under Settings, Connections, shown once
+ * with
  * "Copy", listed with its right and last use and revoked (AC-1, AC-5, AC-9); a note an AI tool makes over MCP lands
  * in the inbox with where it came from and "check title" (AC-4, AC-6); a program connects through the consent page
  * (AC-7). The page is the operator of global-setup.ts. The tool is played by `page.request`, which sends no `Origin`,
@@ -36,16 +37,19 @@ async function makeKey(page: Page, name: string, level: 'read' | 'write'): Promi
 test('NOTES-20 AC-1 AC-5 AC-9 a key is made with a name and a right, shown once, listed and revoked', async ({ page, context }) => {
   await context.grantPermissions(['clipboard-read', 'clipboard-write'])
   const name = `E2E key ${Date.now()}`
-  // The card "API keys" of the shared key module (since the settings pass), with "Also for AI tools (MCP)".
+  // The card "AI tools (MCP)" of the shared key module: an MCP key by hand (module mcp, decision 6). A new API key no
+  // longer offers "Also for AI tools (MCP)".
   await page.goto('/settings/connections')
   await page.getByTestId('api-keys-new').click()
+  await expect(page.getByTestId('key-option-mcp')).toHaveCount(0)
+  await page.keyboard.press('Escape')
+  await page.getByTestId('tools-new').click()
   await page.getByTestId('key-name').fill(name)
   await page.getByTestId('key-right-write').click()
-  await page.getByTestId('key-option-mcp').check()
   await page.getByTestId('key-submit').click()
   await expect(page.getByTestId('key-made')).toContainText(name)
   const token = (await page.getByTestId('key-secret').locator('input').inputValue()).trim()
-  expect(token).toMatch(/^nn_api_/)
+  expect(token).toMatch(/^nn_mcp_/)
   const copy = page.getByTestId('key-secret').getByRole('button', { name: 'Copy' })
   await copy.click()
   await expect(page.getByTestId('key-secret').getByRole('button', { name: 'Copied' })).toBeVisible()
@@ -54,13 +58,13 @@ test('NOTES-20 AC-1 AC-5 AC-9 a key is made with a name and a right, shown once,
   await page.reload()
   await expect(page.getByTestId('key-made')).toHaveCount(0)
   await expect(page.locator('body')).not.toContainText(token)
-  const row = page.locator('[data-card="api-keys"] tr[data-testid="key-row"]').filter({ hasText: name })
+  const keys = page.locator('[data-card="ai-tools"] [data-testid="tools-keys"] tr[data-testid="key-row"]')
+  const row = keys.filter({ hasText: name })
   await expect(row).toContainText('Read and write')
-  await expect(row).toContainText('MCP')
   await expect(row).not.toContainText('never')
   await row.getByTestId('key-revoke').click()
   await page.getByTestId('key-revoke-dialog').getByRole('button', { name: 'Revoke' }).click()
-  await expect(page.locator('[data-card="api-keys"] tr[data-testid="key-row"]').filter({ hasText: name })).toHaveCount(0)
+  await expect(keys.filter({ hasText: name })).toHaveCount(0)
   expect((await rpc(page.request, token, 'ping')).status()).toBe(401)
 })
 
@@ -94,7 +98,7 @@ test('NOTES-20 AC-7 a program connects through the consent page with read only o
   const query = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirect, code_challenge: challenge, code_challenge_method: 'S256', state: 'e2e' })
   await page.goto(`/oauth/authorize?${query}`)
   await expect(page.getByTestId('mcp-consent')).toContainText('E2E program')
-  await page.getByTestId('consent-level-write').check()
+  await page.getByTestId('consent-level-write').click()
   await page.getByTestId('consent-allow').click()
   await page.waitForURL(/127\.0\.0\.1:9\/callback/)
   const back = new URL(page.url())

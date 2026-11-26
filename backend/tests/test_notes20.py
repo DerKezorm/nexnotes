@@ -94,7 +94,9 @@ def tool_names(client: TestClient, token: str) -> set[str]:
     return {tool["name"] for tool in answer.json()["result"]["tools"]}
 
 
-READ_TOOLS = {"search_notes", "read_note", "list_notes", "list_folders", "list_tags", "list_smart_folders"}
+#: ``request_status`` is the module mcp's own tool (every key has it, it reads only its own requests).
+READ_TOOLS = {"search_notes", "read_note", "list_notes", "list_folders", "list_tags", "list_smart_folders",
+              "request_status"}
 WRITE_TOOLS = {"create_note", "append_to_note", "check_item", "move_note", "create_folder", "trash_note"}
 
 
@@ -507,12 +509,13 @@ def test_notes20_ac7_a_code_traded_twice_ends_the_tokens_it_gave(client, operato
     assert rpc(client, access, "ping").status_code == 401
     assert _refresh(program, client_id, traded.json()["refresh_token"]).status_code == 400
     assert mcp_list(client) == []
-    # Brought under another program's name, a spent code ends nothing: that is not its connector.
+    # Brought under another program's name, a spent code is a copy in somebody's hands all the same: since the module
+    # mcp it ends the connector it gave too (before, only under its own program's name).
     code, verifier = _agree(client, client_id, redirect, "read")
     tokens = _trade(program, client_id, code, verifier, redirect).json()
     other_id = program.post("/api/oauth/register", json={"redirect_uris": [redirect]}).json()["client_id"]
     assert _trade(program, other_id, code, verifier, redirect).status_code == 400
-    assert rpc(client, tokens["access_token"], "ping").status_code == 200
+    assert rpc(client, tokens["access_token"], "ping").status_code == 401
 
 
 def test_notes20_ac7_a_code_is_traded_only_with_the_return_address_it_was_given_for(client, operator):
@@ -582,7 +585,8 @@ def test_notes20_ac8_switched_off_every_tool_is_turned_away_and_no_key_is_made(c
     assert made.status_code == 403 and made.json()["detail"]["code"] == "mcp_off"
     assert client.get("/api/tokens").json()["mcp_allowed"] is False
     assert client.get("/.well-known/oauth-authorization-server").status_code == 404
-    assert client.post("/api/oauth/register", json={"redirect_uris": ["https://a.example/cb"]}).status_code == 403
+    # Since the module mcp every way of OAuth answers "not found" while programs may not connect.
+    assert client.post("/api/oauth/register", json={"redirect_uris": ["https://a.example/cb"]}).status_code == 404
     with SessionLocal() as db:
         assert db.scalar(select(Note.id)) is None
     assert client.put("/api/settings", json={"mcp_enabled": True}).status_code == 200
@@ -609,7 +613,8 @@ def test_notes20_ec1_deleting_puts_a_note_into_the_trash_never_away_for_good(cli
 def test_notes20_ec2_many_requests_in_a_short_time_are_slowed(client, operator, monkeypatch):
     token = key_for(operator)
     other = key_for(operator, name="Other")
-    monkeypatch.setattr(mcp, "PER_MINUTE", 5)
+    # The module's configuration is frozen; its rate per key read from it at every call.
+    monkeypatch.setitem(mcp.CONFIG.__dict__, "per_minute", 5)
     for _ in range(5):
         assert rpc(client, token, "ping").status_code == 200
     slowed = rpc(client, token, "ping")
@@ -768,6 +773,31 @@ def test_notes20_protocol_broken_and_oversized_requests_are_refused(client, oper
         assert db.scalar(select(Note.id)) is None
 
 
-def test_notes20_the_setting_starts_on(client, operator):
+def test_notes20_mcp_starts_off_on_a_new_installation_and_stays_on_where_it_was(client, operator):
+    """Module mcp, decision 5 (before, AC-8 "on from the start"): a new installation starts with "MCP-Zugang" off; one
+    from before, which never stored the switch, keeps it on after the update; a stored value stays as it is."""
+    from sqlalchemy import delete
+
+    from app.db import engine
+    from app.models import Setting
+    from app.services import mcp_store
+
+    token = key_for(operator)
     with SessionLocal() as db:
-        assert settings_service.get(db, "mcp_enabled") is True
+        db.execute(delete(Setting).where(Setting.key == "mcp_enabled"))
+        db.commit()
+        assert settings_service.get(db, "mcp_enabled") is False
+    assert client.get("/api/connections/interfaces").json()["mcp"] is False
+    assert rpc(client, token, "ping").status_code == 403
+    # A start that found nothing to add (a new installation, or one already updated) writes nothing.
+    mcp_store.migrate(engine, [])
+    assert rpc(client, token, "ping").status_code == 403
+    # The start that added the module's column to a database of before: the switch is written down as it was, on.
+    mcp_store.migrate(engine, [mcp_store.MARK])
+    with SessionLocal() as db:
+        assert db.get(Setting, "mcp_enabled").value is True
+    assert rpc(client, token, "ping").status_code == 200
+    # Switched off by the operator before the update: it stays off.
+    assert client.put("/api/settings", json={"mcp_enabled": False}).status_code == 200
+    mcp_store.migrate(engine, [mcp_store.MARK])
+    assert rpc(client, token, "ping").status_code == 403

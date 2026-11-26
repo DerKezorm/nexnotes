@@ -52,6 +52,10 @@ function answer(path: string): Answer | undefined {
   }
   if (path === '/api/connections/admin/keys') return { status: 200, body: { keys: [] } }
   if (path === '/api/connections/interfaces') return { status: 200, body: { api: true, mcp: true } }
+  // The operator's MCP settings after "MCP-Zugang" (module mcp).
+  if (path === '/api/connections/mcp/admin') {
+    return { status: 200, body: { programs: true, levels: ['read', 'write'], max_level: 'write', blocked_tools: [], tools: [{ name: 'trash_note', group: 'risky', level: 'write' }] } }
+  }
   if (path === '/api/server/storage') return { status: 200, body: { app: 'nexnotes', used: 1000, parts: [], complete: true, total: 1e12, disk_used: 1e11, free: 9e11, nearly_full: false, where: {}, network: [] } }
   if (path === '/api/server/storage/backups') {
     const schedule = { every: 'daily', time: '03:00', keep: 7 }
@@ -59,7 +63,7 @@ function answer(path: string): Answer | undefined {
   }
   if (path === '/api/notify/devices') return { status: 200, body: { apps: [], browsers: [], this_browser: false } }
   if (path === '/api/about') return { status: 200, body: { version: '0.1.0', license: 'AGPL-3.0', repo_url: 'https://example.com/nexnotes', releases_url: 'https://example.com/nexnotes/releases', project_url: '' } }
-  if (path === '/api/about/updates') return { status: 200, body: { update_check: true, checked: false, latest: null, newer: false, checked_at: null, release_url: null } }
+  if (path === '/api/about/updates') return { status: 200, body: { update_check: true, checked: false, latest: null, newer: false, checked_at: null, release_url: null, hidden: false } }
   if (path.startsWith('/api/logs/level')) return { status: 200, body: { mode: 'normal', until: null, fixed_by_env: false, modes: ['quiet', 'normal', 'detailed', 'trace'] } }
   return undefined
 }

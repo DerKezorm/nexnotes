@@ -5,10 +5,11 @@ Allgemein › Schnittstellen, Konten › API-Schlüssel aller Konten): its ``App
 ⚠️ **No row moves, no key is hashed anew.** Every key nexnotes ever handed out stays valid with its prefix, hash,
 right, folders and extra: API tokens ``nn_api_`` (kind ``api``), the older nexdeck card keys ``nn_deck_`` (kind
 ``dashboard``, a legacy form of an API key, still only for the card's routes), MCP keys made by hand ``nn_mcp_``
-(kind ``mcp`` without a client, no longer made) and the keys AI tools got by OAuth (kind ``mcp`` with a client: the
-module's programs). Paired devices (``nnd_``, kind ``device``) live in the same table and are never keys of the
-module. The check of a key on use stays nexnotes' own (``services/apiaccess``: folders with their subfolders, read or
-write, the second factor the operator requires); the OAuth flow stays in ``routers/oauth.py``.
+(kind ``mcp`` without a client, made again since the module mcp) and the keys AI tools got by OAuth (kind ``mcp`` with
+a client: the module's programs). Paired devices (``nnd_``, kind ``device``) live in the same table and are never keys
+of the module. The check of a key on use stays nexnotes' own (``services/apiaccess``: folders with their subfolders,
+read or write, the second factor the operator requires); OAuth and the endpoint are the module mcp's
+(``services/mcp_store.py``, ``routers/mcp.py``).
 """
 
 from __future__ import annotations
@@ -33,12 +34,16 @@ logger = logging.getLogger("nexnotes.api")
 CONFIG = AppConfig(
     app_name="nexnotes",
     kinds=(
-        # API tokens; the old card keys of nexdeck (kind "dashboard") stay valid as a legacy form of them.
+        # API tokens; the old card keys of nexdeck (kind "dashboard") stay valid as a legacy form of them. The extra
+        # "also for AI tools" is retired (MCP decisions 6, 11): the page no longer offers it and only switches it off;
+        # the older route ``POST /api/tokens`` still sets it (decision 12).
         KeyKind(
-            id="api", prefix="nn_api_", accepted=("nn_deck_",), options=("mcp",), areas=True, counted_with=("mcp",)
+            id="api", prefix="nn_api_", accepted=("nn_deck_",), options=("mcp",), retired_options=("mcp",),
+            areas=True, counted_with=("mcp",),
         ),
-        # MCP keys made by hand before NOTES-25: still valid, no longer made; connectors of AI tools are programs.
-        KeyKind(id="mcp", prefix="nn_mcp_", creatable=False, editable=False, switch="mcp"),
+        # MCP keys made by hand again (MCP decision 6), with level and folders, as before NOTES-25 and since the
+        # module mcp; connectors of AI tools are programs of this kind and count with them.
+        KeyKind(id="mcp", prefix="nn_mcp_", areas=True, switch="mcp", programs_count=True),
     ),
     switches=("api", "mcp"),
     programs=True,
@@ -85,7 +90,7 @@ class KeyStore:
             last_used_at=_aware(row.last_used_at),
             expires_at=_aware(row.expires_at),
             blocked_at=_aware(row.blocked_at),
-            areas=list(row.folder_ids) if row.kind == TOKEN_API and row.folder_ids is not None else None,
+            areas=list(row.folder_ids) if row.kind in (TOKEN_API, TOKEN_MCP) and row.folder_ids is not None else None,
             options={"mcp": bool(row.allow_mcp)} if row.kind == TOKEN_API else ({"mcp": False} if api else {}),
             legacy="card" if row.kind == TOKEN_DASHBOARD else None,
             program=row.kind == TOKEN_MCP and bool(row.client_id),
@@ -119,17 +124,18 @@ class KeyStore:
 
     # --- writing -------------------------------------------------------------------------------------------------
     def add_key(self, new: NewKey) -> Key:
-        """As ``apitokens.make`` wrote an API token (only API tokens are made: MCP keys are not ``creatable``)."""
+        """As ``apitokens.make`` wrote an API token or an MCP key made by hand (the same row, ``kind`` apart)."""
+        mcp_key = new.kind == "mcp"
         row = ApiToken(
             account_id=int(new.account_id),
-            kind=TOKEN_API,
+            kind=TOKEN_MCP if mcp_key else TOKEN_API,
             name=new.name,
             level=new.right,
             token_hash=new.token_hash,
             prefix=new.prefix,
             created_at=new.created_at,
             expires_at=new.expires_at,
-            allow_mcp=bool(new.options.get("mcp")),
+            allow_mcp=False if mcp_key else bool(new.options.get("mcp")),
             folder_ids=[str(area) for area in new.areas] if new.areas else None,
         )
         self.db.add(row)
@@ -181,7 +187,7 @@ class KeyStore:
     def areas_of(self, account_id: int | str, kind: str) -> list[Area]:
         """The account's own folders that are alive, the inbox first, each below its parent with the path in its name
         (``Work › Projects``): what a key may be limited to (with everything below, ``apiaccess.folder_scope``)."""
-        if kind != "api":
+        if kind not in ("api", "mcp"):
             return []
         account = self.db.get(Account, int(account_id))
         if account is None:

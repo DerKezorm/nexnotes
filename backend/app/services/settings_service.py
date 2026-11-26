@@ -42,8 +42,14 @@ DEFAULTS: dict[str, Any] = {
     "link_previews": True,
     #: Members may make read links for people without an account (NOTES-13).
     "share_links": True,
-    #: Members may make keys for MCP tools, and the tools may ask (NOTES-20).
-    "mcp_enabled": True,
+    #: Members may make keys for MCP tools, and the tools may ask (NOTES-20). Off on a new installation (module mcp,
+    #: decision 5); one from before that never stored it keeps it on (``mcp_store.migrate``).
+    "mcp_enabled": False,
+    #: The module mcp's settings, ``None`` until the operator sets them (its defaults then): programs may connect
+    #: (on), the highest level of a key, the tools blocked for every account.
+    "mcp_programs": None,
+    "mcp_max_level": None,
+    "mcp_blocked_tools": None,
     #: Members may make API tokens and programs may ask under ``/api/v1/`` (NOTES-25 AC-5), the nexdeck card too.
     #: On from the start; the MCP switch stays its own.
     "api_enabled": True,

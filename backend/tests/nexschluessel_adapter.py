@@ -116,6 +116,13 @@ class Adapter(StandardAdapter):
                 db.commit()
         return token
 
+    def old_route_key(self, options: dict[str, bool]) -> str:
+        """Since schluessel 1.1.0: nexnotes' older route ``POST /api/tokens`` still sets the retired extra "also for AI
+        tools" (MCP decision 12), as a script does."""
+        made = self.client("owner").post("/api/tokens", json={"name": "Script", "level": "read", **options})
+        assert made.status_code == 201, made.text
+        return str(made.json()["token"])
+
     def probe(self, kind: str, secret: str) -> int:
         from app.security import brake
 

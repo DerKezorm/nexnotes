@@ -18,15 +18,17 @@ AI makes goes into the inbox unless a folder is named, says where it came from (
 
 Markdown goes through the note core (``notedoc.markdown``, ``clean_doc``): only text and the known formatting stay,
 HTML stays text, a link that is not http, https or mailto is dropped (EC-7). The limits are the interface's (EC-8).
+
+Since the shared module mcp (``vendor/nexmcp``, 1.1.0) the endpoint, OAuth, the rights per tool and the requests that
+wait for their account are the module's (``CONFIG`` below, ``services/mcp_store.py``, ``routers/mcp.py``); the tools,
+their names and schemas, and the check of a key stay nexnotes' own. A key, a connector or an older API token with "also
+for AI tools" may be limited to folders.
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-import threading
-import time
-from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -35,6 +37,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select, true
 from sqlalchemy.orm import Session
 
+from .. import __version__
 from ..db import SessionLocal
 from ..models import FOLDER_INBOX, TOKEN_API, TOKEN_MCP, Account, ApiToken, Folder, Note
 from ..models_tags import NoteTag
@@ -43,6 +46,7 @@ from ..notedoc import edit
 from ..notedoc import schema as s
 from ..notedoc.markdown import to_markdown
 from ..notedoc.room import Access
+from ..vendor import nexmcp
 from . import (
     apiaccess,
     apitokens,
@@ -72,9 +76,6 @@ MAX_ANSWER_CHARS = 1_000_000
 MAX_LIST = 200
 MAX_FOLDERS = 1000
 MAX_TAGS = 500
-#: How deep arguments may nest, and the largest whole number in them (what SQLite holds).
-MAX_ARGUMENT_DEPTH = 20
-INT_LIMIT = 2**63 - 1
 
 INSTRUCTIONS = (
     "nexnotes holds quick notes. Every note has an id; folders have ids, and 'inbox' names the inbox. Search or list "
@@ -84,8 +85,9 @@ INSTRUCTIONS = (
 )
 
 
-class ToolError(Exception):
-    """A tool that cannot do what it was asked: the text goes back as the tool's answer (``isError``)."""
+#: A tool that cannot do what it was asked: the text goes back as the tool's answer (``isError``). The module's own,
+#: so that its endpoint knows it.
+ToolError = nexmcp.ToolError
 
 
 def allowed(db: Session) -> bool:
@@ -104,7 +106,7 @@ class Caller:
     key_id: int
     key_name: str
     level: str
-    #: The folders an API token is limited to (NOTES-25 AC-7); ``None`` for every note.
+    #: The folders the key is limited to (NOTES-25 AC-7, module mcp); ``None`` for every note.
     folders: list[str] | None = None
 
     @property
@@ -140,32 +142,16 @@ def authenticate(db: Session, token: str | None) -> Caller | None:
     if totp.setup_required(db, account):
         return None
     level = row.level if row.level in LEVELS else "read"
-    limited = row.kind == TOKEN_API and row.folder_ids is not None
-    folders = [str(chosen) for chosen in row.folder_ids] if limited else None
+    folders = [str(chosen) for chosen in row.folder_ids] if row.folder_ids is not None else None
     db.expunge(account)
     return Caller(account=account, key_id=row.id, key_name=row.name, level=level, folders=folders)
 
 
-_calls_lock = threading.Lock()
-_calls: dict[int, deque[float]] = defaultdict(deque)
-
-
-def brake(key_id: int, now: float | None = None) -> bool:
-    """True while the key stays under ``PER_MINUTE`` requests in the last minute; counts this one."""
-    now = time.monotonic() if now is None else now
-    with _calls_lock:
-        seen = _calls[key_id]
-        while seen and now - seen[0] > 60:
-            seen.popleft()
-        if len(seen) >= PER_MINUTE:
-            return False
-        seen.append(now)
-        return True
-
-
 def forget() -> None:
-    with _calls_lock:
-        _calls.clear()
+    """For tests: the module's brakes (requests per key, wrong keys, registrations) forget what they counted."""
+    from ..vendor.nexmcp.brake import BRAKE
+
+    BRAKE.forget()
 
 
 # --- Keys ---------------------------------------------------------------------------------------------------------
@@ -175,64 +161,6 @@ def count_keys(db: Session, account_id: int) -> int:
     """MCP keys and connectors of the account: a connector signing in counts against ``MAX_KEYS``."""
     return int(db.scalar(select(func.count()).select_from(ApiToken)
                          .where(ApiToken.account_id == account_id, ApiToken.kind == TOKEN_MCP)) or 0)
-
-
-# --- Arguments ----------------------------------------------------------------------------------------------------
-
-
-def shape_problem(args: Any) -> str | None:
-    """Arguments no tool takes, whatever the schema says: nested too deep, text that is not valid Unicode (a lone
-    surrogate cannot be stored), whole numbers past 64 bits."""
-    waiting: list[tuple[Any, int]] = [(args, 0)]
-    while waiting:
-        value, depth = waiting.pop()
-        if depth > MAX_ARGUMENT_DEPTH:
-            return f"The arguments are nested deeper than {MAX_ARGUMENT_DEPTH} levels."
-        if isinstance(value, str):
-            try:
-                value.encode("utf-8")
-            except UnicodeEncodeError:
-                return "The arguments hold text that is not valid Unicode."
-        elif isinstance(value, bool):
-            continue
-        elif isinstance(value, int):
-            if not -INT_LIMIT - 1 <= value <= INT_LIMIT:
-                return "A number in the arguments is too large."
-        elif isinstance(value, dict):
-            for key, inner in value.items():
-                waiting.append((key, depth + 1))
-                waiting.append((inner, depth + 1))
-        elif isinstance(value, list):
-            waiting.extend((inner, depth + 1) for inner in value)
-    return None
-
-
-def check_arguments(schema: dict[str, Any], args: dict[str, Any]) -> str | None:
-    """What is wrong with the arguments by the tool's schema, before anything runs."""
-    shape = shape_problem(args)
-    if shape:
-        return shape
-    properties = schema.get("properties", {})
-    for key in schema.get("required", []):
-        if args.get(key) is None:
-            return f"'{key}' is missing."
-    kinds = {"string": str, "integer": int, "boolean": bool, "array": list, "object": dict}
-    for key, value in args.items():
-        spec = properties.get(key)
-        if spec is None:
-            return f"There is no argument '{key}'."
-        if value is None and key not in schema.get("required", []):
-            continue
-        kind = spec.get("type")
-        wanted = kinds.get(kind) if isinstance(kind, str) else None
-        if wanted is not None and (not isinstance(value, wanted) or (wanted is int and isinstance(value, bool))):
-            return f"'{key}' must be of type {kind}."
-        if isinstance(value, str) and len(value) > spec.get("maxLength", len(value)):
-            return f"'{key}' holds at most {spec['maxLength']} characters."
-        number = isinstance(value, int) and not isinstance(value, bool)
-        if number and (value < spec.get("minimum", value) or value > spec.get("maximum", value)):
-            return f"'{key}' is out of range."
-    return None
 
 
 def _limit(args: dict[str, Any], default: int, top: int) -> int:
@@ -644,74 +572,106 @@ _MARKDOWN = {"type": "string", "maxLength": s.MAX_MARKDOWN,
 Run = Callable[[Caller, dict[str, Any]], Awaitable[Any]]
 
 
-@dataclass(frozen=True)
-class Tool:
-    name: str
-    level: str
-    description: str
-    schema: dict[str, Any]
-    run: Run
+def _old_caller(ctx: Any) -> Caller:
+    """The caller a tool of nexnotes works with, from the module's (``ctx.caller``, ``Store.caller``): its account,
+    key, level and folders; after a request the account allowed, the history names the key as before."""
+    found = ctx.caller
+    return Caller(account=found.account, key_id=int(found.key_id), key_name=found.key_name, level=found.level,
+                  folders=[str(area) for area in found.areas] if found.areas is not None else None)
+
+
+def _tool(name: str, group: str, level: str, description: str, schema: dict[str, Any], run: Run,
+          describe: Callable[[dict[str, Any]], str] | None = None) -> nexmcp.Tool:
+    async def wrapped(ctx: Any, args: dict[str, Any]) -> Any:
+        return await run(_old_caller(ctx), args)
+
+    wrapped.__name__ = name
+    return nexmcp.Tool(name, group, level, description, schema, wrapped, describe=describe)
 
 
 def _schema(properties: dict[str, Any], required: list[str] | None = None) -> dict[str, Any]:
     return {"type": "object", "properties": properties, "required": required or [], "additionalProperties": False}
 
 
-TOOLS: list[Tool] = [
-    Tool("search_notes", "read",
-         "Full text search over the notes you may read (your own and those shared with you), best first. Words "
-         "match as prefixes; \"a phrase\" in quotes, -word leaves out, #tag finds a tag. Hits are marked «like this».",
-         _schema({"query": {"type": "string", "maxLength": search.QUERY_MAX}, "folder_id": _FOLDER,
-                  "tag": {"type": "string", "maxLength": 200},
-                  "limit": {"type": "integer", "minimum": 1, "maximum": 50}}, ["query"]),
-         search_notes),
-    Tool("read_note", "read",
-         "A note as Markdown with its title, folder, tags and numbered checklist items. A locked note gives its "
-         "title only.",
-         _schema({"note_id": _ID}, ["note_id"]), read_note),
-    Tool("list_notes", "read",
-         "The notes of a folder (yours, the inbox, or one shared with you), newest change first; without a folder "
-         "every note you may read.",
-         _schema({"folder_id": _FOLDER, "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIST},
-                  "offset": {"type": "integer", "minimum": 0, "maximum": 1_000_000}}), list_notes),
-    Tool("list_folders", "read",
-         "Your inbox and folders (with their parent and number of notes), and what others shared with you.",
-         _schema({}), list_folders),
-    Tool("list_tags", "read", "The tags of the notes you may read, the most used first.", _schema({}), list_tags),
-    Tool("list_smart_folders", "read",
-         "Your smart folders: saved conditions (tags, folders, dates, open checklist items ...) shown as a folder, "
-         "with how many notes fit them now.",
-         _schema({}), list_smart_folders),
-    Tool("create_note", "write",
-         "Make a note from Markdown. It goes into the inbox unless you name a folder. Without a title the first "
-         "words become one; either way its owner is asked to check the title.",
-         _schema({"text": _MARKDOWN, "title": {"type": "string", "maxLength": s.MAX_TITLE * 4},
-                  "folder_id": _FOLDER}), create_note),
-    Tool("append_to_note", "write", "Add Markdown at the end of a note.",
-         _schema({"note_id": _ID, "text": _MARKDOWN}, ["note_id", "text"]), append_to_note),
-    Tool("check_item", "write",
-         "Tick a checklist item off, or open it again with checked=false. Give its index as read_note numbered it, "
-         "and its text as read_note showed it, to be sure it is still the same item.",
-         _schema({"note_id": _ID, "index": {"type": "integer", "minimum": 0, "maximum": 1_000_000},
-                  "checked": {"type": "boolean"}, "text": {"type": "string", "maxLength": s.MAX_TASK_TEXT}},
-                 ["note_id", "index", "text"]), check_item),
-    Tool("move_note", "write", "Move one of your notes into one of your folders, or back into the inbox.",
-         _schema({"note_id": _ID, "folder_id": _FOLDER}, ["note_id", "folder_id"]), move_note),
-    Tool("create_folder", "write", "Make a folder, at the top or inside another of your folders.",
-         _schema({"name": {"type": "string", "maxLength": 1000},
-                  "parent_id": {"type": "string", "maxLength": 36}}, ["name"]), create_folder),
-    Tool("trash_note", "write", "Put a note into the trash. Its owner can bring it back from there.",
-         _schema({"note_id": _ID}, ["note_id"]), trash_note),
-]
-BY_NAME = {tool.name: tool for tool in TOOLS}
+def _quoted(value: Any) -> str:
+    return " ".join(str(value or "").split())[:80]
 
 
-def tools_for(caller: Caller) -> list[Tool]:
-    return [tool for tool in TOOLS if caller.may(tool.level)]
+#: nexnotes' tools, names and arguments as before (programs remember them), in the module's groups: reading, changing,
+#: and ``trash_note`` as the risky one (it was the destructive one before).
+TOOLS: tuple[nexmcp.Tool, ...] = (
+    _tool("search_notes", "read", "read",
+          "Full text search over the notes you may read (your own and those shared with you), best first. Words "
+          "match as prefixes; \"a phrase\" in quotes, -word leaves out, #tag finds a tag. Hits are marked «like this».",
+          _schema({"query": {"type": "string", "maxLength": search.QUERY_MAX}, "folder_id": _FOLDER,
+                   "tag": {"type": "string", "maxLength": 200},
+                   "limit": {"type": "integer", "minimum": 1, "maximum": 50}}, ["query"]),
+          search_notes),
+    _tool("read_note", "read", "read",
+          "A note as Markdown with its title, folder, tags and numbered checklist items. A locked note gives its "
+          "title only.",
+          _schema({"note_id": _ID}, ["note_id"]), read_note),
+    _tool("list_notes", "read", "read",
+          "The notes of a folder (yours, the inbox, or one shared with you), newest change first; without a folder "
+          "every note you may read.",
+          _schema({"folder_id": _FOLDER, "limit": {"type": "integer", "minimum": 1, "maximum": MAX_LIST},
+                   "offset": {"type": "integer", "minimum": 0, "maximum": 1_000_000}}), list_notes),
+    _tool("list_folders", "read", "read",
+          "Your inbox and folders (with their parent and number of notes), and what others shared with you.",
+          _schema({}), list_folders),
+    _tool("list_tags", "read", "read", "The tags of the notes you may read, the most used first.", _schema({}),
+          list_tags),
+    _tool("list_smart_folders", "read", "read",
+          "Your smart folders: saved conditions (tags, folders, dates, open checklist items ...) shown as a folder, "
+          "with how many notes fit them now.",
+          _schema({}), list_smart_folders),
+    _tool("create_note", "change", "write",
+          "Make a note from Markdown. It goes into the inbox unless you name a folder. Without a title the first "
+          "words become one; either way its owner is asked to check the title.",
+          _schema({"text": _MARKDOWN, "title": {"type": "string", "maxLength": s.MAX_TITLE * 4},
+                   "folder_id": _FOLDER}), create_note,
+          describe=lambda args: f"Make a note '{_quoted(args.get('title') or args.get('text'))}'"),
+    _tool("append_to_note", "change", "write", "Add Markdown at the end of a note.",
+          _schema({"note_id": _ID, "text": _MARKDOWN}, ["note_id", "text"]), append_to_note,
+          describe=lambda args: f"Add text to the note {args.get('note_id')}"),
+    _tool("check_item", "change", "write",
+          "Tick a checklist item off, or open it again with checked=false. Give its index as read_note numbered it, "
+          "and its text as read_note showed it, to be sure it is still the same item.",
+          _schema({"note_id": _ID, "index": {"type": "integer", "minimum": 0, "maximum": 1_000_000},
+                   "checked": {"type": "boolean"}, "text": {"type": "string", "maxLength": s.MAX_TASK_TEXT}},
+                  ["note_id", "index", "text"]), check_item,
+          describe=lambda args: f"Tick '{_quoted(args.get('text'))}' in the note {args.get('note_id')}"),
+    _tool("move_note", "change", "write", "Move one of your notes into one of your folders, or back into the inbox.",
+          _schema({"note_id": _ID, "folder_id": _FOLDER}, ["note_id", "folder_id"]), move_note,
+          describe=lambda args: f"Move the note {args.get('note_id')}"),
+    _tool("create_folder", "change", "write", "Make a folder, at the top or inside another of your folders.",
+          _schema({"name": {"type": "string", "maxLength": 1000},
+                   "parent_id": {"type": "string", "maxLength": 36}}, ["name"]), create_folder,
+          describe=lambda args: f"Make the folder '{_quoted(args.get('name'))}'"),
+    _tool("trash_note", "risky", "write", "Put a note into the trash. Its owner can bring it back from there.",
+          _schema({"note_id": _ID}, ["note_id"]), trash_note,
+          describe=lambda args: f"Put the note {args.get('note_id')} into the trash"),
+)
 
-
-def listed(tool: Tool) -> dict[str, Any]:
-    """A tool as ``tools/list`` gives it, with hints for the client (which may ask its person before a change)."""
-    return {"name": tool.name, "description": tool.description, "inputSchema": tool.schema,
-            "annotations": {"readOnlyHint": tool.level == "read", "destructiveHint": tool.name == "trash_note",
-                            "openWorldHint": False}}
+#: nexnotes' MCP as the shared module knows it: the answers its endpoint gave so far (403 ``mcp_off``, 4 MB, 20 wrong
+#: keys per sender, 240 calls a minute), its OAuth paths and prefixes (``/api/oauth``, ``/oauth/authorize``,
+#: ``nn_mcp_``, ``nnr_``), the limit of keys.
+CONFIG = nexmcp.AppConfig(
+    app_name="nexnotes",
+    version=__version__,
+    instructions=INSTRUCTIONS,
+    tools=TOOLS,
+    levels=LEVELS,
+    off_status=403,
+    off_code="mcp_off",
+    invalid_code="key_invalid",
+    max_body=4 * 1024 * 1024,
+    per_minute=PER_MINUTE,
+    free_wrong_keys=20,
+    oauth_prefix="/api/oauth",
+    consent_path="/oauth/authorize",
+    access_prefix="nn_mcp_",
+    refresh_prefix="nnr_",
+    code_prefix="nnc_",
+    max_keys=MAX_KEYS,
+)

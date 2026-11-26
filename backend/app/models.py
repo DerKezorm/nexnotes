@@ -349,10 +349,14 @@ class ApiToken(Base):
     signed_in_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     #: An API token may also be used at ``/api/mcp`` (NOTES-25 AC-4); off from the start.
     allow_mcp: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=False)
-    #: The folders an API token is limited to, with everything below them (NOTES-25 AC-7); ``None`` for all notes.
+    #: The folders an API token, an MCP key or a connector is limited to, with everything below them (NOTES-25 AC-7,
+    #: module mcp); ``None`` for all notes.
     folder_ids: Mapped[Any] = mapped_column(JSON, nullable=True)
     #: The operator blocked the token (NOTES-25 AC-27): it answers like none from then on.
     blocked_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The last refresh of a connector's tokens (module mcp, decision 7: it signs in again after ``idle_days``
+    #: without one); empty for rows of before, where the end of the access token tells it.
+    refreshed_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     #: A paired device (NOTES-24): ``ios``, ``ipados`` or ``mac``; empty for every other kind.
     device_kind: Mapped[str] = mapped_column(String(8), default="", server_default="")
     #: The device whose token brought this one in (the app's connection handed on through iCloud, NOTES-24 AC-7).
