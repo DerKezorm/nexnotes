@@ -13,6 +13,7 @@ import { ConnectionsTab } from './ConnectionsTab'
 import { FeaturesCard, LanguagesCard, LimitsCard, OcrCard } from './GeneralCards'
 import { LogCard } from './LogCard'
 import { MailCard, useServerSettings } from './ServerCards'
+import { NotificationsArea } from './NotificationsArea'
 import { SignInArea } from './SignInArea'
 import { StorageArea } from './StorageArea'
 
@@ -23,6 +24,8 @@ export function AreaContent({ area }: { area: AreaSlug }) {
       return <AccountTab part={area} />
     case 'appearance':
       return <AppearanceArea />
+    case 'notifications':
+      return <NotificationsArea />
     case 'connections':
       return <ConnectionsTab />
     case 'storage':

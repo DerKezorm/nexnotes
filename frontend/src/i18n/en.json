@@ -963,7 +963,14 @@
     "saved": "Saved.",
     "title": "Settings",
     "things": "notes",
-    "thingsDative": "notes"
+    "thingsDative": "notes",
+    "notifications": {
+      "ways": "Notifications come when others change a shared note whose bell you switched on. Which notes and folders notify, you set at their bell.",
+      "probeSent": "Test notification sent. It shows in this browser in a moment.",
+      "since": "since {{when}}",
+      "apps_one": "{{count}} device gets notifications.",
+      "apps_other": "{{count}} devices get notifications."
+    }
   },
   "setup": {
     "folder": "Data folder {{path}}",

@@ -1,6 +1,6 @@
 /**
  * The areas of the settings, each with its own address (`/settings/<slug>`, plan "Einstellungen"): "Mein Konto" for
- * every account (Profile, Security, Appearance, Connections; nexnotes sends no notifications), "Server" for the
+ * every account (Profile, Security, Appearance, Notifications for the bell of shared notes, Connections), "Server" for the
  * operator only (General, Sign-in, Mail, Storage and backups, then nexnotes' own Text recognition, Accounts, Log), and
  * "Über nexnotes" (`/settings/about`) for everyone, set apart at the end. Titles and lines of the shared areas come from
  * the ui kit (`areaText`); Text recognition keeps its own. `/settings` alone is the list on a phone and the profile
@@ -11,7 +11,7 @@ import type { Me } from '../../api/client'
 
 type Role = Me['role']
 
-export type AreaSlug = 'profile' | 'security' | 'appearance' | 'connections' | 'general' | 'sign-in' | 'mail' | 'storage' | 'ocr' | 'accounts' | 'log' | 'about'
+export type AreaSlug = 'profile' | 'security' | 'appearance' | 'notifications' | 'connections' | 'general' | 'sign-in' | 'mail' | 'storage' | 'ocr' | 'accounts' | 'log' | 'about'
 export type AreaGroup = 'account' | 'server'
 
 /** `own`: an area of nexnotes alone, its title and line under `settings.areas.<slug>` of nexnotes' words. */
@@ -22,6 +22,7 @@ export const AREAS: Area[] = [
   { slug: 'profile', group: 'account', icon: 'UserRound' },
   { slug: 'security', group: 'account', icon: 'ShieldCheck' },
   { slug: 'appearance', group: 'account', icon: 'Palette' },
+  { slug: 'notifications', group: 'account', icon: 'Bell' },
   { slug: 'connections', group: 'account', icon: 'Plug' },
   { slug: 'general', group: 'server', icon: 'SlidersHorizontal' },
   { slug: 'sign-in', group: 'server', icon: 'KeyRound' },

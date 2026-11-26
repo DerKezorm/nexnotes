@@ -963,7 +963,14 @@
     "saved": "Gespeichert.",
     "title": "Einstellungen",
     "things": "Notizen",
-    "thingsDative": "Notizen"
+    "thingsDative": "Notizen",
+    "notifications": {
+      "ways": "Mitteilungen kommen, wenn andere eine geteilte Notiz ändern, an der du die Glocke eingeschaltet hast. Welche Notizen und Ordner melden, stellst du an ihrer Glocke ein.",
+      "probeSent": "Probemeldung geschickt. Sie erscheint gleich in diesem Browser.",
+      "since": "seit {{when}}",
+      "apps_one": "{{count}} Gerät bekommt Mitteilungen.",
+      "apps_other": "{{count}} Geräte bekommen Mitteilungen."
+    }
   },
   "setup": {
     "folder": "Datenordner {{path}}",

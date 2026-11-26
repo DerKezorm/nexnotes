@@ -20,11 +20,11 @@ GUIDE = ROOT / "backend" / "app" / "guide"
 #: The groups of the navigation and their areas (ui kit ``texts.ts`` and nexnotes' own "Texterkennung").
 AREAS = {
     "de": {
-        "Mein Konto": ("Profil", "Sicherheit", "Darstellung", "Verbindungen"),
+        "Mein Konto": ("Profil", "Sicherheit", "Darstellung", "Benachrichtigungen", "Verbindungen"),
         "Server": ("Allgemein", "Anmeldung", "Mail", "Speicher und Sicherung", "Texterkennung", "Konten", "Log"),
     },
     "en": {
-        "My account": ("Profile", "Security", "Appearance", "Connections"),
+        "My account": ("Profile", "Security", "Appearance", "Notifications", "Connections"),
         "Server": ("General", "Sign-in", "Mail", "Storage and backups", "Text recognition", "Accounts", "Log"),
     },
 }

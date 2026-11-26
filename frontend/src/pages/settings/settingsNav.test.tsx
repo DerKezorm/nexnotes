@@ -57,6 +57,7 @@ function answer(path: string): Answer | undefined {
     const schedule = { every: 'daily', time: '03:00', keep: 7 }
     return { status: 200, body: { schedule, zone: 'UTC', last: null, count: 0, kept: 0, failure: null, running: false, restore_failure: null, restored: null, restore: 'restart', download_password: false, backups: [] } }
   }
+  if (path === '/api/notify/devices') return { status: 200, body: { apps: [], browsers: [], this_browser: false } }
   if (path === '/api/about') return { status: 200, body: { version: '0.1.0', license: 'AGPL-3.0', repo_url: 'https://example.com/nexnotes', releases_url: 'https://example.com/nexnotes/releases', project_url: '' } }
   if (path === '/api/about/updates') return { status: 200, body: { update_check: true, checked: false, latest: null, newer: false, checked_at: null, release_url: null } }
   if (path.startsWith('/api/logs/level')) return { status: 200, body: { mode: 'normal', until: null, fixed_by_env: false, modes: ['quiet', 'normal', 'detailed', 'trace'] } }
@@ -173,7 +174,7 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     await open('/settings/sign-in')
     const links = [...box.querySelectorAll<HTMLAnchorElement>('[data-testid="settings-nav"] a[data-testid^="settings-nav-"]')]
     expect(links.map((link) => link.getAttribute('href'))).toEqual(
-      ['profile', 'security', 'appearance', 'connections', 'general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'about'].map((slug) => `/settings/${slug}`),
+      ['profile', 'security', 'appearance', 'notifications', 'connections', 'general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'about'].map((slug) => `/settings/${slug}`),
     )
     for (const link of links) expect(link.tabIndex).toBe(0)
     expect(current()).toEqual(['settings-nav-sign-in'])
@@ -196,7 +197,7 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     expect(main().className).toMatch(/(^| )hidden( |$)/)
     expect(main().className).toContain('@min-[700px]:flex')
     expect([...box.querySelectorAll('[data-testid="settings-nav"] a')].map((link) => link.getAttribute('href'))).toEqual(
-      ['profile', 'security', 'appearance', 'connections', 'about'].map((slug) => `/settings/${slug}`),
+      ['profile', 'security', 'appearance', 'notifications', 'connections', 'about'].map((slug) => `/settings/${slug}`),
     )
     // ... and an area shows itself with a small way back above its title.
     await act(async () => $('settings-nav-security')!.click())
@@ -255,6 +256,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
     ['profile', ['profile', 'sign-out']],
     ['security', ['security']],
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
+    ['notifications', ['notify-ways']],
     ['general', ['limits', 'features', 'interfaces', 'languages']],
     // The points of "Ready for the internet?" are boxes of their own in its card (here one, `ready-address`).
     ['sign-in', ['sign-in-ready', 'ready-address', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
@@ -269,6 +271,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
 
   it.each([
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
+    ['notifications', ['notify-ways']],
     ['general', ['limits', 'features', 'interfaces', 'languages']],
     ['sign-in', ['sign-in-ready', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
