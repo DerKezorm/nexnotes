@@ -166,6 +166,11 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
   (`test_the_old_way_takes_a_profile_language_as_before`, zwei Mutationen rot), `known` nur für die Auswahl.
 - Läufe: `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2263 grün, 29 übersprungen; vitest 1062 grün in 86
   Dateien. Playwright (vor a335909) 141 grün, 9 rot, alle bekannt außerhalb der Einstellungen.
+- E53 (bauplaene 0e372f1, 130e4e9): die API-Beschreibung behält alle Namen von konten. Liste `/api/locales` wieder
+  „Languages the operator added“, `POST /api/auth/access/disconnect` wieder mit „API token“; sicherung braucht nichts,
+  der Adapter gibt `app.openapi()` heraus. `tests/test_openapi_names.py` hält jede operationId, summary und jeden
+  Schemanamen von konten fest (348 Wege, 135 Schemas, Zusätze erlaubt; Mutation rot); `openapi-namen/vergleichen.py`:
+  0 Änderungen, nur Zusätze. Reihe: pytest 2269 grün, 29 übersprungen; vitest 1062 grün.
 
 **Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
 grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
