@@ -7,7 +7,9 @@ Two of them stay nexnotes' own thin wrappers over the module's functions, for wh
 - ``POST /api/oauth/authorize`` takes the answer as ``approve`` (the page of before, still open in a tab when the app is
   updated) as well as ``allow`` (the module's page), and keeps the checks of before on its body ``ConsentIn`` (lengths,
   ``level`` read or write: 422);
-- ``GET /api/oauth/authorize`` adds ``client_name`` to the module's view, as the page of before read it.
+- ``GET /api/oauth/authorize`` adds ``client_name`` to the module's view, as the page of before read it;
+- both answer 403 ``mcp_off`` while MCP is switched off, as before (the module: 404); so does ``POST
+  /api/oauth/register`` with its 403 ``access_denied`` (``routers/mcp.py``).
 
 The token endpoint is the module's since mcp 1.1.1 (a form, or JSON as nexnotes took it before).
 """
@@ -61,6 +63,14 @@ def mcp_store(db: DbSession) -> McpStore:
 Store = Annotated[McpStore, Depends(mcp_store)]
 
 
+def _mcp_on(data: McpStore) -> None:
+    """E55: while MCP is switched off the consent answers as before, 403 ``mcp_off`` (the module: 404 ``programs_off``,
+    which stays for the operator's newer switch "programs")."""
+    if not data.mcp_on():
+        raise HTTPException(status_code=CONFIG.off_status,
+                            detail=detail(CONFIG.off_code, "The operator has switched MCP off."))
+
+
 def refused(refusal: McpRefused) -> HTTPException:
     values = {name: value for name, value in refusal.as_dict().items() if name not in ("code", "message")}
     return HTTPException(status_code=refusal.status, detail=detail(refusal.code, refusal.message, **values))
@@ -85,6 +95,7 @@ def consent_info(
     params = {"client_id": client_id, "redirect_uri": redirect_uri, "response_type": response_type,
               "code_challenge": code_challenge, "code_challenge_method": code_challenge_method, "state": state,
               "resource": resource}
+    _mcp_on(data)
     try:
         shown = mcp_oauth.consent_info(data, CONFIG, account.id, params, base_url(request, data.db))
     except McpRefused as refusal:
@@ -114,6 +125,7 @@ class ConsentIn(BaseModel):
 
 @router.post("/api/oauth/authorize", summary="Agree to a program's sign-in, or turn it down")
 def consent(body: ConsentIn, request: Request, account: Account, data: Store) -> dict[str, str]:
+    _mcp_on(data)
     answer = body.model_dump(exclude={"approve"})
     answer["allow"] = bool(body.allow if body.allow is not None else body.approve)
     try:

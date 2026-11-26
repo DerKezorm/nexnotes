@@ -1,9 +1,11 @@
-"""nexnotes on the shared module mcp (``vendor/nexmcp`` 1.1.0): what nexnotes keeps of before on its own ways, beside
+"""nexnotes on the shared module mcp (``vendor/nexmcp`` 1.1.1): what nexnotes keeps of before on its own ways, beside
 the module's contract tests (``tests/nexmcp``).
 
 - The consent of before (``approve``, the old page) and the module's (``allow``) both answer; ``GET`` still names
   ``client_name``.
-- The token endpoint still reads a JSON body as nexnotes did, besides the form of RFC 6749.
+- The token endpoint still reads a JSON body as nexnotes did, besides the form of RFC 6749 (the module's since 1.1.1).
+- While MCP is switched off, registering and the consent answer as before (E55): 403 ``access_denied`` and 403
+  ``mcp_off``, not the module's 404; the operator's newer switch "programs" keeps the module's 404.
 - MCP keys are made by hand again, limited to folders like an API token; a connector may be limited to folders on the
   consent page, and its tools see nothing else.
 - The older way ``POST /api/tokens`` still sets "also for AI tools" (decision 12), and such a token opens MCP.
@@ -70,6 +72,31 @@ def test_the_token_endpoint_still_reads_json_as_before(client, operator):
     form = program.post("/api/oauth/token", data={"grant_type": "refresh_token", "client_id": client_id,
                                                    "refresh_token": again.json()["refresh_token"]})
     assert form.status_code == 200, form.text
+
+
+def test_mcp_switched_off_keeps_the_answers_of_before_on_registering_and_the_consent(client, operator):
+    program = _program()
+    client_id = _register(program)
+    _verifier, challenge = _pkce()
+    asked = {"client_id": client_id, "redirect_uri": REDIRECT, "code_challenge": challenge,
+             "code_challenge_method": "S256"}
+    assert client.put("/api/settings", json={"mcp_enabled": False}).status_code == 200
+    registered = program.post("/api/oauth/register", json={"redirect_uris": [REDIRECT]})
+    assert registered.status_code == 403, registered.text
+    assert registered.json() == {"error": "access_denied", "error_description": "MCP is switched off here."}
+    assert registered.headers["cache-control"] == "no-store"
+    shown = client.get("/api/oauth/authorize", params=asked)
+    agreed = client.post("/api/oauth/authorize", json={**asked, "approve": True})
+    for answer in (shown, agreed):
+        assert answer.status_code == 403 and answer.json()["detail"]["code"] == "mcp_off", answer.text
+    # MCP on, programs switched off by the operator (a switch of the module): the module's answers.
+    assert client.put("/api/settings", json={"mcp_enabled": True}).status_code == 200
+    assert client.put("/api/connections/mcp/admin", json={"programs": False}).status_code == 200
+    assert program.post("/api/oauth/register", json={"redirect_uris": [REDIRECT]}).status_code == 404
+    shown = client.get("/api/oauth/authorize", params=asked)
+    assert shown.status_code == 404 and shown.json()["detail"]["code"] == "programs_off", shown.text
+    assert client.put("/api/connections/mcp/admin", json={"programs": True}).status_code == 200
+    assert program.post("/api/oauth/register", json={"redirect_uris": [REDIRECT]}).status_code == 201
 
 
 def _folder(client: TestClient, name: str) -> str:

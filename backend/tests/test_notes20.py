@@ -585,8 +585,9 @@ def test_notes20_ac8_switched_off_every_tool_is_turned_away_and_no_key_is_made(c
     assert made.status_code == 403 and made.json()["detail"]["code"] == "mcp_off"
     assert client.get("/api/tokens").json()["mcp_allowed"] is False
     assert client.get("/.well-known/oauth-authorization-server").status_code == 404
-    # Since the module mcp every way of OAuth answers "not found" while programs may not connect.
-    assert client.post("/api/oauth/register", json={"redirect_uris": ["https://a.example/cb"]}).status_code == 404
+    # Registering keeps its answer of before (E55), though the module says "not found" on its other ways.
+    registered = client.post("/api/oauth/register", json={"redirect_uris": ["https://a.example/cb"]})
+    assert registered.status_code == 403 and registered.json()["error"] == "access_denied"
     with SessionLocal() as db:
         assert db.scalar(select(Note.id)) is None
     assert client.put("/api/settings", json={"mcp_enabled": True}).status_code == 200

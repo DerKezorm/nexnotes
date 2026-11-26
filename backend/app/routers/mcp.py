@@ -14,6 +14,7 @@ the page of before, ``client_name``); the module's routes of the same path and m
 from __future__ import annotations
 
 from fastapi import HTTPException, Request
+from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
 
 from ..db import SessionLocal
@@ -23,7 +24,7 @@ from ..services import notify, settings_service
 from ..services.mcp import CONFIG
 from ..vendor.nexmcp import McpRefused
 from ..vendor.nexmcp import api as mcp_api
-from .oauth import OWN, mcp_store
+from .oauth import OWN, Store, mcp_store
 
 
 def _address(request: Request) -> str:
@@ -49,8 +50,22 @@ router = mcp_api.router(
     error=_error,
     tags=["mcp"],
 )
-# nexnotes' own wrappers serve these (``routers/oauth.py``).
+#: The module's registration, behind nexnotes' answer of before (below).
+_register = next(route.endpoint for route in router.routes
+                 if isinstance(route, APIRoute) and route.path == "/api/oauth/register")
+# nexnotes' own wrappers serve these (``routers/oauth.py`` and the registration below).
 router.routes[:] = [
     route for route in router.routes
-    if not (isinstance(route, APIRoute) and any((route.path, method) in OWN for method in route.methods))
+    if not (isinstance(route, APIRoute)
+            and any((route.path, method) in OWN | {("/api/oauth/register", "POST")} for method in route.methods))
 ]
+
+
+@router.post("/api/oauth/register", include_in_schema=False)
+async def register(request: Request, data: Store) -> JSONResponse:
+    """E55: while MCP is switched off, registering answers as before, 403 ``access_denied`` (the module: 404 for every
+    way of OAuth); otherwise the module's registration, also its 404 for the operator's newer switch "programs"."""
+    if not data.mcp_on():
+        return JSONResponse({"error": "access_denied", "error_description": "MCP is switched off here."},
+                            status_code=403, headers={"Cache-Control": "no-store"})
+    return await _register(request, data)
