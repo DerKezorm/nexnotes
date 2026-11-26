@@ -19,7 +19,7 @@ from urllib.parse import parse_qs, urlsplit
 from fastapi.testclient import TestClient
 
 from .test_notes3 import new_note
-from .test_notes20 import _pkce, _program, ok, refused, rpc
+from .test_notes20 import _pkce, _program, call, ok, refused, rpc
 
 REDIRECT = "http://127.0.0.1:33418/callback"
 
@@ -173,3 +173,56 @@ def test_a_request_that_waits_is_told_to_the_accounts_browsers(client, operator,
                                      "url": "/"}))
         db.commit()
     assert notify.send_round() == 0 and len(sent) == 1
+
+
+def _asked_lines(client: TestClient, secret: str, calls: list[tuple[str, dict]]) -> list[str]:
+    """Each call asks first (right "ask"); the lines of the waiting requests, oldest first."""
+    for tool, args in calls:
+        asked = call(client, secret, tool, **args)
+        assert asked["structuredContent"]["status"] == "waiting", asked
+    return [row["summary"] for row in sorted(_waiting(client), key=lambda row: row["id"])]
+
+
+def _waiting(client: TestClient) -> list[dict]:
+    listed = client.get("/api/connections/mcp/requests", params={"status": "waiting"})
+    assert listed.status_code == 200, listed.text
+    return list(listed.json())
+
+
+def test_the_line_of_a_request_speaks_the_accounts_language_and_names_note_and_folder(client, operator):
+    """Module mcp 1.1.1 (M-12): "Was es tun will" in the account's language (DE/EN), with the note's title and the
+    folder's name instead of their ids; a note the key does not see stays unnamed."""
+    from app.db import SessionLocal
+    from app.models import Account
+
+    folder = _folder(client, "Einkauf")
+    note = new_note(client, title="Milch", markdown="- [ ] Butter", folder_id=folder)
+    tools = ("create_note", "append_to_note", "check_item", "move_note", "create_folder", "trash_note")
+    made = client.post("/api/connections/keys", json={"kind": "mcp", "name": "Desk", "right": "write"})
+    secret, key_id = made.json()["secret"], made.json()["key"]["id"]
+    assert client.put(f"/api/connections/mcp/keys/{key_id}/rights",
+                      json={"rights": dict.fromkeys(tools, "ask")}).status_code == 200
+    calls = [
+        ("create_note", {"title": "Plan", "text": "x", "folder_id": folder}),
+        ("append_to_note", {"note_id": note["id"], "text": "Brot"}),
+        ("check_item", {"note_id": note["id"], "index": 0, "text": "Butter"}),
+        ("move_note", {"note_id": note["id"], "folder_id": "inbox"}),
+        ("create_folder", {"name": "Urlaub", "parent_id": folder}),
+        ("trash_note", {"note_id": "no-such-note"}),
+    ]
+    for language, lines in (
+        ("de", ["Notiz „Plan“ im Ordner „Einkauf“ anlegen", "Text an die Notiz „Milch“ anhängen",
+                "„Butter“ in der Notiz „Milch“ abhaken", "Die Notiz „Milch“ in den Eingang verschieben",
+                "Ordner „Urlaub“ in „Einkauf“ anlegen", "Eine unbekannte Notiz in den Papierkorb legen"]),
+        ("en", ["Make the note “Plan” in the folder “Einkauf”", "Add text to the note “Milch”",
+                "Tick “Butter” in the note “Milch”", "Move the note “Milch” into the inbox",
+                "Make the folder “Urlaub” in “Einkauf”", "Put an unknown note into the trash"]),
+    ):
+        with SessionLocal() as db:
+            db.get(Account, operator.id).language = language
+            db.commit()
+        for waiting in _waiting(client):
+            assert client.post(f"/api/connections/mcp/requests/{waiting['id']}/decline").status_code == 200
+        said = _asked_lines(client, secret, calls)
+        assert said == lines, language
+        assert not any(note["id"] in line or folder in line for line in said)

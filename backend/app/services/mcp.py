@@ -580,8 +580,98 @@ def _old_caller(ctx: Any) -> Caller:
                   folders=[str(area) for area in found.areas] if found.areas is not None else None)
 
 
+#: The line "Was es tun will" of a request (decision 14, mcp 1.1.1 M-12) in the account's language: the note by its
+#: title and the folder by its name, never their ids; a note or folder the key does not see stays unnamed.
+LINES: dict[str, dict[str, str]] = {
+    "de": {
+        "note": "die Notiz „{title}“", "note_dative": "der Notiz „{title}“",
+        "untitled": "die Notiz ohne Titel", "untitled_dative": "der Notiz ohne Titel",
+        "unknown": "eine unbekannte Notiz", "unknown_dative": "einer unbekannten Notiz",
+        "create_note": "Notiz „{title}“ anlegen", "create_note_in": "Notiz „{title}“ im Ordner „{folder}“ anlegen",
+        "append_to_note": "Text an {note} anhängen",
+        "check_item": "„{text}“ in {note_dative} abhaken",
+        "uncheck_item": "Haken bei „{text}“ in {note_dative} entfernen",
+        "move_note": "{note} in den Ordner „{folder}“ verschieben",
+        "move_note_inbox": "{note} in den Eingang verschieben",
+        "move_note_unknown": "{note} in einen anderen Ordner verschieben",
+        "create_folder": "Ordner „{name}“ anlegen", "create_folder_in": "Ordner „{name}“ in „{folder}“ anlegen",
+        "trash_note": "{note} in den Papierkorb legen",
+    },
+    "en": {
+        "note": "the note “{title}”", "note_dative": "the note “{title}”",
+        "untitled": "the untitled note", "untitled_dative": "the untitled note",
+        "unknown": "an unknown note", "unknown_dative": "an unknown note",
+        "create_note": "Make the note “{title}”", "create_note_in": "Make the note “{title}” in the folder “{folder}”",
+        "append_to_note": "Add text to {note}",
+        "check_item": "Tick “{text}” in {note_dative}", "uncheck_item": "Untick “{text}” in {note_dative}",
+        "move_note": "Move {note} into the folder “{folder}”", "move_note_inbox": "Move {note} into the inbox",
+        "move_note_unknown": "Move {note} into another folder",
+        "create_folder": "Make the folder “{name}”", "create_folder_in": "Make the folder “{name}” in “{folder}”",
+        "trash_note": "Put {note} into the trash",
+    },
+}
+
+
+def _line(name: str, args: dict[str, Any], found: Any) -> str:
+    """The line of a request for the tool ``name``, for the account behind ``found`` (the module's caller)."""
+    from .notify import language_of
+
+    caller = _old_caller(type("Asked", (), {"caller": found})())
+    words = LINES.get(language_of(caller.account), LINES["en"])
+    with SessionLocal() as db:
+
+        def note_words(key: str) -> dict[str, str]:
+            wanted = args.get(key)
+            try:
+                note = _visible(db, caller.account, wanted, caller=caller) if isinstance(wanted, str) else None
+            except ToolError:
+                note = None
+            title = _quoted(note.title) if note is not None else ""
+            form = "note" if title else "untitled" if note is not None else "unknown"
+            return {"note": words[form].format(title=title), "note_dative": words[f"{form}_dative"].format(title=title)}
+
+        def folder_name(key: str) -> str | None:
+            """The name of the folder ``args[key]`` names, "" for the inbox, ``None`` for none the key sees."""
+            wanted = args.get(key)
+            if not isinstance(wanted, str) or not wanted.strip():
+                return None
+            if wanted.strip().lower() == "inbox":
+                return ""
+            folder = db.get(Folder, wanted.strip())
+            if folder is None or folder.owner_id != caller.account.id or not caller.sees(db, folder.id):
+                return None
+            return "" if folder.kind == FOLDER_INBOX else _quoted(folder.name)
+
+        if name == "create_note":
+            title = _quoted(args.get("title") or args.get("text"))
+            folder = folder_name("folder_id")
+            return (words["create_note_in"] if folder else words["create_note"]).format(title=title, folder=folder)
+        if name == "create_folder":
+            parent = folder_name("parent_id")
+            line = words["create_folder_in"] if parent else words["create_folder"]
+            return line.format(name=_quoted(args.get("name")), folder=parent)
+        named = note_words("note_id")
+        if name == "check_item":
+            line = words["uncheck_item"] if args.get("checked") is False else words["check_item"]
+            return line.format(text=_quoted(args.get("text")), **named)
+        if name == "move_note":
+            folder = folder_name("folder_id")
+            if folder is None:
+                return words["move_note_unknown"].format(**named)
+            return (words["move_note"] if folder else words["move_note_inbox"]).format(folder=folder, **named)
+        return words[name].format(**named)
+
+
+def _describe(name: str) -> Callable[[dict[str, Any], Any], str]:
+    def describe(args: dict[str, Any], caller: Any) -> str:
+        line = _line(name, args, caller)
+        return line[:1].upper() + line[1:]
+
+    return describe
+
+
 def _tool(name: str, group: str, level: str, description: str, schema: dict[str, Any], run: Run,
-          describe: Callable[[dict[str, Any]], str] | None = None) -> nexmcp.Tool:
+          describe: Callable[..., str] | None = None) -> nexmcp.Tool:
     async def wrapped(ctx: Any, args: dict[str, Any]) -> Any:
         return await run(_old_caller(ctx), args)
 
@@ -630,27 +720,27 @@ TOOLS: tuple[nexmcp.Tool, ...] = (
           "words become one; either way its owner is asked to check the title.",
           _schema({"text": _MARKDOWN, "title": {"type": "string", "maxLength": s.MAX_TITLE * 4},
                    "folder_id": _FOLDER}), create_note,
-          describe=lambda args: f"Make a note '{_quoted(args.get('title') or args.get('text'))}'"),
+          describe=_describe("create_note")),
     _tool("append_to_note", "change", "write", "Add Markdown at the end of a note.",
           _schema({"note_id": _ID, "text": _MARKDOWN}, ["note_id", "text"]), append_to_note,
-          describe=lambda args: f"Add text to the note {args.get('note_id')}"),
+          describe=_describe("append_to_note")),
     _tool("check_item", "change", "write",
           "Tick a checklist item off, or open it again with checked=false. Give its index as read_note numbered it, "
           "and its text as read_note showed it, to be sure it is still the same item.",
           _schema({"note_id": _ID, "index": {"type": "integer", "minimum": 0, "maximum": 1_000_000},
                    "checked": {"type": "boolean"}, "text": {"type": "string", "maxLength": s.MAX_TASK_TEXT}},
                   ["note_id", "index", "text"]), check_item,
-          describe=lambda args: f"Tick '{_quoted(args.get('text'))}' in the note {args.get('note_id')}"),
+          describe=_describe("check_item")),
     _tool("move_note", "change", "write", "Move one of your notes into one of your folders, or back into the inbox.",
           _schema({"note_id": _ID, "folder_id": _FOLDER}, ["note_id", "folder_id"]), move_note,
-          describe=lambda args: f"Move the note {args.get('note_id')}"),
+          describe=_describe("move_note")),
     _tool("create_folder", "change", "write", "Make a folder, at the top or inside another of your folders.",
           _schema({"name": {"type": "string", "maxLength": 1000},
                    "parent_id": {"type": "string", "maxLength": 36}}, ["name"]), create_folder,
-          describe=lambda args: f"Make the folder '{_quoted(args.get('name'))}'"),
+          describe=_describe("create_folder")),
     _tool("trash_note", "risky", "write", "Put a note into the trash. Its owner can bring it back from there.",
           _schema({"note_id": _ID}, ["note_id"]), trash_note,
-          describe=lambda args: f"Put the note {args.get('note_id')} into the trash"),
+          describe=_describe("trash_note")),
 )
 
 #: nexnotes' MCP as the shared module knows it: the answers its endpoint gave so far (403 ``mcp_off``, 4 MB, 20 wrong
