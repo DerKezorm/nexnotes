@@ -14,7 +14,7 @@ import { useTitle } from '../lib/title'
 import { useAuth } from '../state/auth'
 import { areaText, languageOf, NEXUI_TEXTS, NexuiLanguage, SettingsLayout, SettingsNav, SettingsPage as Area, type SettingsGroup } from '../vendor/nexui'
 import { ABOUT_AREA, areaPath, areasFor, findArea, GROUPS, resolveArea, type Area as AreaInfo } from './settings/areas'
-import { AreaContent } from './settings/SettingsAreas'
+import { AreaContent, GENERAL_PARTS } from './settings/SettingsAreas'
 
 const APP = 'nexnotes'
 
@@ -64,7 +64,7 @@ export function SettingsPage() {
           />
         }
       >
-        <Area slug={area.slug} app={APP} things={things} thingsDative={thingsDative} title={own?.title} subtitle={own?.text}>
+        <Area slug={area.slug} app={APP} things={things} thingsDative={thingsDative} title={own?.title} subtitle={own?.text} parts={area.slug === 'general' ? GENERAL_PARTS : undefined}>
           <AreaContent key={area.slug} area={area.slug} />
         </Area>
       </SettingsLayout>

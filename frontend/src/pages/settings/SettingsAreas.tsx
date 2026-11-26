@@ -5,6 +5,7 @@
  */
 import { AppsOperator } from '../../connect/AppsArea'
 import { AllKeys, Interfaces } from '../../tokens/KeysCards'
+import type { GeneralPart } from '../../vendor/nexui'
 import { AboutArea } from './AboutArea'
 import { AccountsTab } from './AccountsTab'
 import { AccountTab } from './AccountTab'
@@ -17,6 +18,11 @@ import { MailCard, useServerSettings } from './ServerCards'
 import { NotificationsArea } from './NotificationsArea'
 import { SignInArea } from './SignInArea'
 import { StorageArea } from './StorageArea'
+
+/** The cards of Server › General, in the order they stand (ui 1.1.3, U-3): the area's line names exactly these. No
+ * card "Web Push" in nexnotes (E48). */
+// eslint-disable-next-line react-refresh/only-export-components
+export const GENERAL_PARTS: readonly GeneralPart[] = ['limits', 'features', 'interfaces', 'nexApps', 'languages']
 
 export function AreaContent({ area }: { area: AreaSlug }) {
   switch (area) {

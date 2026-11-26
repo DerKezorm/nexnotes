@@ -11,7 +11,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 import i18n from '../../i18n'
 import { AuthProvider } from '../../state/auth'
-import { areaText, NEXUI_TEXTS } from '../../vendor/nexui'
+import { areaText, languageOf, NEXUI_TEXTS } from '../../vendor/nexui'
 import { resolveArea } from './areas'
 
 const KIT = NEXUI_TEXTS.en
@@ -292,6 +292,18 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
     const buttons = [...$(`settings-area-${slug}`)!.querySelectorAll('button, a[data-kind]')].filter((button) => !button.closest('[role="radiogroup"], [role="group"][data-segment]') && !button.hasAttribute('data-chip'))
     for (const button of buttons.filter((one) => one.hasAttribute('data-kind'))) expect([button.getAttribute('data-size'), button.getAttribute('data-icon')]).not.toContain(null)
     expect($(`settings-area-${slug}`)!.querySelector('.nn-btn, [role="switch"], [role="tab"]')).toBeNull()
+  })
+
+  it('ui 1.1.3 U-3: the line of Server › General names exactly its cards, in their order', async () => {
+    await open('/settings/general')
+    const parts: Record<string, string> = { limits: 'limits', features: 'features', interfaces: 'interfaces', 'nex-apps': 'nexApps', languages: 'languages' }
+    const { GENERAL_PARTS } = await import('./SettingsAreas')
+    expect(GENERAL_PARTS).toEqual(cards().map((id) => parts[id]))
+    const texts = NEXUI_TEXTS[languageOf(i18n.language)]
+    const said = GENERAL_PARTS.map((part) => texts.generalParts[part])
+    const line = `${said.slice(0, -1).join(', ')}${texts.and}${said.at(-1)}`
+    expect($('settings-area-general')!.textContent).toContain(`${line.charAt(0).toUpperCase()}${line.slice(1)}.`)
+    expect($('settings-area-general')!.textContent).not.toContain(texts.generalParts.webPush)
   })
 
   it('NOTES-2 AC-9 the language is set in the profile, theme and paper in Appearance', async () => {
