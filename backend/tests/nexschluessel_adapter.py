@@ -129,29 +129,13 @@ class Adapter(StandardAdapter):
         return client.get("/api/v1/me", headers=headers).status_code
 
     def owe_factor(self) -> None:
-        """The operator requires a second factor; the owner signs in with a password and has none. A browser session of
-        such an account reaches only its account page until it enrols (``deps.SETUP_ONLY_PATHS``); the one state in
-        which it sees its keys while they rest is a sign-in through a provider that checks the second factor itself
-        (``provider_checked``): the session is spared, its keys are not. The owner's browser is that session from now
-        on."""
-        from fastapi.testclient import TestClient
-
+        """The operator requires a second factor; the owner signs in with a password and has none. Its browser still
+        reaches its keys (``deps.SETUP_ONLY_PREFIXES``): it may make them, they rest until the factor is there."""
         from app.db import SessionLocal
-        from app.main import app
-        from app.models import Account
-        from app.security import SESSION_COOKIE, start_session
         from app.services import settings_service
 
         with SessionLocal() as db:
             settings_service.save(db, {"two_factor_required": True})
-            row = db.get(Account, self.ids["owner"])
-            assert row is not None
-            cookie = start_session(db, row, "127.0.0.1", "contract", provider_checked=True)
-        if "owner" in self.clients:
-            self.clients.pop("owner").close()
-        browser = TestClient(app, base_url="https://notes.example.com", headers=TAB)
-        browser.cookies.set(SESSION_COOKIE, cookie)
-        self.clients["owner"] = browser
 
     def foreign_area(self) -> Any:
         return self.folders["other"]

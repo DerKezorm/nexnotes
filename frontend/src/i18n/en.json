@@ -144,7 +144,6 @@
       "submit": "Sign in",
       "title": "Sign in to nexnotes"
     },
-    "password": "Password",
     "reset": {
       "doneText": "Sign in with your new password now.",
       "doneTitle": "Password set",
@@ -696,9 +695,7 @@
       "paperHint": "Each note can be changed later in its menu."
     },
     "password": {
-      "current": "Current password",
       "done": "Password changed. Other browsers and connected devices have to sign in again.",
-      "new": "New password",
       "submit": "Change password"
     },
     "profile": {

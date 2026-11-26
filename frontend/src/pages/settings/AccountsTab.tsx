@@ -396,7 +396,7 @@ function ConfirmAct({ row, name, pending, operatorHasPassword, onCancel, onDone 
     >
       {lines}
       {asksPassword && operatorHasPassword && (
-        <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
+        <Field label={t('account.password')} type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} />
       )}
       <Outcome problem={action.problem} />
     </ConfirmDialog>
@@ -439,7 +439,7 @@ function NameDialog({ row, field, operatorHasPassword, onClose, onSaved }: {
           hints={[field === 'name' ? t('account.usernameRules') : t('account.displayNameHint')]}
         />
         <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
-        {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
+        {operatorHasPassword && <Field label={t('account.password')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
         <Outcome problem={action.problem} />
         <div className="flex flex-wrap justify-end gap-2">
           <AccountButton name="cancel" onClick={onClose}>
@@ -525,7 +525,7 @@ function ResetLinkDialog({ row, name, mailServer, operatorHasPassword, onClose }
             options={RESET_DAYS.map((value) => ({ value: String(value), label: t('account.days', { count: value }) }))}
           />
           <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
-          {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
+          {operatorHasPassword && <Field label={t('account.password')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
           <Outcome problem={action.problem} />
           <div className="flex flex-wrap justify-end gap-2">
             <AccountButton name="cancel" onClick={onClose}>
@@ -572,7 +572,7 @@ function LimitDialog({ row, name, operatorHasPassword, onClose, onSaved }: {
         <p className="m-0 text-sm">{t('accounts.limitText')}</p>
         <Field label={t(STORAGE_LIMIT_DIALOG.field)} type="number" min={0} value={value} onChange={(event) => setValue(event.target.value)} hints={[t(STORAGE_LIMIT_DIALOG.used, { used: bytes(row.storage_used, i18n.language) })]} />
         <p className="m-0 text-sm text-[var(--nexui-text-muted)]">{t(confirmLine(operatorHasPassword))}</p>
-        {operatorHasPassword && <Field label={t('account.currentPassword')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
+        {operatorHasPassword && <Field label={t('account.password')} type="password" autoComplete="current-password" value={own} onChange={(event) => setOwn(event.target.value)} />}
         <Outcome problem={action.problem} />
         <div className="flex flex-wrap justify-end gap-2">
           {row.storage_limit !== null && (

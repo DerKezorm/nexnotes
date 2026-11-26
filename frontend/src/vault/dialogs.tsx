@@ -482,7 +482,7 @@ export function ForgotDialog({ onClose }: { onClose: () => void }) {
                   <legend className="pt-1 text-sm leading-5 font-medium text-[var(--nexui-text)]">{t('vault.forgot.confirm')}</legend>
                   {withPassword ? (
                     <>
-                      <KitPassword label={t('vault.forgot.account')} value={accountPassword} onChange={setAccountPassword} testId="vault-account-password" />
+                      <KitPassword label={t('account.password')} value={accountPassword} onChange={setAccountPassword} testId="vault-account-password" />
                       {withCode && (
                         <Field label={t('vault.forgot.code')} value={code} inputMode="numeric" autoComplete="one-time-code" spellCheck={false} onChange={(event) => setCode(event.target.value)} data-testid="vault-account-code" />
                       )}

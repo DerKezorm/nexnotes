@@ -108,7 +108,7 @@ describe('NOTES-22', () => {
     i18n.addResourceBundle('xx', 'translation', { account: { displayName: 'Nom' } }, true, true)
     await i18n.changeLanguage('xx')
     expect(i18n.t('account.displayName')).toBe('Nom')
-    expect(i18n.t('auth.password')).toBe('Password')
+    expect(i18n.t('account.password')).toBe('Password')
   })
 
   it('NOTES-22 AC-4 dates and numbers in the format of the language', () => {

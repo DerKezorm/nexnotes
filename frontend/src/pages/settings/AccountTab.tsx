@@ -241,7 +241,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
                 setOwn('')
               }}
             >
-              <Field label={t('account.currentPassword')} value={own} onChange={(event) => setOwn(event.target.value)} type="password" autoComplete="current-password" />
+              <Field label={t(FIELDS.password.label)} value={own} onChange={(event) => setOwn(event.target.value)} type="password" autoComplete="current-password" />
             </ConfirmDialog>
           )}
           {me.provider_email && (
@@ -274,7 +274,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
                 setOwn('')
               }}
             >
-              <Field label={t('account.currentPassword')} value={own} onChange={(event) => setOwn(event.target.value)} type="password" autoComplete="current-password" />
+              <Field label={t(FIELDS.password.label)} value={own} onChange={(event) => setOwn(event.target.value)} type="password" autoComplete="current-password" />
             </ConfirmDialog>
           )}
           <SelectField
@@ -345,8 +345,8 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
                 })
               }}
             >
-              <Field label={t('me.password.current')} value={current} onChange={(event) => setCurrent(event.target.value)} type="password" autoComplete="current-password" />
-              <Field label={t('me.password.new')} value={next} onChange={(event) => setNext(event.target.value)} type="password" autoComplete="new-password" hints={[t('setup.passwordHint', { count: me.min_password ?? 12 })]} />
+              <Field label={t(FIELDS.currentPassword.label)} value={current} onChange={(event) => setCurrent(event.target.value)} type="password" autoComplete="current-password" />
+              <Field label={t(FIELDS.newPassword.label)} value={next} onChange={(event) => setNext(event.target.value)} type="password" autoComplete="new-password" hints={[t(FIELDS.newPassword.hint)]} />
               <Field
                 label={t(FIELDS.passwordRepeat.label)}
                 name="password_confirm"
@@ -444,7 +444,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
                 )
               }}
             >
-              <Field label={t('auth.password')} value={linkPassword} onChange={(event) => setLinkPassword(event.target.value)} type="password" autoComplete="current-password" />
+              <Field label={t(FIELDS.password.label)} value={linkPassword} onChange={(event) => setLinkPassword(event.target.value)} type="password" autoComplete="current-password" />
             </ConfirmDialog>
           )}
         </Card>
@@ -567,7 +567,7 @@ function SecondFactor({ me }: { me: Me }) {
               {enrolment.secret.replace(/(.{4})/g, '$1 ').trim()}
             </code>
             <Field label={t('twofactor.code')} value={digits} onChange={(event) => setDigits(event.target.value)} autoComplete="one-time-code" autoFocus mono />
-            <Field label={t('auth.password')} value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" hints={[t('twofactor.passwordHint')]} />
+            <Field label={t(FIELDS.password.label)} value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" hints={[t('twofactor.passwordHint')]} />
             {problem && <Notice tone="danger">{problem}</Notice>}
             <div className="flex flex-wrap gap-2">
               <AccountButton name="cancel" onClick={close}>
@@ -601,7 +601,7 @@ function SecondFactor({ me }: { me: Me }) {
             })
           }
         >
-          <Field label={t('auth.password')} value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
+          <Field label={t(FIELDS.password.label)} value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
         </ConfirmDialog>
       )}
 
@@ -666,7 +666,7 @@ function SecondFactor({ me }: { me: Me }) {
             })
           }
         >
-          <Field label={t('auth.password')} value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
+          <Field label={t(FIELDS.password.label)} value={password} onChange={(event) => setPassword(event.target.value)} type="password" autoComplete="current-password" />
         </ConfirmDialog>
       )}
     </>

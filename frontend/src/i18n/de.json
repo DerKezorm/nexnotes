@@ -144,7 +144,6 @@
       "submit": "Anmelden",
       "title": "Bei nexnotes anmelden"
     },
-    "password": "Passwort",
     "reset": {
       "doneText": "Melde dich jetzt mit dem neuen Passwort an.",
       "doneTitle": "Passwort gesetzt",
@@ -696,9 +695,7 @@
       "paperHint": "Jede Notiz lässt sich danach über ihr Menü umstellen."
     },
     "password": {
-      "current": "Jetziges Passwort",
       "done": "Passwort geändert. Andere Browser und verbundene Geräte müssen sich neu anmelden.",
-      "new": "Neues Passwort",
       "submit": "Passwort ändern"
     },
     "profile": {

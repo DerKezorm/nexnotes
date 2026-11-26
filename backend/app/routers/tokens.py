@@ -49,14 +49,20 @@ class TokenIn(BaseModel):
 
 @router.get("/api/tokens", summary="The account's API tokens, older keys and connected programs")
 def listing(account: Account, db: DbSession, request: Request) -> dict[str, Any]:
+    """Which keys and switches: the shared key module's (``keys.listing``); each key in the shape of before."""
     now = utcnow()
+    found = keys.listing(KeyStore(db), CONFIG, account.id, now)
+    rows = {row.id: row for row in db.scalars(select(ApiToken).where(
+        ApiToken.id.in_([entry["id"] for entry in found["keys"]])))} if found["keys"] else {}
+    # Oldest first, as before; the module lists newest first.
+    listed = sorted((rows[entry["id"]] for entry in found["keys"] if entry["id"] in rows), key=lambda row: row.id)
     return {
-        "allowed": apiaccess.enabled(db),
-        "mcp_allowed": mcp.allowed(db),
+        "allowed": bool(found["api"]),
+        "mcp_allowed": bool(found["mcp"]),
         "address": oauth.base_url(request, db),
         "max_tokens": apitokens.MAX_TOKENS,
-        "tokens": [apitokens.token_out(row, now) for row in apitokens.tokens_of(db, account.id)],
-        "connectors": [apitokens.token_out(row, now) for row in apitokens.connectors_of(db, account.id)],
+        "tokens": [apitokens.token_out(row, now) for row in listed if not row.client_id],
+        "connectors": [apitokens.token_out(row, now) for row in listed if row.client_id],
     }
 
 
@@ -111,7 +117,10 @@ def revoke(token_id: TokenId, account: Account, db: DbSession) -> Response:
 
 @router.get("/api/admin/tokens", summary="Every token of every account: who, name, right, last use; never contents")
 def every(_operator: OperatorAccount, db: DbSession) -> dict[str, Any]:
-    rows = apitokens.every_token(db)
+    """Which keys: the shared key module's overview (``keys.overview``); each in the shape of before."""
+    seen = [entry["id"] for entry in keys.overview(KeyStore(db), CONFIG)]
+    found = {row.id: row for row in db.scalars(select(ApiToken).where(ApiToken.id.in_(seen)))} if seen else {}
+    rows = [found[key_id] for key_id in seen if key_id in found]
     owners = {row.id: row for row in db.scalars(select(AccountRow).where(
         AccountRow.id.in_({row.account_id for row in rows})))} if rows else {}
     now = utcnow()

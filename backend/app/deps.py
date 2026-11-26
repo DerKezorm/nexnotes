@@ -128,6 +128,9 @@ def client_ip(request: Request) -> str:
 SETUP_ONLY_PATHS = {
     "/api/auth/me", "/api/auth/logout", "/api/auth/totp/begin", "/api/auth/totp/setup", "/api/auth/totp/confirm",
 }
+#: And its API keys (module schluessel, Bauplan E33): it may list and make them, they rest until the second factor is
+#: there ("Wirkt erst, wenn du einen zweiten Faktor einrichtest."; ``KeyStore.keys_wait``, refused on use).
+SETUP_ONLY_PREFIXES = ("/api/connections/keys",)
 
 
 #: What a paired device's token never reaches (NOTES-24): tokens and connected programs, the second factor, the
@@ -197,7 +200,9 @@ def require_account(request: Request) -> AccountRow:
             if owner is not None and account_out(owner):
                 raise error("account_blocked", "This account is blocked. Ask the operator to unblock it.", 401)
             raise error("sign_in_required", "Sign in first.", 401)
-        if request.url.path not in SETUP_ONLY_PATHS and totp.setup_required(db, account):
+        path = request.url.path
+        open_while_setup = path in SETUP_ONLY_PATHS or path.startswith(SETUP_ONLY_PREFIXES)
+        if not open_while_setup and totp.setup_required(db, account):
             raise error("second_factor_setup_required", "Set up your second factor first.", 403)
         db.expunge(account)
     logs.set_actor(account.name)
