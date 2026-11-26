@@ -160,7 +160,8 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
   Wörter weg (`pages/settings/languagesCard.test.tsx`, Mutationen rot).
 - schluessel: „Neuer MCP-Schlüssel“ md secondary Plus; Vorlage `nexschluessel.test.tsx` von Hand.
 - sprachen a335909/e18169e und E52: `/api/locales` behält in `/api/openapi.json` die operationIds des alten Routers und
-  den Schemanamen `LocaleEntry` (Adapter-Felder, der Vertragstest bekommt die Beschreibung nur während er läuft);
+  den Schemanamen `LocaleEntry` (Adapter-Felder; die Vertragstests lesen sie seit 68fd070 über `description()` =
+  `app.openapi()`, veröffentlicht wird sie weiter nur mit `NEXNOTES_API_DOCS`);
   `tidy_at_start` beim Start, `restart()` im Adapter; die Profilsprache nimmt genau an, was sie vorher annahm
   (`test_the_old_way_takes_a_profile_language_as_before`, zwei Mutationen rot), `known` nur für die Auswahl.
 - Läufe: `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2263 grün, 29 übersprungen; vitest 1062 grün in 86
