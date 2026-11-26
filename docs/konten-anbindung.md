@@ -105,6 +105,28 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
 - E41: Eigene Schlüssel ruhen beim Sperren und Löschen und kommen mit dem Konto zurück; Geräte und OAuth-Programme
   werden getrennt (`apitokens.shut_out`, Test `test_keys_rest.py`).
 
+**Nachgezogen auf bauplaene-stand a374e3c (E44) und Verweise (E39):**
+- post: `catch_mail` fängt jeden Weg und verweigert echte Mailserver; kein Test von nexnotes erreichte einen
+  (gemessen mit einem Wächter um den ganzen Lauf). `test_accounts.py` nimmt `catch_mail` statt eines eigenen Ersatzes
+  für `send.deliver`.
+- log: nach „Bearer“ bleibt die Vorsilbe sichtbar; der Adapter prüft es für `nn_api_`, `nn_mcp_`, `nn_deck_`, `nnd_`,
+  `nxa_`.
+- konten: „Gespeichert.“ auf der Seite Anmeldung erst nach dem Speichern; der neue Test der Vorlage
+  `nexkonten.cards.test.tsx` von Hand übernommen.
+- E39: Oberfläche, Anleitung (DE/EN), README, `docs/api.md` und die Beschreibung unter `/api/v1/docs` sagen
+  „API-Schlüssel“/„API key“ und nennen die Orte der Navigation (Mein Konto › Verbindungen, › Sicherheit, Server ›
+  Anmeldung, Server › Allgemein › Funktionen für alle Konten; bei nextasks dessen Mein Konto › Verbindungen ›
+  API-Schlüssel). Kapitel „API-Schlüssel und MCP“, nexdeck-Karte „seit nexdeck 1.11.0, als Beta“, Hinweise auf
+  „Auf diesem Gerät installieren“ und „Geräte“. Bilder `nextasks`, `tokens`, `token-dialog` der Anleitung neu
+  (`e2e/guide-shots.mjs` auf die Karten umgestellt). Die Texte der alten Token-Karten sind weg; `used.test.ts` ließ
+  sie durch (`t${` galt für jeden Schlüssel mit „t“) und prüft jetzt erst ab dem Punkt. Wächter:
+  `frontend/src/i18n/places.test.ts`, `backend/tests/test_places.py` (je Mutation rot).
+- Läufe danach (26.11.2026): `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2186 grün, 29 übersprungen;
+  vitest zuerst 2 rot (zwei Tests mit dem alten Wortlaut, umgestellt), danach 1030 grün in 82 Dateien. Playwright 139
+  grün, 11 rot: die zehn bekannten außerhalb der Einstellungen und `folders.spec.ts:86` (Tastatur im Ordnerbaum, allein
+  wiederholt 2 von 5 grün; `FolderTree.tsx` und der Test in diesem Durchgang unverändert, also wackelig wie
+  split-toolbar).
+
 **Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
 grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
 review4-smart 2, review5-p14 1, shares 1, smart 1, split-toolbar 1).
