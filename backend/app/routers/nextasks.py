@@ -54,7 +54,7 @@ def _fail(exc: NextasksError, **more: Any) -> Exception:
 
 @router.get("", summary="The member's nextasks: connected, where, as whom, the list used last")
 def status(account: Account, db: DbSession) -> dict[str, Any]:
-    return nextasks.connection_out(db, nextasks.connection_of(db, account.id))
+    return nextasks.connection_out(db, nextasks.connection_of(db, account.id), account.id)
 
 
 @router.put("", summary="Connect nextasks or change its key: address and key are checked at once")

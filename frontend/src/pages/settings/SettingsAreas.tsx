@@ -3,6 +3,7 @@
  * files (`AccountTab`, `AppearanceArea`, `ConnectionsTab`, `GeneralCards`, `SignInArea`, `ServerCards`, `StorageArea`,
  * `AccountsTab`, `LogCard`, `AboutArea`); an area only picks them.
  */
+import { AppsOperator } from '../../connect/AppsArea'
 import { AllKeys, Interfaces } from '../../tokens/KeysCards'
 import { AboutArea } from './AboutArea'
 import { AccountsTab } from './AccountsTab'
@@ -61,6 +62,7 @@ function ServerCardsOf({ area }: { area: 'general' | 'ocr' }) {
           <LimitsCard server={server} />
           <FeaturesCard server={server} />
           <Interfaces />
+          <AppsOperator />
           <LanguagesCard />
         </>
       )}

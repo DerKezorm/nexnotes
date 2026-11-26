@@ -1,0 +1,125 @@
+"""nexnotes on the shared module verbinden (``vendor/nexverbinden`` 0.1.1), beside the module's contract tests
+(``tests/nexverbinden``):
+
+- nextime may add notes here (catalog: ``notes.add``): its token opens ``/api/v1`` with the right of the purpose and
+  only the folders given, under the switch "Verbindungen mit anderen nex-Apps", not the one of the API;
+- nexnotes' requests to nextasks go through a connection of the module when there is one (it takes the place of a key
+  typed in), else as before over the key;
+- the older way ``PUT /api/nextasks`` (a key typed in, NOTES-19) keeps working beside the module.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import secrets
+from datetime import UTC, datetime, timedelta
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+
+from app.db import SessionLocal
+from app.routers import api_v1
+from app.services import nextasks as nextasks_service
+from app.services import settings_service
+from app.services.verbinden_store import CONFIG, VerbindenStore
+from app.vendor import nexverbinden
+from app.vendor.nexverbinden.reach import Answer
+
+from .test_notes3 import new_note
+
+
+def _folder(client: TestClient, name: str) -> str:
+    made = client.post("/api/folders", json={"name": name})
+    assert made.status_code == 201, made.text
+    return str(made.json()["id"])
+
+
+def _connection(account_id: int, partner: str, grants: tuple[str, ...], areas: list[str] | None) -> str:
+    """A connection as the module makes it after the consent; the access token nexnotes gave the partner."""
+    access = CONFIG.access_prefix + secrets.token_urlsafe(32)
+    now = datetime.now(UTC)
+    with SessionLocal() as db:
+        store = VerbindenStore(db)
+        store.save(nexverbinden.Connection(
+            id=secrets.token_urlsafe(16), account_id=account_id, partner=partner,
+            partner_base=f"https://{partner}.example.com", partner_account="kim", uses=(), grants=grants,
+            areas_granted=areas, areas_used=None, held=store.seal('{"access": "x", "refresh": "y"}'),
+            issued_access_hash=hashlib.sha256(access.encode()).hexdigest(),
+            issued_refresh_hash=hashlib.sha256(secrets.token_bytes(16)).hexdigest(),
+            issued_access_expires=now + timedelta(hours=1), created_at=now))
+        store.commit()
+    return access
+
+
+def test_the_prefix_the_api_knows_is_the_modules() -> None:
+    assert api_v1.CONNECTION_PREFIX == CONFIG.access_prefix
+
+
+def test_nextime_adds_notes_only_into_the_folders_it_was_given(client, operator):
+    work, home = _folder(client, "Work"), _folder(client, "Home")
+    new_note(client, title="Plan", markdown="x", folder_id=work)
+    new_note(client, title="Groceries", markdown="y", folder_id=home)
+    token = _connection(operator.id, "nextime", ("notes.add",), [home])
+    program = TestClient(client.app)
+    listed = program.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"})
+    assert listed.status_code == 200, listed.text
+    assert [note["title"] for note in listed.json()["notes"]] == ["Groceries"]
+    made = program.post("/api/v1/notes", headers={"Authorization": f"Bearer {token}"},
+                        json={"title": "From the calendar", "folder_id": home})
+    assert made.status_code == 201, made.text
+    refused = program.post("/api/v1/notes", headers={"Authorization": f"Bearer {token}"},
+                           json={"title": "Elsewhere", "folder_id": work})
+    assert refused.status_code in (403, 404)
+    # The switch of the API is not the one of connections; theirs closes the way and deletes nothing.
+    with SessionLocal() as db:
+        settings_service.save(db, {"api_enabled": False})
+    assert program.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    with SessionLocal() as db:
+        VerbindenStore(db).set_setting("connections", False)
+        db.commit()
+    off = program.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"})
+    assert off.status_code == 403 and off.json()["detail"]["code"] == "connections_off"
+
+
+def test_a_connection_without_the_purpose_opens_nothing(client, operator):
+    token = _connection(operator.id, "nextasks", (), None)
+    refused = TestClient(client.app).get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"})
+    assert refused.status_code == 403 and refused.json()["detail"]["code"] == "purpose_missing"
+
+
+def test_requests_to_nextasks_go_through_the_modules_connection(client, operator, monkeypatch: pytest.MonkeyPatch):
+    sent: list[tuple[Any, ...]] = []
+
+    def call(_store: Any, _config: Any, account_id: Any, partner: str, method: str, path: str, _now: Any, **kw: Any):
+        sent.append((account_id, partner, method, path))
+        return Answer(200, {"lists": []}, "")
+
+    monkeypatch.setattr(nexverbinden, "call", call)
+    _connection(operator.id, "nextasks", (), None)
+    with SessionLocal() as db:
+        access = nextasks_service.connected_access(db, operator.id)
+    assert access.connected_by == operator.id and access.token == ""
+    assert nextasks_service.request(access, "GET", "lists") == {"lists": []}
+    assert sent == [(operator.id, "nextasks", "GET", "/api/v1/lists")]
+    # What the module says it cannot do comes as nexnotes' own refusal.
+    monkeypatch.setattr(nexverbinden, "call", lambda *a, **k: (_ for _ in ()).throw(nexverbinden.Refused("resting")))
+    with pytest.raises(nextasks_service.NextasksError) as refused:
+        nextasks_service.request(access, "GET", "lists")
+    assert refused.value.code == "nextasks_token_invalid"
+
+
+def test_the_older_way_to_nextasks_keeps_working_beside_the_module(client, operator, monkeypatch):
+    """NOTES-19 by hand: ``PUT /api/nextasks`` checks and keeps address and key as before; the card of the module shows
+    it as a connection by API key."""
+    monkeypatch.setattr(nextasks_service, "check", lambda access: "Kim")
+    made = client.put("/api/nextasks", json={"url": "https://tasks.example.com", "token": "ntk_" + "a" * 40})
+    assert made.status_code == 200, made.text
+    assert client.get("/api/nextasks").json()["connected"] is True
+    with SessionLocal() as db:
+        access = nextasks_service.connected_access(db, operator.id)
+    assert access.connected_by is None and access.token.startswith("ntk_")
+    card = next(view for view in client.get("/api/connect/partners").json() if view["partner"] == "nextasks")
+    assert card["state"] == "legacy" and card["legacy"]["shown"] == "ntk_aaaa"
+    assert client.delete("/api/nextasks").status_code == 204
+    assert client.get("/api/nextasks").json()["connected"] is False

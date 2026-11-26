@@ -90,9 +90,48 @@ def _bearer(request: Request) -> str | None:
     return header[7:].strip() if header[:7].lower() == "bearer " else None
 
 
+#: The purpose another nex app needs for ``/api/v1`` here (module verbinden, catalog: nextime adds notes).
+CONNECTION_PURPOSE = "notes.add"
+#: The start of such a token (``verbinden_store.CONFIG.access_prefix``).
+CONNECTION_PREFIX = "nnx_"
+
+
+def _connection(token: str) -> Caller:
+    """A token of a connection with another nex app (module verbinden): it opens ``/api/v1`` with the right of its
+    purpose and the folders given, as an API token would (stage 1 of the plan). Its own switch "Verbindungen mit
+    anderen nex-Apps" counts, not the one of the API; a refusal answers in the module's words."""
+    from datetime import UTC
+
+    from ..services.verbinden_store import CONFIG, VerbindenStore
+    from ..vendor import nexverbinden
+
+    with SessionLocal() as db:
+        try:
+            found = nexverbinden.authenticate(VerbindenStore(db), CONFIG, token, datetime.now(UTC))
+            nexverbinden.require(found, CONNECTION_PURPOSE)
+        except nexverbinden.Refused as refusal:
+            raise HTTPException(status_code=refusal.status, detail=refusal.as_dict()) from None
+        account = db.get(AccountRow, int(found.account_id))
+        if account is None:
+            raise HTTPException(status_code=401, detail=nexverbinden.Refused("token_invalid").as_dict())
+        db.expunge(account)
+    return Caller(account=account, token_id=-abs(hash(found.connection_id)) - 1, token_name=found.partner,
+                  kind=TOKEN_API, level=found.level if found.level in apiaccess.LEVELS else "read",
+                  folder_ids=[str(area) for area in found.areas] if found.areas is not None else None)
+
+
 def wall(request: Request, *, card: bool = False, write: bool = False) -> Caller:
     if request.headers.get("origin"):
         raise Refused("origin_refused")
+    token = _bearer(request)
+    if token and token.startswith(CONNECTION_PREFIX):
+        caller = _connection(token)
+        if not apibrake.allow(caller.token_id):
+            raise Refused("slow_down", headers={"Retry-After": "60"})
+        if write and not caller.writes:
+            raise Refused("token_reads_only")
+        logs.set_actor(caller.account.name)
+        return caller
     with SessionLocal() as db:
         if not apiaccess.enabled(db):
             raise Refused("api_off")

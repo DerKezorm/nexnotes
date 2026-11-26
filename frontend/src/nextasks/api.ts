@@ -10,6 +10,8 @@ export type NextasksStatus = {
   /** The name nextasks gave for the key's account. */
   name?: string
   last_list?: { id: string; name: string } | null
+  /** `key` typed in by hand, or a `connection` made with a click (module verbinden). */
+  by?: 'key' | 'connection'
 }
 
 /** A list the sending offers; `default` marks the standard list chosen in Connections (interface 0.14). */

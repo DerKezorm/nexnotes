@@ -12,7 +12,7 @@ import http from 'node:http'
 import type { AddressInfo } from 'node:net'
 import os from 'node:os'
 
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
 
 const TAB = { 'X-Nexnotes-Client': 'tab-e2e-nextasks00' }
 const TOKEN = 'ntk_e2e_stand_in_token_0123456789abcdef'
@@ -97,6 +97,14 @@ test.afterAll(async () => {
   await new Promise((resolve) => stand.server.close(resolve))
 })
 
+/** The card of nextasks (module verbinden) opened, and in it the older way, a key typed in ("Connect by hand"). */
+async function openByHand(card: Locator): Promise<void> {
+  const head = card.locator('[data-part="collapsible-head"]').first()
+  if ((await head.getAttribute('aria-expanded')) === 'false') await head.click()
+  if ((await card.getByTestId('nextasks-by-hand').count()) === 0) await card.getByTestId('connection-manual').click()
+  await expect(card.getByTestId('nextasks-by-hand')).toBeVisible()
+}
+
 async function connect(page: Page): Promise<void> {
   expect((await page.request.put('/api/settings', { data: { connections_local_network: true }, headers: TAB })).status()).toBe(200)
   // Connected already, to this worker's stand-in: nothing to do. A stand-in of an earlier worker (a new worker after a
@@ -106,6 +114,8 @@ async function connect(page: Page): Promise<void> {
   if (now.connected) expect((await page.request.delete('/api/nextasks', { headers: TAB })).status()).toBe(204)
   await page.goto('/settings/connections')
   const card = page.locator('[data-card="nextasks"]')
+  // The card of the module verbinden: the key typed in is its "Connect by hand".
+  await openByHand(card)
   await card.getByLabel('Address of nextasks').fill(address)
   await card.getByLabel('API key').fill(TOKEN)
   await card.getByTestId('nextasks-connect').click()
@@ -126,6 +136,7 @@ test('NOTES-19 AC-4 AC-5 connecting under Connections: the button appears only t
   await expect(page.getByTestId('note-body')).toContainText('Before connecting')
   await expect(page.getByTestId('nextasks-send')).toHaveCount(0)
   await page.goto('/settings/connections')
+  await openByHand(page.locator('[data-card="nextasks"]'))
   await expect(page.getByTestId('nextasks-how')).toBeVisible()
   await connect(page)
   await page.goto(`/notes/${id}`)
@@ -182,10 +193,12 @@ test('NOTES-19 the card folds as in nextime; areas and lists chosen and a standa
   const head = card.locator('[data-part="collapsible-head"]')
   await expect(head).toHaveAttribute('aria-expanded', 'false')
   await expect(card.locator('img').first()).toHaveAttribute('src', '/apps/nextasks.svg')
-  await expect(card.getByTestId('nextasks-summary')).toContainText(home!)
+  await expect(card.getByTestId('connection-summary')).toContainText(home!)
   await head.focus()
   await page.keyboard.press('Enter')
   await expect(head).toHaveAttribute('aria-expanded', 'true')
+  // Connected by a key typed in: its lists are in "Connect by hand" (module verbinden).
+  await openByHand(card)
   // Every area from the start; the family area out, then its shopping list alone; the standard list among them.
   const family = card.getByTestId('nextasks-area-group').filter({ hasText: 'Family' })
   await expect(family.getByTestId('nextasks-area')).toBeChecked()

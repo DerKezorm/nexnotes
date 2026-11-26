@@ -334,7 +334,7 @@ class NextasksIn(BaseModel):
 @router.get("/nextasks", summary="The member's nextasks: connected, where, as whom")
 def nextasks_status(found: Device) -> dict[str, Any]:
     with SessionLocal() as db:
-        return nextasks.connection_out(db, nextasks.connection_of(db, found.account.id))
+        return nextasks.connection_out(db, nextasks.connection_of(db, found.account.id), found.account.id)
 
 
 @router.put("/nextasks", summary="Connect nextasks or change its key from the app; checked at once")

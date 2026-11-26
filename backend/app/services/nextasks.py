@@ -237,6 +237,9 @@ class Access:
     token: str
     #: The operator's switch at the time of asking.
     local: bool
+    #: The account of a connection made with the module verbinden (one click and a consent): the requests go through
+    #: the module with its own token, which refreshes itself (``token`` stays empty then).
+    connected_by: int | None = None
 
 
 def _code(answer: httpx.Response) -> tuple[str, list[Any]]:
@@ -277,6 +280,8 @@ def _refusal(answer: httpx.Response, method: str, path: str) -> NoReturn:
 def request(access: Access, method: str, path: str, *, params: dict[str, str] | None = None,
             body: dict[str, Any] | None = None) -> Any:
     """``<address>/api/v1/<path>`` with the token; the JSON of the answer, every failure as ``NextasksError``."""
+    if access.connected_by is not None:
+        return _through_module(access.connected_by, method, path, params=params, body=body)
     if not access.token:
         raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
     url = clean_url(access.url) + "/api/v1/" + path
@@ -313,6 +318,47 @@ def request(access: Access, method: str, path: str, *, params: dict[str, str] | 
         return answer.json()
     except ValueError as exc:
         raise _unreachable("an answer that is no JSON") from exc
+
+
+#: What the module verbinden says when a call cannot go, as nexnotes' own refusals of nextasks.
+MODULE_REFUSALS = {
+    "not_connected": ("nextasks_not_connected", "nextasks is not connected.", 409),
+    "refused": ("nextasks_token_invalid", "nextasks does not take this key.", 409),
+    "resting": ("nextasks_token_invalid", "nextasks does not take this key.", 409),
+    "partner_off": ("nextasks_api_off", "The operator of nextasks has switched API keys off.", 409),
+}
+
+
+def _through_module(account_id: int, method: str, path: str, *, params: dict[str, str] | None = None,
+                    body: dict[str, Any] | None = None) -> Any:
+    """A request over the connection of the module verbinden: its token, its rules for asking (own network only with
+    the operator's switch, no redirect, size and time), the card's state kept by the module."""
+    from datetime import UTC
+    from datetime import datetime as moment
+
+    from ..db import SessionLocal
+    from ..vendor import nexverbinden
+    from .verbinden_store import CONFIG, VerbindenStore
+
+    with SessionLocal() as db:
+        try:
+            answer = nexverbinden.call(VerbindenStore(db), CONFIG, account_id, "nextasks", method, "/api/v1/" + path,
+                                       moment.now(UTC), body=body, params=params)
+        except nexverbinden.Refused as refusal:
+            if refusal.code == "unreachable":
+                raise _unreachable("no connection (module)") from None
+            code, text, status = MODULE_REFUSALS.get(refusal.code, MODULE_REFUSALS["refused"])
+            raise NextasksError(code, text, status) from None
+    if answer.status >= 300:
+        _refusal(httpx.Response(answer.status, json=answer.data if answer.data is not None else {}), method, path)
+    return answer.data
+
+
+def module_connected(db: Session, account_id: int) -> bool:
+    """Whether the account connected nextasks with the module verbinden (it takes the place of a key typed in)."""
+    from .verbinden_store import VerbindenStore
+
+    return VerbindenStore(db).connection(account_id, "nextasks") is not None
 
 
 def check(access: Access) -> str:
@@ -414,12 +460,13 @@ def offered(db: Session, account_id: int) -> dict[str, Any]:
     with outgoing(account_id):
         rows = _list_rows(access)
     row = connection_of(db, account_id)
-    if row is None:
+    if row is None and not access.connected_by:
         raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
-    choice = choice_of(row)
-    standard = _default(row, rows)
+    # A connection of the module without one typed in before: every area whole, no standard list yet.
+    choice = choice_of(row) if row is not None else None
+    standard = _default(row, rows) if row is not None else None
     found = [{**one, "default": one["id"] == standard} for one in _flat([one for one in rows if _chosen(choice, one)])]
-    last = row.last_list_id if any(one["id"] == row.last_list_id for one in found) else ""
+    last = row.last_list_id if row is not None and any(one["id"] == row.last_list_id for one in found) else ""
     return {"lists": found, "last": last or None}
 
 
@@ -460,9 +507,9 @@ def areas_out(db: Session, account_id: int) -> dict[str, Any]:
     with outgoing(account_id):
         areas, rows = _areas(access, account_id)
     row = connection_of(db, account_id)
-    if row is None:
+    if row is None and not access.connected_by:
         raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
-    choice = choice_of(row)
+    choice = choice_of(row) if row is not None else None
     out = []
     for area_id, area in areas.items():
         whole = choice is None or area_id in choice["areas"]
@@ -471,13 +518,17 @@ def areas_out(db: Session, account_id: int) -> dict[str, Any]:
                     "lists": [{"id": one["id"], "name": one["name"], "icon": one["icon"], "color": one["color"],
                                "chosen": whole or one["id"] in single}
                               for one in rows if one["area"] == area_id]})
-    return {"areas": out, "default": _default(row, rows)}
+    return {"areas": out, "default": _default(row, rows) if row is not None else None}
 
 
 def choose(db: Session, account_id: int, areas: list[str], lists: list[str], default: str | None) -> dict[str, Any]:
     """Keeps the areas chosen whole, the single lists and the standard list; a standard list not among the chosen
     ones counts as none from here on (ticked again later, it stays none)."""
     row = connection_of(db, account_id)
+    if row is None and module_connected(db, account_id):
+        # Connected with a click (module verbinden): the choice is kept in a row of its own, without a key.
+        row = NextasksConnection(account_id=account_id, url="", token_enc="")
+        db.add(row)
     if row is None:
         raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
     row.task_choice = jsonlib.dumps({"areas": sorted({one for one in areas if AREA_ID.match(one)})[:MAX_AREAS],
@@ -587,8 +638,15 @@ def access_of(db: Session, row: NextasksConnection) -> Access:
 
 
 def connected_access(db: Session, account_id: int) -> Access:
+    if module_connected(db, account_id):
+        from .verbinden_store import VerbindenStore
+
+        found = VerbindenStore(db).connection(account_id, "nextasks")
+        assert found is not None
+        return Access(url=found.partner_base, token="", local=local_allowed(db), connected_by=account_id)
     row = connection_of(db, account_id)
-    if row is None:
+    if row is None or not row.token_enc:
+        # No key typed in (a row that only keeps the choice of a connection made with a click).
         raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
     access = access_of(db, row)
     if not access.token:
@@ -634,9 +692,27 @@ def disconnect(db: Session, account_id: int) -> None:
         logger.info("nextasks disconnected account_id=%s", account_id)
 
 
-def connection_out(db: Session, row: NextasksConnection | None) -> dict[str, Any]:
+def connection_out(db: Session, row: NextasksConnection | None, account_id: int | None = None) -> dict[str, Any]:
+    """What the card and the sending know of the connection: one typed in by hand (``row``), or since the module
+    verbinden one made with a click (``account_id``; it counts first). ``by`` names which."""
     allowed = local_allowed(db)
-    if row is None:
+    if account_id is not None and module_connected(db, account_id):
+        from .verbinden_store import VerbindenStore
+
+        found = VerbindenStore(db).connection(account_id, "nextasks")
+        assert found is not None
+        last = row.last_list_id if row is not None else ""
+        return {
+            "connected": True,
+            "url": found.partner_base,
+            "host": urlsplit(found.partner_base).hostname or "",
+            "name": found.partner_account,
+            "checked_at": found.ok_at.isoformat() if found.ok_at else None,
+            "last_list": {"id": last, "name": row.last_list_name} if row is not None and last else None,
+            "local_allowed": allowed,
+            "by": "connection",
+        }
+    if row is None or not row.token_enc:
         return {"connected": False, "local_allowed": allowed}
     return {
         "connected": True,
@@ -646,6 +722,7 @@ def connection_out(db: Session, row: NextasksConnection | None) -> dict[str, Any
         "checked_at": row.checked_at.isoformat() if row.checked_at else None,
         "last_list": {"id": row.last_list_id, "name": row.last_list_name} if row.last_list_id else None,
         "local_allowed": allowed,
+        "by": "key",
     }
 
 

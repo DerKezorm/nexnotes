@@ -70,6 +70,7 @@ from .routers import tags as tags_router
 from .routers import tokens as tokens_router
 from .routers import totp as totp_router
 from .routers import vault as vault_router
+from .routers import verbinden as verbinden_router
 from .security import HashingBusy, purge_sessions
 from .services import backups, cleanup, locales, logs, oidc_store, post_store, settings_service, totp, updates
 from .services.konten_store import KontenStore
@@ -100,7 +101,8 @@ FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, searc
                          notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
                          mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router,
                          app_pairing_router, app1_router, app1_member_router, app1_smart_router, app1_trash_router,
-                         app1_files_router, app1_share_router, app1_import_router, app_links_router]
+                         app1_files_router, app1_share_router, app1_import_router, app_links_router,
+                         verbinden_router]
 
 
 def _read_log_mode() -> tuple[str, datetime | None]:
@@ -116,6 +118,14 @@ def _write_log_mode(mode: str, until: datetime | None) -> None:
         settings_service.save(db, {"log_mode": mode, "log_mode_until": until.isoformat() if until else None})
 
 
+def _retry_connections() -> None:
+    from .services.verbinden_store import CONFIG, VerbindenStore
+    from .vendor import nexverbinden
+
+    with SessionLocal() as db:
+        nexverbinden.retry_waiting(VerbindenStore(db), CONFIG, datetime.now(UTC))
+
+
 async def _sweep_forever(stop: asyncio.Event) -> None:
     """Enrolments and sign-ins waiting for their second factor run out; what ran out goes from memory, ended
     sessions from the database once an hour (they stayed until someone showed them again)."""
@@ -127,6 +137,12 @@ async def _sweep_forever(stop: asyncio.Event) -> None:
             await asyncio.to_thread(post_store.run_due)
         except Exception:
             logger.exception("Outbox round failed")
+        if rounds % 5 == 0:
+            # Revocations of connections with other nex apps that did not reach the partner (module verbinden).
+            try:
+                await asyncio.to_thread(_retry_connections)
+            except Exception:
+                logger.exception("Retrying revocations of connections failed")
         if rounds % 60 == 0:
             with SessionLocal() as db:
                 purge_sessions(db)

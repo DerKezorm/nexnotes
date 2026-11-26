@@ -19,7 +19,11 @@ import { AreaMark } from './AreaMark'
 import { nextasksApi, setNextasks, type AreaChoice as AreaRow } from './api'
 import { useNextasks } from './hooks'
 
-export function NextasksSection() {
+/**
+ * `bare`: the card's content without its own frame, as the form "Von Hand verbinden" of the module verbinden's card
+ * "nextasks" (`src/connect/AppsArea.tsx`): the key typed in, its lists, changing the key and disconnecting.
+ */
+export function NextasksSection({ bare = false }: { bare?: boolean } = {}) {
   const { t } = useTranslation()
   const kit = useNexuiTexts()
   const status = useNextasks()
@@ -45,32 +49,17 @@ export function NextasksSection() {
     setLeaving(false)
   }
 
-  return (
-    <Collapsible
-      variant="card"
-      id="nextasks"
-      logo="/apps/nextasks.svg"
-      title={t('nextasks.section.title')}
-      subtitle={t('nextasks.section.text')}
-      open={!foldable || !folded}
-      onOpenChange={(open) => setFolded(open ? '0' : null)}
-      status={
-        status?.connected ? (
-          <span className="flex min-w-0 items-center gap-2" data-testid="nextasks-summary">
-            <Badge tone="on">{t('nextasks.section.connected')}</Badge>
-            <span className="min-w-0 truncate text-sm text-[var(--nexui-text-muted)]">{status.host}</span>
-          </span>
-        ) : undefined
-      }
-      testId="nextasks-card"
-    >
+  // In the module's card a connection made with a click is the card's own; the form here is the key typed in.
+  const byKey = Boolean(status?.connected) && (!bare || status?.by !== 'connection')
+  const body = (
+    <>
       {problem && <Notice tone="danger">{problem}</Notice>}
-      {status?.connected && !editing && (
+      {byKey && !editing && (
         <>
           <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm" data-testid="nextasks-connected">
             <Badge tone="on">{t('nextasks.section.connected')}</Badge>
             <span className="min-w-0 text-[var(--nexui-text-muted)]" data-testid="nextasks-address">
-              {status.host} · {t('nextasks.section.as', { name: status.name || '?' })}
+              {status?.host} · {t('nextasks.section.as', { name: status?.name || '?' })}
             </span>
           </p>
           <AreaChoice />
@@ -84,12 +73,12 @@ export function NextasksSection() {
           </Buttons>
         </>
       )}
-      {status && (!status.connected || editing) && (
+      {status && (!byKey || editing) && (
         <ConnectForm
           url={status.url ?? ''}
           localAllowed={status.local_allowed}
-          changing={status.connected}
-          onCancel={status.connected ? () => setEditing(false) : undefined}
+          changing={byKey}
+          onCancel={byKey ? () => setEditing(false) : undefined}
           onDone={() => {
             setEditing(false)
             setFresh(true)
@@ -109,6 +98,29 @@ export function NextasksSection() {
           testId="nextasks-disconnect-dialog"
         />
       )}
+    </>
+  )
+  if (bare) return <div className="flex flex-col gap-3" data-testid="nextasks-by-hand">{body}</div>
+  return (
+    <Collapsible
+      variant="card"
+      id="nextasks"
+      logo="/apps/nextasks.svg"
+      title={t('nextasks.section.title')}
+      subtitle={t('nextasks.section.text')}
+      open={!foldable || !folded}
+      onOpenChange={(open) => setFolded(open ? '0' : null)}
+      status={
+        status?.connected ? (
+          <span className="flex min-w-0 items-center gap-2" data-testid="nextasks-summary">
+            <Badge tone="on">{t('nextasks.section.connected')}</Badge>
+            <span className="min-w-0 truncate text-sm text-[var(--nexui-text-muted)]">{status.host}</span>
+          </span>
+        ) : undefined
+      }
+      testId="nextasks-card"
+    >
+      {body}
     </Collapsible>
   )
 }
@@ -183,7 +195,8 @@ function ConnectForm({ url: before, localAllowed, changing, onCancel, onDone }: 
  * nextasks' symbol and colour. An area ticked is the whole area, lists added later too (its lists ticked and locked);
  * otherwise single lists, the area's tick then half. All areas whole from the start; kept per account at the server.
  * Below, the standard list among the chosen ones, chosen first in the sending; one chosen away counts as none. */
-function AreaChoice() {
+/** "Bereiche und Listen": what the sending offers; also in the module's card while connected with a click. */
+export function AreaChoice() {
   const { t } = useTranslation()
   const [areas, setAreas] = useState<AreaRow[] | null>(null)
   const [standard, setStandard] = useState<string | null>(null)

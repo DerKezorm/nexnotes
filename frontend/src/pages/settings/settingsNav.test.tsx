@@ -52,6 +52,8 @@ function answer(path: string): Answer | undefined {
   }
   if (path === '/api/connections/admin/keys') return { status: 200, body: { keys: [] } }
   if (path === '/api/connections/interfaces') return { status: 200, body: { api: true, mcp: true } }
+  // "Andere nex-Apps": the switch and addresses of the other nex apps (module verbinden, V14).
+  if (path === '/api/connect/admin') return { status: 200, body: { connections: true, partners: ['nextasks', 'nexlore', 'nextime'], addresses: {} } }
   // The operator's MCP settings after "MCP-Zugang" (module mcp).
   if (path === '/api/connections/mcp/admin') {
     return { status: 200, body: { programs: true, levels: ['read', 'write'], max_level: 'write', blocked_tools: [], tools: [{ name: 'trash_note', group: 'risky', level: 'write' }] } }
@@ -261,7 +263,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
     ['security', ['security']],
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
     ['notifications', ['notify-ways']],
-    ['general', ['limits', 'features', 'interfaces', 'languages']],
+    ['general', ['limits', 'features', 'interfaces', 'nex-apps', 'languages']],
     // The points of "Ready for the internet?" are boxes of their own in its card (here one, `ready-address`).
     ['sign-in', ['sign-in-ready', 'ready-address', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
@@ -276,7 +278,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it.each([
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
     ['notifications', ['notify-ways']],
-    ['general', ['limits', 'features', 'interfaces', 'languages']],
+    ['general', ['limits', 'features', 'interfaces', 'nex-apps', 'languages']],
     ['sign-in', ['sign-in-ready', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
     ['storage', ['storage', 'backups']],

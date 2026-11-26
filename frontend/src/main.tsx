@@ -23,6 +23,8 @@ import './export'
 import './devices/register'
 // The member's own nextasks (NOTES-19): its card in Settings, Connections, "An nextasks" in an open note.
 import './nextasks/register'
+// The cards of the other nex apps (module verbinden), in the place of nextasks' card of before.
+import './connect/register'
 // The consent page of connecting AI programs (NOTES-20).
 import './mcp/register'
 // API tokens for programs, AI tools and the nexdeck card (NOTES-25), in Settings, Connections.

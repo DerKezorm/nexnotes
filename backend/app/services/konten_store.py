@@ -997,6 +997,12 @@ class KontenStore:
         if row is None:
             return
         content.account_purged(self.db, row.id)
+        # Its connections with other nex apps rested while it was deleted; now the partners hear the end (module
+        # verbinden, revoked later where a partner cannot be reached).
+        from ..vendor import nexverbinden
+        from .verbinden_store import CONFIG, VerbindenStore
+
+        nexverbinden.end_all(VerbindenStore(self.db), CONFIG, row.id, datetime.now(UTC))
         # Its keys rested while it was deleted; now they go with it (E41).
         self.db.execute(delete(ApiToken).where(ApiToken.account_id == row.id))
         self.db.execute(update(FormerName).where(FormerName.account_id == row.id).values(account_id=None))

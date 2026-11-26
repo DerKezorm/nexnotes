@@ -1,24 +1,17 @@
 /**
- * A member's own nextasks (NOTES-19) docks onto the frame: its card in Settings, Connections (after the devices, before
- * the MCP keys, drawing N2-Verbindungen), "An nextasks" in the head of an open note, "Als nextasks-Aufgabe" in the bar
- * at the selection and in the note's menu (the whole note as one task).
+ * A member's own nextasks (NOTES-19) docks onto the frame: its card in Settings, Connections is the module verbinden's
+ * (`src/connect/`, with the key typed in as "Von Hand verbinden"), "An nextasks" in the head of an open note, "Als
+ * nextasks-Aufgabe" in the bar at the selection and in the note's menu (the whole note as one task).
  */
 import { ListChecks } from 'lucide-react'
 
 import { NOTE_HEAD_PARTS, NOTE_MENU_ITEMS, SELECTION_ACTIONS } from '../editor/noteParts'
-import { CONNECTION_SECTIONS, SHELL_PARTS } from '../extensions'
+import { SHELL_PARTS } from '../extensions'
 import { onAccountChange } from '../state/account'
 import { setNextasks } from './api'
-import { NextasksSection } from './NextasksSection'
 import { canSendLines, sendSelection } from './selection'
 import { NoteTaskHost, NoteTaskItem, SendToNextasks } from './SendToNextasks'
 
-if (!CONNECTION_SECTIONS.some((section) => section.key === 'nextasks')) {
-  const after = CONNECTION_SECTIONS.findIndex((section) => section.key === 'mcp' || section.key === 'vault')
-  const section = { key: 'nextasks', render: () => <NextasksSection /> }
-  if (after === -1) CONNECTION_SECTIONS.push(section)
-  else CONNECTION_SECTIONS.splice(after, 0, section)
-}
 if (!NOTE_HEAD_PARTS.includes(SendToNextasks)) NOTE_HEAD_PARTS.push(SendToNextasks)
 // The whole note as one task, from the note's menu in the editor and in the list; its dialog over the page.
 if (!NOTE_MENU_ITEMS.includes(NoteTaskItem)) NOTE_MENU_ITEMS.push(NoteTaskItem)
