@@ -80,6 +80,14 @@ from .vendor.nexsprachen import api as nexsprachen_api
 
 logger = logging.getLogger("nexnotes")
 
+#: The operationIds of /api/locales in /api/openapi.json from before the module sprachen (E51); they stay.
+LOCALES_OPERATION_IDS = {
+    "list": "list_locales_api_locales_get",
+    "read": "read_locale_api_locales__code__get",
+    "upload": "upload_locale_api_locales__code__put",
+    "remove": "delete_locale_api_locales__code__delete",
+}
+
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
     health, about, logs_router, auth, totp_router, passkeys_router, oidc, accounts_router, invites,
@@ -263,7 +271,12 @@ app.add_exception_handler(api_v1.apiv1.BadInput, api_v1.bad_input)
 for module in ROUTERS + FEATURE_ROUTERS:
     app.include_router(module.router)
 # The operator's own languages (module sprachen 1.0.0): /api/locales as before, read without signing in.
-app.include_router(nexsprachen_api.router(operator=require_operator))
+app.include_router(nexsprachen_api.router(
+    operator=require_operator,
+    # The names these routes had in /api/openapi.json before the module (FastAPI's, from nexnotes' own router).
+    operation_ids=LOCALES_OPERATION_IDS,
+    schema_names={"LanguageEntry": "LocaleEntry"},
+))
 app.include_router(api_v1.router)
 app.include_router(api_v1_write.router)
 app.include_router(api_v1.docs_router)

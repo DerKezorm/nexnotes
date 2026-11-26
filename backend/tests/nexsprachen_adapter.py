@@ -25,6 +25,17 @@ class Adapter(StandardAdapter):
     built_in = {"de": "Deutsch", "en": "English"}  # noqa: RUF012 (the contract's base declares it so)
     public_read = True
     has_template = False
+    # The description lives at /api/openapi.json (with NEXNOTES_API_DOCS); the operationIds and the
+    # schema name of nexnotes' own router before the module stay.
+    openapi_path = "/api/openapi.json"
+    operation_ids: dict[str, str] = {  # noqa: RUF012 (the contract's base declares it so)
+        "list": "list_locales_api_locales_get",
+        "read": "read_locale_api_locales__code__get",
+        "upload": "upload_locale_api_locales__code__put",
+        "remove": "delete_locale_api_locales__code__delete",
+    }
+    summaries: dict[str, str] = {}  # noqa: RUF012
+    schema_names: dict[str, str] = {"LanguageEntry": "LocaleEntry"}  # noqa: RUF012
 
     def start(self) -> None:
         from app.config import get_settings
@@ -37,6 +48,13 @@ class Adapter(StandardAdapter):
         self._folder = Path(tempfile.mkdtemp(prefix="nexnotes-locales-"))
         self._settings.locales_dir = self._folder
         locales.forget()
+        # /api/openapi.json is there only with NEXNOTES_API_DOCS (off in the tests, read once when the app is made):
+        # for the contract the same description FastAPI serves there (``app.openapi()``), taken away again in stop.
+        from app.main import app
+
+        self._app = app
+        app.add_api_route(self.openapi_path, lambda: app.openapi(), include_in_schema=False)
+        self._docs_route = app.router.routes[-1]
 
     def stop(self) -> None:
         from app.services import locales
@@ -44,6 +62,7 @@ class Adapter(StandardAdapter):
         for client in self._clients:
             client.close()
         self._settings.locales_dir = self._before
+        self._app.router.routes.remove(self._docs_route)
         locales.forget()
         shutil.rmtree(self._folder, ignore_errors=True)
 
