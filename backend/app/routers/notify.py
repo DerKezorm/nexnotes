@@ -122,6 +122,37 @@ def unsubscribe(request: Request, account: Account, db: DbSession) -> None:
     webpush.unsubscribe(db, account.id, session_id)
 
 
+@router.get("/devices", summary="Where the account's notifications arrive: its browsers and its iPhones and iPads")
+def devices(request: Request, account: Account, db: DbSession) -> dict[str, Any]:
+    """The page Notifications (plan "Einstellungen", E57): the same list a bell shows (AC-8), with this browser
+    marked, each browser since when and last reached."""
+    return notify.devices_of(db, account, _session_id(request, db))
+
+
+@router.delete("/webpush/{subscription_id}", status_code=204, summary="Notifications off for one of the own browsers")
+def remove_browser(subscription_id: int, account: Account, db: DbSession) -> None:
+    """Another browser of the account gets no notifications any more (its sign-up goes; plan E34). Only one's own."""
+    if not webpush.remove(db, account.id, subscription_id):
+        raise error("not_found", "Not found.", 404)
+
+
+@router.post("/webpush/test", status_code=204, summary="A test notification to this browser")
+def test_notification(request: Request, account: Account, db: DbSession) -> None:
+    """``Probemeldung schicken`` (plan E34): one notification to this browser at once, in the account's language."""
+    session_id = _session_id(request, db, required=True)
+    assert session_id is not None
+    row = webpush.of_session(db, session_id)
+    if row is None or row.account_id != account.id:
+        raise error("webpush_off", "Notifications are not on in this browser.", 409)
+    try:
+        notify.probe(db, account, row)
+    except webpush.Gone:
+        webpush.unsubscribe(db, account.id, session_id)
+        raise error("webpush_off", "Notifications are not on in this browser.", 409) from None
+    except webpush.Failed as exc:
+        raise error("webpush_failed", "The browser's push service did not take the notification.", 502) from exc
+
+
 @router.put("/viewing", status_code=204)
 def viewing(body: ViewingIn, request: Request, account: Account, db: DbSession) -> None:
     """This browser shows ``note_id`` in view right now, or none (AC-9). Said again while it lasts."""

@@ -456,6 +456,8 @@
     "browser_only": "Das geht nur im Browser.",
     "webpush_endpoint": "Der Browser hat keine gültige Adresse für Mitteilungen geliefert.",
     "webpush_keys": "Der Browser hat keine gültigen Schlüssel für Mitteilungen geliefert.",
+    "webpush_off": "Mitteilungen sind in diesem Browser nicht eingeschaltet.",
+    "webpush_failed": "Der Mitteilungsdienst des Browsers hat die Probemeldung nicht angenommen. Versuch es später noch einmal.",
     "key_invalid": "Dieser MCP-Schlüssel gilt nicht (mehr).",
     "mcp_off": "Der Betreiber hat MCP abgeschaltet.",
     "oauth_client": "Dieses Programm ist hier nicht angemeldet. Starte das Verbinden im Programm noch einmal.",

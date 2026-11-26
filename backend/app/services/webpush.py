@@ -199,6 +199,14 @@ def unsubscribe(db: Session, account_id: int, session_id: int) -> bool:
     return bool(getattr(result, "rowcount", 0))
 
 
+def remove(db: Session, account_id: int, subscription_id: int) -> bool:
+    """One browser of the account no longer gets notifications (the page Notifications); another account's never."""
+    result = db.execute(delete(WebPushSubscription).where(WebPushSubscription.account_id == account_id,
+                                                          WebPushSubscription.id == subscription_id))
+    db.commit()
+    return bool(getattr(result, "rowcount", 0))
+
+
 def of_session(db: Session, session_id: int) -> WebPushSubscription | None:
     return db.scalar(select(WebPushSubscription).where(WebPushSubscription.session_id == session_id))
 

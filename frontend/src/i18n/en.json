@@ -456,6 +456,8 @@
     "browser_only": "This only works in a browser.",
     "webpush_endpoint": "The browser sent no valid address for notifications.",
     "webpush_keys": "The browser sent no valid keys for notifications.",
+    "webpush_off": "Notifications are not on in this browser.",
+    "webpush_failed": "The browser's push service did not take the test notification. Try again later.",
     "key_invalid": "This MCP key is not valid (any more).",
     "mcp_off": "The operator has switched MCP off.",
     "oauth_client": "This program is not registered here. Start connecting in the program again.",

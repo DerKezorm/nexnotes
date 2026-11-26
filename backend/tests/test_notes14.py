@@ -732,3 +732,41 @@ def test_notes14_ac6_the_relay_and_the_push_service_get_a_keyed_mark_instead_of_
     # The same mark for the same note (a newer message replaces the older), another for another note.
     assert body["collapse"] == headers["Topic"] == notify.opaque(note_id)
     assert len(headers["Topic"]) <= 32 and notify.opaque(note_id) != notify.opaque(shopping(client))
+
+
+# --- The page Notifications (plan "Einstellungen", E57) --------------------------------------------------------------
+
+
+def test_e57_the_page_lists_the_browsers_removes_another_and_sends_a_test(
+    as_anna: TestClient, anna: Account, pushed: Recorder
+) -> None:
+    """``GET /api/notify/devices``: the account's browsers with this one marked (and since when); ``DELETE
+    /api/notify/webpush/{id}``: another browser of the account gets nothing any more, another account's stays out of
+    reach; ``POST /api/notify/webpush/test``: one notification to this browser, in the account's language."""
+    with new_client(anna) as other:
+        allow(other)
+    german(anna)
+    here = allow(as_anna)
+    listed = as_anna.get("/api/notify/devices").json()
+    mine = [entry for entry in listed["browsers"] if entry["this"]]
+    others = [entry for entry in listed["browsers"] if not entry["this"]]
+    assert len(mine) == 1 and len(others) == 1 and listed["this_browser"] is True
+    assert mine[0]["since"] and mine[0]["last_ok_at"] is None
+
+    answer = as_anna.post("/api/notify/webpush/test")
+    assert answer.status_code == 204, answer.text
+    assert len(pushed.calls) == 1 and pushed.calls[0][0] == here.endpoint
+    arrived = here.read(pushed.calls[0][1])
+    assert arrived["title"] == "Probemeldung von nexnotes" and arrived["url"] == "/settings/notifications"
+    assert as_anna.get("/api/notify/devices").json()["browsers"][-1]["last_ok_at"]
+
+    lena = make_account("lena-e57")
+    with new_client(lena) as stranger:
+        assert stranger.delete(f"/api/notify/webpush/{others[0]['id']}").status_code == 404
+    assert as_anna.delete(f"/api/notify/webpush/{others[0]['id']}").status_code == 204
+    assert [entry["this"] for entry in as_anna.get("/api/notify/devices").json()["browsers"]] == [True]
+
+    pushed.status = 410
+    gone = as_anna.post("/api/notify/webpush/test")
+    assert gone.status_code == 409 and gone.json()["detail"]["code"] == "webpush_off"
+    assert as_anna.get("/api/notify/webpush").json()["subscribed"] is False

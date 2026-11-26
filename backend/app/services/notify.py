@@ -98,6 +98,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "more": "und {count} weitere",
         "trashed": "{names} hat „{note}“ in den Papierkorb gelegt",
         "and": " und ",
+        "probe_title": "Probemeldung von nexnotes",
+        "probe_text": "So kommen Mitteilungen in diesem Browser an.",
     },
     "en": {
         "title": "{names} in “{note}”",
@@ -108,6 +110,8 @@ TEXTS: dict[str, dict[str, str]] = {
         "more": "and {count} more",
         "trashed": "{names} moved “{note}” to the trash",
         "and": " and ",
+        "probe_title": "Test notification from nexnotes",
+        "probe_text": "This is how notifications arrive in this browser.",
     },
 }
 
@@ -317,8 +321,24 @@ def devices_of(db: Session, account: Account, session_id: int | None) -> dict[st
         browser, system = webpush.describe(row.user_agent)
         mine = session_id is not None and row.session_id == session_id
         this_browser = this_browser or mine
-        browsers.append({"id": row.id, "browser": browser, "system": system, "this": mine})
+        browsers.append({"id": row.id, "browser": browser, "system": system, "this": mine,
+                         "since": row.created_at.isoformat() if row.created_at else None,
+                         "last_ok_at": row.last_ok_at.isoformat() if row.last_ok_at else None})
     return {"apps": apps, "browsers": browsers, "this_browser": this_browser}
+
+
+def probe(db: Session, account: Account, row: WebPushSubscription) -> None:
+    """A test notification to one of the account's browsers at once (plan E34, the page Notifications): its title and
+    line in the account's language, opening the page it came from. Raises ``webpush.Gone`` or ``webpush.Failed``."""
+    import json
+
+    texts = TEXTS[language_of(account)]
+    body = {"title": texts["probe_title"], "body": texts["probe_text"], "url": "/settings/notifications",
+            "tag": "probe"}
+    webpush.deliver(db, row, json.dumps(body, ensure_ascii=False).encode("utf-8"), topic="probe")
+    row.last_ok_at = clock.now()
+    db.commit()
+    logger.info("Test notification sent account_id=%s", account.id)
 
 
 def preview(db: Session, account: Account, title: str) -> dict[str, str]:
