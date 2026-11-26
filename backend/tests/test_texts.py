@@ -107,8 +107,9 @@ def test_no_api_message_is_the_code_spelt_out() -> None:
         assert (text[0].isupper() or text.startswith("nexnotes")) and text.lower().rstrip(".") != code.replace("_", " "), code
 
 
-#: Files that speak of another nex app on purpose: the partner of a connection (module verbinden, Runde 2 V19).
-PARTNER_FILES = {APP / "routers" / "nexlore.py"}
+#: Files that speak of another nex app on purpose: the partner of a connection and the list of partners in use
+#: (module verbinden, Runde 2 V19, V20).
+PARTNER_FILES = {APP / "routers" / "nexlore.py", APP / "services" / "verbinden_store.py"}
 
 
 def test_no_other_app_speaks_in_the_server() -> None:
