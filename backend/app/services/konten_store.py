@@ -949,8 +949,9 @@ class KontenStore:
             self.db.flush()
 
     def shut_out(self, account_id: AccountId) -> None:
-        """What a block or a delete ended in nexnotes before the module: every token goes (paired devices hear why
-        when they call next, NOTES-24 EC-5), no browser counts as known any more. The browser sessions and a sign-in
+        """What a block or a delete ends: paired devices and AI tools connected by OAuth go (devices hear why when they
+        call next, NOTES-24 EC-5), the account's own keys rest until it is back (Bauplan E41, ``apitokens.shut_out``),
+        no browser counts as known any more. The browser sessions and a sign-in
         waiting for its code stay as they are but count for nothing while the account is out
         (``security.account_out``, the code step checks the block), so that an open window and the code step hear
         that the account is blocked instead of being sent to sign in (NOTES-2 EC-4, AC-5); unblocking and bringing
@@ -958,7 +959,7 @@ class KontenStore:
         from . import apitokens
 
         self.renew_device_key(account_id)
-        apitokens.revoke_all(self.db, int(account_id))
+        apitokens.shut_out(self.db, int(account_id))
 
     def on_shut_out(self, account: KontoAccount) -> None:
         """konten 1.1.0 (E38): the account went out. No push goes to it while it is out: nexnotes asks before every
@@ -986,6 +987,8 @@ class KontenStore:
         if row is None:
             return
         content.account_purged(self.db, row.id)
+        # Its keys rested while it was deleted; now they go with it (E41).
+        self.db.execute(delete(ApiToken).where(ApiToken.account_id == row.id))
         self.db.execute(update(FormerName).where(FormerName.account_id == row.id).values(account_id=None))
         self.db.add(FormerName(account_id=None, name=row.name))
         self.db.delete(row)

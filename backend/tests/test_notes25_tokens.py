@@ -295,13 +295,16 @@ def test_notes25_ec9_a_blocked_deleted_or_second_factor_owing_account_s_token_is
     with SessionLocal() as db:
         settings_service.save(db, {"two_factor_required": False})
     assert get(token, "/api/v1/me").status_code == 200
-    # Blocked through the interface: the tokens are gone for good.
+    # Blocked through the interface: refused while it lasts; the token rests and comes back with the account (Bauplan
+    # E41, before: gone for good; `test_keys_rest.py` has the whole round).
     from .test_notes2 import _confirm
 
     assert client.post(f"/api/accounts/{anna.id}/block", json=_confirm()).status_code in (200, 204)
     assert code(get(token, "/api/v1/me")) == "token_invalid"
     with SessionLocal() as db:
-        assert db.scalar(select(ApiToken).where(ApiToken.account_id == anna.id)) is None
+        assert db.scalar(select(ApiToken).where(ApiToken.account_id == anna.id)) is not None
+    assert client.post(f"/api/accounts/{anna.id}/unblock", json=_confirm()).status_code in (200, 204)
+    assert get(token, "/api/v1/me").status_code == 200
     # Deleted.
     lena = make_account("lena")
     with new_client(lena) as as_lena:

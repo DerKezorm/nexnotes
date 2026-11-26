@@ -6,8 +6,9 @@ check them on every request. A token acts as its account and never sees more. Th
 SHA-256 is stored, with its first characters to tell tokens apart. It travels in ``Authorization: Bearer``, never in an
 address, and never reaches the log.
 
-A blocked or deleted account's tokens count for nothing at once, and a block removes them for good: a device of a
-blocked account is turned away whatever it sends. A token the operator blocked (``blocked_at``, NOTES-25 AC-27) stays
+A blocked or deleted account's tokens count for nothing at once. A block or a delete removes its paired devices and
+its connected AI tools for good, like its sessions (a device of a blocked account is turned away whatever it sends);
+its own keys rest until it is back (Bauplan E41). A token the operator blocked (``blocked_at``, NOTES-25 AC-27) stays
 in the member's list, says so, and opens nothing.
 
 The older kinds are never rewritten: an MCP key stays a key for ``/api/mcp``, a card key one for the card's routes
@@ -91,13 +92,22 @@ def authenticate(db: Session, token: str | None, kinds: tuple[str, ...] = KINDS)
     return account, row
 
 
-def revoke_all(db: Session, account_id: int) -> int:
-    """Every token of the account goes (a block or a delete). Its paired devices are told why when they call next
-    (``account_blocked``, NOTES-24 EC-5)."""
+def shut_out(db: Session, account_id: int) -> int:
+    """A block or a delete (Bauplan E41): its paired devices go for good and are told why when they call next
+    (``account_blocked``, NOTES-24 EC-5), and so do the AI tools connected by OAuth: like sessions and devices they
+    are connected anew after unblocking. The keys the account made itself (API tokens ``nn_api_``, MCP keys
+    ``nn_mcp_``, nexdeck card keys ``nn_deck_``) stay and rest: every check refuses them while the account is out
+    (``authenticate``, ``account_out``); unblocking or bringing the account back makes them valid again, only
+    ``purge_account`` removes them."""
     from .devices import remember_blocked
 
     remember_blocked(db, account_id)
-    result = db.execute(delete(ApiToken).where(ApiToken.account_id == account_id))
+    result = db.execute(
+        delete(ApiToken).where(
+            ApiToken.account_id == account_id,
+            (ApiToken.kind == TOKEN_DEVICE) | ((ApiToken.kind == TOKEN_MCP) & ApiToken.client_id.is_not(None)),
+        )
+    )
     db.commit()
     return int(getattr(result, "rowcount", 0) or 0)
 
