@@ -6,6 +6,7 @@ import { ChevronDown, X } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { usePlaceInside } from '../components/Menu'
 import { useFolders } from '../folders/store'
 import { errorText } from '../lib/errors'
 import { tagsApi, type TagInfo } from '../tags/api'
@@ -23,6 +24,9 @@ const IDLE = 'border-edge text-mist-100 hover:bg-ink-800'
 function Chip({ label, active, testId, children }: { label: string; active: boolean; testId: string; children: (close: () => void) => ReactNode }) {
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
+  // Beside the chip like every menu of the app, upward or moved when the window has no room (components/Menu).
+  const panel = useRef<HTMLDivElement>(null)
+  const place = usePlaceInside(panel, open)
   useEffect(() => {
     if (!open) return
     const outside = (event: PointerEvent) => {
@@ -56,7 +60,7 @@ function Chip({ label, active, testId, children }: { label: string; active: bool
         <ChevronDown className="h-3 w-3 text-mist-500" strokeWidth={3} aria-hidden />
       </button>
       {open && (
-        <div role="menu" className="nn-menu absolute left-0 top-10 max-h-80 w-64 overflow-y-auto" data-testid={`${testId}-menu`}>
+        <div ref={panel} role="menu" className="nn-menu absolute max-h-80 w-64 overflow-y-auto" style={place.style} data-up={place.up || undefined} data-testid={`${testId}-menu`}>
           {children(() => setOpen(false))}
         </div>
       )}

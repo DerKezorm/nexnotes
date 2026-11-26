@@ -2,9 +2,11 @@
  * The one menu of the app: over everything (a portal on `body`, so no box with a scroll bar cuts it off or grows one),
  * fixed beside the button or the point that opened it, upward when there is no room below, always inside the window.
  * The arrow keys go through the entries, Home and End to the first and last, Escape and Tab close it and give the
- * focus back to the button, a click outside closes it. Scrolling or a new window size moves it along.
+ * focus back to the button, a click outside closes it. Scrolling, a new window size or the menu growing (entries that
+ * come a moment later, as a note's own in the list) moves it along. A menu that hangs off another element (the
+ * selection bar's) takes the same place through `usePlaceInside`.
  */
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { createPortal } from 'react-dom'
 
 export type MenuAnchor = HTMLElement | { x: number; y: number }
@@ -27,6 +29,59 @@ export function menuPlace(
   const up = below + size.height > view.height - EDGE && above >= EDGE
   const top = up ? above : Math.max(EDGE, Math.min(below, view.height - size.height - EDGE))
   return { left, top, up }
+}
+
+/** Calls `measure` again whenever `element` changes its size or its content (where the browser can tell). */
+function useFollowSize(element: RefObject<HTMLElement | null>, measure: () => void, active: unknown): void {
+  useEffect(() => {
+    const target = element.current
+    if (!target || !active) return
+    const sized = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(() => measure())
+    sized?.observe(target)
+    const changed = new MutationObserver(() => measure())
+    changed.observe(target, { childList: true, subtree: true })
+    return () => {
+      sized?.disconnect()
+      changed.disconnect()
+    }
+  }, [element, measure, active])
+}
+
+/**
+ * The place of a menu that stands in its parent (`position: absolute`, as the selection bar's): the same rule as the
+ * menus over everything (`menuPlace`: beside the parent, upward without room below, inside the window), as `left` and
+ * `top` within the parent. Hidden until measured.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function usePlaceInside(panel: RefObject<HTMLElement | null>, open: unknown, align: 'start' | 'end' = 'start'): { style: CSSProperties; up: boolean } {
+  const [place, setPlace] = useState<{ left: number; top: number; up: boolean } | null>(null)
+  const measure = useCallback(() => {
+    const element = panel.current
+    const parent = element?.offsetParent
+    if (!element || !(parent instanceof HTMLElement)) return
+    const box = parent.getBoundingClientRect()
+    const at = menuPlace(box, { width: element.offsetWidth, height: element.offsetHeight }, { width: window.innerWidth, height: window.innerHeight }, align)
+    const next = { left: at.left - box.left, top: at.top - box.top, up: at.up }
+    setPlace((before) => (before && before.left === next.left && before.top === next.top && before.up === next.up ? before : next))
+  }, [panel, align])
+  useLayoutEffect(() => {
+    if (open) measure()
+    else setPlace(null)
+  }, [open, measure])
+  useEffect(() => {
+    if (!open) return
+    window.addEventListener('resize', measure)
+    window.addEventListener('scroll', measure, true)
+    return () => {
+      window.removeEventListener('resize', measure)
+      window.removeEventListener('scroll', measure, true)
+    }
+  }, [open, measure])
+  useFollowSize(panel, measure, open)
+  return {
+    style: place ? { left: place.left, top: place.top } : { left: 0, top: '100%', visibility: 'hidden' },
+    up: place?.up ?? false,
+  }
 }
 
 export function Menu({
@@ -64,6 +119,8 @@ export function Menu({
   }, [anchor, align])
 
   useLayoutEffect(measure, [measure])
+  // Entries that come later (a note's own in the list) make it taller: placed again, never off the screen.
+  useFollowSize(panel, measure, true)
 
   // The first entry takes the focus once the menu stands where it belongs (a hidden one cannot).
   const placed = place !== null

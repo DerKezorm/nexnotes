@@ -917,9 +917,11 @@ describe('NOTES-3 EC-11 a short toolbar', () => {
         unobserve() {}
       },
     )
+    // The toolbar's own observer (a menu that opens watches its own size too, components/Menu).
     const resize = async (next: number) => {
       width = next
-      await act(async () => observers.at(-1)!.callback([{ target: observers.at(-1)!.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
+      const bar = observers.filter((observer) => observer.target.closest('[role="menu"]') === null).at(-1)!
+      await act(async () => bar.callback([{ target: bar.target, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver))
     }
     try {
       const editor = makeEditor()

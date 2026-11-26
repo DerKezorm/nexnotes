@@ -19,6 +19,7 @@ import { Bold, ChevronDown, Code, Copy, Highlighter, Italic, Link as LinkIcon, R
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { usePlaceInside } from '../components/Menu'
 import { showNotice } from '../folders/notice'
 import { HIGHLIGHT_COLORS } from './extensions'
 import { SELECTION_ACTIONS } from './noteParts'
@@ -78,6 +79,9 @@ export function SelectionBar({ editor, onLink, headHeight = 0 }: { editor: Edito
   const state = useEditorState({ editor, selector: ({ editor: current }) => readState(current) })
   const bar = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState<'highlight' | 'style' | null>(null)
+  // Its menus stand beside the bar like every menu of the app: upward when there is no room below, inside the window.
+  const menuPanel = useRef<HTMLDivElement>(null)
+  const menuPlace = usePlaceInside(menuPanel, open)
   const [focusAt, setFocusAt] = useState(0)
   // Escape sends the bar away for this selection; a new selection brings it back.
   const dismissed = useRef<Selection | null>(null)
@@ -290,7 +294,15 @@ export function SelectionBar({ editor, onLink, headHeight = 0 }: { editor: Edito
           )
         })}
         {open && (
-          <div role="menu" aria-label={open === 'style' ? t('editor.tools.style') : t('editor.tools.highlightColors')} className="nn-menu absolute top-full left-0 mt-1" data-testid={`selection-menu-${open}`}>
+          <div
+            ref={menuPanel}
+            role="menu"
+            aria-label={open === 'style' ? t('editor.tools.style') : t('editor.tools.highlightColors')}
+            className="nn-menu absolute max-h-[calc(100dvh-16px)] overflow-y-auto"
+            style={menuPlace.style}
+            data-up={menuPlace.up || undefined}
+            data-testid={`selection-menu-${open}`}
+          >
             {open === 'style'
               ? styles.map(([value, run]) => menuItem(`style-${value}`, t(`editor.style.${value}`), run, { checked: state.style === value }))
               : [
