@@ -145,6 +145,8 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
 - Läufe: `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2190 grün, 29 übersprungen; vitest danach (nach dem
   Theme-Nachtrag und `AccountButton`) 1039 grün in 83 Dateien. Playwright 138 grün, 12 rot: die elf von vorher und
   `toolbar.spec.ts:75` (1440 px), der lief neben einer Playwright-Reihe von nexlore; allein 6 von 6 grün.
+- Nach konten 1ce1a8f/c0b07ab und dem neuen Satz unter Grenzen: `reihe.sh nexnotes ende` ruff, lint, build sauber,
+  pytest 2192 grün, 29 übersprungen; vitest 1046 grün in 84 Dateien.
 
 **Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
 grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
