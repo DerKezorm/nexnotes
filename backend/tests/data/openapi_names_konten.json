@@ -1,0 +1,1534 @@
+{
+ "_about": "The names of nexnotes' API description on the branch konten (before the settings pass), from openapi-namen/beschreibungen/nexnotes-konten.json (E53). They stay; additions are allowed.",
+ "routes": {
+  "GET /api/about": {
+   "operationId": "about_api_about_get",
+   "summary": "About nexnotes"
+  },
+  "GET /api/about/updates": {
+   "operationId": "update_state_api_about_updates_get",
+   "summary": "Whether a newer nexnotes is out (asked once a day)"
+  },
+  "PUT /api/about/updates": {
+   "operationId": "switch_api_about_updates_put",
+   "summary": "Switch the daily check"
+  },
+  "POST /api/about/updates/check": {
+   "operationId": "check_now_api_about_updates_check_post",
+   "summary": "Ask now, also with the daily check off"
+  },
+  "GET /api/accounts": {
+   "operationId": "list_accounts_api_accounts_get",
+   "summary": "All accounts, with storage and last use (no contents)"
+  },
+  "DELETE /api/accounts/{account_id}": {
+   "operationId": "delete_account_api_accounts__account_id__delete",
+   "summary": "Delete an account (brought back within 30 days)"
+  },
+  "POST /api/accounts/{account_id}/block": {
+   "operationId": "block_account_api_accounts__account_id__block_post",
+   "summary": "Block an account (out on every device at once)"
+  },
+  "PUT /api/accounts/{account_id}/display-name": {
+   "operationId": "set_display_name_api_accounts__account_id__display_name_put",
+   "summary": "Give an account another display name"
+  },
+  "DELETE /api/accounts/{account_id}/email": {
+   "operationId": "remove_email_api_accounts__account_id__email_delete",
+   "summary": "Take an account's address away (never set one)"
+  },
+  "GET /api/accounts/{account_id}/impact": {
+   "operationId": "delete_impact_api_accounts__account_id__impact_get",
+   "summary": "What deleting the account takes away: numbers only"
+  },
+  "PUT /api/accounts/{account_id}/name": {
+   "operationId": "set_name_api_accounts__account_id__name_put",
+   "summary": "Give an account another username"
+  },
+  "POST /api/accounts/{account_id}/reset-link": {
+   "operationId": "reset_link_api_accounts__account_id__reset_link_post",
+   "summary": "A link with which the person sets a new password themselves (mailed, or shown once)"
+  },
+  "POST /api/accounts/{account_id}/restore": {
+   "operationId": "restore_account_api_accounts__account_id__restore_post",
+   "summary": "Bring a deleted account back"
+  },
+  "PUT /api/accounts/{account_id}/role": {
+   "operationId": "set_role_api_accounts__account_id__role_put",
+   "summary": "Make an account operator or member"
+  },
+  "POST /api/accounts/{account_id}/sign-out": {
+   "operationId": "sign_out_account_api_accounts__account_id__sign_out_post",
+   "summary": "End every session of an account"
+  },
+  "PUT /api/accounts/{account_id}/storage-limit": {
+   "operationId": "set_limit_api_accounts__account_id__storage_limit_put",
+   "summary": "Set or remove the storage limit of an account"
+  },
+  "GET /api/accounts/{account_id}/totp/reset": {
+   "operationId": "operator_reset_overview_api_accounts__account_id__totp_reset_get",
+   "summary": "Operator: what a reset of the second factor takes away"
+  },
+  "POST /api/accounts/{account_id}/totp/reset": {
+   "operationId": "operator_reset_api_accounts__account_id__totp_reset_post",
+   "summary": "Operator: take the second factor of a locked-out account"
+  },
+  "POST /api/accounts/{account_id}/unblock": {
+   "operationId": "unblock_account_api_accounts__account_id__unblock_post",
+   "summary": "Let a blocked account in again"
+  },
+  "GET /api/admin/tokens": {
+   "operationId": "every_api_admin_tokens_get",
+   "summary": "Every token of every account: who, name, right, last use; never contents"
+  },
+  "POST /api/admin/tokens/{token_id}/block": {
+   "operationId": "block_api_admin_tokens__token_id__block_post",
+   "summary": "Block a token: its next request is turned away"
+  },
+  "POST /api/app-connect": {
+   "operationId": "connect_api_app_connect_post",
+   "summary": "Connect the app that opened /app-connect: a one-time code for it"
+  },
+  "GET /api/app-devices": {
+   "operationId": "own_devices_api_app_devices_get",
+   "summary": "The own connected devices"
+  },
+  "DELETE /api/app-devices/{device_id}": {
+   "operationId": "disconnect_api_app_devices__device_id__delete",
+   "summary": "Disconnect a device"
+  },
+  "POST /api/app-pairing": {
+   "operationId": "pair_api_app_pairing_post",
+   "summary": "A QR code for the app (valid 10 minutes, one device)"
+  },
+  "DELETE /api/app-pairing/{pairing_id}": {
+   "operationId": "withdraw_api_app_pairing__pairing_id__delete",
+   "summary": "Withdraw a QR code"
+  },
+  "GET /api/app-pairing/{pairing_id}": {
+   "operationId": "pairing_state_api_app_pairing__pairing_id__get",
+   "summary": "Whether the app used the QR code"
+  },
+  "GET /api/app/1/attachments": {
+   "operationId": "gallery_api_app_1_attachments_get",
+   "summary": "The gallery: every attachment of the account's notes, or of a smart folder's"
+  },
+  "DELETE /api/app/1/avatar": {
+   "operationId": "remove_avatar_api_app_1_avatar_delete",
+   "summary": "Remove the own profile picture"
+  },
+  "PUT /api/app/1/avatar": {
+   "operationId": "set_avatar_api_app_1_avatar_put",
+   "summary": "The own profile picture (the picture as the body)"
+  },
+  "GET /api/app/1/changes": {
+   "operationId": "changes_api_app_1_changes_get",
+   "summary": "Everything the account sees that changed after the cursor"
+  },
+  "DELETE /api/app/1/device": {
+   "operationId": "forget_device_api_app_1_device_delete",
+   "summary": "This device disconnects itself"
+  },
+  "GET /api/app/1/devices": {
+   "operationId": "own_devices_api_app_1_devices_get",
+   "summary": "The own devices"
+  },
+  "POST /api/app/1/devices": {
+   "operationId": "bring_in_api_app_1_devices_post",
+   "summary": "A token of its own for another device of this account"
+  },
+  "DELETE /api/app/1/devices/{device_id}": {
+   "operationId": "disconnect_device_api_app_1_devices__device_id__delete",
+   "summary": "Disconnect an own device"
+  },
+  "POST /api/app/1/folders": {
+   "operationId": "create_folder_api_app_1_folders_post",
+   "summary": "A new folder with the device's id; the same id again is the same"
+  },
+  "PUT /api/app/1/folders/order": {
+   "operationId": "order_folders_api_app_1_folders_order_put",
+   "summary": "The order of the folders under one parent"
+  },
+  "DELETE /api/app/1/folders/{folder_id}": {
+   "operationId": "trash_folder_api_app_1_folders__folder_id__delete",
+   "summary": "A folder into the trash, with its subfolders and notes"
+  },
+  "PATCH /api/app/1/folders/{folder_id}": {
+   "operationId": "change_folder_api_app_1_folders__folder_id__patch",
+   "summary": "Rename, symbol, colour, move a folder"
+  },
+  "POST /api/app/1/folders/{folder_id}/restore": {
+   "operationId": "restore_folder_api_app_1_folders__folder_id__restore_post",
+   "summary": "A folder back from the trash, with what went with it"
+  },
+  "GET /api/app/1/hello": {
+   "operationId": "hello_api_app_1_hello_get",
+   "summary": "Which interface this server speaks (no sign-in)"
+  },
+  "POST /api/app/1/import": {
+   "operationId": "bring_over_api_app_1_import_post",
+   "summary": "Folders and notes brought over from another account, in pieces; resumable"
+  },
+  "POST /api/app/1/locked-notes": {
+   "operationId": "create_locked_api_app_1_locked_notes_post",
+   "summary": "A note that comes locked from another account, sealed on the device; never plain here"
+  },
+  "PUT /api/app/1/look": {
+   "operationId": "set_look_api_app_1_look_put",
+   "summary": "How every list of the account looks"
+  },
+  "GET /api/app/1/me": {
+   "operationId": "me_api_app_1_me_get",
+   "summary": "The account, this device, what the server offers"
+  },
+  "DELETE /api/app/1/nextasks": {
+   "operationId": "nextasks_disconnect_api_app_1_nextasks_delete",
+   "summary": "Disconnect nextasks from the app; tasks and marks stay"
+  },
+  "GET /api/app/1/nextasks": {
+   "operationId": "nextasks_status_api_app_1_nextasks_get",
+   "summary": "The member's nextasks: connected, where, as whom"
+  },
+  "PUT /api/app/1/nextasks": {
+   "operationId": "nextasks_connect_api_app_1_nextasks_put",
+   "summary": "Connect nextasks or change its key from the app; checked at once"
+  },
+  "POST /api/app/1/notes": {
+   "operationId": "create_api_app_1_notes_post",
+   "summary": "A new note with the device's id; the same id again is the same note"
+  },
+  "DELETE /api/app/1/notes/{note_id}": {
+   "operationId": "trash_api_app_1_notes__note_id__delete",
+   "summary": "Into the trash"
+  },
+  "PATCH /api/app/1/notes/{note_id}": {
+   "operationId": "patch_api_app_1_notes__note_id__patch",
+   "summary": "Paper, symbol, color, folder, pin, title ok"
+  },
+  "POST /api/app/1/notes/{note_id}/read-link": {
+   "operationId": "make_link_api_app_1_notes__note_id__read_link_post",
+   "summary": "A new link to read the note (replaces the one before); its address comes only now"
+  },
+  "POST /api/app/1/notes/{note_id}/restore": {
+   "operationId": "restore_api_app_1_notes__note_id__restore_post",
+   "summary": "Back from the trash"
+  },
+  "GET /api/app/1/notes/{note_id}/versions": {
+   "operationId": "versions_api_app_1_notes__note_id__versions_get",
+   "summary": "The versions of a note, newest first, a page at a time"
+  },
+  "GET /api/app/1/notes/{note_id}/versions/{version_id}": {
+   "operationId": "version_api_app_1_notes__note_id__versions__version_id__get",
+   "summary": "One version whole, with its Yjs state"
+  },
+  "POST /api/app/1/notes/{note_id}/versions/{version_id}/copy": {
+   "operationId": "copy_api_app_1_notes__note_id__versions__version_id__copy_post",
+   "summary": "A version as a new note with the device's id; the same id again is that note"
+  },
+  "POST /api/app/1/notes/{note_id}/versions/{version_id}/restore": {
+   "operationId": "restore_api_app_1_notes__note_id__versions__version_id__restore_post",
+   "summary": "A version becomes the note"
+  },
+  "GET /api/app/1/notify/{kind}/{item_id}": {
+   "operationId": "bell_api_app_1_notify__kind___item_id__get",
+   "summary": "Whether notifications are on for a note or folder"
+  },
+  "PUT /api/app/1/notify/{kind}/{item_id}": {
+   "operationId": "set_bell_api_app_1_notify__kind___item_id__put",
+   "summary": "Notifications on or off for a shared note or folder"
+  },
+  "POST /api/app/1/pairing/code": {
+   "operationId": "pickup_by_code_api_app_1_pairing_code_post",
+   "summary": "The device's token for the code of the sign-in page"
+  },
+  "POST /api/app/1/pairing/{pairing_id}/key": {
+   "operationId": "pickup_by_secret_api_app_1_pairing__pairing_id__key_post",
+   "summary": "The device's token for the QR code"
+  },
+  "PUT /api/app/1/paper": {
+   "operationId": "set_paper_api_app_1_paper_put",
+   "summary": "The paper new notes start on"
+  },
+  "GET /api/app/1/people": {
+   "operationId": "people_api_app_1_people_get",
+   "summary": "Members of this server by name or address, to share with"
+  },
+  "PUT /api/app/1/profile": {
+   "operationId": "set_profile_api_app_1_profile_put",
+   "summary": "The own name (the address only in the browser)"
+  },
+  "DELETE /api/app/1/push": {
+   "operationId": "push_off_api_app_1_push_delete",
+   "summary": "No more notifications for this device"
+  },
+  "PUT /api/app/1/push": {
+   "operationId": "push_on_api_app_1_push_put",
+   "summary": "Notifications for this device: the relay's ticket and the key"
+  },
+  "GET /api/app/1/read-links": {
+   "operationId": "read_links_api_app_1_read_links_get",
+   "summary": "The own read links"
+  },
+  "DELETE /api/app/1/read-links/{link_id}": {
+   "operationId": "revoke_read_link_api_app_1_read_links__link_id__delete",
+   "summary": "Revoke a read link"
+  },
+  "PUT /api/app/1/read-links/{link_id}": {
+   "operationId": "change_link_api_app_1_read_links__link_id__put",
+   "summary": "Another last day for a read link"
+  },
+  "GET /api/app/1/shared": {
+   "operationId": "shared_with_me_api_app_1_shared_get",
+   "summary": "What others shared with the account, per owner, and what ended"
+  },
+  "DELETE /api/app/1/shared/notices/{notice_id}": {
+   "operationId": "drop_notice_api_app_1_shared_notices__notice_id__delete",
+   "summary": "Put away a notice of a share that ended"
+  },
+  "DELETE /api/app/1/shared/{kind}/{item_id}": {
+   "operationId": "leave_api_app_1_shared__kind___item_id__delete",
+   "summary": "Leave what somebody shared with the account"
+  },
+  "GET /api/app/1/shares/{kind}/{item_id}": {
+   "operationId": "sharing_api_app_1_shares__kind___item_id__get",
+   "summary": "Whom an own note or folder is shared with, and its read link"
+  },
+  "DELETE /api/app/1/shares/{kind}/{item_id}/people/{person_id}": {
+   "operationId": "unshare_api_app_1_shares__kind___item_id__people__person_id__delete",
+   "summary": "Stop sharing with a member"
+  },
+  "PUT /api/app/1/shares/{kind}/{item_id}/people/{person_id}": {
+   "operationId": "share_with_api_app_1_shares__kind___item_id__people__person_id__put",
+   "summary": "Share with a member, or change the right"
+  },
+  "POST /api/app/1/smart-folders": {
+   "operationId": "create_api_app_1_smart_folders_post",
+   "summary": "A smart folder with the device's id; the same id again is it"
+  },
+  "PUT /api/app/1/smart-folders/order": {
+   "operationId": "order_api_app_1_smart_folders_order_put",
+   "summary": "The order of the smart folders"
+  },
+  "GET /api/app/1/smart-folders/presets": {
+   "operationId": "presets_api_app_1_smart_folders_presets_get",
+   "summary": "The smart folders every account gets, to make one anew"
+  },
+  "DELETE /api/app/1/smart-folders/{folder_id}": {
+   "operationId": "remove_api_app_1_smart_folders__folder_id__delete",
+   "summary": "A smart folder gone for good; no note changes"
+  },
+  "PATCH /api/app/1/smart-folders/{folder_id}": {
+   "operationId": "change_api_app_1_smart_folders__folder_id__patch",
+   "summary": "Rename a smart folder, change its conditions, symbol, colour"
+  },
+  "GET /api/app/1/smart-folders/{folder_id}/notes": {
+   "operationId": "fitting_api_app_1_smart_folders__folder_id__notes_get",
+   "summary": "The notes that fit a smart folder now, by the server"
+  },
+  "POST /api/app/1/sync": {
+   "operationId": "sync_api_app_1_sync_post",
+   "summary": "Text of up to 50 notes: the device's updates in, what it lacks out"
+  },
+  "DELETE /api/app/1/tags/{name}": {
+   "operationId": "remove_tag_api_app_1_tags__name__delete",
+   "summary": "Take a tag out of the own notes"
+  },
+  "PUT /api/app/1/tags/{name}": {
+   "operationId": "rename_tag_api_app_1_tags__name__put",
+   "summary": "Rename a tag in the own notes, or merge it into another"
+  },
+  "POST /api/app/1/texts": {
+   "operationId": "texts_api_app_1_texts_post",
+   "summary": "The recognised text of the attachments of up to 50 notes, for the search offline"
+  },
+  "GET /api/app/1/trash": {
+   "operationId": "listing_api_app_1_trash_get",
+   "summary": "The account's trash: what was deleted, when it goes for good"
+  },
+  "POST /api/app/1/trash/empty": {
+   "operationId": "empty_api_app_1_trash_empty_post",
+   "summary": "Everything in the trash deleted until the moment given, gone for good"
+  },
+  "DELETE /api/app/1/trash/folders/{folder_id}": {
+   "operationId": "purge_folder_api_app_1_trash_folders__folder_id__delete",
+   "summary": "A folder in the trash gone for good, with what went with it"
+  },
+  "DELETE /api/app/1/trash/notes/{note_id}": {
+   "operationId": "purge_note_api_app_1_trash_notes__note_id__delete",
+   "summary": "A note in the trash gone for good"
+  },
+  "PUT /api/app/1/viewing": {
+   "operationId": "viewing_api_app_1_viewing_put",
+   "summary": "This device shows a note in view right now, or none"
+  },
+  "PUT /api/app/1/views": {
+   "operationId": "set_view_api_app_1_views_put",
+   "summary": "Sort and grouping of one list"
+  },
+  "GET /api/app/1/wait": {
+   "operationId": "wait_api_app_1_wait_get",
+   "summary": "Answers as soon as something changed after the cursor, at the latest after 25 s"
+  },
+  "GET /api/attachments": {
+   "operationId": "gallery_api_attachments_get",
+   "summary": "Every attachment of the account's notes (the gallery)"
+  },
+  "POST /api/attachments": {
+   "operationId": "upload_api_attachments_post",
+   "summary": "Upload an attachment into a note (the file as the body)"
+  },
+  "GET /api/attachments/limits": {
+   "operationId": "limits_api_attachments_limits_get",
+   "summary": "The limit per file, the storage of the account, link cards on or off"
+  },
+  "GET /api/attachments/{attachment_id}": {
+   "operationId": "one_api_attachments__attachment_id__get",
+   "summary": "One attachment"
+  },
+  "GET /api/attachments/{attachment_id}/file": {
+   "operationId": "file_api_attachments__attachment_id__file_get",
+   "summary": "The file of an attachment"
+  },
+  "GET /api/attachments/{attachment_id}/pages/{page}": {
+   "operationId": "page_picture_api_attachments__attachment_id__pages__page__get",
+   "summary": "A page of a PDF as a picture (the large view)"
+  },
+  "GET /api/attachments/{attachment_id}/text": {
+   "operationId": "text_of_api_attachments__attachment_id__text_get",
+   "summary": "The recognised text of an attachment, page by page"
+  },
+  "PUT /api/attachments/{attachment_id}/text": {
+   "operationId": "device_text_api_attachments__attachment_id__text_put",
+   "summary": "The text the iOS app recognised itself"
+  },
+  "GET /api/attachments/{attachment_id}/thumb": {
+   "operationId": "thumb_api_attachments__attachment_id__thumb_get",
+   "summary": "The preview of an attachment"
+  },
+  "GET /api/attachments/{attachment_id}/view": {
+   "operationId": "view_api_attachments__attachment_id__view_get",
+   "summary": "The picture as every browser shows it"
+  },
+  "GET /api/auth/access": {
+   "operationId": "remaining_access_api_auth_access_get",
+   "summary": "What still has access after a password set through a link"
+  },
+  "POST /api/auth/access/disconnect": {
+   "operationId": "disconnect_all_api_auth_access_disconnect_post",
+   "summary": "Disconnect all: every device, API token and passkey of the account"
+  },
+  "POST /api/auth/access/seen": {
+   "operationId": "remaining_access_seen_api_auth_access_seen_post",
+   "summary": "The list of what still has access is put away"
+  },
+  "DELETE /api/auth/avatar": {
+   "operationId": "remove_avatar_api_auth_avatar_delete",
+   "summary": "Remove the own profile picture"
+  },
+  "PUT /api/auth/avatar": {
+   "operationId": "set_avatar_api_auth_avatar_put",
+   "summary": "Set the own profile picture (the picture itself as the body)"
+  },
+  "POST /api/auth/forgot": {
+   "operationId": "forgot_api_auth_forgot_post",
+   "summary": "Forgot your password? A link by mail (with a mail server)"
+  },
+  "POST /api/auth/login": {
+   "operationId": "login_api_auth_login_post",
+   "summary": "Sign in with username or email and password"
+  },
+  "POST /api/auth/login/totp": {
+   "operationId": "login_code_api_auth_login_totp_post",
+   "summary": "Second step of the sign-in: the code from the app or a recovery code"
+  },
+  "POST /api/auth/login/totp/cancel": {
+   "operationId": "cancel_code_api_auth_login_totp_cancel_post",
+   "summary": "Give up the second step and start over"
+  },
+  "POST /api/auth/logout": {
+   "operationId": "logout_api_auth_logout_post",
+   "summary": "Sign out in this browser"
+  },
+  "POST /api/auth/logout-all": {
+   "operationId": "logout_everywhere_api_auth_logout_all_post",
+   "summary": "Sign out every other browser of the own account"
+  },
+  "GET /api/auth/me": {
+   "operationId": "me_api_auth_me_get",
+   "summary": "The signed-in account, and what this server offers it"
+  },
+  "GET /api/auth/methods": {
+   "operationId": "methods_api_auth_methods_get",
+   "summary": "How one can sign in here (no sign-in needed)"
+  },
+  "POST /api/auth/passkey/begin": {
+   "operationId": "begin_sign_in_api_auth_passkey_begin_post",
+   "summary": "Sign in with a passkey: the challenge (no sign-in needed)"
+  },
+  "POST /api/auth/passkey/finish": {
+   "operationId": "finish_sign_in_api_auth_passkey_finish_post",
+   "summary": "Sign in with a passkey: the browser's answer"
+  },
+  "GET /api/auth/passkeys": {
+   "operationId": "my_passkeys_api_auth_passkeys_get",
+   "summary": "The own passkeys"
+  },
+  "POST /api/auth/passkeys/begin": {
+   "operationId": "begin_add_api_auth_passkeys_begin_post",
+   "summary": "Start adding a passkey; needs the password"
+  },
+  "POST /api/auth/passkeys/finish": {
+   "operationId": "finish_add_api_auth_passkeys_finish_post",
+   "summary": "Finish adding a passkey with the browser's answer"
+  },
+  "DELETE /api/auth/passkeys/{uid}": {
+   "operationId": "remove_api_auth_passkeys__uid__delete",
+   "summary": "Remove a passkey; needs the password"
+  },
+  "PUT /api/auth/password": {
+   "operationId": "change_password_api_auth_password_put",
+   "summary": "Change the own password"
+  },
+  "GET /api/auth/sessions": {
+   "operationId": "my_sessions_api_auth_sessions_get",
+   "summary": "Where the own account is signed in: browsers and paired devices"
+  },
+  "DELETE /api/auth/sessions/{uid}": {
+   "operationId": "end_one_session_api_auth_sessions__uid__delete",
+   "summary": "Sign one browser or device of the own account out"
+  },
+  "POST /api/auth/totp/begin": {
+   "operationId": "begin_api_auth_totp_begin_post",
+   "summary": "Start enrolling an authenticator app; the seed is shown once"
+  },
+  "POST /api/auth/totp/confirm": {
+   "operationId": "confirm_api_auth_totp_confirm_post",
+   "summary": "Finish enrolling: a code from the app and the password"
+  },
+  "POST /api/auth/totp/disable": {
+   "operationId": "disable_api_auth_totp_disable_post",
+   "summary": "Turn the second factor off; needs the password"
+  },
+  "POST /api/auth/totp/recovery": {
+   "operationId": "new_recovery_codes_api_auth_totp_recovery_post",
+   "summary": "New recovery codes; the old ones stop working"
+  },
+  "GET /api/auth/totp/setup": {
+   "operationId": "waiting_setup_api_auth_totp_setup_get",
+   "summary": "The authenticator that waits for its first code, once more"
+  },
+  "GET /api/avatars/{account_id}": {
+   "operationId": "get_avatar_api_avatars__account_id__get",
+   "summary": "A profile picture, for those who may see it"
+  },
+  "GET /api/backups": {
+   "operationId": "listing_api_backups_get",
+   "summary": "Listing"
+  },
+  "POST /api/backups": {
+   "operationId": "create_api_backups_post",
+   "summary": "Create"
+  },
+  "POST /api/backups/upload": {
+   "operationId": "upload_api_backups_upload_post",
+   "summary": "Upload"
+  },
+  "DELETE /api/backups/{name}": {
+   "operationId": "delete_api_backups__name__delete",
+   "summary": "Delete"
+  },
+  "POST /api/backups/{name}/check": {
+   "operationId": "check_api_backups__name__check_post",
+   "summary": "Check"
+  },
+  "POST /api/backups/{name}/download": {
+   "operationId": "download_api_backups__name__download_post",
+   "summary": "Download"
+  },
+  "POST /api/backups/{name}/restore": {
+   "operationId": "restore_route_api_backups__name__restore_post",
+   "summary": "Restore Route"
+  },
+  "GET /api/email/{token}": {
+   "operationId": "email_link_state_api_email__token__get",
+   "summary": "Which address a confirmation link confirms (no sign-in needed)"
+  },
+  "POST /api/email/{token}": {
+   "operationId": "confirm_email_api_email__token__post",
+   "summary": "Confirm a new address with the link sent there (no sign-in needed)"
+  },
+  "GET /api/export/estimate": {
+   "operationId": "estimate_api_export_estimate_get",
+   "summary": "About how big the ZIP of a folder (or, without one, of everything) gets"
+  },
+  "GET /api/export/jobs": {
+   "operationId": "jobs_api_export_jobs_get",
+   "summary": "The account's exports of the last 24 hours"
+  },
+  "POST /api/export/jobs": {
+   "operationId": "start_api_export_jobs_post",
+   "summary": "Starts the export of a folder or of everything in the background"
+  },
+  "GET /api/export/jobs/{job_id}/download": {
+   "operationId": "download_api_export_jobs__job_id__download_get",
+   "summary": "The ZIP, for 24 hours, as often as asked"
+  },
+  "POST /api/export/jobs/{job_id}/restart": {
+   "operationId": "restart_api_export_jobs__job_id__restart_post",
+   "summary": "Starts a failed export once more"
+  },
+  "POST /api/export/jobs/{job_id}/seen": {
+   "operationId": "seen_api_export_jobs__job_id__seen_post",
+   "summary": "The member saw the notice of this export"
+  },
+  "GET /api/export/notes/{note_id}/markdown": {
+   "operationId": "note_markdown_api_export_notes__note_id__markdown_get",
+   "summary": "One note as Markdown; with attachments a ZIP of the file and them"
+  },
+  "GET /api/export/notes/{note_id}/pdf": {
+   "operationId": "note_pdf_api_export_notes__note_id__pdf_get",
+   "summary": "One note as PDF; one at a time per account, 429 when busy"
+  },
+  "GET /api/folders": {
+   "operationId": "tree_api_folders_get",
+   "summary": "Tree"
+  },
+  "POST /api/folders": {
+   "operationId": "create_api_folders_post",
+   "summary": "Create"
+  },
+  "GET /api/folders/inbox": {
+   "operationId": "inbox_api_folders_inbox_get",
+   "summary": "Inbox"
+  },
+  "POST /api/folders/move": {
+   "operationId": "move_api_folders_move_post",
+   "summary": "Move"
+  },
+  "PUT /api/folders/order": {
+   "operationId": "order_api_folders_order_put",
+   "summary": "Order"
+  },
+  "GET /api/folders/stamp": {
+   "operationId": "stamp_api_folders_stamp_get",
+   "summary": "Stamp"
+  },
+  "DELETE /api/folders/{folder_id}": {
+   "operationId": "trash_api_folders__folder_id__delete",
+   "summary": "Trash"
+  },
+  "PATCH /api/folders/{folder_id}": {
+   "operationId": "change_api_folders__folder_id__patch",
+   "summary": "Change"
+  },
+  "GET /api/folders/{folder_id}/impact": {
+   "operationId": "impact_api_folders__folder_id__impact_get",
+   "summary": "Impact"
+  },
+  "POST /api/folders/{folder_id}/restore": {
+   "operationId": "restore_api_folders__folder_id__restore_post",
+   "summary": "Restore"
+  },
+  "POST /api/guide": {
+   "operationId": "make_api_guide_post",
+   "summary": "Make the guide again as a folder of its own, next to what is there"
+  },
+  "GET /api/health": {
+   "operationId": "health_api_health_get",
+   "summary": "Is nexnotes running?"
+  },
+  "GET /api/health/clock": {
+   "operationId": "clock_api_health_clock_get",
+   "summary": "The server's time in milliseconds"
+  },
+  "POST /api/health/clock": {
+   "operationId": "compare_clock_api_health_clock_post",
+   "summary": "A browser tells its time; the log warns when the server's clock is far off"
+  },
+  "GET /api/invite/{token}": {
+   "operationId": "invite_state_api_invite__token__get",
+   "summary": "What an invitation offers (no sign-in needed)"
+  },
+  "POST /api/invite/{token}": {
+   "operationId": "accept_api_invite__token__post",
+   "summary": "Accept an invitation with a new account and a password"
+  },
+  "GET /api/invites": {
+   "operationId": "list_invites_api_invites_get",
+   "summary": "Open invitations (operator)"
+  },
+  "POST /api/invites": {
+   "operationId": "invite_api_invites_post",
+   "summary": "Invite a person; the link is shown once (operator)"
+  },
+  "DELETE /api/invites/{invite_id}": {
+   "operationId": "withdraw_api_invites__invite_id__delete",
+   "summary": "Withdraw an invitation (operator)"
+  },
+  "GET /api/locales": {
+   "operationId": "list_locales_api_locales_get",
+   "summary": "Languages the operator added"
+  },
+  "DELETE /api/locales/{code}": {
+   "operationId": "delete_locale_api_locales__code__delete",
+   "summary": "Remove an added language (operator)"
+  },
+  "GET /api/locales/{code}": {
+   "operationId": "read_locale_api_locales__code__get",
+   "summary": "The texts of one added language"
+  },
+  "PUT /api/locales/{code}": {
+   "operationId": "upload_locale_api_locales__code__put",
+   "summary": "Add or replace a language (operator)"
+  },
+  "DELETE /api/logs": {
+   "operationId": "clear_logs_api_logs_delete",
+   "summary": "Clear the log"
+  },
+  "GET /api/logs": {
+   "operationId": "read_logs_api_logs_get",
+   "summary": "The newest lines"
+  },
+  "GET /api/logs/level": {
+   "operationId": "read_level_api_logs_level_get",
+   "summary": "Which level applies"
+  },
+  "PUT /api/logs/level": {
+   "operationId": "set_level_api_logs_level_put",
+   "summary": "Change the level, effective at once"
+  },
+  "POST /api/mcp": {
+   "operationId": "endpoint_api_mcp_post",
+   "summary": "MCP (JSON-RPC over HTTP) with a key in Authorization: Bearer"
+  },
+  "DELETE /api/me/email/pending": {
+   "operationId": "withdraw_email_api_me_email_pending_delete",
+   "summary": "Withdraw the address that waits for its link"
+  },
+  "POST /api/me/email/resend": {
+   "operationId": "resend_email_link_api_me_email_resend_post",
+   "summary": "Send the link for the address that waits once more"
+  },
+  "PUT /api/me/language": {
+   "operationId": "set_language_api_me_language_put",
+   "summary": "The language of the own account, on every device; empty follows the browser"
+  },
+  "PUT /api/me/list-look": {
+   "operationId": "set_list_look_api_me_list_look_put",
+   "summary": "How every list of notes of the own account looks: list, cards, compact or tiles, with which hints (checklists, attachments, tags)"
+  },
+  "PUT /api/me/new-sign-in-mail": {
+   "operationId": "set_new_sign_in_mail_api_me_new_sign_in_mail_put",
+   "summary": "A mail when a browser signs in for the first time: on or off"
+  },
+  "PUT /api/me/paper": {
+   "operationId": "set_default_paper_api_me_paper_put",
+   "summary": "The paper new notes of the own account start on (NOTES-3 AC-17)"
+  },
+  "POST /api/me/password-reset-notice/seen": {
+   "operationId": "password_reset_notice_seen_api_me_password_reset_notice_seen_post",
+   "summary": "The notice that the password was set through the operator's reset link is read"
+  },
+  "PUT /api/me/profile": {
+   "operationId": "set_profile_api_me_profile_put",
+   "summary": "The own display name, username and address"
+  },
+  "POST /api/me/whats-new/seen": {
+   "operationId": "whats_new_seen_api_me_whats_new_seen_post",
+   "summary": "What's new of the running version is read or put away"
+  },
+  "DELETE /api/nextasks": {
+   "operationId": "disconnect_api_nextasks_delete",
+   "summary": "Disconnect nextasks; the tasks and the marks stay"
+  },
+  "GET /api/nextasks": {
+   "operationId": "status_api_nextasks_get",
+   "summary": "The member's nextasks: connected, where, as whom, the list used last"
+  },
+  "PUT /api/nextasks": {
+   "operationId": "connect_api_nextasks_put",
+   "summary": "Connect nextasks or change its key: address and key are checked at once"
+  },
+  "GET /api/nextasks/areas": {
+   "operationId": "areas_api_nextasks_areas_get",
+   "summary": "Every area of nextasks with its lists: chosen whole, or which lists alone"
+  },
+  "PUT /api/nextasks/areas": {
+   "operationId": "choose_areas_api_nextasks_areas_put",
+   "summary": "Choose the areas and lists the sending offers, and the standard list"
+  },
+  "GET /api/nextasks/links": {
+   "operationId": "links_api_nextasks_links_get",
+   "summary": "The member's own marks of a note"
+  },
+  "DELETE /api/nextasks/links/{link_id}": {
+   "operationId": "remove_link_api_nextasks_links__link_id__delete",
+   "summary": "Remove a mark; the task in nextasks stays"
+  },
+  "GET /api/nextasks/links/{link_id}/open": {
+   "operationId": "open_link_api_nextasks_links__link_id__open_get",
+   "summary": "Where the task is now, or that nextasks has it no more"
+  },
+  "GET /api/nextasks/lists": {
+   "operationId": "lists_api_nextasks_lists_get",
+   "summary": "The lists chosen in Connections the key may write into; the standard list marked"
+  },
+  "POST /api/nextasks/send": {
+   "operationId": "send_api_nextasks_send_post",
+   "summary": "Each line becomes a task in nextasks with a link back to the note; a mark per line, or the whole note one task"
+  },
+  "GET /api/note-list": {
+   "operationId": "read_list_api_note_list_get",
+   "summary": "Read List"
+  },
+  "GET /api/note-list/stamp": {
+   "operationId": "read_stamp_api_note_list_stamp_get",
+   "summary": "Read Stamp"
+  },
+  "PUT /api/note-list/view": {
+   "operationId": "save_view_api_note_list_view_put",
+   "summary": "Save View"
+  },
+  "GET /api/notes": {
+   "operationId": "list_notes_api_notes_get",
+   "summary": "List Notes"
+  },
+  "POST /api/notes": {
+   "operationId": "create_note_api_notes_post",
+   "summary": "Create Note"
+  },
+  "DELETE /api/notes/{note_id}": {
+   "operationId": "delete_note_api_notes__note_id__delete",
+   "summary": "Delete Note"
+  },
+  "GET /api/notes/{note_id}": {
+   "operationId": "get_note_api_notes__note_id__get",
+   "summary": "Get Note"
+  },
+  "GET /api/notes/{note_id}/attachments": {
+   "operationId": "of_note_api_notes__note_id__attachments_get",
+   "summary": "The attachments a note names or was given"
+  },
+  "PUT /api/notes/{note_id}/color": {
+   "operationId": "color_api_notes__note_id__color_put",
+   "summary": "Color"
+  },
+  "POST /api/notes/{note_id}/discard": {
+   "operationId": "discard_api_notes__note_id__discard_post",
+   "summary": "Discard"
+  },
+  "POST /api/notes/{note_id}/duplicate": {
+   "operationId": "duplicate_api_notes__note_id__duplicate_post",
+   "summary": "Duplicate"
+  },
+  "GET /api/notes/{note_id}/history": {
+   "operationId": "listing_api_notes__note_id__history_get",
+   "summary": "Listing"
+  },
+  "GET /api/notes/{note_id}/history/restored": {
+   "operationId": "restored_api_notes__note_id__history_restored_get",
+   "summary": "Restored"
+  },
+  "GET /api/notes/{note_id}/history/{version_id}": {
+   "operationId": "read_api_notes__note_id__history__version_id__get",
+   "summary": "Read"
+  },
+  "POST /api/notes/{note_id}/history/{version_id}/copy": {
+   "operationId": "copy_api_notes__note_id__history__version_id__copy_post",
+   "summary": "Copy"
+  },
+  "POST /api/notes/{note_id}/history/{version_id}/restore": {
+   "operationId": "restore_api_notes__note_id__history__version_id__restore_post",
+   "summary": "Restore"
+  },
+  "PUT /api/notes/{note_id}/icon": {
+   "operationId": "put_icon_api_notes__note_id__icon_put",
+   "summary": "The symbol before a note's title, empty for none (needs the right to write)"
+  },
+  "POST /api/notes/{note_id}/link-preview": {
+   "operationId": "link_preview_api_notes__note_id__link_preview_post",
+   "summary": "The card of a link pasted into the note, or none"
+  },
+  "PUT /api/notes/{note_id}/paper": {
+   "operationId": "put_paper_api_notes__note_id__paper_put",
+   "summary": "The paper of a note: blank, lined, grid or dots (needs the right to write)"
+  },
+  "PUT /api/notes/{note_id}/pin": {
+   "operationId": "pin_api_notes__note_id__pin_put",
+   "summary": "Pin"
+  },
+  "POST /api/notes/{note_id}/read-link": {
+   "operationId": "make_link_api_notes__note_id__read_link_post",
+   "summary": "A new link to read the note without an account (replaces the one before); shown once"
+  },
+  "POST /api/notes/{note_id}/restore": {
+   "operationId": "restore_api_notes__note_id__restore_post",
+   "summary": "Restore"
+  },
+  "PUT /api/notes/{note_id}/title": {
+   "operationId": "put_title_api_notes__note_id__title_put",
+   "summary": "Put Title"
+  },
+  "POST /api/notes/{note_id}/title/ok": {
+   "operationId": "title_ok_api_notes__note_id__title_ok_post",
+   "summary": "Title Ok"
+  },
+  "POST /api/notes/{note_id}/title/suggestion": {
+   "operationId": "take_suggestion_api_notes__note_id__title_suggestion_post",
+   "summary": "Take Suggestion"
+  },
+  "GET /api/notify/folder/{folder_id}": {
+   "operationId": "folder_settings_api_notify_folder__folder_id__get",
+   "summary": "Folder Settings"
+  },
+  "PUT /api/notify/folder/{folder_id}": {
+   "operationId": "set_folder_api_notify_folder__folder_id__put",
+   "summary": "Set Folder"
+  },
+  "GET /api/notify/note/{note_id}": {
+   "operationId": "note_settings_api_notify_note__note_id__get",
+   "summary": "Note Settings"
+  },
+  "PUT /api/notify/note/{note_id}": {
+   "operationId": "set_note_api_notify_note__note_id__put",
+   "summary": "Set Note"
+  },
+  "PUT /api/notify/viewing": {
+   "operationId": "viewing_api_notify_viewing_put",
+   "summary": "Viewing"
+  },
+  "DELETE /api/notify/webpush": {
+   "operationId": "unsubscribe_api_notify_webpush_delete",
+   "summary": "Unsubscribe"
+  },
+  "GET /api/notify/webpush": {
+   "operationId": "webpush_state_api_notify_webpush_get",
+   "summary": "Webpush State"
+  },
+  "PUT /api/notify/webpush": {
+   "operationId": "subscribe_api_notify_webpush_put",
+   "summary": "Subscribe"
+  },
+  "GET /api/oauth/authorize": {
+   "operationId": "consent_info_api_oauth_authorize_get",
+   "summary": "What a program asks to sign in for"
+  },
+  "POST /api/oauth/authorize": {
+   "operationId": "consent_api_oauth_authorize_post",
+   "summary": "Agree to a program's sign-in, or turn it down"
+  },
+  "GET /api/ocr": {
+   "operationId": "engine_api_ocr_get",
+   "summary": "Whether the server recognises text, and in which of the languages offered"
+  },
+  "DELETE /api/oidc/admin/accounts/{account_id}/links/{provider_id}": {
+   "operationId": "operator_unlink_api_oidc_admin_accounts__account_id__links__provider_id__delete",
+   "summary": "Operator: unlink an account from a provider (with the own password)"
+  },
+  "GET /api/oidc/admin/providers": {
+   "operationId": "admin_providers_api_oidc_admin_providers_get",
+   "summary": "The provider list for the operator (never a secret)"
+  },
+  "POST /api/oidc/admin/providers": {
+   "operationId": "add_provider_api_oidc_admin_providers_post",
+   "summary": "Add a provider; the issuer is checked by discovery"
+  },
+  "PUT /api/oidc/admin/providers/order": {
+   "operationId": "order_providers_api_oidc_admin_providers_order_put",
+   "summary": "Put the providers in this order (the drag handle)"
+  },
+  "DELETE /api/oidc/admin/providers/{provider_id}": {
+   "operationId": "remove_provider_api_oidc_admin_providers__provider_id__delete",
+   "summary": "Remove a provider with its links"
+  },
+  "PUT /api/oidc/admin/providers/{provider_id}": {
+   "operationId": "save_provider_api_oidc_admin_providers__provider_id__put",
+   "summary": "Save a provider; another issuer drops its links"
+  },
+  "GET /api/oidc/admin/providers/{provider_id}/impact": {
+   "operationId": "provider_impact_api_oidc_admin_providers__provider_id__impact_get",
+   "summary": "Who loses a link when the issuer changes or it goes"
+  },
+  "GET /api/oidc/authentik/address": {
+   "operationId": "authentik_address_api_oidc_authentik_address_get",
+   "summary": "What the authentik card shows about the public address"
+  },
+  "POST /api/oidc/authentik/address": {
+   "operationId": "authentik_save_address_api_oidc_authentik_address_post",
+   "summary": "Save the public address, asking first when it changes what authentik knows"
+  },
+  "GET /api/oidc/authentik/blueprint": {
+   "operationId": "authentik_blueprint_api_oidc_authentik_blueprint_get",
+   "summary": "Download a blueprint that creates the same objects in authentik"
+  },
+  "POST /api/oidc/authentik/setup": {
+   "operationId": "authentik_setup_api_oidc_authentik_setup_post",
+   "summary": "Set up provider and application in authentik with a one-time token"
+  },
+  "GET /api/oidc/callback": {
+   "operationId": "legacy_callback_api_oidc_callback_get",
+   "summary": "The return from the provider of the entry oidc (the address before the list)"
+  },
+  "GET /api/oidc/me": {
+   "operationId": "my_providers_api_oidc_me_get",
+   "summary": "The active providers and whether the own account is linked to each"
+  },
+  "DELETE /api/oidc/me/address": {
+   "operationId": "decline_offered_address_api_oidc_me_address_delete",
+   "summary": "Do not offer the provider's address any more"
+  },
+  "POST /api/oidc/me/address": {
+   "operationId": "take_offered_address_api_oidc_me_address_post",
+   "summary": "Take the address a provider knows the own account by"
+  },
+  "GET /api/oidc/providers": {
+   "operationId": "public_providers_api_oidc_providers_get",
+   "summary": "The active sign-in providers: slug and label (no sign-in needed)"
+  },
+  "GET /api/oidc/{slug}/callback": {
+   "operationId": "callback_api_oidc__slug__callback_get",
+   "summary": "The return from the provider (no sign-in needed)"
+  },
+  "DELETE /api/oidc/{slug}/link": {
+   "operationId": "unlink_api_oidc__slug__link_delete",
+   "summary": "Unlink the own account from a provider"
+  },
+  "POST /api/oidc/{slug}/link": {
+   "operationId": "link_start_api_oidc__slug__link_post",
+   "summary": "Start linking the own account to a provider; needs the password"
+  },
+  "GET /api/oidc/{slug}/start": {
+   "operationId": "start_api_oidc__slug__start_get",
+   "summary": "Send the browser to the provider (no sign-in needed)"
+  },
+  "GET /api/read-links": {
+   "operationId": "my_links_api_read_links_get",
+   "summary": "Every read link of the account, with its note and last day"
+  },
+  "DELETE /api/read-links/{link_id}": {
+   "operationId": "revoke_link_api_read_links__link_id__delete",
+   "summary": "Revoke a read link at once"
+  },
+  "PUT /api/read-links/{link_id}": {
+   "operationId": "change_link_api_read_links__link_id__put",
+   "summary": "Another last day for a read link"
+  },
+  "GET /api/reset/{token}": {
+   "operationId": "reset_state_api_reset__token__get",
+   "summary": "Whom a reset link is for (no sign-in needed)"
+  },
+  "POST /api/reset/{token}": {
+   "operationId": "reset_password_api_reset__token__post",
+   "summary": "Set a new password with a reset link; signs in nowhere"
+  },
+  "GET /api/search": {
+   "operationId": "find_api_search_get",
+   "summary": "Find"
+  },
+  "GET /api/server/storage": {
+   "operationId": "storage_api_server_storage_get",
+   "summary": "What the app takes on the disk, how full it is, network shares (operator)"
+  },
+  "GET /api/server/storage/backups": {
+   "operationId": "backups_api_server_storage_backups_get",
+   "summary": "The schedule, the last backup, a failure, and the list (operator)"
+  },
+  "POST /api/server/storage/backups": {
+   "operationId": "make_api_server_storage_backups_post",
+   "summary": "Make a backup now"
+  },
+  "DELETE /api/server/storage/backups/restore-failed": {
+   "operationId": "dismiss_api_server_storage_backups_restore_failed_delete",
+   "summary": "The failed restore was seen"
+  },
+  "PUT /api/server/storage/backups/schedule": {
+   "operationId": "schedule_api_server_storage_backups_schedule_put",
+   "summary": "Automatic backups: off, daily, weekly, monthly; the time; how many"
+  },
+  "POST /api/server/storage/backups/upload": {
+   "operationId": "upload_api_server_storage_backups_upload_post",
+   "summary": "Bring in a backup from elsewhere (the body is the archive); needs the password again, in the header"
+  },
+  "DELETE /api/server/storage/backups/{name}": {
+   "operationId": "delete_api_server_storage_backups__name__delete",
+   "summary": "Delete a backup; needs the password again"
+  },
+  "POST /api/server/storage/backups/{name}/check": {
+   "operationId": "check_api_server_storage_backups__name__check_post",
+   "summary": "The trial run: whole or not, what a restore would change"
+  },
+  "POST /api/server/storage/backups/{name}/download": {
+   "operationId": "download_api_server_storage_backups__name__download_post",
+   "summary": "The archive itself; needs the password again"
+  },
+  "POST /api/server/storage/backups/{name}/restore": {
+   "operationId": "restore_route_api_server_storage_backups__name__restore_post",
+   "summary": "Keep the current state, then restore; needs the password again"
+  },
+  "GET /api/settings": {
+   "operationId": "read_api_settings_get",
+   "summary": "Read"
+  },
+  "PUT /api/settings": {
+   "operationId": "save_api_settings_put",
+   "summary": "Save"
+  },
+  "POST /api/settings/mail-test": {
+   "operationId": "mail_test_api_settings_mail_test_post",
+   "summary": "Send a test mail through the configured server"
+  },
+  "GET /api/setup": {
+   "operationId": "setup_state_api_setup_get",
+   "summary": "Does nexnotes still need its first account, and is this browser signed in?"
+  },
+  "POST /api/setup": {
+   "operationId": "setup_api_setup_post",
+   "summary": "Create the operator account"
+  },
+  "GET /api/shared-folders/{folder_id}": {
+   "operationId": "shared_folder_api_shared_folders__folder_id__get",
+   "summary": "A folder shared with the account: owner, right, subfolders"
+  },
+  "POST /api/shares/move-check": {
+   "operationId": "move_check_api_shares_move_check_post",
+   "summary": "Which notes would stop being shared when moved there (EC-2)"
+  },
+  "DELETE /api/shares/notices/{notice_id}": {
+   "operationId": "drop_notice_api_shares_notices__notice_id__delete",
+   "summary": "Put away a notice of a share that ended"
+  },
+  "GET /api/shares/people": {
+   "operationId": "people_api_shares_people_get",
+   "summary": "Members of this server by name or address, to share with"
+  },
+  "GET /api/shares/with-me": {
+   "operationId": "with_me_api_shares_with_me_get",
+   "summary": "What others shared with the account, per owner, and what went"
+  },
+  "DELETE /api/shares/with-me/{kind}/{item_id}": {
+   "operationId": "leave_api_shares_with_me__kind___item_id__delete",
+   "summary": "Leave a note or folder somebody shared (it stays theirs)"
+  },
+  "GET /api/shares/{kind}/{item_id}": {
+   "operationId": "sharing_api_shares__kind___item_id__get",
+   "summary": "Whom an own note or folder is shared with, and its read link"
+  },
+  "DELETE /api/shares/{kind}/{item_id}/people/{person_id}": {
+   "operationId": "unshare_api_shares__kind___item_id__people__person_id__delete",
+   "summary": "Stop sharing with a member"
+  },
+  "PUT /api/shares/{kind}/{item_id}/people/{person_id}": {
+   "operationId": "share_with_api_shares__kind___item_id__people__person_id__put",
+   "summary": "Share with a member, or change the right"
+  },
+  "GET /api/smart-folders": {
+   "operationId": "list_folders_api_smart_folders_get",
+   "summary": "List Folders"
+  },
+  "POST /api/smart-folders": {
+   "operationId": "make_api_smart_folders_post",
+   "summary": "Make"
+  },
+  "PUT /api/smart-folders/order": {
+   "operationId": "order_api_smart_folders_order_put",
+   "summary": "Order"
+  },
+  "POST /api/smart-folders/preview": {
+   "operationId": "preview_api_smart_folders_preview_post",
+   "summary": "Preview"
+  },
+  "DELETE /api/smart-folders/{folder_id}": {
+   "operationId": "remove_api_smart_folders__folder_id__delete",
+   "summary": "Remove"
+  },
+  "GET /api/smart-folders/{folder_id}": {
+   "operationId": "read_folder_api_smart_folders__folder_id__get",
+   "summary": "Read Folder"
+  },
+  "PUT /api/smart-folders/{folder_id}": {
+   "operationId": "change_api_smart_folders__folder_id__put",
+   "summary": "Change"
+  },
+  "GET /api/smart-folders/{folder_id}/attachments": {
+   "operationId": "gallery_api_smart_folders__folder_id__attachments_get",
+   "summary": "Gallery"
+  },
+  "GET /api/smart-folders/{folder_id}/notes": {
+   "operationId": "notes_api_smart_folders__folder_id__notes_get",
+   "summary": "Notes"
+  },
+  "GET /api/smart-folders/{folder_id}/stamp": {
+   "operationId": "stamp_api_smart_folders__folder_id__stamp_get",
+   "summary": "Stamp"
+  },
+  "PUT /api/smart-folders/{folder_id}/view": {
+   "operationId": "save_view_api_smart_folders__folder_id__view_put",
+   "summary": "Save View"
+  },
+  "GET /api/tags": {
+   "operationId": "list_tags_api_tags_get",
+   "summary": "List Tags"
+  },
+  "DELETE /api/tags/{name}": {
+   "operationId": "remove_api_tags__name__delete",
+   "summary": "Remove"
+  },
+  "GET /api/tags/{name}": {
+   "operationId": "tag_page_api_tags__name__get",
+   "summary": "Tag Page"
+  },
+  "PUT /api/tags/{name}": {
+   "operationId": "rename_api_tags__name__put",
+   "summary": "Rename"
+  },
+  "GET /api/tags/{name}/notes": {
+   "operationId": "tag_list_api_tags__name__notes_get",
+   "summary": "Tag List"
+  },
+  "GET /api/tags/{name}/stamp": {
+   "operationId": "tag_stamp_api_tags__name__stamp_get",
+   "summary": "Tag Stamp"
+  },
+  "PUT /api/tags/{name}/view": {
+   "operationId": "save_view_api_tags__name__view_put",
+   "summary": "Save View"
+  },
+  "GET /api/tokens": {
+   "operationId": "listing_api_tokens_get",
+   "summary": "The account's API tokens, older keys and connected programs"
+  },
+  "POST /api/tokens": {
+   "operationId": "make_api_tokens_post",
+   "summary": "A new API token; the token itself is shown this once"
+  },
+  "DELETE /api/tokens/{token_id}": {
+   "operationId": "revoke_api_tokens__token_id__delete",
+   "summary": "Revoke a token or a connected program at once"
+  },
+  "GET /api/trash": {
+   "operationId": "listing_api_trash_get",
+   "summary": "Listing"
+  },
+  "POST /api/trash/empty": {
+   "operationId": "empty_api_trash_empty_post",
+   "summary": "Empty"
+  },
+  "DELETE /api/trash/folders/{folder_id}": {
+   "operationId": "purge_folder_api_trash_folders__folder_id__delete",
+   "summary": "Purge Folder"
+  },
+  "POST /api/trash/folders/{folder_id}/restore": {
+   "operationId": "restore_folder_api_trash_folders__folder_id__restore_post",
+   "summary": "Restore Folder"
+  },
+  "DELETE /api/trash/notes/{note_id}": {
+   "operationId": "purge_note_api_trash_notes__note_id__delete",
+   "summary": "Purge Note"
+  },
+  "POST /api/trash/notes/{note_id}/restore": {
+   "operationId": "restore_note_api_trash_notes__note_id__restore_post",
+   "summary": "Restore Note"
+  },
+  "GET /api/v1/attachments/{attachment_id}/file": {
+   "operationId": "attachment_file_api_v1_attachments__attachment_id__file_get",
+   "summary": "The file of an attachment, as a download"
+  },
+  "GET /api/v1/dashboard": {
+   "operationId": "pinned_api_v1_dashboard_get",
+   "summary": "The pinned notes for a card: title, first line, progress"
+  },
+  "GET /api/v1/folders": {
+   "operationId": "folder_tree_api_v1_folders_get",
+   "summary": "The inbox, the own folders as a tree, the folders shared with the account"
+  },
+  "POST /api/v1/folders": {
+   "operationId": "make_folder_api_v1_folders_post",
+   "summary": "Make a folder, at the top or in another own folder"
+  },
+  "DELETE /api/v1/folders/{folder_id}": {
+   "operationId": "trash_folder_api_v1_folders__folder_id__delete",
+   "summary": "Put an own folder with everything in it into the trash"
+  },
+  "PATCH /api/v1/folders/{folder_id}": {
+   "operationId": "change_folder_api_v1_folders__folder_id__patch",
+   "summary": "Rename, give a symbol or color, or move an own folder"
+  },
+  "POST /api/v1/folders/{folder_id}/restore": {
+   "operationId": "restore_folder_api_v1_folders__folder_id__restore_post",
+   "summary": "Bring a folder back from the trash with what went with it"
+  },
+  "GET /api/v1/me": {
+   "operationId": "me_api_v1_me_get",
+   "summary": "Who the token reads as, what it may, what this nexnotes offers"
+  },
+  "GET /api/v1/notes": {
+   "operationId": "list_notes_api_v1_notes_get",
+   "summary": "The notes the token sees, newest change first, a page at a time"
+  },
+  "POST /api/v1/notes": {
+   "operationId": "make_note_api_v1_notes_post",
+   "summary": "Make a note from Markdown; in the inbox unless a folder is named"
+  },
+  "DELETE /api/v1/notes/{note_id}": {
+   "operationId": "trash_note_api_v1_notes__note_id__delete",
+   "summary": "Put a note into the trash (never away for good)"
+  },
+  "GET /api/v1/notes/{note_id}": {
+   "operationId": "one_note_api_v1_notes__note_id__get",
+   "summary": "One note: its Markdown, its numbered checklist items, its state as `etag`"
+  },
+  "PATCH /api/v1/notes/{note_id}": {
+   "operationId": "change_note_api_v1_notes__note_id__patch",
+   "summary": "Change title, symbol, color, paper, pinning or folder of a note"
+  },
+  "POST /api/v1/notes/{note_id}/append": {
+   "operationId": "append_api_v1_notes__note_id__append_post",
+   "summary": "Add Markdown at the end of a note"
+  },
+  "GET /api/v1/notes/{note_id}/attachments": {
+   "operationId": "note_attachments_api_v1_notes__note_id__attachments_get",
+   "summary": "The attachments of a note"
+  },
+  "POST /api/v1/notes/{note_id}/attachments": {
+   "operationId": "upload_api_v1_notes__note_id__attachments_post",
+   "summary": "Upload a file (the request body) as a block at the end of the note"
+  },
+  "PUT /api/v1/notes/{note_id}/content": {
+   "operationId": "replace_api_v1_notes__note_id__content_put",
+   "summary": "Replace the whole text; paragraphs that stay the same keep everything they had"
+  },
+  "POST /api/v1/notes/{note_id}/items/{index}": {
+   "operationId": "check_api_v1_notes__note_id__items__index__post",
+   "summary": "Tick a checklist item off, or open it again"
+  },
+  "POST /api/v1/notes/{note_id}/restore": {
+   "operationId": "restore_note_api_v1_notes__note_id__restore_post",
+   "summary": "Bring a note back from the trash"
+  },
+  "GET /api/v1/search": {
+   "operationId": "find_api_v1_search_get",
+   "summary": "Full text search as the search page: text, tags, text read from pictures and PDFs"
+  },
+  "GET /api/v1/shares/with-me": {
+   "operationId": "shared_with_me_api_v1_shares_with_me_get",
+   "summary": "What others share with the account, with the right"
+  },
+  "GET /api/v1/smart-folders": {
+   "operationId": "smart_list_api_v1_smart_folders_get",
+   "summary": "The smart folders with their conditions and how many notes fit them"
+  },
+  "GET /api/v1/smart-folders/{smart_id}/notes": {
+   "operationId": "smart_notes_api_v1_smart_folders__smart_id__notes_get",
+   "summary": "The notes a smart folder shows, a page at a time"
+  },
+  "GET /api/v1/tags": {
+   "operationId": "tag_list_api_v1_tags_get",
+   "summary": "The tags of the notes the token sees, the most used first"
+  },
+  "PATCH /api/v1/tags/{name}": {
+   "operationId": "rename_tag_api_v1_tags__name__patch",
+   "summary": "Rename a tag in the account's own notes"
+  },
+  "GET /api/v1/trash": {
+   "operationId": "trash_list_api_v1_trash_get",
+   "summary": "The own notes and folders in the trash, with the day each goes for good"
+  },
+  "GET /api/vault": {
+   "operationId": "get_vault_api_vault_get",
+   "summary": "The account's vault: set up, how to derive its keys, its epoch, the locked notes"
+  },
+  "PUT /api/vault/attachments": {
+   "operationId": "put_attachment_api_vault_attachments_put",
+   "summary": "A new attachment of a locked note, encrypted on the device"
+  },
+  "GET /api/vault/notes/{note_id}": {
+   "operationId": "sealed_api_vault_notes__note_id__get",
+   "summary": "The encrypted content of a locked note and its revision"
+  },
+  "POST /api/vault/notes/{note_id}/lock": {
+   "operationId": "lock_finish_api_vault_notes__note_id__lock_post",
+   "summary": "Finish locking a note once every part is laid down"
+  },
+  "POST /api/vault/notes/{note_id}/lock/cancel": {
+   "operationId": "lock_cancel_api_vault_notes__note_id__lock_cancel_post",
+   "summary": "Break a lock off"
+  },
+  "POST /api/vault/notes/{note_id}/lock/start": {
+   "operationId": "lock_start_api_vault_notes__note_id__lock_start_post",
+   "summary": "Begin locking a note: what the device must encrypt"
+  },
+  "POST /api/vault/notes/{note_id}/unlock": {
+   "operationId": "unlock_finish_api_vault_notes__note_id__unlock_post",
+   "summary": "Finish unlocking a note once every plain part is laid down"
+  },
+  "POST /api/vault/notes/{note_id}/unlock/cancel": {
+   "operationId": "unlock_cancel_api_vault_notes__note_id__unlock_cancel_post",
+   "summary": "Break an unlock off"
+  },
+  "POST /api/vault/notes/{note_id}/unlock/start": {
+   "operationId": "unlock_start_api_vault_notes__note_id__unlock_start_post",
+   "summary": "Begin unlocking a note: everything encrypted it holds"
+  },
+  "POST /api/vault/password": {
+   "operationId": "change_password_api_vault_password_post",
+   "summary": "A new vault password: the same key wrapped anew"
+  },
+  "POST /api/vault/reset": {
+   "operationId": "reset_api_vault_reset_post",
+   "summary": "Forgotten password: a new vault, every locked note goes for good"
+  },
+  "POST /api/vault/save": {
+   "operationId": "save_api_vault_save_post",
+   "summary": "Save a locked note (encrypted on the device)"
+  },
+  "POST /api/vault/setup": {
+   "operationId": "setup_api_vault_setup_post",
+   "summary": "Set the vault up (the first lock)"
+  },
+  "PUT /api/vault/stage": {
+   "operationId": "stage_api_vault_stage_put",
+   "summary": "One part of a lock or unlock (the bytes as the body)"
+  },
+  "POST /api/vault/unlock": {
+   "operationId": "unlock_api_vault_unlock_post",
+   "summary": "The wrapped vault key for the right check value; wrong ones are counted"
+  }
+ },
+ "schemas": [
+  "AcceptIn",
+  "AddressIn",
+  "AppendIn",
+  "AreasIn",
+  "BeginAddIn",
+  "BrowserClockIn",
+  "ColorIn",
+  "ConfirmIn",
+  "ConsentIn",
+  "ContentIn",
+  "DeviceIn",
+  "DeviceText",
+  "DisplayNameIn",
+  "DownloadIn",
+  "EmptyIn",
+  "FactorResetIn",
+  "FinishIn",
+  "FolderPatch",
+  "ForgotIn",
+  "GuideIn",
+  "HTTPValidationError",
+  "IconIn",
+  "ImportFolder",
+  "ImportIn",
+  "InviteIn",
+  "JobIn",
+  "Kdf",
+  "KeyIn",
+  "KeysIn",
+  "LanguageIn",
+  "LevelIn",
+  "LimitIn",
+  "LineIn",
+  "ListLookIn",
+  "LocaleEntry",
+  "LockedNote",
+  "LogEntry",
+  "LogMode",
+  "LogModeChange",
+  "LoginIn",
+  "LookIn",
+  "MoveCheckIn",
+  "MoveIn",
+  "NameIn",
+  "NewFolder",
+  "NewSmart",
+  "NextasksIn",
+  "NoteChange",
+  "NotePatch",
+  "OperatorConfirmIn",
+  "PageIn",
+  "PairingIn",
+  "PaperDefaultIn",
+  "PasswordChangeIn",
+  "PinIn",
+  "PreviewIn",
+  "Problem",
+  "ProblemOut",
+  "ProviderIn",
+  "PushIn",
+  "RemoveIn",
+  "RenameIn",
+  "ResetLinkIn",
+  "RestoreIn",
+  "RoleIn",
+  "SaveIn",
+  "ScheduleIn",
+  "SendIn",
+  "SettingsIn",
+  "SettingsOut",
+  "SmartPatch",
+  "SubscriptionIn",
+  "SuggestionIn",
+  "SwitchIn",
+  "SyncIn",
+  "SyncNote",
+  "TagChange",
+  "TagRename",
+  "TakeAddressIn",
+  "TestMailIn",
+  "TextsIn",
+  "TitleIn",
+  "TokenIn",
+  "UnlockIn",
+  "UnlockNoteIn",
+  "UpdateSwitchIn",
+  "UpdatesOut",
+  "ValidationError",
+  "app__routers__api_v1__CheckIn",
+  "app__routers__api_v1_write__FolderChange",
+  "app__routers__api_v1_write__FolderIn",
+  "app__routers__api_v1_write__NoteIn",
+  "app__routers__app1__CodeIn",
+  "app__routers__app1__NewNote",
+  "app__routers__app1_member__HintKindsIn",
+  "app__routers__app1_member__OrderIn",
+  "app__routers__app1_member__PaperIn",
+  "app__routers__app1_member__ProfileIn",
+  "app__routers__app1_member__ViewIn",
+  "app__routers__app1_share__LinkIn",
+  "app__routers__app1_share__ViewingIn",
+  "app__routers__app1_smart__OrderIn",
+  "app__routers__app1_trash__CopyIn",
+  "app__routers__app_pairing__ConnectIn",
+  "app__routers__attachments__LinkIn",
+  "app__routers__auth__HintKindsIn",
+  "app__routers__auth__ProfileIn",
+  "app__routers__auth__SetupIn",
+  "app__routers__folders__FolderChange",
+  "app__routers__folders__FolderIn",
+  "app__routers__folders__OrderIn",
+  "app__routers__history__CopyIn",
+  "app__routers__invites__ResetIn",
+  "app__routers__nextasks__ConnectIn",
+  "app__routers__notes__NewNote",
+  "app__routers__notes__PaperIn",
+  "app__routers__notes_list__ViewIn",
+  "app__routers__notify__ViewingIn",
+  "app__routers__oidc__OrderIn",
+  "app__routers__oidc__PasswordIn",
+  "app__routers__oidc__SetupIn",
+  "app__routers__shares__LinkIn",
+  "app__routers__smart_folders__FolderChange",
+  "app__routers__smart_folders__FolderIn",
+  "app__routers__smart_folders__OrderIn",
+  "app__routers__smart_folders__ViewIn",
+  "app__routers__tags__ViewIn",
+  "app__routers__totp__CodeIn",
+  "app__routers__totp__PasswordIn",
+  "app__routers__vault__PasswordIn",
+  "app__routers__vault__ResetIn",
+  "app__routers__vault__SetupIn",
+  "app__vendor__nexsicherung__routes__CheckIn",
+  "app__vendor__nexsicherung__routes__NoteIn",
+  "app__vendor__nexsicherung__routes__PasswordIn"
+ ]
+}

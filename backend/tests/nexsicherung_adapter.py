@@ -24,6 +24,19 @@ class Adapter(StandardAdapter):
     prefix = "/api/server/storage"
     legacy_prefix = "/api/backups"
     legacy_header = "x-nexnotes-password"
+    # E53: nexnotes took the module already on konten, its names are the module's; nothing given to the routers.
+    operation_ids: dict[str, str] = {}  # noqa: RUF012 (the contract's base declares it so)
+    summaries: dict[str, str] = {}  # noqa: RUF012
+    schema_names: dict[str, str] = {}  # noqa: RUF012
+    openapi_path = "/api/openapi.json"
+
+    def description(self) -> dict[str, Any]:
+        """nexnotes publishes its description only with NEXNOTES_API_DOCS (off in the tests): its own, as FastAPI
+        would serve it at /api/openapi.json."""
+        from app.main import app
+
+        found: dict[str, Any] = app.openapi()
+        return found
 
     def start(self) -> None:
         from fastapi.testclient import TestClient
