@@ -82,7 +82,9 @@ export function takeAccountTheme(theme: string | undefined, take: (kept: string)
     applyMode(theme)
     return
   }
-  // Only an account of before has no theme: it takes, once, what this browser really kept, raw (never what the
+  // A page without the field (a server before konten 1.1.0) leaves the browser as it is.
+  if (theme === undefined) return
+  // Only an account of before has no theme ("" from the server): it takes, once, what this browser really kept, raw (never what the
   // browser prefers), and without one the server takes nexnotes' default of before (konten 1.1.0, E45).
   void take(keptMode()).then(
     (answer) => {
