@@ -960,6 +960,18 @@ class KontenStore:
         self.renew_device_key(account_id)
         apitokens.revoke_all(self.db, int(account_id))
 
+    def on_shut_out(self, account: KontoAccount) -> None:
+        """konten 1.1.0 (E38): the account went out. No push goes to it while it is out: nexnotes asks before every
+        message (``notify.send_round``, ``account_out``) and drops what waits (``notify._accounts_out`` on
+        ``sessions_ended``). Its web push subscriptions hang on its browser sessions and its app's on its paired
+        devices; the block ends both (``shut_out``, and ``end_sessions`` on unblocking), so nothing of them
+        comes back (``einst-fragen/nexnotes.md``, question 11)."""
+        logger.info("Account out: no pushes account_id=%s", account.id)
+
+    def on_back(self, account: KontoAccount) -> None:
+        """konten 1.1.0 (E38): the account can sign in again. Pushes go to what it signs up anew (browser, device)."""
+        logger.info("Account back: pushes again account_id=%s", account.id)
+
     def deleted_before(self, moment: datetime) -> list[AccountId]:
         return list(
             self.db.scalars(select(Account.id).where(Account.deleted_at.is_not(None), Account.deleted_at <= moment))

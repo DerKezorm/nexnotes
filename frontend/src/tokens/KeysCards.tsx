@@ -11,7 +11,7 @@ import { useTranslation } from 'react-i18next'
 import { api } from '../api/client'
 import { day } from '../lib/format'
 import { useAuth } from '../state/auth'
-import { AllKeysCard, ApiKeysCard, InterfacesCard, ToolsCard, type AppWords, type KeyRequest } from '../vendor/nexschluessel'
+import { AllKeysCard, ApiKeysCard, InterfacesCard, ToolsCard, type AdminKey, type AppWords, type KeyRequest } from '../vendor/nexschluessel'
 
 /** nexnotes' client for the cards (its tab header, its errors with their codes). */
 // eslint-disable-next-line react-refresh/only-export-components
@@ -33,7 +33,7 @@ export function ConnectionKeys() {
   const words = useWords()
   return (
     <>
-      <ApiKeysCard request={keyRequest} things={t('settings.things')} words={words} docsHref={DOCS} operator={me?.role === 'operator'} language={i18n.language} when={day} />
+      <ApiKeysCard request={keyRequest} things={t('settings.things')} thingsDative={t('settings.thingsDative')} words={words} docsHref={DOCS} operator={me?.role === 'operator'} language={i18n.language} when={day} />
       <ToolsCard request={keyRequest} words={words} language={i18n.language} when={day} />
     </>
   )
@@ -48,5 +48,11 @@ export function Interfaces() {
 /** Server › Accounts, place 4: "API-Schlüssel aller Konten". */
 export function AllKeys() {
   const { i18n } = useTranslation()
-  return <AllKeysCard request={keyRequest} words={useWords()} language={i18n.language} when={day} />
+  const { t } = useTranslation()
+  // nexnotes' own column (E36): how many folders a key is limited to, never which; "all" for every note.
+  const extra = [{ key: 'folders', label: t('tokens.dialog.folders'), width: '7rem', cell: (row: AdminKey) => {
+    const count = Number(row.extra?.folders ?? 0)
+    return <span>{count > 0 ? t('tokens.list.folders', { count }) : t('tokens.list.foldersAll')}</span>
+  } }]
+  return <AllKeysCard request={keyRequest} words={useWords()} language={i18n.language} when={day} extra={extra} />
 }

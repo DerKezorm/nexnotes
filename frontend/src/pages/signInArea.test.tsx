@@ -296,13 +296,17 @@ describe('the second factor requirement', () => {
       viewer.two_factor = false
       await page(language)
       expect(factorBox().disabled).toBe(true)
-      expect(hint()).toBe(i18n.t('account.ownSecondFactorFirst'))
+      // Since E36 the module names the provider switch that exempts a sign-in (nexnotes' own sentence before).
+      const trusts = i18n.t('oidc.admin.trustsSecondFactor')
+      expect(hint()).toBe(`${i18n.t('account.ownSecondFactorFirst')} ${i18n.t('account.factorRequiredExemptLocked', { trusts })}`)
+      expect(hint()).toContain(trusts)
       act(() => root.unmount())
       root = createRoot(box)
       viewer.two_factor = true
       await page(language)
       expect(factorBox().disabled).toBe(false)
-      expect(hint()).toBe(i18n.t('account.factorRequiredSwitchHint'))
+      expect(hint()).toBe(`${i18n.t('account.factorRequiredSwitchHint')} ${i18n.t('account.factorRequiredExempt', { trusts })}`)
+      expect(hint()).toContain(trusts)
       await act(async () => factorBox().click())
       await settle()
       expect(calls.filter((call) => call.method === 'PUT' && call.path === '/api/server/sign-in').map((call) => call.body)).toEqual([
@@ -399,8 +403,9 @@ describe('the authentik steps', () => {
       await press(authentikCard(), i18n.t('oidc.authentik.run'))
       await settle()
       expect(dialog()!.textContent).toContain(i18n.t('oidc.admin.issuerChangeConfirm', { count: 7 }))
-      // The step list says it too, with the number in it (no placeholder left over).
-      expect(rows()).toEqual([`✗${i18n.t('oidc.authentik.step.reached')}${i18n.t('oidc.authentik.why.issuer_change', { count: 7 })}`])
+      // Since E33 only the question, with the number in it, and no line of steps behind it (no placeholder left over).
+      expect(rows()).toEqual([])
+      expect(document.querySelector('[data-testid="authentik-steps"]')).toBeNull()
       expect(box.textContent).not.toContain('{{')
       expect(calls.filter((call) => call.path === '/api/oidc/authentik/setup').map((call) => call.body)).toEqual([
         { url: 'https://auth.example.com', token: 'token', confirm_issuer_change: false, public_url: '' },

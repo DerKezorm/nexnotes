@@ -966,7 +966,8 @@
     },
     "saved": "Gespeichert.",
     "title": "Einstellungen",
-    "things": "Notizen"
+    "things": "Notizen",
+    "thingsDative": "Notizen"
   },
   "setup": {
     "folder": "Datenordner {{path}}",

@@ -44,6 +44,8 @@ CONFIG = AppConfig(
     programs=True,
     mcp_path="/api/mcp",
     error_codes={"too_many_keys": "tokens_too_many"},
+    # "API-Schlüssel aller Konten" names how many folders a key is limited to, never which (NOTES-25 AC-27, E36).
+    admin_extra=lambda _store, key: {"folders": len(key.areas) if key.areas is not None else 0},
 )
 
 #: The operator's switches under nexnotes' names (both on from the start).

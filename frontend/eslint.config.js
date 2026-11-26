@@ -10,8 +10,8 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 
 export default tseslint.config(
-  // The shared sign-in module comes unchanged from its own repository and is linted there.
-  { ignores: ['**/dist/**', 'src/vendor/nexoidc/**'] },
+  // The shared modules come unchanged from their own repository and are linted there.
+  { ignores: ['**/dist/**', 'src/vendor/**'] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ['**/*.{ts,tsx}'],

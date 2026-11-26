@@ -16,5 +16,5 @@ const when = (line: LogLine, language: string) => (line.at ? moment(line.at, lan
 
 export function LogCard() {
   const { t } = useTranslation()
-  return <SharedLogCard request={request} base="/api/logs" things={t('settings.things')} when={when} clock={(iso, language) => clock(iso, language)} />
+  return <SharedLogCard request={request} base="/api/logs" things={t('settings.things')} thingsDative={t('settings.thingsDative')} when={when} clock={(iso, language) => clock(iso, language)} />
 }

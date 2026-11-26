@@ -169,3 +169,18 @@ def test_the_interfaces_card_switches_what_general_switched(client: TestClient, 
     assert client.get("/api/settings").json()["mcp_enabled"] is False
     client.put("/api/settings", json={"api_enabled": False})
     assert client.get("/api/connections/interfaces").json()["api"] is False
+
+
+def test_the_operator_sees_how_many_folders_a_key_reaches_never_which_nor_its_start(
+    client: TestClient, operator: Account
+) -> None:
+    """E36: nexnotes' own column in "API keys of all accounts" (``admin_extra``); the start of a key stays hidden."""
+    home = client.post("/api/folders", json={"name": "Home"}).json()["id"]
+    work = client.post("/api/folders", json={"name": "Work"}).json()["id"]
+    some = client.post("/api/connections/keys", json={"kind": "api", "name": "Two folders", "areas": [home, work]})
+    every = client.post("/api/connections/keys", json={"kind": "api", "name": "All notes"})
+    assert some.status_code == every.status_code == 201
+    rows = {row["name"]: row for row in client.get("/api/connections/admin/keys").json()["keys"]}
+    assert rows["Two folders"]["extra"] == {"folders": 2} and rows["All notes"]["extra"] == {"folders": 0}
+    assert all("prefix" not in row for row in rows.values())
+    assert "Home" not in str(rows) and "Work" not in str(rows)

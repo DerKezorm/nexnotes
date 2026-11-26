@@ -26,10 +26,11 @@ export function SettingsPage() {
   const where = resolveArea(asked, me?.role, search)
   const area = 'area' in where ? findArea(where.area) : undefined
   const things = t('settings.things')
+  const thingsDative = t('settings.thingsDative')
   const words = (info: AreaInfo) =>
     info.own
       ? { title: t(`settings.areas.${info.slug}.title`), text: t(`settings.areas.${info.slug}.text`) }
-      : (areaText(NEXUI_TEXTS[languageOf(i18n.language)], info.slug, { app: APP, things }) ?? { title: info.slug, text: '' })
+      : (areaText(NEXUI_TEXTS[languageOf(i18n.language)], info.slug, { app: APP, things, thingsDative }) ?? { title: info.slug, text: '' })
   const title = area ? words(area).title : ''
   useTitle(area ? `${title} · ${t('settings.title')}` : t('settings.title'))
   if (!me) return null
@@ -54,6 +55,7 @@ export function SettingsPage() {
           <SettingsNav
             app={APP}
             things={things}
+            thingsDative={thingsDative}
             groups={groups}
             about={{ href: areaPath(ABOUT_AREA.slug), slug: ABOUT_AREA.slug }}
             current={area.slug}
@@ -62,7 +64,7 @@ export function SettingsPage() {
           />
         }
       >
-        <Area slug={area.slug} app={APP} things={things} title={own?.title} subtitle={own?.text}>
+        <Area slug={area.slug} app={APP} things={things} thingsDative={thingsDative} title={own?.title} subtitle={own?.text}>
           <AreaContent key={area.slug} area={area.slug} />
         </Area>
       </SettingsLayout>

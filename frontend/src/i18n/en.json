@@ -966,7 +966,8 @@
     },
     "saved": "Saved.",
     "title": "Settings",
-    "things": "notes"
+    "things": "notes",
+    "thingsDative": "notes"
   },
   "setup": {
     "folder": "Data folder {{path}}",

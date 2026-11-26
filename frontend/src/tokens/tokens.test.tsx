@@ -143,8 +143,8 @@ beforeEach(() => {
     entry({ id: 6, name: 'Chat Desktop', kind: 'mcp', program: true, right: 'write', options: {}, expires_at: null }),
   ]
   every = [
-    { ...entry({ id: 1, name: 'n8n Wetter', right: 'write', options: { mcp: true } }), areas: 2, account: { id: 1, name: 'tester', display_name: 'Tester', out: false } },
-    { ...entry({ id: 7, name: 'Fremd', expires_at: null }), areas: null, account: { id: 2, name: 'anna', display_name: 'Anna', out: false } },
+    { ...entry({ id: 1, name: 'n8n Wetter', right: 'write', options: { mcp: true } }), areas: 2, account: { id: 1, name: 'tester', display_name: 'Tester', out: false }, extra: { folders: 2 } },
+    { ...entry({ id: 7, name: 'Fremd', expires_at: null }), areas: null, account: { id: 2, name: 'anna', display_name: 'Anna', out: false }, extra: { folders: 0 } },
   ] as AdminKey[]
   vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
     const url = new URL(input, 'http://localhost')
@@ -317,10 +317,13 @@ describe('NOTES-25 the operator', () => {
     expect(rows.map((row) => row.textContent)).toEqual([expect.stringContaining('Tester'), expect.stringContaining('Anna')])
     expect(rows[0]!.textContent).toContain('n8n Wetter')
     expect(rows[0]!.textContent).toContain('Lesen und schreiben')
-    // The operator learns how many folders at most (the server answers a number), never which; never the key itself.
-    // The module's table shows the key's visible start and no column for the folders (see einst-fragen, nexnotes 4).
+    // The operator learns how many folders (nexnotes' own column, E36), never which; never the key, not even its start.
+    const heads = [...document.querySelectorAll('[data-testid="all-keys-table"] thead th')].map((cell) => cell.textContent)
+    expect(heads).toContain('Ordner')
+    expect(rows[0]!.textContent).toContain('2 Ordner')
+    expect(rows[1]!.textContent).toContain('alle Notizen')
     expect(document.body.textContent).not.toContain('Haushalt')
-    expect(document.body.textContent).not.toContain(SECRET)
+    expect(document.body.textContent).not.toContain('nn_api_')
     await click($('all-keys-block', rows[1]!))
     expect(dialogTitle()).toBe('„Fremd“ von Anna sperren?')
     expect(calls.some((call) => call.method === 'POST')).toBe(false)
