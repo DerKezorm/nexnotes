@@ -28,7 +28,7 @@ import { go } from '../../lib/providers'
 import { waitingChanges } from '../../state/account'
 import { useAuth } from '../../state/auth'
 import { SignOutCard, UnconfirmedEmailBox } from '../../vendor/nexkonten/AccountCards'
-import { DISPLAY_NAME_MAX, EMAIL_MAX, FIELDS, PAGES, passwordChanged, screenFields, SECOND_FACTOR_STATE, showUnconfirmed, USERNAME_MAX } from '../../vendor/nexkonten/konten'
+import { DISPLAY_NAME_MAX, EMAIL_MAX, fieldLabel, FIELDS, PAGES, passwordChanged, screenFields, SECOND_FACTOR_STATE, showUnconfirmed, USERNAME_MAX } from '../../vendor/nexkonten/konten'
 import { Badge, Box, Card, CheckboxRow, ConfirmDialog, Field, Notice, Row, Rows, SelectField } from '../../vendor/nexui'
 import { pagePart } from './accountPages'
 import { Notice as Done, PasskeysBox, RemainingAccess, SecondFactorOffNotice, SessionsBox } from './SecurityBoxes'
@@ -346,7 +346,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
               }}
             >
               <Field label={t(FIELDS.currentPassword.label)} value={current} onChange={(event) => setCurrent(event.target.value)} type="password" autoComplete="current-password" />
-              <Field label={t(FIELDS.newPassword.label)} value={next} onChange={(event) => setNext(event.target.value)} type="password" autoComplete="new-password" hints={[t(FIELDS.newPassword.hint)]} />
+              <Field label={t(fieldLabel('change', 'newPassword'))} value={next} onChange={(event) => setNext(event.target.value)} type="password" autoComplete="new-password" hints={[t(FIELDS.newPassword.hint)]} />
               <Field
                 label={t(FIELDS.passwordRepeat.label)}
                 name="password_confirm"

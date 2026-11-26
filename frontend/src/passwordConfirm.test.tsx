@@ -153,8 +153,8 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     }
     const { ResetPage } = await import('./pages/AuthPages')
     await render(<AuthProvider><Routes><Route path="/reset/:token" element={<ResetPage />} /></Routes></AuthProvider>, '/reset/abcdefghijklmnopqrstuvwxyz')
-    const confirm = expectPair(box, i18n.t('account.newPassword'))
-    type(field(i18n.t('account.newPassword')), 'twelve chars')
+    const confirm = expectPair(box, i18n.t('account.changedPassword'))
+    type(field(i18n.t('account.changedPassword')), 'twelve chars')
     await expectMismatchRefused(box.querySelector('form')!, confirm, 'POST', '/api/reset/')
     type(confirm, 'twelve chars')
     await submit(box.querySelector('form')!)
@@ -177,12 +177,13 @@ describe('NOTES-2 AC-10 password confirmation', () => {
     await act(async () => box.querySelector<HTMLButtonElement>('[data-testid="password-change"]')!.click())
     await settle()
     const row = document.querySelector<HTMLElement>('[role="dialog"]')!
-    // The module's words (konten 1.1.0): "Aktuelles Passwort", "Passwort", "Passwort wiederholen".
-    expect([i18n.t('account.currentPassword'), i18n.t('account.newPassword')]).toEqual(['Aktuelles Passwort', 'Passwort'])
-    const confirm = expectPair(row, i18n.t('account.newPassword'))
+    // The module's words: "Aktuelles Passwort", "Neues Passwort", "Passwort wiederholen".
+    // konten 1.1.2: where a password replaces one, the field says "Neues Passwort"; setup and invitation keep "Passwort".
+    expect([i18n.t('account.currentPassword'), i18n.t('account.changedPassword')]).toEqual(['Aktuelles Passwort', 'Neues Passwort'])
+    const confirm = expectPair(row, i18n.t('account.changedPassword'))
     expect(i18n.t('account.passwordRepeat')).toBe('Passwort wiederholen')
     type(field(i18n.t('account.currentPassword'), row), 'the old one!')
-    type(field(i18n.t('account.newPassword'), row), 'a brand new one')
+    type(field(i18n.t('account.changedPassword'), row), 'a brand new one')
     type(confirm, 'a brand new on')
     await expectMismatchRefused(row.querySelector('form')!, confirm, 'PUT', '/api/auth/password')
     expect(row.textContent).toContain('Die Passwörter stimmen nicht überein.')
