@@ -354,6 +354,16 @@ def _through_module(account_id: int, method: str, path: str, *, params: dict[str
     return answer.data
 
 
+def settings_row(db: Session, account_id: int) -> NextasksConnection | None:
+    """The row that keeps the account's choice of areas and lists and the list used last: the one of the key typed in,
+    or, connected with a click (module verbinden), a row of its own without a key (it opens nothing)."""
+    row = connection_of(db, account_id)
+    if row is None and module_connected(db, account_id):
+        row = NextasksConnection(account_id=account_id, url="", token_enc="")
+        db.add(row)
+    return row
+
+
 def module_connected(db: Session, account_id: int) -> bool:
     """Whether the account connected nextasks with the module verbinden (it takes the place of a key typed in)."""
     from .verbinden_store import VerbindenStore
@@ -524,11 +534,7 @@ def areas_out(db: Session, account_id: int) -> dict[str, Any]:
 def choose(db: Session, account_id: int, areas: list[str], lists: list[str], default: str | None) -> dict[str, Any]:
     """Keeps the areas chosen whole, the single lists and the standard list; a standard list not among the chosen
     ones counts as none from here on (ticked again later, it stays none)."""
-    row = connection_of(db, account_id)
-    if row is None and module_connected(db, account_id):
-        # Connected with a click (module verbinden): the choice is kept in a row of its own, without a key.
-        row = NextasksConnection(account_id=account_id, url="", token_enc="")
-        db.add(row)
+    row = settings_row(db, account_id)
     if row is None:
         raise NextasksError("nextasks_not_connected", "nextasks is not connected.", 409)
     row.task_choice = jsonlib.dumps({"areas": sorted({one for one in areas if AREA_ID.match(one)})[:MAX_AREAS],
@@ -791,7 +797,7 @@ def send(db: Session, account_id: int, *, note_id: str, note_title: str, note_ur
                                                        NextasksLink.position == position))
             assert row is not None
         made.append(row)
-    connection = connection_of(db, account_id)
+    connection = settings_row(db, account_id)
     if connection is not None:
         connection.last_list_id, connection.last_list_name = list_id, list_name[:300]
         db.commit()
@@ -807,7 +813,7 @@ def send_note(db: Session, account_id: int, *, note_id: str, title: str, text: s
     access = connected_access(db, account_id)
     task = create_task(access, title=title, note_url=note_url, note_title=title, list_id=list_id, due=due,
                        ref=ref_for(account_id, request_id, 0), text=text)
-    connection = connection_of(db, account_id)
+    connection = settings_row(db, account_id)
     if connection is not None:
         connection.last_list_id, connection.last_list_name = list_id, list_name[:300]
         db.commit()
