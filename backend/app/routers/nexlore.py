@@ -66,13 +66,13 @@ def status(account: Account, db: DbSession) -> dict[str, Any]:
             "spaces": _spaces(account.id)}
 
 
-class SendIn(BaseModel):
+class NexloreSendIn(BaseModel):
     note_id: str = Field(min_length=1, max_length=36)
     space: str = Field(min_length=1, max_length=255)
 
 
 @router.post("/send", summary="Put a note into a space of nexlore as a new note")
-async def send(body: SendIn, account: Account) -> dict[str, Any]:
+async def send(body: NexloreSendIn, account: Account) -> dict[str, Any]:
     with SessionLocal() as db:
         note = db.get(Note, body.note_id)
         if note is None or notes.access_to(db, account, note) not in (NoteAccess.READ, NoteAccess.WRITE):
