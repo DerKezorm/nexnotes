@@ -184,3 +184,32 @@ def test_the_operator_sees_how_many_folders_a_key_reaches_never_which_nor_its_st
     assert rows["Two folders"]["extra"] == {"folders": 2} and rows["All notes"]["extra"] == {"folders": 0}
     assert all("prefix" not in row for row in rows.values())
     assert "Home" not in str(rows) and "Work" not in str(rows)
+
+
+def test_new_accounts_start_with_the_storage_for_new_accounts_the_ones_there_keep_theirs(
+    client: TestClient, operator: Account
+) -> None:
+    """Bauplan E44: "Speicher für neue Konten" under General › Limits; empty means no limit."""
+    from app.services import accounts as account_service
+    from app.services.konten_store import KontenStore
+
+    before = make_account("before")
+    assert client.get("/api/settings").json()["new_account_storage_limit"] is None
+    five = 5 * 1024**3
+    assert client.put("/api/settings", json={"new_account_storage_limit": five}).json()["new_account_storage_limit"] == five
+    # An invitation accepted (the account module), an account made by nexnotes' own way: both start with it.
+    invite = client.post("/api/invites", json={}).json()["link"].split("/invite/")[1]
+    with new_client() as guest:
+        made = guest.post(f"/api/invite/{invite}", json={"display_name": "Nina", "name": "nina",
+                                                        "password": "a long enough password"})
+        assert made.status_code in (200, 201), made.text
+    with SessionLocal() as db:
+        nina = db.query(Account).filter(Account.name == "nina").one()
+        assert nina.storage_limit == five
+        assert db.get(Account, before.id).storage_limit is None, "an account that is there keeps its limit"
+        made_here = account_service.create_with_password(db, display_name="Otto", email="", password="a long enough password")
+        assert made_here.storage_limit == five
+        assert KontenStore(db).get_account(nina.id).storage_limit == five
+    # Emptied: new accounts start without a limit again.
+    assert client.put("/api/settings", json={"new_account_storage_limit": None}).json()["new_account_storage_limit"] is None
+    assert client.put("/api/settings", json={"new_account_storage_limit": 0}).status_code == 422

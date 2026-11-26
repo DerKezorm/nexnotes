@@ -20,12 +20,21 @@ import type { Server } from './ServerCards'
 export const HISTORY_DAYS = [30, 90, 180, 365, 730] as const
 // eslint-disable-next-line react-refresh/only-export-components
 export const TRASH_DAYS = [7, 30, 90, 180, 365] as const
+const GB = 1024 ** 3
 
 export function LimitsCard({ server }: { server: Server }) {
   const { t } = useTranslation()
   const [size, setSize] = useState<string | null>(null)
+  const [newLimit, setNewLimit] = useState<string | null>(null)
   const s = server.settings
   if (!s) return null
+  const shownLimit = s.new_account_storage_limit ? String(Math.round((s.new_account_storage_limit / GB) * 10) / 10) : ''
+  const saveNewLimit = () => {
+    const typed = (newLimit ?? shownLimit).replace(',', '.').trim()
+    const gigabytes = Number(typed)
+    if (typed && (!Number.isFinite(gigabytes) || gigabytes <= 0)) return
+    void server.save({ new_account_storage_limit: typed ? Math.round(gigabytes * GB) : null }, t('settings.saved')).then(() => setNewLimit(null))
+  }
   const daysLabel = (days: number) => (days % 365 === 0 ? t('server.years', { count: days / 365 }) : t('server.days', { count: days }))
   const saveSize = () => {
     const value = Math.max(1, Math.min(100_000, Number(size ?? s.upload_max_mb) || 100))
@@ -50,6 +59,29 @@ export function LimitsCard({ server }: { server: Server }) {
           data-testid="limits-upload-max"
           action={
             <Button kind="secondary" icon="Check" type="submit" busy={server.busy} testId="limits-upload-save">
+              {t('common.save')}
+            </Button>
+          }
+        />
+      </form>
+      {/* Bauplan E44: the limit every new account starts with; the limit of one account is set under Accounts. */}
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          saveNewLimit()
+        }}
+      >
+        <Field
+          label={t('server.newAccountStorage')}
+          type="number"
+          min={0}
+          step="any"
+          value={newLimit ?? shownLimit}
+          onChange={(event) => setNewLimit(event.target.value)}
+          hints={[t('server.newAccountStorageHint')]}
+          data-testid="limits-new-account-storage"
+          action={
+            <Button kind="secondary" icon="Check" type="submit" busy={server.busy} testId="limits-new-account-storage-save">
               {t('common.save')}
             </Button>
           }

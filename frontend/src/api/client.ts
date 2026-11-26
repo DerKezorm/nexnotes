@@ -314,6 +314,8 @@ export type ServerSettings = {
   /** Passkeys may be added and used to sign in (on from the start). */
   passkeys_allowed?: boolean
   upload_max_mb: number
+  /** The storage limit new accounts start with, in bytes; null: none (Bauplan E44). */
+  new_account_storage_limit?: number | null
   history_days: number
   trash_days: number
   link_previews: boolean

@@ -38,6 +38,7 @@ from ..models import (
     utcnow,
 )
 from ..security import LOCK_MINUTES, MAX_FAILURES, MIN_PASSWORD, hash_password, hash_token, verify_password
+from . import settings_service
 
 logger = logging.getLogger("nexnotes.auth")
 
@@ -159,6 +160,7 @@ def create_with_password(
         password_hash=hash_password(password),
         password_changed_at=utcnow(),
         whats_new_seen=__version__,
+        storage_limit=settings_service.new_account_storage_limit(db),
     )
     db.add(account)
     if commit:

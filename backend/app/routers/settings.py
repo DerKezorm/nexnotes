@@ -51,6 +51,8 @@ class SettingsOut(BaseModel):
     #: Passkeys may be added and used to sign in (on from the start).
     passkeys_allowed: bool = True
     upload_max_mb: int
+    #: The storage limit new accounts start with, in bytes; None: none (Bauplan E44).
+    new_account_storage_limit: int | None = None
     history_days: int
     trash_days: int
     link_previews: bool
@@ -95,6 +97,8 @@ class SettingsIn(BaseModel):
     #: The operator's own password: asked when the second factor for everybody goes off (konten 1.1.0).
     current_password: str = Field(default="", max_length=200)
     upload_max_mb: int | None = Field(default=None, ge=1, le=100_000)
+    #: Bytes; sent as null it is removed (new accounts without a limit), left out it stays.
+    new_account_storage_limit: int | None = Field(default=None, ge=1, le=10 * 1024**4)
     history_days: int | None = None
     trash_days: int | None = None
     link_previews: bool | None = None
@@ -135,6 +139,7 @@ def _view(db: DbSession) -> SettingsOut:
         mail_last_error_at=str(values.get("mail_last_error_at") or ""),
         passkeys_allowed=bool(values.get("passkeys_allowed", True)),
         upload_max_mb=settings_service.upload_max_mb(db),
+        new_account_storage_limit=settings_service.new_account_storage_limit(db),
         history_days=settings_service.history_days(db),
         trash_days=settings_service.trash_days(db),
         link_previews=bool(values["link_previews"]),
@@ -176,9 +181,12 @@ def save(payload: SettingsIn, request: Request, operator: OperatorAccount, db: D
     if switches:
         server_signin.change(db, request, operator, current_password=payload.current_password, **switches)
     changes: dict[str, Any] = {}
+    if "new_account_storage_limit" in payload.model_fields_set:
+        # null removes the limit for new accounts; the accounts there are keep theirs.
+        changes["new_account_storage_limit"] = payload.new_account_storage_limit
     for key, value in payload.model_dump(exclude_unset=True).items():
         if value is None or key in ("confirm_address", "current_password", "password_login", "two_factor_required",
-                                    "passkeys_allowed"):
+                                    "passkeys_allowed", "new_account_storage_limit"):
             continue
         if key == "public_url":
             try:

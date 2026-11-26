@@ -132,6 +132,12 @@ def _dummy_hash() -> str:
 PICTURE_IN_THREAD = True
 
 
+def _new_account_limit(db: Session) -> int | None:
+    from . import settings_service
+
+    return settings_service.new_account_storage_limit(db)
+
+
 class KontenStore:
     """``nexkonten.Store`` and the stores of part 2 over nexnotes' tables, inside one session."""
 
@@ -280,6 +286,8 @@ class KontenStore:
             password_changed_at=utcnow() if new.password else None,
             language=new.language or "",
             whats_new_seen=__version__,
+            # The limit new accounts start with (Bauplan E44, Server › General › Limits).
+            storage_limit=_new_account_limit(self.db),
         )
         self.db.add(row)
         self._flush()

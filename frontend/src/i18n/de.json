@@ -940,6 +940,8 @@
     "upload": "Sprache hochladen",
     "uploadMax": "Größte Datei je Anhang (MB)",
     "uploadMaxHint": "Ab Werk 100 MB. Gilt sofort.",
+    "newAccountStorage": "Speicher für neue Konten (GB)",
+    "newAccountStorageHint": "Leer heißt ohne Grenze. Gilt für Konten, die ab jetzt dazukommen. Die Grenze eines Kontos setzt du unter Konten › Verwalten.",
     "years_one": "{{count}} Jahr",
     "years_other": "{{count}} Jahren",
     "localNetwork": "Verbindungen ins eigene Netz",

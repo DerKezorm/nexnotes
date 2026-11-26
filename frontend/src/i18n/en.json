@@ -940,6 +940,8 @@
     "upload": "Upload language",
     "uploadMax": "Largest file per attachment (MB)",
     "uploadMaxHint": "100 MB from the start. Counts at once.",
+    "newAccountStorage": "Storage for new accounts (GB)",
+    "newAccountStorageHint": "Empty means no limit. Applies to accounts added from now on. The limit of one account is set under Accounts › Manage.",
     "years_one": "{{count}} year",
     "years_other": "{{count}} years",
     "localNetwork": "Connections into the local network",

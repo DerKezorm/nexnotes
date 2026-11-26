@@ -369,6 +369,7 @@ class SqlStore:
             email_confirmed=True,
             email_proven=bool(address and invitation is not None and invitation.mailed),
             whats_new_seen=__version__,
+            storage_limit=settings_service.new_account_storage_limit(self.db),
         )
         self.db.add(row)
         self.db.flush()

@@ -99,6 +99,9 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
 - `KontenStore.on_shut_out`/`on_back`; Push-Abos hängen in nexnotes an Sitzung und Gerät (Frage 11).
 - Vorlagen-Kopien mit den Änderungen und Kopfzeilen von 7685875; sicherung aus b0d3618 ohne Ausschlüsse in
   tsc/eslint; Satz für `restore_options_invalid`.
+- E44: „Speicher für neue Konten“ (GB, leer = ohne Grenze) in Allgemein › Grenzen als `Field action`; Einstellung
+  `new_account_storage_limit` (Bytes, `GET/PUT /api/settings`), jedes neue Konto (Einrichtung, Einladung, Anbieter)
+  startet damit, vorhandene behalten ihre Grenze (Tests `test_settings_pass.py`, `limits.test.tsx`).
 - E41: Eigene Schlüssel ruhen beim Sperren und Löschen und kommen mit dem Konto zurück; Geräte und OAuth-Programme
   werden getrennt (`apitokens.shut_out`, Test `test_keys_rest.py`).
 

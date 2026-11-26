@@ -31,6 +31,9 @@ DEFAULTS: dict[str, Any] = {
     "backup_keep": 7,
     #: Largest single attachment in MB (NOTES-10): 100 from the start.
     "upload_max_mb": 100,
+    #: The storage limit every new account starts with, in bytes (Bauplan E44); None: none. An account's own limit is
+    #: set under Accounts › Manage; changing this changes no account that exists.
+    "new_account_storage_limit": None,
     #: How long the history of a note is kept, in days: a year from the start (NOTES-15).
     "history_days": 365,
     #: How long deleted notes stay in the trash, in days: 90 from the start (NOTES-15).
@@ -144,3 +147,9 @@ def history_days(db: Session) -> int:
 
 def trash_days(db: Session) -> int:
     return int(get(db, "trash_days") or 90)
+
+
+def new_account_storage_limit(db: Session) -> int | None:
+    """The limit a new account starts with (E44), bytes or None."""
+    value = get(db, "new_account_storage_limit")
+    return int(value) if isinstance(value, int) and not isinstance(value, bool) and value > 0 else None
