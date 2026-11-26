@@ -60,7 +60,6 @@ from .routers import nextasks as nextasks_router
 from .routers import notes as notes_router
 from .routers import notes_list as notes_list_router
 from .routers import notify as notify_router
-from .routers import oauth as oauth_router
 from .routers import ocr as ocr_router
 from .routers import passkeys as passkeys_router
 from .routers import search as search_router
@@ -100,7 +99,7 @@ ROUTERS = [
 #: The vault comes early: its start puts the locked notes into the hooks the others read at their own start.
 FEATURE_ROUTERS: list = [folders, notes_router, vault_router, tags_router, search_router, history, trash,
                          notes_list_router, export, attachments_router, ocr_router, shares_router, notify_router,
-                         mcp_router, oauth_router, smart_folders_router, nextasks_router, tokens_router, guide_router,
+                         mcp_router, smart_folders_router, nextasks_router, tokens_router, guide_router,
                          app_pairing_router, app1_router, app1_member_router, app1_smart_router, app1_trash_router,
                          app1_files_router, app1_share_router, app1_import_router, app_links_router,
                          verbinden_router, nexlore_router]

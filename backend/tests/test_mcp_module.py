@@ -1,11 +1,12 @@
-"""nexnotes on the shared module mcp (``vendor/nexmcp`` 1.1.1): what nexnotes keeps of before on its own ways, beside
+"""nexnotes on the shared module mcp (``vendor/nexmcp`` 1.1.2): what nexnotes keeps of before on its own ways, beside
 the module's contract tests (``tests/nexmcp``).
 
 - The consent of before (``approve``, the old page) and the module's (``allow``) both answer; ``GET`` still names
   ``client_name``.
 - The token endpoint still reads a JSON body as nexnotes did, besides the form of RFC 6749 (the module's since 1.1.1).
 - While MCP is switched off, registering and the consent answer as before (E55): 403 ``access_denied`` and 403
-  ``mcp_off``, not the module's 404; the operator's newer switch "programs" keeps the module's 404.
+  ``mcp_off`` (``CONFIG.oauth_off_*``, since mcp 1.1.2), not the module's 404; the operator's newer switch "programs"
+  keeps the module's 404.
 - MCP keys are made by hand again, limited to folders like an API token; a connector may be limited to folders on the
   consent page, and its tools see nothing else.
 - The older way ``POST /api/tokens`` still sets "also for AI tools" (decision 12), and such a token opens MCP.

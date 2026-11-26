@@ -664,6 +664,9 @@ CONFIG = nexmcp.AppConfig(
     levels=LEVELS,
     off_status=403,
     off_code="mcp_off",
+    # E55: the consent and registering answer as before while MCP is off (403 mcp_off, 403 access_denied).
+    oauth_off_status=403,
+    oauth_off_code="mcp_off",
     invalid_code="key_invalid",
     max_body=4 * 1024 * 1024,
     per_minute=PER_MINUTE,
