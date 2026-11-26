@@ -6,7 +6,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 
 import i18n from '../../i18n'
-import { LimitsCard } from './GeneralCards'
+import { FeaturesCard, LimitsCard } from './GeneralCards'
 
 let root: Root
 let box: HTMLDivElement
@@ -43,8 +43,11 @@ describe('E44 the storage for new accounts', () => {
     expect(field.labels![0]!.textContent).toBe('Speicher für neue Konten (GB)')
     expect(field.value).toBe('5')
     const hint = document.getElementById((field.getAttribute('aria-describedby') ?? '').split(' ')[0]!)!
-    expect(hint.textContent).toContain('Leer heißt ohne Grenze.')
-    expect(hint.textContent).toContain('Konten › Verwalten')
+    expect(hint.textContent).toBe('Leer heißt ohne Grenze. Gilt für Konten, die ab jetzt dazukommen.')
+    // E48: the card says once where one account's limit is set, the field no second time.
+    const card = box.querySelector<HTMLElement>('[data-card="limits"]')!
+    expect(card.textContent).toContain('Die Grenze eines Kontos setzt du unter Konten › Verwalten.')
+    expect(card.textContent!.split('Konten › Verwalten').length).toBe(2)
     const button = box.querySelector<HTMLElement>('[data-testid="limits-new-account-storage-save"]')!
     expect(field.closest('[data-part="field-action"]')?.contains(button)).toBe(true)
     expect([button.dataset.kind, button.dataset.icon]).toEqual(['secondary', 'Check'])
@@ -59,5 +62,15 @@ describe('E44 the storage for new accounts', () => {
   it('shows an empty field while new accounts start without a limit', async () => {
     await show(null, vi.fn(async () => true))
     expect(box.querySelector<HTMLInputElement>('[data-testid="limits-new-account-storage"]')!.value).toBe('')
+  })
+})
+
+describe('E48 the features for every account', () => {
+  it('say in one sentence what they are, in the card "features"', async () => {
+    const server = { settings: { link_previews: true, share_links: true, connections_local_network: false }, save: vi.fn(), busy: false, problem: null, done: null }
+    await act(async () => root.render(<FeaturesCard server={server as never} />))
+    const card = box.querySelector<HTMLElement>('[data-card="features"]')!
+    expect(card.textContent).toContain('Funktionen für alle Konten')
+    expect(card.textContent).toContain('Was jedes Konto auf diesem Server nutzen darf.')
   })
 })

@@ -62,8 +62,29 @@ def test_a_programs_access_is_an_api_key(language: str) -> None:
     assert old == []
 
 
+@pytest.mark.parametrize("language", ["de", "en"])
+def test_a_place_is_written_with_its_group_and_no_card_or_comma_form(language: str) -> None:
+    """E46: "Einstellungen › Mein Konto › Verbindungen › API-Schlüssel", never "…, in der Karte „API-Schlüssel“",
+    "Mein Konto, Sicherheit" or an arrow; an area at the start of a path comes after its group."""
+    groups = AREAS[language]
+    words = "|".join(re.escape(word) for word in [SETTINGS[language], *groups, *(a for areas in groups.values() for a in areas)])
+    areas = "|".join(re.escape(area) for values in groups.values() for area in values)
+    wrong = []
+    for name, text in _texts(language).items():
+        for line in text.splitlines():
+            if re.search(rf"\b({words})\s*(,|→|->)\s*({words})\b", line):
+                wrong.append(f"{name}: {line.strip()[:100]}")
+            if re.search(r"(in der Karte|die Karte|in the card|the card) [„“\"]", line):
+                wrong.append(f"{name}: {line.strip()[:100]}")
+            for found in re.finditer(rf"({areas}) › ", line):
+                before = line[: found.start()]
+                if not any(before.endswith(f"{group} › ") for group in groups):
+                    wrong.append(f"{name}: {line.strip()[:100]}")
+    assert wrong == []
+
+
 def test_the_guide_points_to_nextasks_and_nexdeck_as_they_are_now() -> None:
     nextasks = (GUIDE / "de" / "7 Verbindungen" / "1 nextasks.md").read_text(encoding="utf-8")
-    assert "In nextasks unter Einstellungen › Mein Konto › Verbindungen in der Karte „API-Schlüssel“" in nextasks
+    assert "In nextasks unter Einstellungen › Mein Konto › Verbindungen › API-Schlüssel einen Schlüssel" in nextasks
     deck = (GUIDE / "en" / "7 Connections" / "3 nexdeck card.md").read_text(encoding="utf-8")
     assert "since nexdeck 1.11.0" in deck and "next versions of nexdeck" not in deck

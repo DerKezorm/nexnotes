@@ -59,6 +59,28 @@ describe('the places the texts name', () => {
     })
   }
 
+  for (const { name, tree, kit, own } of LANGUAGES) {
+    const areas = [...ACCOUNT, ...SERVER].map((slug) => kit.areas[slug].title).concat(own)
+    const words = [kit.groupAccount, kit.groupServer, kit.settings, ...areas].map((word) => word.replace(/[()]/g, '\\$&')).join('|')
+
+    it(`write a place group › area, with no comma, arrow or "card" as a separator (E46, ${name})`, () => {
+      const wrong: string[] = []
+      for (const [key, text] of texts(tree)) {
+        if (new RegExp(`\\b(${words})\\s*(,|→|->)\\s*(${words})\\b`).test(text)) wrong.push(`${key}: ${text}`)
+        if (new RegExp(`(Karte|card) [„“"](${words})`).test(text)) wrong.push(`${key}: ${text}`)
+        // An area at the start of a path needs its group before it; E48 fixes "Konten › Verwalten" in "Grenzen".
+        for (const found of text.matchAll(new RegExp(`(^|[^›] )(${areas.join('|').replace(/[()]/g, '\\$&')}) › `, 'g'))) {
+          const at = (found.index ?? 0) + found[1]!.length
+          const before = text.slice(0, at)
+          const grouped = before.endsWith(`${kit.groupAccount} › `) || before.endsWith(`${kit.groupServer} › `)
+          const e48 = key === 'server.limitsHint' && found[2] === kit.areas.accounts.title
+          if (!grouped && !e48) wrong.push(`${key}: ${text}`)
+        }
+      }
+      expect(wrong).toEqual([])
+    })
+  }
+
   it('lead to the places of nextasks and of the server in the same words', () => {
     expect(de.nextasks.section.how).toContain('in nextasks unter Mein Konto › Verbindungen › API-Schlüssel')
     expect(en.nextasks.section.how).toContain('in nextasks, create a key that reads and writes under My account › Connections › API keys')

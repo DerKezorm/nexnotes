@@ -9,8 +9,8 @@ Steht in einer Notiz etwas, das erledigt werden muss, schickst du die Zeile als 
 
 ## Verbinden
 
-1. In nextasks unter Einstellungen › Mein Konto › Verbindungen in der Karte „API-Schlüssel“ einen Schlüssel mit „Lesen und schreiben“ anlegen.
-2. In nexnotes unter **Einstellungen › Mein Konto › Verbindungen** in der Karte „nextasks“ die Adresse von nextasks und den Schlüssel eintragen, dann „Verbinden“.
+1. In nextasks unter Einstellungen › Mein Konto › Verbindungen › API-Schlüssel einen Schlüssel mit „Lesen und schreiben“ anlegen.
+2. In nexnotes unter **Einstellungen › Mein Konto › Verbindungen › nextasks** die Adresse von nextasks und den Schlüssel eintragen, dann „Verbinden“.
 
 ## Schicken
 

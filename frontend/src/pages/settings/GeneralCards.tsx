@@ -117,7 +117,7 @@ export function FeaturesCard({ server }: { server: Server }) {
   const s = server.settings
   if (!s) return null
   return (
-    <Card id="features" icon="SlidersHorizontal" title={t('server.features')}>
+    <Card id="features" icon="SlidersHorizontal" title={t('server.features')} subtitle={t('server.featuresHint')}>
       <CheckboxRow label={t('server.linkPreviews')} hint={t('server.linkPreviewsHint')} checked={s.link_previews} onChange={(link_previews) => void server.save({ link_previews })} testId="feature-link-previews" />
       <CheckboxRow label={t('server.shareLinks')} hint={t('server.shareLinksHint')} checked={s.share_links} onChange={(share_links) => void server.save({ share_links })} testId="feature-share-links" />
       <CheckboxRow
