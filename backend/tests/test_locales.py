@@ -238,3 +238,20 @@ def test_old_callers_get_the_same_answers(client: TestClient, folder: Path) -> N
     assert client.delete("/api/locales/it").status_code == 204
     gone = client.delete("/api/locales/it")
     assert gone.status_code == 404 and gone.json()["detail"]["code"] == "not_found"
+
+
+def test_the_old_way_takes_a_profile_language_as_before(client: TestClient, folder: Path) -> None:
+    """E52: ``PUT /api/me/language`` takes exactly what it took before the module sprachen: a shipped language, an
+    added file's code, empty for the browser's; a valid code without a file is refused with 422 ``unknown_language``
+    as before (no new refusal, none dropped)."""
+    from .conftest import make_account, sign_in
+
+    sign_in(client, make_account("lena"))
+    for code in ("de", "en", ""):
+        assert client.put("/api/me/language", json={"language": code}).json()["language"] == code
+    refused = client.put("/api/me/language", json={"language": "nl"})
+    assert refused.status_code == 422 and refused.json()["detail"]["code"] == "unknown_language"
+    put(folder, "nl.json", {"_meta": {"name": "Nederlands"}, "save": "Opslaan"})
+    assert client.put("/api/me/language", json={"language": "nl"}).json()["language"] == "nl"
+    put(folder, "it.json", b"{broken")
+    assert client.put("/api/me/language", json={"language": "it"}).status_code == 422

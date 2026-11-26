@@ -183,6 +183,8 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     for directory in (settings.locales_dir, backups.media_root()):
         if directory is not None:
             directory.mkdir(parents=True, exist_ok=True)
+    # What a stopped upload of a language file left in its folder (module sprachen, E52); configured on import.
+    locales.tidy_at_start()
     added = locales.available()
     if added:
         logger.info("Languages added by the operator: %s", ", ".join(locale.code for locale in added))

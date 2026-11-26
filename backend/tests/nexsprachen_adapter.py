@@ -66,6 +66,14 @@ class Adapter(StandardAdapter):
         locales.forget()
         shutil.rmtree(self._folder, ignore_errors=True)
 
+    def restart(self) -> None:
+        """nexnotes started again on the same data, as in production: its start (the lifespan of the app: the
+        folder, ``tidy_at_start``) runs once more."""
+        from fastapi.testclient import TestClient
+
+        with TestClient(self._app):
+            pass
+
     def client(self, role: str) -> Any:
         from app.models import MEMBER, OPERATOR
         from tests.conftest import make_account, new_client
