@@ -54,6 +54,7 @@ from ..services.konten_store import KontenStore
 from ..services.oidc_store import SqlStore, offered_address
 from ..vendor import nexkonten
 from ..vendor.nexkonten import login as konten_login
+from ..vendor.nexkonten import passkeys as konten_passkeys
 from ..vendor.nexkonten import profiles, resets
 from ..vendor.nexkonten import sessions as konten_sessions
 from ..vendor.nexkonten import setup as konten_setup
@@ -499,10 +500,24 @@ def logout_everywhere(request: Request, response: Response, account: Account, db
     logger.info("All other sessions ended by their owner name=%s", account.name)
 
 
+def passkey_base(request: Request, db: Session) -> str:
+    """The address passkeys belong to: the public one, else the one this request came to (``routers/passkeys``)."""
+    return settings_service.public_url(db) or str(request.base_url).rstrip("/")
+
+
+def passkeys_can_add(request: Request, db: Session) -> bool:
+    """Since konten 1.1.0 (E49): whether the box "Passkeys" offers "Add a passkey" here, with the same inputs as
+    adding one (a public https address, or the page on localhost)."""
+    return konten_passkeys.can_add(passkey_base(request, db), origin=request.headers.get("origin", ""),
+                                   request_url=str(request.url))
+
+
 @router.get("/auth/me", summary="The signed-in account, and what this server offers it")
-def me(account: Account, db: DbSession) -> dict[str, Any]:
+def me(account: Account, db: DbSession, request: Request) -> dict[str, Any]:
     return {
         **account_view(account, db),
+        # The box "Passkeys" under My account › Security (E49): the button, or what is missing for it.
+        "passkeys_can_add": passkeys_can_add(request, db),
         "mail": mailer.configured(db),
         "second_factor_setup_required": totp.setup_required(db, account),
         "upload_max_mb": settings_service.upload_max_mb(db),

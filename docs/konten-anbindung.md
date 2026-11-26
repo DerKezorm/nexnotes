@@ -134,10 +134,12 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
   Browsers; ohne das Feld `theme` (Server vor 1.1.0) bleibt der Browser, wie er ist (`lib/theme.test.ts`).
 - E46: Orte als „Gruppe › Bereich › Karte“, auch in der Anleitung (statt „…, in der Karte „…““); Wächter
   `places.test.ts` und `test_places.py` prüfen Kommas, Pfeile, Kartenform und Bereiche ohne Gruppe.
-- E48: Grenzen „Die Grenze eines Kontos setzt du unter Konten › Verwalten.“ (einmal in der Karte), Funktionen „Was
+- E48: Grenzen „Die Grenze eines Kontos setzt du unter Server › Konten › Verwalten.“ (einmal in der Karte), Funktionen „Was
   jedes Konto auf diesem Server nutzen darf.“; keine Web-Push-Karte, keine Schriften-Überschrift unter „Gebaut mit“.
-- E49: Entwurf „Was ist neu“ nennt die Orte mit „›“; der Hinweis statt „Passkey hinzufügen“ ohne https-Adresse kommt
-  mit konten (noch nicht in bauplaene-stand).
+- E49: Entwurf „Was ist neu“ nennt die Orte mit „›“. Passkeys (konten 1ce1a8f): `/api/auth/me` trägt
+  `passkeys_can_add` (`passkeys.can_add` mit denselben Eingaben wie das Anlegen, `routers/auth.passkey_base`), der
+  Kasten „Passkeys“ zeigt `PasskeyAddition`: den Knopf oder den Satz, beim Betreiber mit Link auf Server › Anmeldung;
+  vorhandene Passkeys bleiben (`test_settings_pass.py`, `pages/settings/passkeysBox.test.tsx`, Vorlage von Hand).
 - „Verwalten“ und alle Zeilenknöpfe von konten in `sm`: `AccountButton` nimmt die Größe aus `BUTTONS`
   (`buttonSize`), die Seite kann keine setzen (`components/AccountButton.test.tsx`).
 - Läufe: `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2190 grün, 29 übersprungen; vitest danach (nach dem

@@ -145,6 +145,8 @@ export type Me = {
   provider_email_from?: string
   /** Empty: the browser's language. Chosen once, it counts on every device of the account. */
   language: string
+  /** Whether "Add a passkey" can work here (konten 1.1.0, E49: a public https address, or the page on localhost). */
+  passkeys_can_add?: boolean
   /** The paper new notes start on (NOTES-3 AC-17). */
   paper?: string
   /** How every list of notes looks, on every device: list, cards, compact or tiles (`notes/list/look.ts`). */

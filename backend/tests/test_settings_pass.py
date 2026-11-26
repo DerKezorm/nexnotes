@@ -213,3 +213,18 @@ def test_new_accounts_start_with_the_storage_for_new_accounts_the_ones_there_kee
     # Emptied: new accounts start without a limit again.
     assert client.put("/api/settings", json={"new_account_storage_limit": None}).json()["new_account_storage_limit"] is None
     assert client.put("/api/settings", json={"new_account_storage_limit": 0}).status_code == 422
+
+
+def test_the_box_passkeys_offers_adding_only_where_a_passkey_can_be_added(client: TestClient, operator: Account) -> None:
+    """konten 1.1.0 (E49): ``passkeys_can_add`` in the answer for Security, with the inputs adding uses: no public
+    address and a page on http elsewhere: no; the page on localhost: yes; a public https address: yes."""
+    from app.db import SessionLocal
+    from app.services import settings_service
+
+    assert client.get("/api/auth/me").json()["passkeys_can_add"] is False
+    assert client.post("/api/auth/passkeys/begin", json={"password": PASSWORD}).status_code >= 400
+    assert client.get("/api/auth/me", headers={"origin": "http://localhost:5173"}).json()["passkeys_can_add"] is True
+    with SessionLocal() as db:
+        settings_service.save(db, {"public_url": "https://notes.example.com"})
+    assert client.get("/api/auth/me").json()["passkeys_can_add"] is True
+    assert client.post("/api/auth/passkeys/begin", json={"password": PASSWORD}).status_code == 200

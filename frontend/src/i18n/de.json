@@ -904,7 +904,7 @@
     "languages": "Sprachen",
     "languagesHint": "Deutsch und Englisch sind eingebaut. Weitere als JSON-Datei hinzufügen, fehlende Texte fallen auf Englisch zurück.",
     "limits": "Grenzen",
-    "limitsHint": "Die Grenze eines Kontos setzt du unter Konten › Verwalten.",
+    "limitsHint": "Die Grenze eines Kontos setzt du unter Server › Konten › Verwalten.",
     "linkPreviews": "Link-Vorschauen",
     "linkPreviewsHint": "Der Server holt Titel und Bild verlinkter Seiten.",
     "mail": "Mail",

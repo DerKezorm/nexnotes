@@ -14,14 +14,17 @@ import { confirmOf } from '../../lib/accountButton'
 import { problemText } from '../../lib/errors'
 import { dayTime } from '../../lib/format'
 import { addPasskey, passkeysSupported } from '../../lib/passkeys'
+import { PasskeyAddition } from '../../vendor/nexkonten/AccountCards'
 import { Badge, Box, ConfirmDialog, Field, Notice as Message, Row, Rows } from '../../vendor/nexui'
+import { areaPath } from './areas'
 
 /** A success worth a sentence that is not the usual "saved" (thrown to end an action early). */
 // eslint-disable-next-line react-refresh/only-export-components
 export class Notice extends Error {}
 
-/** The own passkeys: list, add (password first), remove. */
-export function PasskeysBox({ signedInByPassword }: { signedInByPassword: boolean }) {
+/** The own passkeys: list, add (password first), remove. Adding through the module's `PasskeyAddition` (E49): the
+ * button where the server can add one, else what is missing (the public https address). */
+export function PasskeysBox({ signedInByPassword, canAdd, operator }: { signedInByPassword: boolean; canAdd: boolean; operator: boolean }) {
   const { t, i18n } = useTranslation()
   const [keys, setKeys] = useState<PasskeyEntry[] | null>(null)
   const [asking, setAsking] = useState<{ kind: 'add' } | { kind: 'remove'; uid: string } | null>(null)
@@ -57,7 +60,7 @@ export function PasskeysBox({ signedInByPassword }: { signedInByPassword: boolea
       title={t('account.passkeys')}
       hint={t('account.passkeysHint')}
       testId="passkeys"
-      actions={passkeysSupported() && <AccountButton name="account.passkeyAdd" onClick={() => setAsking({ kind: 'add' })} />}
+      actions={passkeysSupported() && <PasskeyAddition t={t} canAdd={canAdd} operator={operator} onAdd={() => setAsking({ kind: 'add' })} signInHref={areaPath('sign-in')} />}
     >
       {keys.length > 0 && (
         <Rows label={t('account.passkeys')}>

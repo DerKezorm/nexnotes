@@ -68,13 +68,12 @@ describe('the places the texts name', () => {
       for (const [key, text] of texts(tree)) {
         if (new RegExp(`\\b(${words})\\s*(,|→|->)\\s*(${words})\\b`).test(text)) wrong.push(`${key}: ${text}`)
         if (new RegExp(`(Karte|card) [„“"](${words})`).test(text)) wrong.push(`${key}: ${text}`)
-        // An area at the start of a path needs its group before it; E48 fixes "Konten › Verwalten" in "Grenzen".
+        // An area at the start of a path needs its group before it.
         for (const found of text.matchAll(new RegExp(`(^|[^›] )(${areas.join('|').replace(/[()]/g, '\\$&')}) › `, 'g'))) {
           const at = (found.index ?? 0) + found[1]!.length
           const before = text.slice(0, at)
           const grouped = before.endsWith(`${kit.groupAccount} › `) || before.endsWith(`${kit.groupServer} › `)
-          const e48 = key === 'server.limitsHint' && found[2] === kit.areas.accounts.title
-          if (!grouped && !e48) wrong.push(`${key}: ${text}`)
+          if (!grouped) wrong.push(`${key}: ${text}`)
         }
       }
       expect(wrong).toEqual([])

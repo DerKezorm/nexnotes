@@ -46,7 +46,7 @@ describe('E44 the storage for new accounts', () => {
     expect(hint.textContent).toBe('Leer heißt ohne Grenze. Gilt für Konten, die ab jetzt dazukommen.')
     // E48: the card says once where one account's limit is set, the field no second time.
     const card = box.querySelector<HTMLElement>('[data-card="limits"]')!
-    expect(card.textContent).toContain('Die Grenze eines Kontos setzt du unter Konten › Verwalten.')
+    expect(card.textContent).toContain('Die Grenze eines Kontos setzt du unter Server › Konten › Verwalten.')
     expect(card.textContent!.split('Konten › Verwalten').length).toBe(2)
     const button = box.querySelector<HTMLElement>('[data-testid="limits-new-account-storage-save"]')!
     expect(field.closest('[data-part="field-action"]')?.contains(button)).toBe(true)
