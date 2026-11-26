@@ -82,7 +82,11 @@ test('NOTES-2 AC-9 a member sees only My account and lands on the profile from a
   const nav = own.getByTestId('settings-nav')
   await expect(nav.getByText('My account', { exact: true })).toBeVisible()
   await expect(nav.getByText('Server', { exact: true })).toHaveCount(0)
-  await expect(nav.getByRole('link')).toHaveText(['Profile', 'Security', 'Appearance', 'Connections', 'About nexnotes'])
+  await expect(nav.getByRole('link')).toHaveText(['Profile', 'Security', 'Appearance', 'Notifications', 'Connections', 'About nexnotes'])
+  // E57: nexnotes notifies through the bell of shared notes, so the member has "Which way" under Notifications.
+  await own.goto('/settings/notifications')
+  await expect(own.locator('[data-card="notify-ways"]')).toBeVisible()
+  await expect(own.getByTestId('notify-browsers')).toBeVisible()
   for (const asked of ['/settings/server', '/settings/accounts', '/settings/log', '/settings/general']) {
     await own.goto(asked)
     await expect(own).toHaveURL(/\/settings$/)
