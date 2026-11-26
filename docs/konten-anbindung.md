@@ -91,6 +91,21 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
 `account.newPassword`, `account.passwordRepeat`). Vorlagen-Kopien tragen die Kopfzeile `// Vorlage <Paket> <Fassung>`
 (bauplaene-stand `bef0132`, `check` ok für alle sieben Module).
 
+**Nachgezogen auf bauplaene-stand 7685875 und b0d3618 (E33 bis E38) und Bauplan E41:**
+- `things`/`thingsDative` (Notizen/Notizen) an Gerüst, Log und „API-Schlüssel“.
+- Spalte „Ordner“ in „API-Schlüssel aller Konten“ über `admin_extra`; der Anfang eines Schlüssels bleibt beim Betreiber
+  verborgen.
+- Der Satz zur Anbieter-Ausnahme am Faktor-Haken kommt aus konten.
+- `KontenStore.on_shut_out`/`on_back`; Push-Abos hängen in nexnotes an Sitzung und Gerät (Frage 11).
+- Vorlagen-Kopien mit den Änderungen und Kopfzeilen von 7685875; sicherung aus b0d3618 ohne Ausschlüsse in
+  tsc/eslint; Satz für `restore_options_invalid`.
+- E41: Eigene Schlüssel ruhen beim Sperren und Löschen und kommen mit dem Konto zurück; Geräte und OAuth-Programme
+  werden getrennt (`apitokens.shut_out`, Test `test_keys_rest.py`).
+
+**Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
+grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
+review4-smart 2, review5-p14 1, shares 1, smart 1, split-toolbar 1).
+
 **Läufe (26.11.2026, Testplatz `reihe.sh nexnotes ende`):** ruff sauber; pytest 2175 grün, 29 übersprungen (darin die
 Vertragstests `nexkonten`, `nexoidc`, `nexpost`, `nexlog`, `nexsicherung`, `nexschluessel`, Test „Bestand“); lint
 sauber; vitest 1002 grün in 80 Dateien; build sauber. Playwright `npm run e2e` (kopflos): 139 grün, 11 rot, alle 11
