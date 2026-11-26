@@ -37,8 +37,9 @@ from . import apitokens, settings_service
 logger = logging.getLogger("nexnotes.connect")
 
 #: nexnotes' tokens for its partners: never the start of one of its API keys (``nn_api_``, ``nn_mcp_``, ``nnd_``).
+#: Partners in use (V20): nextasks (tasks, NOTES-19), nexlore (a note into it), nextime (adds notes here).
 CONFIG = nexverbinden.AppConfig(app_name="nexnotes", version=__version__, access_prefix="nnx_",
-                                refresh_prefix="nnxr_", code_prefix="nnxc_")
+                                refresh_prefix="nnxr_", code_prefix="nnxc_", in_use=("nextasks", "nexlore", "nextime"))
 #: The module's settings under nexnotes' names (``connect.connections``, ``connect.addresses``).
 SETTING_PREFIX = "connect."
 #: How the sealing of the module's secrets is told apart from nexnotes' other sealed texts.

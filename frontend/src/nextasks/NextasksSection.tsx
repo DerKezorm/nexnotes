@@ -62,7 +62,8 @@ export function NextasksSection({ bare = false }: { bare?: boolean } = {}) {
               {status?.host} · {t('nextasks.section.as', { name: status?.name || '?' })}
             </span>
           </p>
-          <AreaChoice />
+          {/* In the module's card "Bereiche und Listen" stand open in the card itself (V23). */}
+          {!bare && <AreaChoice />}
           <Buttons>
             <Button kind="secondary" icon="KeyRound" onClick={() => setEditing(true)} testId="nextasks-change">
               {t('nextasks.section.changeKey')}

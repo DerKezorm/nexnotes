@@ -192,13 +192,13 @@ test('NOTES-19 the card folds as in nextime; areas and lists chosen and a standa
   // opens it by keyboard.
   const head = card.locator('[data-part="collapsible-head"]')
   await expect(head).toHaveAttribute('aria-expanded', 'false')
-  await expect(card.locator('img').first()).toHaveAttribute('src', '/apps/nextasks.svg')
+  // nextasks' logo comes from the module verbinden (0.1.2).
+  await expect(card.locator('img').first()).toBeVisible()
   await expect(card.getByTestId('connection-summary')).toContainText(home!)
   await head.focus()
   await page.keyboard.press('Enter')
   await expect(head).toHaveAttribute('aria-expanded', 'true')
-  // Connected by a key typed in: its lists are in "Connect by hand" (module verbinden).
-  await openByHand(card)
+  // Its areas and lists stand open in the card, however it is connected (V23).
   // Every area from the start; the family area out, then its shopping list alone; the standard list among them.
   const family = card.getByTestId('nextasks-area-group').filter({ hasText: 'Family' })
   await expect(family.getByTestId('nextasks-area')).toBeChecked()

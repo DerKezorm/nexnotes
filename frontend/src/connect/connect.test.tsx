@@ -69,11 +69,22 @@ async function open(card: HTMLElement): Promise<void> {
 }
 
 describe('the cards of the other nex apps (module verbinden)', () => {
-  it('shows one card per partner of the catalog, nextasks with its logo', async () => {
+  it('V23 shows "Bereiche und Listen" open in the card of a key typed in, not under "Von Hand verbinden"', async () => {
+    views[0] = view('nextasks', { state: 'legacy', address: 'https://tasks.example.com', host: 'tasks.example.com', legacy: { shown: 'ntk_AbCd', expires_at: null }, uses: ['tasks.read', 'tasks.write'], uses_levels: { 'tasks.read': 'read', 'tasks.write': 'write' } })
+    status = { connected: true, local_allowed: false, url: 'https://tasks.example.com', host: 'tasks.example.com', name: 'kim', by: 'key' }
+    await show()
+    const card = $('connection-nextasks')!
+    await open(card)
+    expect(paths).toContain('/api/nextasks/areas')
+    expect($('nextasks-by-hand', card)).toBeNull()
+  })
+
+  it('shows one card per partner of the catalog, each with its logo', async () => {
     await show()
     expect(paths).toContain('/api/connect/partners')
     for (const partner of ['nextasks', 'nexlore', 'nextime']) expect($(`connection-${partner}`)).not.toBeNull()
-    expect($('connection-nextasks')!.querySelector('img')?.getAttribute('src')).toBe('/apps/nextasks.svg')
+    // The partners' logos come from the module (0.1.2), not from nexnotes.
+    expect($('connection-nextasks')!.querySelector('img')).not.toBeNull()
   })
 
   it('NOTES-19 AC-5 keeps the key typed in as "Von Hand verbinden" in the card of nextasks', async () => {
@@ -85,6 +96,8 @@ describe('the cards of the other nex apps (module verbinden)', () => {
     await settle()
     expect($('nextasks-by-hand', card)).not.toBeNull()
     expect($('nextasks-form', card)).not.toBeNull()
+    // Not connected: no lists to choose.
+    expect(paths).not.toContain('/api/nextasks/areas')
     expect(i18n.t('nextasks.section.url')).toBeTruthy()
   })
 
