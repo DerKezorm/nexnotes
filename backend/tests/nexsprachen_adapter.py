@@ -25,7 +25,7 @@ class Adapter(StandardAdapter):
     built_in = {"de": "Deutsch", "en": "English"}  # noqa: RUF012 (the contract's base declares it so)
     public_read = True
     has_template = False
-    # The description lives at /api/openapi.json (with NEXNOTES_API_DOCS); the operationIds and the
+    # The description lives at /api/openapi.json (only with NEXNOTES_API_DOCS, see description()); the operationIds and the
     # schema name of nexnotes' own router before the module stay.
     openapi_path = "/api/openapi.json"
     operation_ids: dict[str, str] = {  # noqa: RUF012 (the contract's base declares it so)
@@ -48,13 +48,9 @@ class Adapter(StandardAdapter):
         self._folder = Path(tempfile.mkdtemp(prefix="nexnotes-locales-"))
         self._settings.locales_dir = self._folder
         locales.forget()
-        # /api/openapi.json is there only with NEXNOTES_API_DOCS (off in the tests, read once when the app is made):
-        # for the contract the same description FastAPI serves there (``app.openapi()``), taken away again in stop.
         from app.main import app
 
         self._app = app
-        app.add_api_route(self.openapi_path, lambda: app.openapi(), include_in_schema=False)
-        self._docs_route = app.router.routes[-1]
 
     def stop(self) -> None:
         from app.services import locales
@@ -62,7 +58,6 @@ class Adapter(StandardAdapter):
         for client in self._clients:
             client.close()
         self._settings.locales_dir = self._before
-        self._app.router.routes.remove(self._docs_route)
         locales.forget()
         shutil.rmtree(self._folder, ignore_errors=True)
 
@@ -73,6 +68,12 @@ class Adapter(StandardAdapter):
 
         with TestClient(self._app):
             pass
+
+    def description(self) -> dict[str, Any]:
+        """nexnotes publishes its description only with NEXNOTES_API_DOCS (off in the tests): its own, as FastAPI
+        would serve it at /api/openapi.json."""
+        found: dict[str, Any] = self._app.openapi()
+        return found
 
     def client(self, role: str) -> Any:
         from app.models import MEMBER, OPERATOR
