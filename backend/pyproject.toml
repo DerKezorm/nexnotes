@@ -5,7 +5,7 @@ line-length = 120
 # and are linted there.
 extend-exclude = ["app/vendor/nexoidc", "tests/nexoidc", "app/vendor/nexlog", "tests/nexlog", "app/vendor/nexsicherung",
                   "tests/nexsicherung", "app/vendor/nexkonten", "tests/nexkonten", "app/vendor/nexpost", "tests/nexpost",
-                  "app/vendor/nexschluessel", "tests/nexschluessel"]
+                  "app/vendor/nexschluessel", "tests/nexschluessel", "app/vendor/nexsprachen", "tests/nexsprachen"]
 
 [tool.ruff.lint]
 extend-select = ["E501", "E402", "S608", "B", "I"]

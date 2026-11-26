@@ -364,7 +364,6 @@
     "invite_expired": "This invitation has expired. Ask for a new one.",
     "invite_invalid": "The invitation ran out or has been used.",
     "last_operator": "nexnotes needs at least one operator.",
-    "locale_unusable": "This language file cannot be used.",
     "log_level_from_environment": "The log level is fixed by NEXNOTES_LOG_LEVEL.",
     "mail_failed": "The mail server did not accept the mail.",
     "mail_off": "No mail server is set up.",

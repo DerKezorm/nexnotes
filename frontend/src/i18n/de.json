@@ -364,7 +364,6 @@
     "invite_expired": "Diese Einladung ist abgelaufen. Frag nach einer neuen.",
     "invite_invalid": "Die Einladung ist abgelaufen oder schon benutzt.",
     "last_operator": "nexnotes braucht mindestens einen Betreiber.",
-    "locale_unusable": "Diese Sprachdatei lässt sich nicht verwenden.",
     "log_level_from_environment": "Die Stufe des Logs ist mit NEXNOTES_LOG_LEVEL fest eingestellt.",
     "mail_failed": "Der Mailserver hat die Mail nicht angenommen.",
     "mail_off": "Es ist kein Mailserver eingetragen.",

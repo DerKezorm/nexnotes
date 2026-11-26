@@ -65,8 +65,6 @@ logger = logging.getLogger("nexnotes.auth")
 
 router = APIRouter(prefix="/api", tags=["auth"])
 
-#: The languages inside the frontend; others come as files from the operator.
-SHIPPED = ("en", "de")
 #: Names a sign-in waiting for its second factor (``services/totp.py``), and nothing else.
 PENDING_COOKIE = "nexnotes_2fa" + get_settings().cookie_name_suffix()
 
@@ -189,8 +187,8 @@ def check_confirm(password: str, confirm: str | None) -> None:
 
 
 def check_language(language: str) -> str:
-    """Empty (the browser decides) or a language nexnotes has."""
-    if language and language not in SHIPPED and language not in {item.code for item in locales.available()}:
+    """Empty (the browser decides) or a language nexnotes has: built in or a usable file (``nexsprachen.known``)."""
+    if language and not locales.known(language):
         raise error("unknown_language", "nexnotes does not have this language.", 422)
     return language
 

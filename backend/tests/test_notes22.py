@@ -61,7 +61,9 @@ def test_notes22_ac5_a_language_file_of_the_operator_is_offered_marked_as_the_op
     (folder / "nl.json").write_text(json.dumps({"_meta": {"name": "Nederlands"}, "settings": {"title": "Instellingen"}}),
                                     encoding="utf-8")
     listed = client.get("/api/locales").json()
-    assert listed == [{"code": "nl", "name": "Nederlands", "keys": 1}]
+    # Since the module sprachen (E51): the built-in languages first, the operator's file marked as its own.
+    assert listed[2:] == [{"code": "nl", "name": "Nederlands", "keys": 1, "built_in": False, "own": True}]
+    assert [(entry["code"], entry["built_in"]) for entry in listed[:2]] == [("de", True), ("en", True)]
     assert client.get("/api/locales/nl").json() == {"settings": {"title": "Instellingen"}}
     assert client.put("/api/me/language", json={"language": "nl"}).json()["language"] == "nl"
 
@@ -73,7 +75,7 @@ def test_notes22_ec2_a_broken_language_file_is_left_out_and_named_in_the_log(
     (folder / "fr.json").write_text('{"settings": {"title": ', encoding="utf-8")
     with caplog.at_level(logging.WARNING):
         listed = client.get("/api/locales").json()
-    assert [entry["code"] for entry in listed] == ["nl"]
+    assert [entry["code"] for entry in listed if not entry["built_in"]] == ["nl"]
     skipped = [record.getMessage() for record in caplog.records if "skipped" in record.getMessage()]
     assert len(skipped) == 1 and skipped[0].startswith("Language file name=fr.json skipped: ")
     assert "nl.json" not in caplog.text

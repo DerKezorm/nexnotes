@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import __version__, private
 from .config import get_settings
 from .db import SessionLocal, init_db
+from .deps import require_operator
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
 from .routers import (
@@ -52,7 +53,6 @@ from .routers import attachments as attachments_router
 from .routers import avatars as avatars_router
 from .routers import backups as backups_router
 from .routers import guide as guide_router
-from .routers import locales as locales_router
 from .routers import logs as logs_router
 from .routers import mcp as mcp_router
 from .routers import nextasks as nextasks_router
@@ -76,12 +76,13 @@ from .services.konten_store import KontenStore
 from .vendor import nexoidc
 from .vendor.nexkonten import factor as konten_factor
 from .vendor.nexkonten import setup as konten_setup
+from .vendor.nexsprachen import api as nexsprachen_api
 
 logger = logging.getLogger("nexnotes")
 
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
-    health, about, locales_router, logs_router, auth, totp_router, passkeys_router, oidc, accounts_router, invites,
+    health, about, logs_router, auth, totp_router, passkeys_router, oidc, accounts_router, invites,
     settings_router, server_signin, server_mail, connections,
     backups_router, avatars_router,
 ]
@@ -261,6 +262,8 @@ app.add_exception_handler(api_v1.apiv1.BadInput, api_v1.bad_input)
 
 for module in ROUTERS + FEATURE_ROUTERS:
     app.include_router(module.router)
+# The operator's own languages (module sprachen 1.0.0): /api/locales as before, read without signing in.
+app.include_router(nexsprachen_api.router(operator=require_operator))
 app.include_router(api_v1.router)
 app.include_router(api_v1_write.router)
 app.include_router(api_v1.docs_router)
