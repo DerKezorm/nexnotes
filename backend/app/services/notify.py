@@ -646,10 +646,12 @@ def _deliver(db: Session, row: NotifyOutbox) -> None:
         target = db.get(WebPushSubscription, row.target_id)
         if target is None or target.account_id != row.account_id:
             raise LookupError
+        about = f"mcp-{payload.get('request_id')}" if payload.get("kind") == MCP_REQUEST else str(
+            payload.get("note_id") or "")
         body = {"title": payload.get("title"), "body": payload.get("text"), "url": payload.get("url"),
-                "tag": f"note-{payload.get('note_id')}"}
-        webpush.deliver(db, target, json.dumps(body, ensure_ascii=False).encode("utf-8"),
-                        topic=opaque(str(payload.get("note_id") or "")))
+                "tag": f"mcp-{payload.get('request_id')}" if payload.get("kind") == MCP_REQUEST
+                else f"note-{payload.get('note_id')}"}
+        webpush.deliver(db, target, json.dumps(body, ensure_ascii=False).encode("utf-8"), topic=opaque(about))
         target.last_ok_at = clock.now()
     elif row.channel == "app":
         device = db.get(PushDevice, row.target_id)
@@ -661,10 +663,50 @@ def _deliver(db: Session, row: NotifyOutbox) -> None:
         raise LookupError
 
 
+#: "Ein Programm wartet auf dein Ja" (module mcp, decision 14): a tool set to "ask" waits for the account's answer.
+REQUEST_WORDS = {
+    "de": ("Ein Programm wartet auf dein Ja", "{key}: {what}"),
+    "en": ("A program is waiting for your yes", "{key}: {what}"),
+}
+#: The kind of such a message in the outbox.
+MCP_REQUEST = "mcp_request"
+
+
+def request_waiting(account_id: int, request: Any) -> int:
+    """A request of an AI program waits for the account (module mcp, decision 14): a Web Push to each of its browsers
+    with the program and what it asks, leading to the request's page. Only browsers: the iPhone app knows messages of
+    notes only. Returns how many were queued."""
+    with SessionLocal() as db:
+        account = db.get(Account, account_id)
+        if account is None or account_out(account):
+            return 0
+        title, line = REQUEST_WORDS.get(language_of(account), REQUEST_WORDS["en"])
+        what = str(getattr(request, "summary", "") or getattr(request, "tool", ""))
+        payload = {"kind": MCP_REQUEST, "request_id": int(request.id), "title": title,
+                   "text": _cut(line.format(key=str(request.key_name or ""), what=what), 200),
+                   "url": f"/mcp/requests/{int(request.id)}"}
+        now = clock.now()
+        count = 0
+        for row in webpush.subscriptions(db, account.id):
+            db.add(NotifyOutbox(account_id=account.id, channel="web", target_id=row.id, payload=payload,
+                                created_at=now, next_try_at=now))
+            count += 1
+        db.commit()
+    if count:
+        logger.info("MCP request told account_id=%s request=%s browsers=%s", account_id, int(request.id), count)
+    return count
+
+
 def _still_for(db: Session, account: Account, payload: dict[str, Any]) -> str:
     """Why a message must not go any more (empty: it may): the receiver lost the right to the note since it was
     bundled (EC-5), or the note was locked meanwhile and the message tells of its content (EC-1). Asked before every
-    try, the first and each one after a failure."""
+    try, the first and each one after a failure. A request of an AI program goes only while it still waits."""
+    if payload.get("kind") == MCP_REQUEST:
+        from ..models_mcp import McpRequest
+
+        waiting = db.get(McpRequest, int(payload.get("request_id") or 0))
+        return "" if waiting is not None and waiting.account_id == account.id and waiting.status == "waiting" \
+            else "decided"
     note = db.get(Note, str(payload.get("note_id") or ""))
     if note is None:
         return "no_note"

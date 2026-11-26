@@ -107,3 +107,41 @@ def test_the_older_way_still_makes_a_token_also_for_ai_tools(client, operator):
     assert rpc(client, made.json()["token"], "ping").status_code == 200
     plain = client.post("/api/tokens", json={"name": "Plain", "level": "read"})
     assert rpc(client, plain.json()["token"], "ping").status_code == 401
+
+
+def test_a_request_that_waits_is_told_to_the_accounts_browsers(client, operator, monkeypatch):
+    """Module mcp, decision 14: nexnotes has no bell; "A program is waiting for your yes" goes as Web Push to the
+    account's browsers, leading to the request's page, and only while the request still waits."""
+    import json
+
+    from app.db import SessionLocal
+    from app.models import AuthSession
+    from app.models_notify import NotifyOutbox, WebPushSubscription
+    from app.services import notify, webpush
+
+    with SessionLocal() as db:
+        session = db.query(AuthSession).filter_by(account_id=operator.id).first()
+        db.add(WebPushSubscription(account_id=operator.id, session_id=session.id, endpoint="https://push.example.com/a",
+                                   p256dh="x", auth="y"))
+        db.commit()
+    made = client.post("/api/connections/keys", json={"kind": "mcp", "name": "Desk", "right": "write"})
+    secret, key_id = made.json()["secret"], made.json()["key"]["id"]
+    assert client.put(f"/api/connections/mcp/keys/{key_id}/rights",
+                      json={"rights": {"create_note": "ask"}}).status_code == 200
+    asked = ok(client, secret, "create_note", title="Plan")
+    assert asked.get("status") == "waiting" or "request" in json.dumps(asked)
+    sent: list[dict] = []
+    monkeypatch.setattr(webpush, "deliver", lambda db, row, body, topic="": sent.append(json.loads(body)))
+    assert notify.send_round() == 1
+    (told,) = sent
+    assert told["title"] == "A program is waiting for your yes" and told["url"].startswith("/mcp/requests/")
+    assert told["body"].startswith("Desk: ")
+    # Decided meanwhile: a message still waiting is dropped.
+    request_id = int(told["url"].rsplit("/", 1)[1])
+    assert client.post(f"/api/connections/mcp/requests/{request_id}/decline").status_code == 200
+    with SessionLocal() as db:
+        db.add(NotifyOutbox(account_id=operator.id, channel="web", target_id=db.query(WebPushSubscription).first().id,
+                            payload={"kind": notify.MCP_REQUEST, "request_id": request_id, "title": "t", "text": "x",
+                                     "url": "/"}))
+        db.commit()
+    assert notify.send_round() == 0 and len(sent) == 1

@@ -13,13 +13,15 @@ The consent (``GET``/``POST /api/oauth/authorize``) and the token endpoint are n
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import HTTPException, Request
 from fastapi.routing import APIRoute
 
 from ..db import SessionLocal
 from ..deps import client_ip, require_account, require_operator
 from ..errors import detail
-from ..services import settings_service
+from ..services import notify, settings_service
 from ..services.mcp import CONFIG
 from ..vendor.nexmcp import McpRefused
 from ..vendor.nexmcp import api as mcp_api
@@ -37,7 +39,14 @@ def _error(refusal: McpRefused) -> Exception:
     return HTTPException(status_code=refusal.status, detail=detail(refusal.code, refusal.message, **values))
 
 
+def _notify(event: str, request: Any) -> None:
+    """A request waits for its account (decision 14): nexnotes has no bell, it tells the account's browsers."""
+    if event == "waiting":
+        notify.request_waiting(int(request.account_id), request)
+
+
 router = mcp_api.router(
+    notify=_notify,
     config=CONFIG,
     store=mcp_store,
     account=require_account,
