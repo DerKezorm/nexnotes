@@ -11,6 +11,7 @@ import { api, ApiError } from './api/client'
 import i18n from './i18n'
 import { AuthProvider, SIGNED_IN_AGAIN_EVENT } from './state/auth'
 import { areaText, NEXUI_TEXTS } from './vendor/nexui'
+import { UPDATES_TEXTS } from './vendor/nexupdates/updates'
 
 type Answer = { status: number; body: unknown }
 let handler: (method: string, path: string, body: unknown) => Answer | undefined = () => undefined
@@ -95,7 +96,10 @@ describe('the setup (NOTES-1)', () => {
       // The order of the shared account module (SCREENS.setup): the username follows the display name.
       i18n.t('account.setupCode'), i18n.t('account.displayName'), i18n.t('account.username'), i18n.t('account.email'),
       i18n.t('account.newPassword'), i18n.t('account.passwordRepeat'),
+      // "Nach neuen Versionen sehen" of the module updates, ticked (U1).
+      UPDATES_TEXTS.en.setupLabel,
     ])
+    expect(fields[6].checked).toBe(true)
     type(fields[0], 'AB12-CD34-EF56')
     type(fields[1], 'Robin')
     type(fields[3], 'robin@example.com')
@@ -103,7 +107,7 @@ describe('the setup (NOTES-1)', () => {
     type(fields[5], 'twelve chars')
     await act(async () => box.querySelector('form')!.requestSubmit())
     await settle()
-    expect(made).toEqual({ display_name: 'Robin', name: 'robin', email: 'robin@example.com', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34-EF56', language: 'en' })
+    expect(made).toEqual({ display_name: 'Robin', name: 'robin', email: 'robin@example.com', password: 'twelve chars', password_confirm: 'twelve chars', code: 'AB12-CD34-EF56', language: 'en', update_check: true })
     expect(box.querySelector('[data-testid="home"]')).not.toBeNull()
   })
 
