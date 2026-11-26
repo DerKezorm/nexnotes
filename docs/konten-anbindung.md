@@ -376,6 +376,11 @@ Runde 6 (Nachzug `84d152a`: ui 1.1.3, verbinden 0.1.6, mcp 1.1.4): Server › Al
 `pages/settings/SettingsAreas.tsx`: Grenzen, Funktionen, Schnittstellen, andere nex-Apps, eigene Sprachen; kein Web
 Push), Test in `settingsNav.test.tsx` gegen die Karten der Seite; Vorlagen verbinden und mcp neu.
 
+Galerie fd2e027: Farbreihe im Menü einer Notiz bricht um (auf dem Handy und im schmalen Fenster sind Knöpfe 44 px zum
+Tippen, `styles/index.css`; der Kreis bleibt 24 px), `e2e/menu-place.spec.ts` auch bei 420×860. Die Zeile einer
+Rückfrage („Was es tun will“) kommt aus `services/mcp.LINES` über `describe(arguments, caller)`: Deutsch oder Englisch
+nach dem Konto, mit Titel der Notiz und Namen des Ordners statt Kennungen (`tests/test_mcp_module.py`).
+
 Menüs (27.11.2026): `components/Menu.tsx` misst bei jeder Größen- oder Inhaltsänderung neu; `usePlaceInside` für die
 Untermenüs der Auswahlleiste und die Suchfilter; Papierwahl im Menü zwei mal zwei. Tests `Menu.test.tsx`,
 `e2e/menu-place.spec.ts`.
