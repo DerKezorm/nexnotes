@@ -225,6 +225,10 @@ def test_the_box_passkeys_offers_adding_only_where_a_passkey_can_be_added(client
     assert client.post("/api/auth/passkeys/begin", json={"password": PASSWORD}).status_code >= 400
     assert client.get("/api/auth/me", headers={"origin": "http://localhost:5173"}).json()["passkeys_can_add"] is True
     with SessionLocal() as db:
+        settings_service.save(db, {"public_url": "http://localhost:8570"})
+    # An address set counts alone, and only with https (c0b07ab): http answers no, also on localhost.
+    assert client.get("/api/auth/me", headers={"origin": "http://localhost:8570"}).json()["passkeys_can_add"] is False
+    with SessionLocal() as db:
         settings_service.save(db, {"public_url": "https://notes.example.com"})
     assert client.get("/api/auth/me").json()["passkeys_can_add"] is True
     assert client.post("/api/auth/passkeys/begin", json={"password": PASSWORD}).status_code == 200

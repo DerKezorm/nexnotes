@@ -137,7 +137,7 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
 - E48: Grenzen „Die Grenze eines Kontos setzt du unter Server › Konten › Verwalten.“ (einmal in der Karte), Funktionen „Was
   jedes Konto auf diesem Server nutzen darf.“; keine Web-Push-Karte, keine Schriften-Überschrift unter „Gebaut mit“.
 - E49: Entwurf „Was ist neu“ nennt die Orte mit „›“. Passkeys (konten 1ce1a8f): `/api/auth/me` trägt
-  `passkeys_can_add` (`passkeys.can_add` mit denselben Eingaben wie das Anlegen, `routers/auth.passkey_base`), der
+  `passkeys_can_add` (`passkeys.can_add` aus c0b07ab: eine gesetzte Adresse zählt allein und nur mit https, ohne Adresse nur localhost), der
   Kasten „Passkeys“ zeigt `PasskeyAddition`: den Knopf oder den Satz, beim Betreiber mit Link auf Server › Anmeldung;
   vorhandene Passkeys bleiben (`test_settings_pass.py`, `pages/settings/passkeysBox.test.tsx`, Vorlage von Hand).
 - „Verwalten“ und alle Zeilenknöpfe von konten in `sm`: `AccountButton` nimmt die Größe aus `BUTTONS`
