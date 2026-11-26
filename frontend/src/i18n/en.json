@@ -1896,9 +1896,7 @@
       "folders_other": "{{count}} folders"
     },
     "dialog": {
-      "folders": "Folders",
-      "foldersAll": "All notes",
-      "foldersSome": "Only these folders …"
+      "folders": "Folders"
     }
   },
   "guide": {

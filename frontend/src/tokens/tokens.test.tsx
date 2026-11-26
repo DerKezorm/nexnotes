@@ -174,7 +174,8 @@ describe('NOTES-25 API keys in Settings, Connections', () => {
     expect(($('key-option-mcp') as HTMLInputElement).checked).toBe(false)
     expect($('key-areas')!.textContent).toContain('Ordner')
     expect($('key-areas-all')!.getAttribute('aria-checked')).toBe('true')
-    expect($('key-areas-all')!.textContent).toBe('Alle Notizen')
+    // One wording in every app (schluessel 1.1.1, M-5), with nexnotes' word for its areas.
+    expect([$('key-areas-all')!.textContent, $('key-areas-some')!.textContent]).toEqual(['Alle Ordner, auch spätere', 'Nur diese Ordner'])
     expect(($('key-expiry') as HTMLSelectElement).value).toBe('90')
     expect([...($('key-expiry') as HTMLSelectElement).options].map((option) => option.textContent)).toEqual(['30 Tage', '90 Tage', '1 Jahr', 'Nie'])
     // Without a name, nothing is made.

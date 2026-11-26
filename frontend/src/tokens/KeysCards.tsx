@@ -27,7 +27,8 @@ export const DOCS = '/api/v1/docs'
 
 function useWords(): AppWords {
   const { t } = useTranslation()
-  return { areas: t('tokens.dialog.folders'), areasAll: t('tokens.dialog.foldersAll'), areasSome: t('tokens.dialog.foldersSome') }
+  // One wording for every app (schluessel 1.1.1, M-5): "Alle Ordner, auch spätere", "Nur diese Ordner".
+  return { areas: t('tokens.dialog.folders') }
 }
 
 /** My account › Connections, places 5 and 6: "API-Schlüssel", then "KI-Werkzeuge (MCP)". */
