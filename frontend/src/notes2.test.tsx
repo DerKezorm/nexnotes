@@ -100,6 +100,10 @@ describe('the setup (NOTES-1)', () => {
       UPDATES_TEXTS.en.setupLabel,
     ])
     expect(fields[6].checked).toBe(true)
+    // No bell for operators (U19): the hint says the answer stands under About (updates 0.1.2).
+    const host = (text: string) => text.replace(/\{app\}/g, 'nexnotes').replace('{host}', 'api.github.com')
+    expect(box.textContent).toContain(host(UPDATES_TEXTS.en.setupHintNoBell))
+    expect(box.textContent).not.toContain(host(UPDATES_TEXTS.en.setupHint))
     type(fields[0], 'AB12-CD34-EF56')
     type(fields[1], 'Robin')
     type(fields[3], 'robin@example.com')

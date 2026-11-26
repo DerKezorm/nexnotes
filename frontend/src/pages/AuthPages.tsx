@@ -226,7 +226,7 @@ export function SetupPage() {
             {t(note)}
           </p>
         ))}
-        <UpdateSetupRow app="nexnotes" checked={updateCheck} onChange={setUpdateCheck} language={i18n.language} />
+        <UpdateSetupRow app="nexnotes" checked={updateCheck} onChange={setUpdateCheck} language={i18n.language} bell={false} />
         <Primary name="setupSubmit" busy={busy}>{t('setup.submit')}</Primary>
       </form>
     </AuthFrame>

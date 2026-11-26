@@ -49,23 +49,9 @@ MEDIA = Path(_DATA) / "attachments"
 TAB = {"X-Nexnotes-Client": "tab-tests000"}
 
 
-#: Contract tests of the module updates that need a bell for operators. nexnotes has none (U19: no background look,
-#: the operator's page asks), and the module's contract tests have no switch for such an app yet.
-#: TODO updates 0.1.1: drop once the module skips them for an app without a bell (einst-fragen/nexnotes-module.md 1).
-WITHOUT_A_BELL = {
-    "test_the_bell_hears_of_each_new_version_once",
-    "test_the_bell_speaks_the_language_of_each_operator_s_account",
-    "test_the_setup_ticked_checks_by_itself",
-}
-
-
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     """A test that measures time against a limit (``@pytest.mark.timing``) says nothing beside nine other workers
     using the machine: in a parallel run (pytest-xdist) it is skipped, ``pytest -m timing`` runs them on their own."""
-    no_bell = pytest.mark.skip(reason="nexnotes has no bell for operators (U19); TODO updates 0.1.1")
-    for item in items:
-        if item.name in WITHOUT_A_BELL and "nexupdates" in item.nodeid:
-            item.add_marker(no_bell)
     if not os.environ.get("PYTEST_XDIST_WORKER"):
         return
     skip = pytest.mark.skip(reason="timing: runs on its own after the parallel run (pytest -m timing)")

@@ -2,8 +2,8 @@
 
 The contract tests in ``backend/tests/nexupdates/`` run the module's routes (``/api/about``) in nexnotes, over its
 setting ``update_check`` (``services/updates.py``). The database is the one of the test session (``tests/conftest.py``
-empties it before every test). nexnotes has no bell for operators (U19): ``bell`` stays empty and the background does
-not look; the three contract tests that need a bell are skipped by ``tests/conftest.py`` (TODO updates 0.1.1).
+empties it before every test). nexnotes has no bell for operators (U19): ``has_bell = False``, so the contract checks
+that the background never looks and that the first visit of an operator to "About" asks once (updates 0.1.2).
 """
 
 from __future__ import annotations
@@ -18,6 +18,7 @@ TAB = {"X-Nexnotes-Client": "tab-updates00"}
 
 
 class Adapter(StandardAdapter):
+    has_bell = False
     package = "app.vendor.nexupdates"
     prefix = "/api/about"
     also: tuple[str, ...] = ()
@@ -106,10 +107,3 @@ class Adapter(StandardAdapter):
                                                 "password": "correct horse battery", "update_check": on})
         browser.close()
         assert made.status_code == 200, made.text
-
-    def bell(self) -> list[str]:
-        """No bell for operators in nexnotes (U19)."""
-        return []
-
-    def bell_notices(self) -> list[tuple[str, str, str]]:
-        return []
