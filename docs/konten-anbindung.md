@@ -172,6 +172,19 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
   Schemanamen von konten fest (348 Wege, 135 Schemas, Zusätze erlaubt; Mutation rot); `openapi-namen/vergleichen.py`:
   0 Änderungen, nur Zusätze. Reihe: pytest 2269 grün, 29 übersprungen; vitest 1062 grün.
 
+**E57 (N9) und Module dcbd5d1:**
+- Neuer Bereich Mein Konto › Benachrichtigungen (Slug `notifications`, Bell, zwischen Darstellung und Verbindungen):
+  „Auf welchem Weg“ (`NotifyWays`) mit diesem Browser (ein/aus, Probemeldung), den Browsern des Kontos (dieser
+  markiert, andere entfernen) und der iPhone- und iPad-App (Verweis auf Verbindungen); keine Mail. Dazu die Wege
+  `GET /api/notify/devices`, `DELETE /api/notify/webpush/{id}` (nur eigene), `POST /api/notify/webpush/test`
+  (E34). Tests: `test_notes14.py` (E57), `pages/settings/notificationsArea.test.tsx`, Navigation, Orte; Mutationen rot.
+  Anleitung „Mitteilungen“ nennt den Ort.
+- sprachen 1.0.1 (Rückfrage beim Entfernen), konten 1.1.1, schluessel 1.0.1; drei Vorlagen von Hand, der eigene Test
+  der Karte „Sprachen“ bestätigt im Fenster.
+- Läufe: `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2277 grün, 29 übersprungen; vitest 1074 grün in 88
+  Dateien. Playwright der Einstellungen (settings-nav, signout, api, nextasks, mcp, notify, nexoidc, deck): 27 grün,
+  2 rot (notify.spec 26 und 60, die bekannten Roten von „Nach Stufe 1“, an der Glocke einer Notiz).
+
 **Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
 grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
 review4-smart 2, review5-p14 1, shares 1, smart 1, split-toolbar 1).
