@@ -127,6 +127,23 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
   wiederholt 2 von 5 grün; `FolderTree.tsx` und der Test in diesem Durchgang unverändert, also wackelig wie
   split-toolbar).
 
+**Gemeinsame Runde auf bauplaene-stand 86a0cce (E45, E46, E48, E49, „Verwalten“):**
+- Alle sieben Module neu gezogen, `check` ok; Kopfzeile der Vorlage `e2e/nexoidc.spec.ts` auf 1.2.0.
+- E45: `add_account` schreibt `NewAccount.theme` (`system`), `oidc_store.create_account` ebenso; die Seite schickt
+  `nexnotes.theme` roh, auch leer (dann nimmt der Server die Vorgabe von vorher, `system`), nie die Vorliebe des
+  Browsers; ohne das Feld `theme` (Server vor 1.1.0) bleibt der Browser, wie er ist (`lib/theme.test.ts`).
+- E46: Orte als „Gruppe › Bereich › Karte“, auch in der Anleitung (statt „…, in der Karte „…““); Wächter
+  `places.test.ts` und `test_places.py` prüfen Kommas, Pfeile, Kartenform und Bereiche ohne Gruppe.
+- E48: Grenzen „Die Grenze eines Kontos setzt du unter Konten › Verwalten.“ (einmal in der Karte), Funktionen „Was
+  jedes Konto auf diesem Server nutzen darf.“; keine Web-Push-Karte, keine Schriften-Überschrift unter „Gebaut mit“.
+- E49: Entwurf „Was ist neu“ nennt die Orte mit „›“; der Hinweis statt „Passkey hinzufügen“ ohne https-Adresse kommt
+  mit konten (noch nicht in bauplaene-stand).
+- „Verwalten“ und alle Zeilenknöpfe von konten in `sm`: `AccountButton` nimmt die Größe aus `BUTTONS`
+  (`buttonSize`), die Seite kann keine setzen (`components/AccountButton.test.tsx`).
+- Läufe: `reihe.sh nexnotes ende` ruff, lint, build sauber, pytest 2190 grün, 29 übersprungen; vitest danach (nach dem
+  Theme-Nachtrag und `AccountButton`) 1039 grün in 83 Dateien. Playwright 138 grün, 12 rot: die elf von vorher und
+  `toolbar.spec.ts:75` (1440 px), der lief neben einer Playwright-Reihe von nexlore; allein 6 von 6 grün.
+
 **Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
 grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
 review4-smart 2, review5-p14 1, shares 1, smart 1, split-toolbar 1).
