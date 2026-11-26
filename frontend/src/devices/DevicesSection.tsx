@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { problemText } from '../lib/errors'
-import { ago } from '../lib/time'
+import { formatMoment } from '../vendor/nexui'
 import { Badge, Box, Button, Buttons, Card, ConfirmDialog, Notice, Row, Rows, useNexuiTexts } from '../vendor/nexui'
 import { devicesApi, type AppDevice } from './api'
 import { ConnectDialog } from './ConnectDialog'
@@ -64,7 +64,7 @@ export function DevicesSection() {
                   <span data-testid="device-meta">
                     {[
                       t(`devices.kind.${device.kind === 'mac' ? 'mac' : 'ios'}`),
-                      device.last_seen_at ? t('devices.section.lastSeen', { when: ago(new Date(device.last_seen_at).getTime(), i18n.language) }) : t('devices.section.neverSeen'),
+                      device.last_seen_at ? t('devices.section.lastSeen', { when: formatMoment(device.last_seen_at, i18n.language) }) : t('devices.section.neverSeen'),
                     ].join(' · ')}
                   </span>
                 }

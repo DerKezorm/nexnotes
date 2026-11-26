@@ -12,7 +12,7 @@ import { authApi, passkeysApi, type AccessEntry, type PasskeyEntry, type Session
 import { AccountButton } from '../../components/AccountButton'
 import { confirmOf } from '../../lib/accountButton'
 import { problemText } from '../../lib/errors'
-import { dayTime } from '../../lib/format'
+import { formatMoment } from '../../vendor/nexui'
 import { addPasskey, passkeysSupported } from '../../lib/passkeys'
 import { PasskeyAddition } from '../../vendor/nexkonten/AccountCards'
 import { Badge, Box, ConfirmDialog, Field, Notice as Message, Row, Rows } from '../../vendor/nexui'
@@ -69,7 +69,7 @@ export function PasskeysBox({ signedInByPassword, canAdd, operator }: { signedIn
               key={key.uid}
               icon={Fingerprint}
               name={key.name || t('account.passkeys')}
-              detail={dayTime(key.last_used_at ?? key.created_at, i18n.language)}
+              detail={formatMoment(key.last_used_at ?? key.created_at, i18n.language)}
               action={<AccountButton name="account.passkeyRemove" onClick={() => setAsking({ kind: 'remove', uid: key.uid })} />}
             />
           ))}
@@ -121,7 +121,7 @@ export function SessionsBox({ onEverywhere, busy = false }: { onEverywhere: () =
             icon={row.device ? Smartphone : Monitor}
             name={<span title={row.label}>{row.device ? `${t('account.sessionDevice')}: ${row.label}` : row.label || t('account.sessions')}</span>}
             badge={row.current ? <Badge tone="on">{t('account.sessionThis')}</Badge> : undefined}
-            detail={row.current ? undefined : dayTime(row.last_seen_at ?? row.created_at, i18n.language)}
+            detail={row.current ? undefined : formatMoment(row.last_seen_at ?? row.created_at, i18n.language)}
             action={
               !row.current && (
                 <AccountButton

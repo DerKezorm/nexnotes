@@ -6,7 +6,6 @@
  */
 import { useTranslation } from 'react-i18next'
 
-import { moment } from '../lib/time'
 import { AreaChoice, NextasksSection } from '../nextasks/NextasksSection'
 import { ConnectionsArea, ConnectionsOperatorCard } from '../vendor/nexverbinden'
 import { connectRequest, leave } from './words'
@@ -24,7 +23,6 @@ export function AppsArea() {
       extra={(view) => (view.partner === 'nextasks' && WITH_LISTS.has(view.state) ? <AreaChoice /> : null)}
       areaWord={t('tokens.dialog.folders')}
       language={i18n.language}
-      when={(iso, language) => moment(iso, language)}
       navigate={(address) => leave.to(address)}
     />
   )

@@ -14,6 +14,7 @@ import { AppConnectPage } from '../pages/AppConnectPage'
 import { qrSource, type AppDevice, type Pairing } from './api'
 import { POLL_MS } from './ConnectDialog'
 import { DevicesSection } from './DevicesSection'
+import { formatMoment } from '../vendor/nexui'
 import './register'
 
 const scene = vi.hoisted(() => ({
@@ -135,7 +136,9 @@ describe('NOTES-24 devices in Settings, Connections', () => {
     await render(<DevicesSection />)
     expect($$('device-name').map((element) => element.textContent)).toEqual(['iPhone von Mila', 'Mac mini'])
     const [phone, mac] = $$('device-meta').map((element) => element.textContent)
-    expect(phone).toBe('iOS-App · zuletzt vor 2 Minuten')
+    // Last contact in the one form of every app (ui 1.1.2, E65): "heute, 14:05", "gestern, 14:05", else the day.
+    expect(phone).toBe(`iOS-App · zuletzt ${formatMoment(devices[0].last_seen_at!, 'de')}`)
+    expect(phone).toMatch(/^iOS-App · zuletzt (heute|gestern), \d\d:\d\d$/)
     expect(mac).toBe('iPad-App auf dem Mac · noch nicht gemeldet')
     // Notifications as a badge of each row: on for the phone, off for the Mac.
     const rows = $$('device-row')

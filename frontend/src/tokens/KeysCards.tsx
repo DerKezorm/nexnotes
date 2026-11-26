@@ -10,8 +10,6 @@
 import { useTranslation } from 'react-i18next'
 
 import { api } from '../api/client'
-import { day } from '../lib/format'
-import { moment } from '../lib/time'
 import { mcpRequest, useMcpWords } from '../mcp/words'
 import { useAuth } from '../state/auth'
 import { McpOperatorSettings, PendingRequests, ToolRights } from '../vendor/nexmcp'
@@ -39,15 +37,14 @@ export function ConnectionKeys() {
   const tools = useMcpWords()
   return (
     <>
-      <ApiKeysCard request={keyRequest} things={t('settings.things')} thingsDative={t('settings.thingsDative')} words={words} docsHref={DOCS} operator={me?.role === 'operator'} language={i18n.language} when={day} />
+      <ApiKeysCard request={keyRequest} things={t('settings.things')} thingsDative={t('settings.thingsDative')} words={words} docsHref={DOCS} operator={me?.role === 'operator'} language={i18n.language} />
       <ToolsCard
         request={keyRequest}
         words={words}
         language={i18n.language}
-        when={day}
         extra={(key) => <ToolRights request={mcpRequest} keyId={key.id} words={tools} language={i18n.language} />}
       >
-        <PendingRequests request={mcpRequest} words={tools} language={i18n.language} when={(iso, language) => moment(iso, language)} viewHref={(entry) => `/mcp/requests/${entry.id}`} />
+        <PendingRequests request={mcpRequest} words={tools} language={i18n.language} viewHref={(entry) => `/mcp/requests/${entry.id}`} />
       </ToolsCard>
     </>
   )
@@ -76,5 +73,5 @@ export function AllKeys() {
     const count = Number(row.extra?.folders ?? 0)
     return <span>{count > 0 ? t('tokens.list.folders', { count }) : t('tokens.list.foldersAll')}</span>
   } }]
-  return <AllKeysCard request={keyRequest} words={useWords()} language={i18n.language} when={day} extra={extra} />
+  return <AllKeysCard request={keyRequest} words={useWords()} language={i18n.language} extra={extra} />
 }

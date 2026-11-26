@@ -10,7 +10,7 @@ import { useTranslation } from 'react-i18next'
 
 import { api } from '../../api/client'
 import { problemText } from '../../lib/errors'
-import { dayTime } from '../../lib/format'
+import { formatMoment } from '../../vendor/nexui'
 import { allowBrowser, browserState, stopBrowser, type BrowserState } from '../../notify/browser'
 import { Notice, NotifyWays } from '../../vendor/nexui'
 import { areaPath } from './areas'
@@ -78,7 +78,7 @@ export function NotificationsArea() {
           items: devices.browsers.map((entry) => ({
             id: String(entry.id),
             name: name(entry),
-            detail: entry.since ? t('settings.notifications.since', { when: dayTime(entry.since, i18n.language) }) : undefined,
+            detail: entry.since ? t('settings.notifications.since', { when: formatMoment(entry.since, i18n.language) }) : undefined,
             current: entry.this,
           })),
           busy,

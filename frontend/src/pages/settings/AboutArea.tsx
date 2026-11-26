@@ -10,7 +10,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { tabId } from '../../api/client'
-import { moment } from '../../lib/time'
+import { formatMoment } from '../../vendor/nexui'
 import { useAuth } from '../../state/auth'
 import { AboutPage, Notice, type BuiltWith } from '../../vendor/nexui'
 import { useUpdates, useUpdatesTexts, whatGoesOut, type Fetcher } from '../../vendor/nexupdates/updates'
@@ -46,7 +46,7 @@ export function AboutArea() {
   const { me } = useAuth()
   const operator = me?.role === 'operator'
   const texts = useUpdatesTexts(i18n.language)
-  const state = useUpdates({ fetcher, operator, when: (iso) => moment(iso, i18n.language), language: i18n.language })
+  const state = useUpdates({ fetcher, operator, when: (iso) => formatMoment(iso, i18n.language), language: i18n.language })
 
   if (!state.about) return state.problem ? <Notice tone="danger">{state.problem}</Notice> : null
   return (

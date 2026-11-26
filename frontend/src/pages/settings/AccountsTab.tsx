@@ -20,7 +20,8 @@ import { accountsApi, invitesApi, oidcAdminApi, type AccountRow, type FactorRese
 import { AccountButton } from '../../components/AccountButton'
 import { confirmOf } from '../../lib/accountButton'
 import { copyText } from '../../lib/copy'
-import { bytes, day, dayTime } from '../../lib/format'
+import { bytes } from '../../lib/format'
+import { formatDay, formatMoment } from '../../vendor/nexui'
 import { useAuth } from '../../state/auth'
 import { WhatYouSeeCard } from '../../vendor/nexkonten/AccountCards'
 import {
@@ -71,7 +72,7 @@ function Badges({ shown }: { shown: BadgeShown[] }) {
     <>
       {shown.map((badge, index) => (
         <Badge key={`${badge.badge}-${index}`} tone={badge.tone}>
-          {badge.label ?? t(badge.text, badge.date ? { day: day(badge.date, i18n.language) } : undefined)}
+          {badge.label ?? t(badge.text, badge.date ? { day: formatDay(badge.date, i18n.language) } : undefined)}
         </Badge>
       ))}
     </>
@@ -245,7 +246,7 @@ function ManageDialog({ row, listed, operatorHasPassword, mailServer, onClose, o
     label: t(fact.label),
     value: (
       <>
-        {fact.raw ?? (fact.date ? dayTime(fact.date, lang) : fact.text ? t(fact.text, fact.values) : '')}
+        {fact.raw ?? (fact.date ? formatMoment(fact.date, lang) : fact.text ? t(fact.text, fact.values) : '')}
         {fact.state && <span className="text-[var(--nexui-text-muted)]"> · {t(fact.state)}</span>}
       </>
     ),
@@ -613,7 +614,7 @@ function InviteDialog({ onClose, onMade }: { onClose: () => void; onMade: () => 
               {t(INVITE_DIALOG.done.sent, { email: made.email })}
             </Notice>
           )}
-          <CopyField value={made.link} label={t(INVITE_DIALOG.done.link)} hint={t(INVITE_DIALOG.done.linkHint, { day: day(made.expires, i18n.language) })} />
+          <CopyField value={made.link} label={t(INVITE_DIALOG.done.link)} hint={t(INVITE_DIALOG.done.linkHint, { day: formatDay(made.expires, i18n.language) })} />
           <div className="flex justify-end">
             <AccountButton name="done" onClick={onClose}>
               {t('common.done')}

@@ -22,7 +22,7 @@ import { browserLanguage, changeLanguage, languageOptions, type LanguageOption }
 import { confirmOf } from '../../lib/accountButton'
 import { copyText } from '../../lib/copy'
 import { errorText, problemText, signInErrorText } from '../../lib/errors'
-import { day } from '../../lib/format'
+import { formatDay } from '../../vendor/nexui'
 import { usePasswordConfirm } from '../../lib/passwordConfirm'
 import { go } from '../../lib/providers'
 import { waitingChanges } from '../../state/account'
@@ -43,7 +43,7 @@ export function AccountTab({ part }: { part?: AccountPart } = {}) {
   /** "Last changed on …" in the box Password, or that it is not known (konten 0.3.10, `passwordChanged`). */
   const changedLine = (at: string | null | undefined) => {
     const changed = passwordChanged(at)
-    return t(changed.text, changed.date ? { day: day(changed.date, i18n.language) } : undefined)
+    return t(changed.text, changed.date ? { day: formatDay(changed.date, i18n.language) } : undefined)
   }
   const { me, setMe, refresh } = useAuth()
   const [params] = useSearchParams()

@@ -7,7 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api, ApiError, settingsApi, type AddressQuestion, type ServerSettings, type SettingsChange } from '../../api/client'
-import { dayTime } from '../../lib/format'
+import { formatMoment } from '../../vendor/nexui'
 import { ASKED, useAction } from './actions'
 import { MailCard as PostMailCard } from '../../vendor/nexpost/MailCard'
 import type { PostRequest } from '../../vendor/nexpost/mailserver'
@@ -63,7 +63,7 @@ export function MailCard() {
       subtitle={t('server.mailHint')}
       senderPlaceholder="notes@example.com"
       language={i18n.language}
-      when={(iso, language) => dayTime(iso, language)}
+      when={formatMoment}
     />
   )
 }

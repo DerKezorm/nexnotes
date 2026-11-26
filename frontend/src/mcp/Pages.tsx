@@ -5,7 +5,6 @@
 import { useTranslation } from 'react-i18next'
 import { useLocation, useParams } from 'react-router-dom'
 
-import { moment } from '../lib/time'
 import { ConsentPage, RequestPage } from '../vendor/nexmcp'
 import { leave, mcpRequest, useMcpWords } from './words'
 
@@ -31,7 +30,7 @@ export function Request() {
   const { id = '' } = useParams()
   return (
     <div className="mx-auto w-full max-w-xl p-6">
-      <RequestPage request={mcpRequest} id={id} words={useMcpWords()} language={i18n.language} when={(iso, language) => moment(iso, language)} />
+      <RequestPage request={mcpRequest} id={id} words={useMcpWords()} language={i18n.language} />
     </div>
   )
 }

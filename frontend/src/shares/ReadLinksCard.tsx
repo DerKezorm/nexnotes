@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { problemText } from '../lib/errors'
-import { day } from '../lib/format'
+import { formatDay } from '../vendor/nexui'
 import { noteHref } from '../notes/newNote'
 import { Box, Button, Card, Notice, Row, Rows } from '../vendor/nexui'
 import { sharesApi, type ReadLink } from './api'
@@ -53,8 +53,8 @@ export function ReadLinksCard() {
                 detail={
                   <span className={link.expired ? 'text-[var(--nexui-warn)]' : undefined}>
                     {link.expired
-                      ? t('shares.links.expired', { date: day(`${link.expires_on}T12:00:00`, i18n.language) })
-                      : t('shares.link.untilText', { date: day(`${link.expires_on}T12:00:00`, i18n.language) })}
+                      ? t('shares.links.expired', { date: formatDay(`${link.expires_on}T12:00:00`, i18n.language) })
+                      : t('shares.link.untilText', { date: formatDay(`${link.expires_on}T12:00:00`, i18n.language) })}
                   </span>
                 }
                 action={
