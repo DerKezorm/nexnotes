@@ -344,8 +344,8 @@ def trash_list(caller: Reader) -> dict[str, Any]:
 # --- The description (AC-25) ----------------------------------------------------------------------------------------
 
 DOCS_TEXT = (
-    "Programs read the notes of one account with an API token from Settings, Connections: "
-    "`Authorization: Bearer nn_api_...`. A token never sees more than its account, never a locked note's content, "
+    "Programs read the notes of one account with an API key from Settings › My account › Connections › API keys: "
+    "`Authorization: Bearer nn_api_...`. A key never sees more than its account, never a locked note's content, "
     "and only the folders it is limited to. Errors come as `{\"detail\": {\"code\", \"message\"}}`. Requests with an "
     "`Origin` header are refused, so this page cannot try them out: use `curl` as in the examples. "
     "What stands under `/api/v1/` stays: fields may be added, none renamed or removed."
@@ -386,7 +386,7 @@ def openapi(base: str) -> dict[str, Any]:
     schema = get_openapi(title="nexnotes API", version=__version__, description=DOCS_TEXT,
                          routes=[*router.routes, *api_v1_write.router.routes], servers=[{"url": base}])
     schema.setdefault("components", {})["securitySchemes"] = {
-        "bearerAuth": {"type": "http", "scheme": "bearer", "description": "An API token (`nn_api_...`)."}}
+        "bearerAuth": {"type": "http", "scheme": "bearer", "description": "An API key (`nn_api_...`)."}}
     schema["security"] = [{"bearerAuth": []}]
     for path, operations in schema.get("paths", {}).items():
         for method, operation in operations.items():

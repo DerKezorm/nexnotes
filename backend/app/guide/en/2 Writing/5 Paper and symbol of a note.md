@@ -8,7 +8,7 @@ Every note can sit on its own paper: **blank, lined, grid or dots**. This one is
 
 ![Choosing the paper](shots/paper.webp)
 
-Which paper new notes start on is set under **Settings › Appearance**.
+Which paper new notes start on is set under **Settings › My account › Appearance**.
 
 ## A symbol before the title
 

@@ -45,7 +45,9 @@ function askedFor(key: string): boolean {
   const stem = base.replace(/[A-Z][a-z]*$/, '')
   if (stem !== base && new RegExp(`['\`]${escape(stem)}\\$\\{`).test(source)) return true
   // A key built from a fixed start and a value: `server.confirm.backup_${kind}.title`.
-  for (let end = base.length - 1; end > 0; end--) {
+  // The fixed start reaches past the section at least: `t${…}` asks for no key starting with "t" (it hid 54 texts of
+  // the old token cards).
+  for (let end = base.length - 1; end > base.indexOf('.'); end--) {
     if (source.includes('`' + base.slice(0, end) + '${')) return true
   }
   const parts = base.split('.')

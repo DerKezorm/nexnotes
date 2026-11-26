@@ -15,6 +15,6 @@ nexnotes liest den Text in Fotos, Scans und PDFs. Danach findet die Suche auch W
 
 ## Gut zu wissen
 
-- Welche Sprachen erkannt werden, legt der Betreiber unter Einstellungen › Texterkennung fest.
+- Welche Sprachen erkannt werden, legt der Betreiber unter Einstellungen › Server › Texterkennung fest.
 - Gesperrte Notizen im Tresor werden nicht gelesen.
 - Die Fotos dieser Anleitung sind von der Texterkennung ausgenommen, damit die Suche nicht doppelt findet.

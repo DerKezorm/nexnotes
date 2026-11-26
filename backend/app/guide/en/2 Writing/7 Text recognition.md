@@ -15,6 +15,6 @@ nexnotes reads the text in photos, scans and PDFs. After that, search also finds
 
 ## Good to know
 
-- Which languages are recognised is set by the operator under Settings › Text recognition.
+- Which languages are recognised is set by the operator under Settings › Server › Text recognition.
 - Locked notes in the vault are not read.
 - The pictures of this guide are left out of text recognition, so that search does not find everything twice.

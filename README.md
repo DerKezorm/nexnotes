@@ -213,7 +213,7 @@ Make a backup first (see above). What changed is in the release notes.
 | `NEXNOTES_LOG_LEVEL` | stored setting | `quiet`, `normal`, `detailed` or `trace`; overrides the setting |
 | `NEXNOTES_PUSH_RELAY` | `https://push.nexapps.dev` | The relay that hands notifications to Apple for the iOS app. It sees only what is encrypted for the device. Empty: nothing goes out |
 | `NEXNOTES_APPLE_APP_IDS` | `6KQSFL9GA3.dev.nexapps.nexnotes` | Apps whose links to notes open in the app instead of the browser (`/.well-known/apple-app-site-association`), comma separated. Only for an address the app was built with. Empty: no file |
-| `NEXNOTES_GUIDE` | `true` | Every account gets the folder "Guide". `false`: only who asks for it under **Settings › Appearance** |
+| `NEXNOTES_GUIDE` | `true` | Every account gets the folder "Guide". `false`: only who asks for it under **Settings › My account › Appearance** |
 | `NEXNOTES_LOCALES_DIR` | `<data>/locales` | Where your own language files lie |
 | `NEXNOTES_API_DOCS` | `false` | Also serves FastAPI's own `/api/docs` and `/api/openapi.json` (the API for programs has its description at `/api/v1/docs` either way) |
 | `NEXNOTES_MEDIA_MEMORY_MB` | `1024` | Memory one worker for pictures, PDFs and videos may take, at least 256 |
@@ -228,8 +228,8 @@ links, the API and MCP are set in the interface.
 ## For programs
 
 Home Assistant, n8n or your own scripts use nexnotes over `/api/v1`: folders, notes, tags, smart folders, search,
-attachments, and making, changing and ticking off in notes. Every account makes its own tokens under
-**Settings › Connections › API tokens**, to read or to read and write, for all notes or chosen folders, with an end
+attachments, and making, changing and ticking off in notes. Every account makes its own API keys under
+**Settings › My account › Connections › API keys**, to read or to read and write, for all notes or chosen folders, with an end
 date. A browser with nexnotes open shows every route with a `curl` example at `/api/v1/docs`; the reference is in
 [docs/api.md](docs/api.md).
 
@@ -240,7 +240,7 @@ curl -H "Authorization: Bearer $NEXNOTES_TOKEN" https://notes.example.com/api/v1
 What is under `/api/v1` stays: new fields may come, nothing is renamed or taken away. A change that would break a
 program goes to `/api/v2` beside it.
 
-**MCP**: a token with "Also for AI tools (MCP)" opens `/api/mcp` for tools that speak the Model Context Protocol; a
+**MCP**: an API key with "Also for AI tools (MCP)" opens `/api/mcp` for tools that speak the Model Context Protocol; a
 tool can also connect itself by OAuth, with the member's consent. The operator can switch MCP off for the whole server.
 
 ## Languages

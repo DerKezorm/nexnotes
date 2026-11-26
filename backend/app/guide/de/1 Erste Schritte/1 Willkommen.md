@@ -26,4 +26,4 @@ Diese Checkliste ist echt. Hak ab, was du schon kennst:
 - [ ] Eine Notiz anheften
 - [ ] Eine zweite Notiz daneben öffnen
 
-Wenn du die Anleitung später noch einmal frisch brauchst: Unter **Einstellungen › Darstellung** legt „Anleitung neu anlegen“ sie wieder an. Deine Änderungen bleiben dabei unberührt.
+Wenn du die Anleitung später noch einmal frisch brauchst: Unter **Einstellungen › Mein Konto › Darstellung** legt „Anleitung neu anlegen“ sie wieder an. Deine Änderungen bleiben dabei unberührt.

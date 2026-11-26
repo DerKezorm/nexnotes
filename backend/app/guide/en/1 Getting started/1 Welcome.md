@@ -26,4 +26,4 @@ This checklist is real. Tick off what you know already:
 - [ ] Pin a note
 - [ ] Open a second note beside the first
 
-Need the guide fresh again later? Under **Settings › Appearance**, "Make the guide again" adds it once more. Your own changes stay untouched.
+Need the guide fresh again later? Under **Settings › My account › Appearance**, "Make the guide again" adds it once more. Your own changes stay untouched.

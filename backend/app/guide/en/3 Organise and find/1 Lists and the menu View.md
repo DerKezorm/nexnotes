@@ -16,4 +16,4 @@ The look applies to every list and follows you to every device. Sorting (last ch
 
 ![Notes as tiles](shots/tiles.webp)
 
-Under "Hints" you tick checklists, attachments and tags one by one: the list can show the progress of your checklists, say, but no tags. The same three ticks are under **Settings › Appearance** at "Note lists"; the choice holds on every device. Drag the edge of the sidebar or the list to change their width.
+Under "Hints" you tick checklists, attachments and tags one by one: the list can show the progress of your checklists, say, but no tags. The same three ticks are under **Settings › My account › Appearance** at "Note lists"; the choice holds on every device. Drag the edge of the sidebar or the list to change their width.

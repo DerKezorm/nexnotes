@@ -256,7 +256,7 @@ def _refusal(answer: httpx.Response, method: str, path: str) -> NoReturn:
     code, fields = _code(answer)
     logger.info("nextasks answered HTTP %s (%s) on %s %s", status, code or "-", method, path.split("/")[0])
     if status == 401 and code == "api_off":
-        raise NextasksError("nextasks_api_off", "The operator of nextasks has switched API tokens off.", 409)
+        raise NextasksError("nextasks_api_off", "The operator of nextasks has switched API keys off.", 409)
     if status == 401:
         raise NextasksError("nextasks_token_invalid", "nextasks does not take this key.", 409)
     if status == 403 and code == "token_reads_only":

@@ -386,7 +386,7 @@
     "provider_first": "Richte zuerst einen Anmeldeanbieter ein, sonst kommt außer dir niemand mehr herein.",
     "public_url_change": "Mit dieser Adresse ändert sich, was authentik kennt. Bestätige das zuerst.",
     "public_url_invalid": "Diese Adresse lässt sich in nexnotes nicht verwenden. Prüf, wie sie geschrieben ist.",
-    "public_url_missing": "Für Mails braucht nexnotes seine öffentliche Adresse; der Betreiber trägt sie unter Einstellungen ein.",
+    "public_url_missing": "Für Mails braucht nexnotes seine öffentliche Adresse; der Betreiber trägt sie unter Server › Anmeldung ein.",
     "public_url_needed": "nexnotes hat noch keine öffentliche Adresse. Trag sie zuerst ein.",
     "reset_expired": "Dieser Link ist abgelaufen. Bitte den Betreiber um einen neuen.",
     "reset_invalid": "Dieser Link wurde schon benutzt oder durch einen neueren ersetzt.",
@@ -477,14 +477,14 @@
     "item_changed": "Diesen Punkt gibt es so nicht mehr. Lade die Notiz neu.",
     "note_format": "Diese Notiz hat ein Format, das dieser Server nicht kennt.",
     "note_trashed": "Diese Notiz liegt im Papierkorb.",
-    "nextasks_not_connected": "nextasks ist nicht verbunden. Verbinde es unter Einstellungen, Verbindungen.",
+    "nextasks_not_connected": "nextasks ist nicht verbunden. Verbinde es unter Mein Konto › Verbindungen › nextasks.",
     "nextasks_address_invalid": "Das ist keine Adresse von nextasks. Sie beginnt mit http:// oder https://.",
-    "nextasks_address_local": "Diese Adresse liegt im eigenen Netz. Das muss der Betreiber unter Einstellungen, Server erst erlauben.",
+    "nextasks_address_local": "Diese Adresse liegt im eigenen Netz. Das muss der Betreiber unter Server › Allgemein › Funktionen für alle Konten erst erlauben.",
     "nextasks_address_refused": "Diese Adresse fragt nexnotes nie, auch nicht im eigenen Netz.",
     "nextasks_unreachable": "nextasks ist gerade nicht erreichbar oder hat nicht passend geantwortet. Die Notiz bleibt, wie sie ist.",
     "nextasks_address_port": "Unter 1024 fragt nexnotes nur die Ports 80 und 443. Nimm die Adresse, unter der nextasks im Browser läuft.",
     "nextasks_busy": "Es laufen schon zwei Anfragen an nextasks. Warte einen Moment.",
-    "nextasks_token_invalid": "nextasks nimmt diesen Schlüssel nicht (mehr). Trag unter Verbindungen einen neuen ein.",
+    "nextasks_token_invalid": "nextasks nimmt diesen Schlüssel nicht (mehr). Trag unter Mein Konto › Verbindungen › nextasks einen neuen ein.",
     "nextasks_api_off": "Der Betreiber von nextasks hat die API-Schlüssel abgeschaltet.",
     "nextasks_read_only": "Dieser Schlüssel von nextasks darf nur lesen. Lege dort einen mit Lesen und Schreiben an.",
     "nextasks_too_old": "Dieses nextasks spricht eine andere Schnittstelle als nexnotes. Aktualisiere nextasks oder nexnotes.",
@@ -494,8 +494,8 @@
     "nextasks_task_gone": "Diese Aufgabe gibt es in nextasks nicht mehr.",
     "list_style_unknown": "Wähl Liste, Karten, Kompakt oder Kacheln.",
     "api_off": "Der Betreiber hat die Programmschnittstelle abgeschaltet.",
-    "tokens_too_many": "Ein Konto hat höchstens {{max}} API-Token. Widerrufe zuerst einen.",
-    "app_address_missing": "nexnotes kennt seine Adresse nicht. Der Betreiber trägt sie unter Einstellungen, Server ein.",
+    "tokens_too_many": "Ein Konto hat höchstens {{max}} API-Schlüssel. Widerrufe zuerst einen.",
+    "app_address_missing": "nexnotes kennt seine Adresse nicht. Der Betreiber trägt sie unter Server › Anmeldung als öffentliche Adresse ein.",
     "too_many_pairings": "Höchstens 5 Codes dürfen gleichzeitig warten.",
     "pairing_gone": "Der Code ist abgelaufen, schon benutzt oder nicht gültig.",
     "push_ticket_invalid": "Mitteilungen ließen sich für dieses Gerät nicht einrichten.",
@@ -676,7 +676,7 @@
     "weekOf": "Woche ab {{date}}",
     "sealed": "Diese Fassung ist verschlüsselt. Entsperre die Notiz, dann lässt sie sich hier ansehen.",
     "viaDeck": "nexdeck · {{key}}",
-    "viaApi": "{{account}} über API-Token „{{name}}“",
+    "viaApi": "{{account}} über API-Schlüssel „{{name}}“",
     "viaGuide": "nexnotes · Anleitung"
   },
   "home": {
@@ -835,7 +835,7 @@
   },
   "resetNotice": {
     "button": "Verstanden",
-    "hint": "Warst du das nicht, sag es dem Betreiber und ändere dein Passwort unter „Mein Konto“.",
+    "hint": "Warst du das nicht, sag es dem Betreiber und ändere dein Passwort unter Mein Konto › Sicherheit.",
     "text": "Dein Passwort wurde über einen Link des Betreibers zurückgesetzt.",
     "title": "Passwort zurückgesetzt"
   },
@@ -946,7 +946,7 @@
     "years_other": "{{count}} Jahren",
     "localNetwork": "Verbindungen ins eigene Netz",
     "localNetworkHint": "Mitglieder dürfen ihr nextasks auch unter einer Adresse im eigenen Netz (LAN, VPN) verbinden. Dann kann jedes Mitglied nexnotes Adressen dort ansprechen lassen.",
-    "backupHolds": "Eine Sicherung enthält alle Notizen samt Verlauf und Papierkorb, alle Anhänge, die Konten mit ihren Freigaben, intelligenten Ordnern und API-Token, die Einstellungen und den Schlüssel des Servers. Gesperrte Notizen bleiben darin verschlüsselt. Nicht dabei: Log, Exporte, Zwischenspeicher und eigene Sprachdateien, auch kein über NEXNOTES_SECRET_KEY gesetzter Schlüssel.",
+    "backupHolds": "Eine Sicherung enthält alle Notizen samt Verlauf und Papierkorb, alle Anhänge, die Konten mit ihren Freigaben, intelligenten Ordnern und API-Schlüsseln, die Einstellungen und den Schlüssel des Servers. Gesperrte Notizen bleiben darin verschlüsselt. Nicht dabei: Log, Exporte, Zwischenspeicher und eigene Sprachdateien, auch kein über NEXNOTES_SECRET_KEY gesetzter Schlüssel.",
     "ocrLanguagesLabel": "Sprachen"
   },
   "session": {
@@ -1679,7 +1679,7 @@
       "allow": "Erlauben",
       "deny": "Ablehnen",
       "broken": "Diese Anfrage zum Verbinden ist unvollständig. Starte das Verbinden im Programm noch einmal.",
-      "later": "Du findest das Programm unter Einstellungen, Verbindungen, und widerrufst es dort."
+      "later": "Du findest das Programm unter Mein Konto › Verbindungen › KI-Werkzeuge (MCP) und widerrufst es dort."
     }
   },
   "smart": {
@@ -1834,12 +1834,12 @@
     "section": {
       "title": "nextasks",
       "text": "Zeilen und Checklistenpunkte lassen sich als Aufgabe in dein nextasks schicken.",
-      "how": "So verbindest du: Lege in nextasks unter Mein Konto, Verbindungen einen API-Schlüssel mit Lesen und Schreiben an und trag hier die Adresse von nextasks und den Schlüssel ein.",
+      "how": "So verbindest du: Lege in nextasks unter Mein Konto › Verbindungen › API-Schlüssel einen Schlüssel mit „Lesen und schreiben“ an und trag hier die Adresse von nextasks und den Schlüssel ein.",
       "url": "Adresse von nextasks",
       "urlHint": "z. B. https://tasks.example.com",
       "key": "API-Schlüssel",
       "keyHint": "beginnt mit ntk_",
-      "localOff": "Läuft dein nextasks im eigenen Netz, muss der Betreiber das unter Einstellungen, Server erst erlauben.",
+      "localOff": "Läuft dein nextasks im eigenen Netz, muss der Betreiber das unter Server › Allgemein › Funktionen für alle Konten erst erlauben.",
       "connect": "Verbinden",
       "checking": "Wird geprüft …",
       "connected": "verbunden",
@@ -1890,83 +1890,15 @@
     }
   },
   "tokens": {
-    "section": {
-      "title": "API-Token",
-      "text": "Ein API-Token lässt ein Programm deine Notizen lesen und, wenn du willst, schreiben, etwa n8n, Home Assistant, ein Skript oder die nexdeck-Karte. Er darf nie mehr als dein Konto. Gesperrte Notizen sieht er nie.",
-      "new": "Neuer API-Token",
-      "none": "Noch kein API-Token.",
-      "off": "Der Betreiber hat die Programmschnittstelle abgeschaltet. Bestehende Tokens funktionieren erst wieder, wenn er sie einschaltet.",
-      "made": "„{{name}}“ angelegt",
-      "once": "Kopiere den Token jetzt. Er wird nur dieses eine Mal angezeigt.",
-      "address": "Adresse für Programme",
-      "header": "Programme schicken den Token als „Authorization: Bearer …“, KI-Werkzeuge an …/api/mcp.",
-      "docs": "API-Dokumentation",
-      "lastUsed": "zuletzt {{when}}",
-      "neverUsed": "noch nie benutzt",
-      "revoke": "Widerrufen",
-      "revokeTitle": "„{{name}}“ widerrufen?",
-      "revokeText": "Das Programm kommt sofort nicht mehr herein. Was es geschrieben hat, bleibt.",
-      "count": "{{count}} von {{max}} Token",
-      "blocked": "Vom Betreiber gesperrt"
-    },
-    "level": {
-      "read": "nur lesen",
-      "write": "lesen und schreiben"
-    },
-    "access": {
-      "api": "API",
-      "mcp": "MCP",
-      "card": "nexdeck-Karte"
-    },
-    "legacy": {
-      "mcp": "nur MCP (älterer Schlüssel)",
-      "card": "nur nexdeck-Karte (älterer Token)"
-    },
     "list": {
       "foldersAll": "alle Notizen",
       "folders_one": "{{count}} Ordner",
       "folders_other": "{{count}} Ordner"
     },
-    "expiry": {
-      "on": "Läuft am {{date}} ab",
-      "expired": "Abgelaufen",
-      "never": "Läuft nie ab"
-    },
     "dialog": {
-      "title": "Neuer API-Token",
-      "name": "Name",
-      "namePlaceholder": "z. B. n8n Wetterbericht",
-      "right": "Recht",
-      "read": "Nur lesen",
-      "readHint": "Notizen, Ordner, Schlagwörter, Suche, Anhänge und Papierkorb lesen.",
-      "write": "Lesen und schreiben",
-      "writeHint": "Dazu Checklisten abhaken und, sobald es das gibt, Notizen anlegen und ändern.",
-      "mcp": "Auch für KI-Werkzeuge (MCP)",
-      "mcpHint": "Der Token gilt dann auch unter …/api/mcp.",
-      "mcpOff": "Der Betreiber hat MCP abgeschaltet.",
       "folders": "Ordner",
       "foldersAll": "Alle Notizen",
-      "foldersSome": "Nur diese Ordner …",
-      "expiry": "Ablauf",
-      "days_30": "30 Tage",
-      "days_90": "90 Tage",
-      "days_365": "1 Jahr",
-      "never": "Nie",
-      "make": "Token anlegen"
-    },
-    "connectors": {
-      "title": "Verbundene KI-Werkzeuge",
-      "text": "Programme, die sich mit deiner Zustimmung selbst verbunden haben. Sie arbeiten als du, nie mit mehr.",
-      "none": "Noch kein Programm verbunden."
-    },
-    "admin": {
-      "title": "API-Token aller Konten",
-      "text": "Je Token Konto, Name, Recht, Zugang, Ablauf und letzte Nutzung. Nie der Token, nie Titel oder Inhalte.",
-      "none": "Noch kein Konto hat einen API-Token.",
-      "connector": "verbundenes KI-Werkzeug",
-      "block": "Sperren",
-      "blockTitle": "„{{name}}“ sperren?",
-      "blockText": "Der Token funktioniert sofort nicht mehr. Das Konto sieht ihn als „Vom Betreiber gesperrt“."
+      "foldersSome": "Nur diese Ordner …"
     }
   },
   "guide": {

@@ -386,7 +386,7 @@
     "provider_first": "Set up a sign-in provider first, or nobody but you could sign in.",
     "public_url_change": "This address changes what authentik knows. Confirm that first.",
     "public_url_invalid": "This is not an address nexnotes can use. Check how it is written.",
-    "public_url_missing": "Mail needs the public address of nexnotes; the operator sets it under Settings.",
+    "public_url_missing": "Mail needs the public address of nexnotes; the operator sets it under Server › Sign-in.",
     "public_url_needed": "nexnotes has no public address yet. Enter it first.",
     "reset_expired": "This link has expired. Ask the operator for a new one.",
     "reset_invalid": "This link has been used already or was replaced by a newer one.",
@@ -477,14 +477,14 @@
     "item_changed": "This item is not like that any more. Load the note again.",
     "note_format": "This note is in a format this server does not know.",
     "note_trashed": "This note is in the trash.",
-    "nextasks_not_connected": "nextasks is not connected. Connect it under Settings, Connections.",
+    "nextasks_not_connected": "nextasks is not connected. Connect it under My account › Connections › nextasks.",
     "nextasks_address_invalid": "This is not an address of nextasks. It starts with http:// or https://.",
-    "nextasks_address_local": "This address is in the local network. The operator has to allow that first under Settings, Server.",
+    "nextasks_address_local": "This address is in the local network. The operator has to allow that first under Server › General › Features for every account.",
     "nextasks_address_refused": "nexnotes never asks this address, not even in the local network.",
     "nextasks_unreachable": "nextasks cannot be reached right now or did not answer as expected. The note stays as it is.",
     "nextasks_address_port": "Below 1024, nexnotes only asks ports 80 and 443. Use the address nextasks runs at in the browser.",
     "nextasks_busy": "Two requests to nextasks are running already. Wait a moment.",
-    "nextasks_token_invalid": "nextasks does not take this key (any more). Enter a new one under Connections.",
+    "nextasks_token_invalid": "nextasks does not take this key (any more). Enter a new one under My account › Connections › nextasks.",
     "nextasks_api_off": "The operator of nextasks has switched API keys off.",
     "nextasks_read_only": "This key of nextasks may only read. Create one there that reads and writes.",
     "nextasks_too_old": "This nextasks speaks another interface than nexnotes. Update nextasks or nexnotes.",
@@ -494,8 +494,8 @@
     "nextasks_task_gone": "This task is no longer in nextasks.",
     "list_style_unknown": "Choose list, cards, compact or tiles.",
     "api_off": "The operator has switched the API off.",
-    "tokens_too_many": "An account can have at most {{max}} API tokens. Revoke one first.",
-    "app_address_missing": "nexnotes does not know its address. The operator enters it under Settings, Server.",
+    "tokens_too_many": "An account can have at most {{max}} API keys. Revoke one first.",
+    "app_address_missing": "nexnotes does not know its address. The operator enters it as the public address under Server › Sign-in.",
     "too_many_pairings": "At most 5 codes may wait at once.",
     "pairing_gone": "The code has expired, was used already, or is not valid.",
     "push_ticket_invalid": "Notifications could not be set up for this device.",
@@ -676,7 +676,7 @@
     "weekOf": "Week of {{date}}",
     "sealed": "This version is encrypted. Unlock the note to see it here.",
     "viaDeck": "nexdeck · {{key}}",
-    "viaApi": "{{account}} via API token “{{name}}”",
+    "viaApi": "{{account}} via API key “{{name}}”",
     "viaGuide": "nexnotes · Guide"
   },
   "home": {
@@ -835,7 +835,7 @@
   },
   "resetNotice": {
     "button": "Got it",
-    "hint": "If that was not you, tell the operator and change your password under “My account”.",
+    "hint": "If that was not you, tell the operator and change your password under My account › Security.",
     "text": "Your password was reset through a link from the operator.",
     "title": "Password reset"
   },
@@ -946,7 +946,7 @@
     "years_other": "{{count}} years",
     "localNetwork": "Connections into the local network",
     "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there.",
-    "backupHolds": "A backup contains all notes with their history and trash, all attachments, the accounts with their shares, smart folders and API tokens, the settings and the server’s key. Locked notes stay encrypted in it. Not included: the log, exports, caches and your own language files, nor a key set through NEXNOTES_SECRET_KEY.",
+    "backupHolds": "A backup contains all notes with their history and trash, all attachments, the accounts with their shares, smart folders and API keys, the settings and the server’s key. Locked notes stay encrypted in it. Not included: the log, exports, caches and your own language files, nor a key set through NEXNOTES_SECRET_KEY.",
     "ocrLanguagesLabel": "Languages"
   },
   "session": {
@@ -1679,7 +1679,7 @@
       "allow": "Allow",
       "deny": "Deny",
       "broken": "This connection request is incomplete. Start connecting in the program again.",
-      "later": "You find the program under Settings, Connections, and revoke it there."
+      "later": "You find the program under My account › Connections › AI tools (MCP), and revoke it there."
     }
   },
   "smart": {
@@ -1834,12 +1834,12 @@
     "section": {
       "title": "nextasks",
       "text": "Lines and checklist items can be sent to your nextasks as tasks.",
-      "how": "To connect: create an API key that reads and writes in nextasks under My account, Connections, and enter the address of nextasks and the key here.",
+      "how": "To connect: in nextasks, create a key that reads and writes under My account › Connections › API keys, and enter the address of nextasks and the key here.",
       "url": "Address of nextasks",
       "urlHint": "e.g. https://tasks.example.com",
       "key": "API key",
       "keyHint": "starts with ntk_",
-      "localOff": "If your nextasks runs in the local network, the operator has to allow that first under Settings, Server.",
+      "localOff": "If your nextasks runs in the local network, the operator has to allow that first under Server › General › Features for every account.",
       "connect": "Connect",
       "checking": "Checking …",
       "connected": "connected",
@@ -1890,83 +1890,15 @@
     }
   },
   "tokens": {
-    "section": {
-      "title": "API tokens",
-      "text": "An API token lets a program read your notes and, if you want, write them: n8n, Home Assistant, a script or the nexdeck card. It never may more than your account. It never sees locked notes.",
-      "new": "New API token",
-      "none": "No API token yet.",
-      "off": "The operator switched the API off. Existing tokens work again once it is switched on.",
-      "made": "“{{name}}” made",
-      "once": "Copy the token now. It is shown only this once.",
-      "address": "Address for programs",
-      "header": "Programs send the token as “Authorization: Bearer …”, AI tools to …/api/mcp.",
-      "docs": "API documentation",
-      "lastUsed": "last used {{when}}",
-      "neverUsed": "never used",
-      "revoke": "Revoke",
-      "revokeTitle": "Revoke “{{name}}”?",
-      "revokeText": "The program is shut out at once. What it wrote stays.",
-      "count": "{{count}} of {{max}} tokens",
-      "blocked": "Blocked by the operator"
-    },
-    "level": {
-      "read": "read only",
-      "write": "read and write"
-    },
-    "access": {
-      "api": "API",
-      "mcp": "MCP",
-      "card": "nexdeck card"
-    },
-    "legacy": {
-      "mcp": "MCP only (older key)",
-      "card": "nexdeck card only (older token)"
-    },
     "list": {
       "foldersAll": "all notes",
       "folders_one": "{{count}} folder",
       "folders_other": "{{count}} folders"
     },
-    "expiry": {
-      "on": "Expires on {{date}}",
-      "expired": "Expired",
-      "never": "Never expires"
-    },
     "dialog": {
-      "title": "New API token",
-      "name": "Name",
-      "namePlaceholder": "e.g. n8n weather report",
-      "right": "Right",
-      "read": "Read only",
-      "readHint": "Read notes, folders, tags, search, attachments and the trash.",
-      "write": "Read and write",
-      "writeHint": "Also tick checklists and, once that comes, make and change notes.",
-      "mcp": "Also for AI tools (MCP)",
-      "mcpHint": "The token then also works at …/api/mcp.",
-      "mcpOff": "The operator has switched MCP off.",
       "folders": "Folders",
       "foldersAll": "All notes",
-      "foldersSome": "Only these folders …",
-      "expiry": "Expires",
-      "days_30": "30 days",
-      "days_90": "90 days",
-      "days_365": "1 year",
-      "never": "Never",
-      "make": "Make token"
-    },
-    "connectors": {
-      "title": "Connected AI tools",
-      "text": "Programs that connected themselves with your consent. They work as you, never with more.",
-      "none": "No program connected yet."
-    },
-    "admin": {
-      "title": "API tokens of all accounts",
-      "text": "Per token the account, name, right, access, run-out and last use. Never the token, never titles or contents.",
-      "none": "No account has an API token yet.",
-      "connector": "connected AI tool",
-      "block": "Block",
-      "blockTitle": "Block “{{name}}”?",
-      "blockText": "The token stops working at once. The account sees it as “Blocked by the operator”."
+      "foldersSome": "Only these folders …"
     }
   },
   "guide": {

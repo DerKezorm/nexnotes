@@ -507,21 +507,26 @@ async function run(language, samples, out) {
       })
       await shoot('nextasks', async () => {
         await page.goto('/settings/connections')
-        const card = page.locator('section').filter({ hasText: 'nextasks' }).first()
+        // Since the settings pass (plan "Einstellungen"): a card that opens, closed at first.
+        const card = page.locator('[data-card="nextasks"]')
         await card.waitFor()
+        if ((await card.locator('[data-part="collapsible-head"]').getAttribute('aria-expanded')) !== 'true') {
+          await card.locator('[data-part="collapsible-head"]').click()
+        }
         await card.scrollIntoViewIfNeeded()
+        await page.waitForTimeout(300)
         return around(page, [card], 12)
       })
       await shoot('tokens', async () => {
         await page.goto('/settings/connections')
-        const card = page.locator('section').filter({ hasText: L('API-Token', 'API token') }).first()
+        const card = page.locator('[data-card="api-keys"]')
         await card.waitFor()
         await card.scrollIntoViewIfNeeded()
         return around(page, [card], 12)
       })
       await shoot('token-dialog', async () => {
         await page.goto('/settings/connections')
-        await page.getByRole('button', { name: L('Neuer API-Token', 'New API token') }).first().click()
+        await page.getByRole('button', { name: L('Neuer API-Schlüssel', 'New API key') }).first().click()
         const dialog = page.getByRole('dialog')
         await dialog.waitFor()
         await page.waitForTimeout(400)

@@ -8,7 +8,7 @@ Jede Notiz kann auf ihrem eigenen Papier stehen: **leer, liniert, kariert oder g
 
 ![Die Wahl des Papiers](shots/paper.webp)
 
-Welches Papier neue Notizen bekommen, stellst du unter **Einstellungen › Darstellung** ein.
+Welches Papier neue Notizen bekommen, stellst du unter **Einstellungen › Mein Konto › Darstellung** ein.
 
 ## Ein Symbol vor dem Titel
 

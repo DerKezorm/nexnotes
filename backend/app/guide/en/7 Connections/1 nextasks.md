@@ -5,12 +5,12 @@ icon: check
 
 If a note holds something to be done, send the line as a task to your **nextasks**. The line stays in the note and gets a link to the task.
 
-![Connecting nextasks under Settings › Connections](shots/nextasks.webp)
+![Connecting nextasks under Settings › My account › Connections](shots/nextasks.webp)
 
 ## Connecting
 
-1. In nextasks, under My account › Connections, make an API key with read and write.
-2. In nexnotes, under **Settings › Connections**, enter the address of nextasks and the key, then "Connect".
+1. In nextasks, under Settings › My account › Connections, create a key with "Read and write" in the card "API keys".
+2. In nexnotes, under **Settings › My account › Connections**, enter the address of nextasks and the key in the card "nextasks", then "Connect".
 
 ## Sending
 
