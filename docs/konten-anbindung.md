@@ -29,8 +29,74 @@ Nach dem Bauplan in nexlore `Development/nexapps/Baupläne/Bauplan Einstellungen
 | Über | `AboutPage` (ui) in `pages/settings/AboutArea.tsx`, Logo `/logo.svg` | eigene Seite → drei Karten `about`, `about-updates`, `about-built-with`; nexnotes' Satz „was hinausgeht“ bleibt |
 | Profil, Sicherheit, Anmeldung, Mail, Konten | unverändert (Teil 2) | – |
 
-Umwege, bis die Module sie selbst können (in `fragen.md` des Durchgangs): `backup_hooks.DAMAGE` nimmt `zlib.error`
-dazu; `tidy()` löscht beim Start leere Archive, die ein abgebrochener Prozess unter dem endgültigen Namen hinterließ.
+Umwege von Teil 1 (`backup_hooks.DAMAGE` mit `zlib.error`, `tidy()` für leere Archive) sind mit sicherung 1.0.1 weg
+(siehe Teil 2 und 3).
+
+### Durchgang „Einstellungen“, Teil 2 und 3 (26.11.2026)
+
+Aus `bauplaene` Zweig `konten` (`bauplaene-stand`): **`konten` 1.1.0, `oidc` 1.2.0, `post` 1.1.0, `schluessel` 1.0.0**;
+**`sicherung` 1.0.1** aus `bauplaene-einst` (`c21542d` und Nachtrag `b874a2c`). Alle mit `tools/sync.py copy`, `check`
+grün. ruff nimmt die Module samt Vertragstests aus (`pyproject.toml`, wie oidc/log/sicherung schon).
+
+| Bereich | woher jetzt | was gewandert ist (alt → neu) |
+|---|---|---|
+| Profil | `PAGES.profile` wie bisher; `UnconfirmedEmailBox` (wo `showUnconfirmed`, Route `POST /api/me/email/prove`), `SignOutCard` | eigene Karte „Abmelden“ → Modulkarte (Satz mit `{{things}}`, Rückfrage bei wartenden Änderungen, gezählt beim Drücken); `me.mail_server`, `me.email_proven` |
+| Darstellung | `AppearanceCard` (konten) | Hell/Dunkel im Browser (`TODO konten 1.1.0`) → Spalte `accounts.theme`, `PUT /api/me/theme`; beim Laden `POST /api/me/theme/adopt` mit dem Wert von `nexnotes.theme` (einmal, wenn das Konto keinen hat); `lib/theme.takeAccountTheme`, der Browser behält den Wert für den ersten Anstrich |
+| Verbindungen | „Geräte“, „Auf diesem Gerät installieren“ (immer, E28), „nextasks“, `ApiKeysCard`, `ToolsCard` (schluessel) | `tokens/TokensSection.tsx` → Modulkarten über `/api/connections` (`tokens/KeysCards.tsx`, Wörter für Ordner); Install-Karte: Knopf „Installieren“ oder Weg je Browser (iPhone/iPad, Safari Mac, Firefox, andere), installiert „läuft schon“ |
+| Allgemein | „Grenzen“, „Funktionen für alle Konten“, `InterfacesCard` (schluessel), „Sprachen“ | Haken MCP/API aus „Funktionen“ → „Schnittstellen“; Proxy-Hinweis → „Bereit fürs Internet?“ |
+| Anmeldung | `SignInPage` (konten) + `SignInProviders` (oidc), `pages/settings/SignInArea.tsx` | `SignInCards.tsx` weg; Schalter über `GET/PUT /api/server/sign-in` (`signin.view`/`change`), Bereitschaft `GET /api/server/sign-in/readiness` (`readiness.check`, Klappzustand je Gerät `fold.ready`); öffentliche Adresse weiter über `PUT /api/settings` |
+| Mail | `MailCard` (post) über `/api/server/mail` (`routers/server_mail.py`) | eigene Karte weg; Satz der App nennt alle Mails (`server.mailHint`); alte Wege `/api/settings` (`smtp_*`), `POST /api/settings/mail-test` bleiben |
+| Speicher und Sicherung | sicherung 1.0.1 | `archives.tidy_at_start()` beim Start (`main.lifespan`, Adapter `restart`); eigenes `tidy()` nur noch für Beiseitegelegtes einer Wiederherstellung, `DAMAGE = tools.DAMAGE` |
+| Konten | `manage.*` (konten) in `routers/accounts.py`, `capsOf('nexnotes', …)`, `storageFact`, `STORAGE_LIMIT_DIALOG`, `WhatYouSeeCard`, `AllKeysCard` | eigener Knopf „Speichergrenze“ (`OwnButton`) → eingebaut; Karte „Was du siehst“ aus dem Modul mit nexnotes' Satz; „API-Token aller Konten“ → „API-Schlüssel aller Konten“ |
+| Fenster aus den Einstellungen (E31) | Bausatz `Dialog`, `Field`, `CheckboxRow`, `Button`, `Notice` | Tresor „Neues Passwort“, „Passwort vergessen“ (dieselbe Einrichtungsform auch beim ersten Sperren einer Notiz), „iPhone oder iPad verbinden“; `pages/settings/ui.tsx` ganz weg (`SignInAgain` als eigene Datei aus dem Bausatz, `Outcome` statt `Feedback`) |
+
+**Server, konten 1.1.0:** `KontenStore` beantwortet `ManageStore`, `ThemeStore`, `SignInStore` (`model3.py`); `_account`
+füllt `blocked_at`, `deleted_at`, `theme`, `storage_limit`. Wanderung: Spalte `accounts.theme` (leer); beim Start, der
+sie anlegt, genau einmal `email_proven = 1` für jede zählende Adresse (E23, `konten_wanderung.run(added=…)`,
+`db._add_missing_columns` nennt jetzt die neuen Spalten). Hausputz `accounts.purge_deleted` → `manage.purge_due`
+(`purge_account`: `content.account_purged`, Namen bleiben reserviert). `services/accounts.block/unblock/delete/restore`
+gehen über dieselben Store-Schritte und Ereignisse. Alte Wege `PUT /api/settings` mit `password_login`,
+`two_factor_required`, `passkeys_allowed` gehen über `signin.change` (Abschalten des Faktors jetzt mit `current_password`).
+
+**Server, post 1.1.0:** `mail_outbox.letter_key` (eindeutiger Index, nur hinzufügend), Brief als `letter_data`,
+`waiting`, `on_commit`, `recipient`; `AppConfig(outbox_runner=…)` (Kontomails sofort, ohne Hintergrund bei
+`disable_background`). Eigener Mailer weg: Einladung `outbox.deliver_now(compose("invite"))`, Testmail
+`outbox.test_mail`, „Passwort vergessen“ `deliver_now`; `services/mailer.py` behält nur Sprache, `configured`,
+`one_line` und `old_code` (alte Kennungen `mail_off`/`mail_failed`/`invalid_email`, `mail_code` dazu).
+
+**Server, schluessel 1.0.0:** `services/schluessel_store.py` (`CONFIG` = Vorschlag aus `tests/app_configs.py`, gegen
+`apitokens` geprüft: `nn_api_`, `nn_deck_` als alte Form, `nn_mcp_` nur noch vorhanden, Programme über OAuth, 20 je
+Konto, 30/90/365/nie, `tokens_too_many`), `KeyStore` über `api_tokens` ohne Geräte, Ordner als Bereiche (Eingang zuerst,
+Pfad im Namen), `keys_wait` = `totp.factor_missing`. Routen `routers/connections.py` unter `/api/connections`
+(`DEVICE_REFUSED_PREFIXES`). Alte Wege `/api/tokens` (Anlegen über `keys.make`, gewählte Ordner-Reihenfolge bleibt,
+Widerrufen `keys.revoke`) und `/api/admin/tokens` (Sperren `keys.block`) in alter Form; die Prüfung beim Vorlegen bleibt
+nexnotes' (`apiaccess`). OAuth bleibt in `routers/oauth.py` (E27).
+
+**Umwege und Abweichungen** (Fragen in `einst-fragen/nexnotes.md`): `shut_out` lässt Browser-Sitzungen und eine
+wartende Anmeldung stehen (zählen nichts, solange gesperrt; Frage 5); `frontend/src/nexpost.test.ts` mit
+`count` (`TODO post 1.1.0`, Frage 2); `frontend/src/nexschluessel.test.tsx` ohne den Namen aus der Vorlage (Frage 3).
+
+**Tests neu:** `backend/tests/test_settings_pass.py` (Theme und Übernahme, Box mit Link, Faktor nur mit Passwort auf
+altem und neuem Weg, Passwort-Anmeldung nur mit Anbieter, nur Betreiber, Bereitschaft mit Proxy, Mail-Seite und alter
+Weg, alte und neue Schlüsselwege dieselben Schlüssel, Geräte nie dabei, Schnittstellen = alte Schalter; je eine
+Mutation rot), `frontend/src/pwa/install.test.tsx` (Mutation rot), `frontend/src/pages/signInArea.test.tsx` (aus
+`signInCards.test.tsx`), `frontend/src/tokens/tokens.test.tsx` auf die Modulkarten (Mutation rot), Vorlagen
+`nexkonten.cards.test.tsx`, `nexoidc.cards.test.tsx`, `nexpostMailCard.test.tsx`, `nexschluessel.test.tsx`; Adapter um
+`age_deletion`, `provider_active`, `readiness` (konten), `account`, `client` (post), neu `nexschluessel_adapter.py`.
+
+**Nach Bauplan E31 und E33:** Fenster nur aus den Einstellungen aus dem Bausatz (die übrigen in den Fragen unter
+„Nach Stufe 1“); ein Konto mit geschuldetem zweiten Faktor erreicht `/api/connections/keys` (`deps.SETUP_ONLY_PREFIXES`,
+Schlüssel ruhen bis zum Faktor); auch die alten Listen `GET /api/tokens`, `GET /api/admin/tokens` über `keys.listing`
+bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.password`, `account.currentPassword`,
+`account.newPassword`, `account.passwordRepeat`). Vorlagen-Kopien tragen die Kopfzeile `// Vorlage <Paket> <Fassung>`
+(bauplaene-stand `bef0132`, `check` ok für alle sieben Module).
+
+**Läufe (26.11.2026, Testplatz `reihe.sh nexnotes ende`):** ruff sauber; pytest 2175 grün, 29 übersprungen (darin die
+Vertragstests `nexkonten`, `nexoidc`, `nexpost`, `nexlog`, `nexsicherung`, `nexschluessel`, Test „Bestand“); lint
+sauber; vitest 1002 grün in 80 Dateien; build sauber. Playwright `npm run e2e` (kopflos): 139 grün, 11 rot, alle 11
+außerhalb der Einstellungen und schon vorher veraltet (Liste in `einst-fragen/nexnotes.md`); die betroffenen Specs
+danach noch einmal einzeln: 37 grün (vault, settings-nav, signout, api, mcp, deck, nexoidc, menus, attachments), vorher
+36 grün (dazu nextasks, split-list, workspace, logo, sheet).
 
 
 Stand 25.11.2026 spätabends, Zweig `konten`: **auf den Modulen 1.0.0** (eingefroren). Aus `bauplaene` Zweig `konten`
