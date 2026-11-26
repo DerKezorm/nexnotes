@@ -148,6 +148,18 @@ bzw. `keys.overview`; Passwortfelder mit den Wörtern des Moduls (`account.passw
 - Nach konten 1ce1a8f/c0b07ab und dem neuen Satz unter Grenzen: `reihe.sh nexnotes ende` ruff, lint, build sauber,
   pytest 2192 grün, 29 übersprungen; vitest 1046 grün in 84 Dateien.
 
+**Modul sprachen 1.0.0 (E51) und schluessel 4f3e75e:**
+- `services/locales.py` ist das Modul (`configure` mit `NEXNOTES_LOCALES_DIR`, Deutsch und Englisch eingebaut, Vorlage
+  auf der Seite); `routers/locales.py` ist weg, die Wege kommen aus `nexsprachen.api.router(operator=require_operator)`
+  unter `/api/locales`, ohne Anmeldung lesbar wie bisher. Die Liste nennt jetzt zuerst die eingebauten Sprachen
+  (`built_in`, `own`); `test_locales.py` liest sie wie die Aufrufer von vorher und zeigt, dass die alten Wege so
+  antworten wie bisher. Profilsprache über `locales.known`. Vertragstests `tests/nexsprachen` mit eigenem Adapter
+  (frischer Ordner je Test). Die Lese-Seite (`share_page.py`) nimmt `load`/`valid_code` aus dem Modul.
+- Seite: Karte „Sprachen“ ist `LanguagesCard` des Moduls (Anfragen mit `X-Nexnotes-Client`, `onChange=own.forget`,
+  Vorlage aus den englischen Texten); i18n über `ownLanguages`, Profilmenü über `own.options`; alte Karte und
+  Wörter weg (`pages/settings/languagesCard.test.tsx`, Mutationen rot).
+- schluessel: „Neuer MCP-Schlüssel“ md secondary Plus; Vorlage `nexschluessel.test.tsx` von Hand.
+
 **Läufe nach dem Nachziehen (26.11.2026):** ruff, lint, build sauber; pytest 2180 grün, 29 übersprungen; vitest 1022
 grün in 80 Dateien; Playwright 140 grün, 10 rot (die bekannten außerhalb der Einstellungen: list-styles 2, notify 2,
 review4-smart 2, review5-p14 1, shares 1, smart 1, split-toolbar 1).
