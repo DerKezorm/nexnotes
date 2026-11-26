@@ -231,7 +231,7 @@ describe('NOTES-19 nextasks in Settings, Connections', () => {
       </>,
     )
     expect($('nextasks-send')).toBeNull()
-    expect($('nextasks-how')!.textContent).toContain('API-Schlüssel mit Lesen und Schreiben')
+    expect($('nextasks-how')!.textContent).toContain('Mein Konto › Verbindungen › API-Schlüssel einen Schlüssel mit „Lesen und schreiben“')
     // nextasks in the own network needs the operator first: said beside the form.
     expect($('nextasks-local')!.textContent).toContain('Betreiber')
     expect(calls.some((call) => call.path === '/api/nextasks/links')).toBe(false)

@@ -342,8 +342,8 @@ describe('NOTES-25 what a program wrote, in the inbox and the history', () => {
     expect($('inbox-origin-icon')!.getAttribute('class')).toContain('lucide-braces')
   })
 
-  it('NOTES-25 AC-22 the history names the account through the API token', () => {
-    expect(whoText([{ id: 1, name: 'Tester', via: 'api:Hausautomation' }], i18n.t)).toBe('Tester über API-Token „Hausautomation“')
+  it('NOTES-25 AC-22 the history names the account through the API key', () => {
+    expect(whoText([{ id: 1, name: 'Tester', via: 'api:Hausautomation' }], i18n.t)).toBe('Tester über API-Schlüssel „Hausautomation“')
     expect(whoText([{ id: 1, name: 'Tester', via: 'mcp:Laptop' }], i18n.t)).toBe('MCP · Laptop')
   })
 })
