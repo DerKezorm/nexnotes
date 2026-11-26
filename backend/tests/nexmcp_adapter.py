@@ -62,6 +62,20 @@ class Adapter(StandardAdapter):
 
     def start(self) -> None:
         self._accounts()
+        self._listen()
+
+    def _listen(self) -> None:
+        """Every call of nexnotes' ``notify`` for the module (``services/notify.mcp_event``), in order."""
+        from app.services import notify
+
+        self._told: list[tuple[str, Any]] = []
+        self._told_before = notify.mcp_event
+
+        def told(event: str, request: Any) -> None:
+            self._told.append((event, request.id))
+            self._told_before(event, request)
+
+        notify.mcp_event = told
 
     def start_older(self) -> None:
         """As nexnotes before the module: ``apitokens.make`` for the MCP key and the API token, the OAuth token
@@ -72,6 +86,7 @@ class Adapter(StandardAdapter):
         from app.services import apitokens, mcp_store
 
         self._accounts()
+        self._listen()
         refresh = "nnr_" + secrets.token_urlsafe(32)
         with SessionLocal() as db:
             owner = db.get(Account, self.ids["owner"])
@@ -93,6 +108,11 @@ class Adapter(StandardAdapter):
         mcp_store.migrate(engine, [mcp_store.MARK])
 
     def stop(self) -> None:
+        from app.services import notify
+
+        if hasattr(self, "_told_before"):
+            notify.mcp_event = self._told_before
+            del self._told_before
         for client in self.clients.values():
             client.close()
         self.clients = {}
@@ -143,3 +163,17 @@ class Adapter(StandardAdapter):
 
     def legacy_program(self) -> LegacyProgram | None:
         return self.program
+
+    def notified(self) -> list[tuple[str, Any]]:
+        return list(self._told)
+
+    def change_arguments(self, request_id: Any, arguments: str) -> None:
+        """Other arguments in a waiting request, written straight into ``mcp_requests``."""
+        from app.db import SessionLocal
+        from app.models_mcp import McpRequest
+
+        with SessionLocal() as db:
+            row = db.get(McpRequest, int(request_id))
+            assert row is not None
+            row.arguments = arguments
+            db.commit()

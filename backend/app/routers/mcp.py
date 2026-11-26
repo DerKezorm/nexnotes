@@ -1,4 +1,4 @@
-"""MCP over HTTP (``POST /api/mcp``, NOTES-20), since the shared module mcp (``vendor/nexmcp`` 1.1.0) the module's
+"""MCP over HTTP (``POST /api/mcp``, NOTES-20), since the shared module mcp (``vendor/nexmcp`` 1.1.1) the module's
 endpoint, OAuth for programs, rights per tool, requests that wait for their account, and the operator's settings,
 mounted here over nexnotes' tables (``services/mcp_store.py``) with nexnotes' tools (``services/mcp.py``).
 
@@ -7,13 +7,11 @@ sender, then 429; no valid key 401 ``key_invalid`` with ``WWW-Authenticate`` nam
 minute per key; a body up to 4 MB. Keys are made and revoked in ``routers/connections.py`` (and the older
 ``routers/tokens.py``); the account's pages of the module are under ``/api/connections/mcp``.
 
-The consent (``GET``/``POST /api/oauth/authorize``) and the token endpoint are nexnotes' thin wrappers in
-``routers/oauth.py``; the module's routes of the same path and method are left out here.
+The consent (``GET``/``POST /api/oauth/authorize``) is nexnotes' thin wrapper in ``routers/oauth.py`` (``approve`` of
+the page of before, ``client_name``); the module's routes of the same path and method are left out here.
 """
 
 from __future__ import annotations
-
-from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.routing import APIRoute
@@ -39,14 +37,9 @@ def _error(refusal: McpRefused) -> Exception:
     return HTTPException(status_code=refusal.status, detail=detail(refusal.code, refusal.message, **values))
 
 
-def _notify(event: str, request: Any) -> None:
-    """A request waits for its account (decision 14): nexnotes has no bell, it tells the account's browsers."""
-    if event == "waiting":
-        notify.request_waiting(int(request.account_id), request)
-
-
 router = mcp_api.router(
-    notify=_notify,
+    # Looked up at each call, so a test can listen (``tests/nexmcp_adapter.py``).
+    notify=lambda event, request: notify.mcp_event(event, request),
     config=CONFIG,
     store=mcp_store,
     account=require_account,

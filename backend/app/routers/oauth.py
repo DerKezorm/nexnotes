@@ -2,23 +2,21 @@
 metadata, registration, consent, tokens, revocation (``routers/mcp.py`` mounts its routes). The paths stay where
 connected programs know them (``/api/oauth/register``, ``/authorize``, ``/token``; the page ``/oauth/authorize``).
 
-Three of them are nexnotes' own thin wrappers over the module's functions, so that nothing of before changes:
+Two of them stay nexnotes' own thin wrappers over the module's functions, for what the module does not give (E53, E55):
 
-- ``POST /api/oauth/authorize`` keeps its body ``ConsentIn`` with its name in the API description (E53), takes the
-  answer as ``approve`` (the page of before) or ``allow`` (the module's page), and only adds the module's fields;
-- ``GET /api/oauth/authorize`` answers the module's view and ``client_name`` as before;
-- ``POST /api/oauth/token`` still reads a JSON body as well as a form, as nexnotes did
-  (TODO mcp 1.1.0, einst-fragen/nexnotes-module.md 2 and 3).
+- ``POST /api/oauth/authorize`` takes the answer as ``approve`` (the page of before, still open in a tab when the app is
+  updated) as well as ``allow`` (the module's page), and keeps the checks of before on its body ``ConsentIn`` (lengths,
+  ``level`` read or write: 422);
+- ``GET /api/oauth/authorize`` adds ``client_name`` to the module's view, as the page of before read it.
+
+The token endpoint is the module's since mcp 1.1.1 (a form, or JSON as nexnotes took it before).
 """
 
 from __future__ import annotations
 
-import json
 from typing import Annotated, Any
-from urllib.parse import parse_qs
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from ..deps import Account, DbSession
@@ -26,7 +24,7 @@ from ..errors import detail
 from ..services import settings_service
 from ..services.mcp import CONFIG
 from ..services.mcp_store import McpStore
-from ..vendor.nexmcp import McpRefused, OAuthError
+from ..vendor.nexmcp import McpRefused
 from ..vendor.nexmcp import api as mcp_api
 from ..vendor.nexmcp import oauth as mcp_oauth
 from ..vendor.nexmcp.brake import BRAKE
@@ -43,8 +41,6 @@ IDLE_DAYS = CONFIG.idle_days
 MAX_CLIENTS = CONFIG.max_clients
 REGISTER_PER_MINUTE = CONFIG.register_per_minute
 REGISTER_PER_SENDER = CONFIG.register_per_sender
-#: The largest body of the token endpoint, as before.
-MAX_FORM = 64 * 1024
 
 
 def forget() -> None:
@@ -129,36 +125,5 @@ def consent(body: ConsentIn, request: Request, account: Account, data: Store) ->
     return {"redirect": redirect}
 
 
-# --- Tokens -------------------------------------------------------------------------------------------------------
-
-
-async def _form(request: Request) -> dict[str, str]:
-    """A form as RFC 6749 asks, or a JSON object, as nexnotes took it before the module."""
-    raw = b""
-    async for chunk in request.stream():
-        raw += chunk
-        if len(raw) > MAX_FORM:
-            raise OAuthError("invalid_request", "The request is too large.", 413)
-    text = raw.decode("utf-8", "replace")
-    if request.headers.get("content-type", "").startswith("application/json"):
-        try:
-            found = json.loads(text)
-        except (ValueError, RecursionError):
-            return {}
-        return {key: str(value) for key, value in found.items()} if isinstance(found, dict) else {}
-    return {key: values[0] for key, values in parse_qs(text, keep_blank_values=True).items()}
-
-
-@router.post("/api/oauth/token", include_in_schema=False)
-async def token(request: Request, data: Store) -> JSONResponse:
-    headers = {"Cache-Control": "no-store", "Pragma": "no-cache"}
-    try:
-        form = await _form(request)
-        answer = mcp_oauth.token(data, CONFIG, form, base_url(request, data.db), mcp_api._now())
-    except OAuthError as refusal:
-        return JSONResponse(refusal.as_dict(), status_code=refusal.status, headers=headers)
-    return JSONResponse(answer, headers=headers)
-
-
 #: The routes of this file stand in for the module's under the same path and method (``routers/mcp.py``).
-OWN = {("/api/oauth/authorize", "GET"), ("/api/oauth/authorize", "POST"), ("/api/oauth/token", "POST")}
+OWN = {("/api/oauth/authorize", "GET"), ("/api/oauth/authorize", "POST")}

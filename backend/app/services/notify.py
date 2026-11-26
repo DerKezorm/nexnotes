@@ -672,6 +672,13 @@ REQUEST_WORDS = {
 MCP_REQUEST = "mcp_request"
 
 
+def mcp_event(event: str, request: Any) -> None:
+    """The module mcp tells of a request (decision 14): ``waiting`` goes to the account's browsers (nexnotes has no
+    bell); ``decided`` needs nothing, a message not sent yet stops by itself (``_still_for``)."""
+    if event == "waiting":
+        request_waiting(int(request.account_id), request)
+
+
 def request_waiting(account_id: int, request: Any) -> int:
     """A request of an AI program waits for the account (module mcp, decision 14): a Web Push to each of its browsers
     with the program and what it asks, leading to the request's page. Only browsers: the iPhone app knows messages of
