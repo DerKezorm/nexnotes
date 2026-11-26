@@ -516,7 +516,8 @@
     "backup_write_failed": "The backup could not be written. The older backups stay.",
     "keep_invalid": "Between 1 and 365.",
     "schedule_invalid": "Off, every night, every week or every month.",
-    "time_invalid": "Enter a time such as 03:00."
+    "time_invalid": "Enter a time such as 03:00.",
+    "restore_options_invalid": "These answers do not fit the questions of the restore."
   },
   "folders": {
     "section": "Folders",
