@@ -1,11 +1,14 @@
-"""nexnotes on the shared module verbinden (``vendor/nexverbinden`` 0.1.1), beside the module's contract tests
+"""nexnotes on the shared module verbinden (``vendor/nexverbinden`` 0.1.4), beside the module's contract tests
 (``tests/nexverbinden``):
 
 - nextime may add notes here (catalog: ``notes.add``): its token opens ``/api/v1`` with the right of the purpose and
   only the folders given, under the switch "Verbindungen mit anderen nex-Apps", not the one of the API;
 - nexnotes' requests to nextasks go through a connection of the module when there is one (it takes the place of a key
   typed in), else as before over the key;
-- the older way ``PUT /api/nextasks`` (a key typed in, NOTES-19) keeps working beside the module.
+- the older way ``PUT /api/nextasks`` (a key typed in, NOTES-19) keeps working beside the module;
+- "Verbindungen ins eigene Netz" in the module's card and nexnotes' own switch are one setting (0.1.4);
+- "Trennen" of a connection by click drops the row without a key that kept nextasks' areas and lists for it, never a
+  connection typed in (``on_disconnected``, 0.1.4).
 """
 
 from __future__ import annotations
@@ -24,6 +27,7 @@ from app.services import nextasks as nextasks_service
 from app.services import settings_service
 from app.services.verbinden_store import CONFIG, VerbindenStore
 from app.vendor import nexverbinden
+from app.vendor.nexverbinden import connect
 from app.vendor.nexverbinden.reach import Answer
 
 from .test_notes3 import new_note
@@ -44,7 +48,7 @@ def _connection(account_id: int, partner: str, grants: tuple[str, ...], areas: l
         store.save(nexverbinden.Connection(
             id=secrets.token_urlsafe(16), account_id=account_id, partner=partner,
             partner_base=f"https://{partner}.example.com", partner_account="kim", uses=(), grants=grants,
-            areas_granted=areas, areas_used=None, held=store.seal('{"access": "x", "refresh": "y"}'),
+            areas_granted=areas, areas_used=None, held=store.seal('{"access": "x", "refresh": "y", "own": "z"}'),
             issued_access_hash=hashlib.sha256(access.encode()).hexdigest(),
             issued_refresh_hash=hashlib.sha256(secrets.token_bytes(16)).hexdigest(),
             issued_access_expires=now + timedelta(hours=1), created_at=now))
@@ -123,3 +127,34 @@ def test_the_older_way_to_nextasks_keeps_working_beside_the_module(client, opera
     assert card["state"] == "legacy" and card["legacy"]["shown"] == "ntk_aaaa"
     assert client.delete("/api/nextasks").status_code == 204
     assert client.get("/api/nextasks").json()["connected"] is False
+
+
+def test_the_own_network_is_one_setting_in_the_card_and_in_general(client, operator):
+    assert client.put("/api/connect/admin", json={"local": True}).status_code == 200
+    assert client.get("/api/settings").json()["connections_local_network"] is True
+    assert client.put("/api/settings", json={"connections_local_network": False}).status_code == 200
+    assert client.get("/api/connect/admin").json()["local"] is False
+    assert client.put("/api/connect/admin", json={"local": "yes"}).status_code == 422
+
+
+def test_trennen_drops_the_choice_kept_for_a_click_and_never_a_key_typed_in(client, operator, monkeypatch):
+    from app.models_nextasks import NextasksConnection
+    from app.security import encrypt_secret
+
+    monkeypatch.setattr(connect, "_ask", lambda *args, **kwargs: {})
+    _connection(operator.id, "nextasks", (), None)
+    with SessionLocal() as db:
+        db.add(NextasksConnection(account_id=operator.id, url="", token_enc="", task_choice='{"areas": ["a"]}'))
+        db.commit()
+    assert client.delete("/api/connect/partners/nextasks").status_code == 200
+    with SessionLocal() as db:
+        assert db.get(NextasksConnection, operator.id) is None
+    # A key typed in is its own connection: ending one by click leaves it.
+    _connection(operator.id, "nextasks", (), None)
+    with SessionLocal() as db:
+        db.add(NextasksConnection(account_id=operator.id, url="https://nextasks.example.com",
+                                  token_enc=encrypt_secret("ntk_x", f"nextasks:{operator.id}"), name="Kim"))
+        db.commit()
+    assert client.delete("/api/connect/partners/nextasks").status_code == 200
+    with SessionLocal() as db:
+        assert db.get(NextasksConnection, operator.id) is not None

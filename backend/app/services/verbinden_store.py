@@ -239,6 +239,11 @@ class VerbindenStore:
     def local_allowed(self) -> bool:
         return bool(settings_service.get(self.db, "connections_local_network"))
 
+    def set_local_allowed(self, on: bool) -> None:
+        """The tick in the card "Andere nex-Apps" (verbinden 0.1.4): the same setting as nexnotes' own under Server ›
+        Allgemein (``PUT /api/settings``), so both show one value."""
+        settings_service.save(self.db, {"connections_local_network": bool(on)}, commit=False)
+
     def seal(self, text: str) -> str:
         return encrypt_secret(text, SEAL_CONTEXT)
 
@@ -250,3 +255,18 @@ class VerbindenStore:
 
     def rollback(self) -> None:
         self.db.rollback()
+
+
+def disconnected(store: VerbindenStore, account_id: Any, partner: str) -> None:
+    """A connection made here ended, by "Trennen" or by the partner (verbinden 0.1.4, ``on_disconnected``): the row
+    without a key that kept the account's choice of nextasks' areas and lists for it goes too, as "Trennen" of a key
+    typed in drops its row (``nextasks.disconnect``). A row with a key is the older connection and stays."""
+    if partner != "nextasks":
+        return
+    from ..models_nextasks import NextasksConnection
+
+    row = store.db.get(NextasksConnection, int(account_id))
+    if row is not None and not row.token_enc:
+        store.db.delete(row)
+        store.db.commit()
+        logger.info("nextasks choice of a connection by click dropped account_id=%s", account_id)

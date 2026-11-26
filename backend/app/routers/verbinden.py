@@ -15,7 +15,7 @@ from ..db import SessionLocal
 from ..deps import DbSession, require_account, require_operator
 from ..errors import detail
 from ..security import decrypt_secret
-from ..services import settings_service
+from ..services import settings_service, verbinden_store
 from ..services.verbinden_store import CONFIG, VerbindenStore
 from ..vendor.nexverbinden import Refused
 from ..vendor.nexverbinden import api as verbinden_api
@@ -46,5 +46,11 @@ def _old_key(data: Any, account_id: Any, partner: str) -> str | None:
     return decrypt_secret(row.token_enc, f"nextasks:{row.account_id}") or None if row is not None else None
 
 
+def _disconnected(data: VerbindenStore, account_id: Any, partner: str) -> None:
+    # Looked up on each call, so the contract's adapter can listen in (``disconnected()``, verbinden 0.1.4).
+    verbinden_store.disconnected(data, account_id, partner)
+
+
 router = verbinden_api.router(config=CONFIG, store=store, account=require_account, operator=require_operator,
-                              address=_address, error=_error, old_key=_old_key, tags=["connect"])
+                              address=_address, error=_error, old_key=_old_key, on_disconnected=_disconnected,
+                              tags=["connect"])

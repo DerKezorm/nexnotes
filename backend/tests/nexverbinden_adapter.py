@@ -63,8 +63,27 @@ class Adapter(StandardAdapter):
                 db.commit()
         self._session = SessionLocal()
         self.store = VerbindenStore(self._session)
+        # Every call of nexnotes' ``on_disconnected``, heard before nexnotes clears up (``disconnected()``).
+        from app.services import verbinden_store
+
+        self._ended: list[tuple[Any, str]] = []
+        self._clear_up = verbinden_store.disconnected
+
+        def heard(store: Any, account_id: Any, partner: str) -> None:
+            self._ended.append((account_id, partner))
+            self._clear_up(store, account_id, partner)
+
+        verbinden_store.disconnected = heard  # type: ignore[assignment]
+
+    def disconnected(self) -> list[tuple[Any, str]]:
+        return list(self._ended)
 
     def stop(self) -> None:
+        from app.services import verbinden_store
+
+        if hasattr(self, "_clear_up"):
+            verbinden_store.disconnected = self._clear_up  # type: ignore[assignment]
+            del self._clear_up
         for client in self.clients.values():
             client.close()
         self.clients = {}
