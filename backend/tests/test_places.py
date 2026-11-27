@@ -83,8 +83,16 @@ def test_a_place_is_written_with_its_group_and_no_card_or_comma_form(language: s
     assert wrong == []
 
 
-def test_the_guide_points_to_nextasks_and_nexdeck_as_they_are_now() -> None:
-    nextasks = (GUIDE / "de" / "7 Verbindungen" / "1 nextasks.md").read_text(encoding="utf-8")
-    assert "In nextasks unter Einstellungen › Mein Konto › Verbindungen › API-Schlüssel einen Schlüssel" in nextasks
-    deck = (GUIDE / "en" / "7 Connections" / "3 nexdeck card.md").read_text(encoding="utf-8")
+def test_the_guide_points_to_the_other_nex_apps_and_nexdeck_as_they_are_now() -> None:
+    """Release 1.2.0: the other nex apps connect with a click; the operator sets them up once; nextime's note has no
+    way back to its event, so the guide promises none."""
+    chapter = GUIDE / "de" / "7 Verbindungen"
+    apps = (chapter / "1 Andere nex-Apps verbinden.md").read_text(encoding="utf-8")
+    assert "Einstellungen › Server › Allgemein › Andere nex-Apps" in apps and "„Verbindungen ins eigene Netz“" in apps
+    nextasks = (chapter / "2 nextasks.md").read_text(encoding="utf-8")
+    assert "„Mit nextasks verbinden“" in nextasks and "API-Schlüssel" not in nextasks
+    for language, folder, name in (("de", "7 Verbindungen", "4 nextime.md"), ("en", "7 Connections", "4 nextime.md")):
+        nextime = (GUIDE / language / folder / name).read_text(encoding="utf-8").lower()
+        assert not any(word in nextime for word in ("rücklink", "zurück zum termin", "link back", "leads back"))
+    deck = (GUIDE / "en" / "7 Connections" / "6 nexdeck card.md").read_text(encoding="utf-8")
     assert "since nexdeck 1.11.0" in deck and "next versions of nexdeck" not in deck

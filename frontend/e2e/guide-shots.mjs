@@ -505,18 +505,33 @@ async function run(language, samples, out) {
         await page.waitForTimeout(800)
         return around(page, [dialog], 2)
       })
-      await shoot('nextasks', async () => {
-        await page.goto('/settings/connections')
-        // Since the settings pass (plan "Einstellungen"): a card that opens, closed at first.
-        const card = page.locator('[data-card="nextasks"]')
-        await card.waitFor()
-        if ((await card.locator('[data-part="collapsible-head"]').getAttribute('aria-expanded')) !== 'true') {
-          await card.locator('[data-part="collapsible-head"]').click()
+      if (!ONLY.size || ONLY.has('apps')) {
+        // The other nex apps as a member (Jonas) sees them once the operator (Lena) has set them up: connect with one
+        // click (an operator would also see "Von Hand verbinden").
+        const other = await signedIn(browser, language, { who: 'jonas@example.com' })
+        try {
+          await api(context.request, 'PUT', '/api/connect/admin', {
+            addresses: { nextasks: 'https://tasks.example.com', nexlore: 'https://lore.example.com', nextime: 'https://time.example.com' },
+          })
+          await other.page.goto('/settings/connections')
+          const card = other.page.locator('[data-card="nextasks"]')
+          await card.waitFor()
+          if ((await card.locator('[data-part="collapsible-head"]').getAttribute('aria-expanded')) !== 'true') {
+            await card.locator('[data-part="collapsible-head"]').click()
+          }
+          await card.getByTestId('connection-connect').waitFor()
+          await card.scrollIntoViewIfNeeded()
+          await other.page.waitForTimeout(300)
+          const clip = await around(other.page, [card], 12)
+          await other.page.screenshot({ path: path.join(out, 'apps.png'), clip, animations: 'disabled', caret: 'hide' })
+          done.push('apps')
+        } catch (error) {
+          failed.push(`apps: ${String(error).split('\n')[0]}`)
+          await other.page.screenshot({ path: path.join(out, '_failed-apps.png') }).catch(() => null)
+        } finally {
+          await other.context.close()
         }
-        await card.scrollIntoViewIfNeeded()
-        await page.waitForTimeout(300)
-        return around(page, [card], 12)
-      })
+      }
       await shoot('tokens', async () => {
         await page.goto('/settings/connections')
         const card = page.locator('[data-card="api-keys"]')
@@ -529,6 +544,8 @@ async function run(language, samples, out) {
         await page.getByRole('button', { name: L('Neuer API-Schlüssel', 'New API key') }).first().click()
         const dialog = page.getByRole('dialog')
         await dialog.waitFor()
+        // The pointer off the dialog: no button shown as hovered.
+        await page.mouse.move(0, 0)
         await page.waitForTimeout(400)
         return around(page, [dialog], 2)
       })

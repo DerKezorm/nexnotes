@@ -3,11 +3,11 @@ icon: kanban
 ---
 # nexdeck-Karte
 
-Auf deinem **nexdeck**-Dashboard kann eine Karte deine angehefteten Notizen oder eine Checkliste zeigen. Auf der Karte hakst du Punkte direkt ab.
+Auf deinem **nexdeck**-Dashboard kann eine Karte deine angehefteten Notizen oder eine Checkliste zeigen. Auf der Karte hakst du Punkte direkt ab. nexdeck verbindest du weiter mit einem API-Schlüssel.
 
 ## So verbindest du nexdeck
 
-1. In nexnotes unter **Einstellungen › Mein Konto › Verbindungen** einen API-Schlüssel anlegen. Zum Abhaken braucht er „Lesen und schreiben“.
+1. In nexnotes unter **Einstellungen › Mein Konto › Verbindungen › API-Schlüssel** einen Schlüssel anlegen. Zum Abhaken braucht er „Lesen und schreiben“.
 2. In nexdeck eine Karte „nexnotes“ hinzufügen, die Adresse von nexnotes und den Schlüssel eintragen.
 3. Wählen, was die Karte zeigt: die angehefteten Notizen oder eine bestimmte Checkliste.
 
