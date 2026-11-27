@@ -3,6 +3,109 @@
 All notable changes to nexnotes. The format follows Keep a Changelog; the
 project uses semantic versioning.
 
+## 1.2.0 – 2026-11-27
+
+nexnotes now connects with your other nex apps in one click, works with AI tools the same way as every nex app, and
+its settings are laid out like those of the other nex apps. Your notes are not touched.
+
+### Connect nex apps
+
+Under **My account › Connections**, the card **Other nex apps** lists the apps nexnotes works with: **nextasks**,
+**nexlore** and **nextime**. Click **Connect with …**, agree once in the other app, and you are back, connected. No key
+to make, copy and paste. The page where you agree says in plain words what each app may do (for example "Create and
+change tasks") and shows the account you are signed in with. Each app may only do what the connection is for, nothing
+more. The card shows since when you are connected, when the connection was last used and what it allows, with
+**Check now** and **Disconnect**, which ends it on both sides.
+
+- **nextasks: now connected with one click.** Everything you did with a key works the same way over the new
+  connection: put the cursor in a line or select several and send them with **To nextasks** in the head of the note
+  (each line becomes a task, with a list and an optional due date, and keeps a mark that leads to it); **As a nextasks
+  task** in the bar at selected text; **As a nextasks task** in a note's menu turns the whole note into one task (the
+  title becomes the task, the text its notes, and the task leads back to the note). You still choose which areas and
+  lists nexnotes may use and which list comes first. A connection you made with a key keeps working as it is;
+  **Connect again** turns it into the new kind.
+- **nexlore, new:** **To nexlore** in a note's menu puts the note into a space of nexlore you pick, with its title and
+  text. The note stays here as it is. Notes in the vault are never sent.
+- **nextime, new:** in nextime, **Note in nexnotes** in an event's panel makes a note in your nexnotes inbox with the
+  event's title, its time, place and notes. Clicking it again for the same event finds the note made before. nextime
+  may only add notes; it reads nothing of yours.
+- **The operator sets the other apps up once**, under **Server › General › Other nex apps**: the address of each app,
+  and whether nexnotes may reach apps in the local network (**Connections into the local network**). After that every
+  account only clicks. Connections can be switched off for everybody there; nothing is deleted. When something goes
+  wrong in the other app, you come back to your card and read there what happened.
+
+### AI tools (MCP)
+
+- **MCP keys by hand again**, read only or read and write, and limited to folders, under My account › Connections ›
+  AI tools (MCP). A program that connects itself can be limited to folders too.
+- **Rights per tool**: for every key and every program, allow a tool, ask first, or deny it. What asks waits under
+  **Waiting requests** for your answer (24 hours), and your browsers get a notification that a program is waiting
+  for your yes, in your language and with the note's title and the folder's name.
+- New API keys no longer offer "Also for AI tools (MCP)". Older keys with it keep working; there it can only be
+  switched off. Scripts that make keys over the API with `mcp: true` work as before.
+- MCP starts switched off on a new installation. An installation that had it keeps it on.
+- Connecting programs is stricter: a program may only name return addresses with a plain host name or an IP
+  address, and a request you allow runs exactly as it was asked, or not at all.
+
+### Settings like in every nex app
+
+- **Areas with an address of their own**: My account (Profile, Security, Appearance, Notifications, Connections) and
+  Server for the operator. On a phone the list of the areas comes first.
+- **Light or dark belongs to your account** and follows you to every device; "As the system" follows each device.
+- **API keys and AI tools (MCP)** are cards of their own under My account › Connections: make a key with folders and
+  an end date, see it once, edit or revoke it.
+- **Notifications** under My account › Notifications: which way your notifications come, this browser on or off with
+  a test notification, your other browsers (remove one) and the iPhone and iPad app.
+- **Install on this device** is always under My account › Connections: the button where the browser offers it,
+  otherwise how it is done in your browser.
+- **Ready for the internet?** under Server › Sign-in: each time you open the page, nexnotes checks its address, the
+  second factor, the protection against guessing, cookies and the proxy.
+- **Storage for new accounts** under Server › General › Limits: the limit every new account starts with.
+- **Backups** under Server › Storage and backups at a time of day you choose, now also every month. "Back up now"
+  asks first and takes an optional note, shown with the backup in the list.
+- **Own languages** under Server › General › Languages: upload a language file and download a template. Files are
+  checked more strictly, and a broken one says why.
+- **Updates**: a new installation asks once at setup whether nexnotes may look for new versions. Only the operator
+  sees whether a newer version is out and switches the check; members see their own version. nexnotes asks only
+  when an operator opens Settings › About nexnotes, at most once a day, and the question goes out without the
+  version of this server.
+
+### Changed
+
+- Sign-in providers, authentik in one step and the mail server are under Server › Sign-in and Server › Mail, laid out
+  as in the other nex apps. The test mail carries nexnotes' logo.
+- The switches for the API and MCP are under Server › General › Interfaces.
+- The operator's account list has one row per account with **Manage**. A key the operator blocked can be unblocked
+  again.
+- A blocked or deleted account's own API and MCP keys rest and work again once it is back; paired devices and
+  connected AI tools are disconnected.
+- Every signed-in account sees the profile pictures of the others, as in every nex app.
+- Mails about your account go out at once instead of within a minute.
+- A new email address shows "Address not confirmed yet" with a link to send, until you confirm it.
+- Dates and times read the same way everywhere in the settings.
+
+### Fixed
+
+- **Menus stay on screen**: the menu of a note low in the list, and every other menu (also those of the selection
+  bar and the search filters), opens upward or moves up instead of running off the window. The choice of paper
+  shows two by two with a small preview, and the colours of a note's menu wrap on a phone, so no menu scrolls
+  sideways.
+- The settings no longer show an empty strip and a second scroll bar below the page.
+- nexnotes starts again in a container with all capabilities dropped (`cap_drop: ALL`); the check of the data folder
+  stopped every start there.
+
+### For the operator
+
+- **Nothing to do for an update.** Before it changes anything, nexnotes makes a backup named "before 1.2.0". Every
+  API key, MCP key and older nexdeck card key keeps working, paired devices stay connected, a connection to nextasks
+  made with a key keeps working, backups stay readable, and the old addresses of the settings lead to their new
+  place. No new environment variables, ports or paths.
+- **Interface change:** turning "Require a second factor of everybody" off asks for your password once more, on the
+  page and in the API: `PUT /api/settings` with `"two_factor_required": false` now needs `"current_password"` (else
+  401 `wrong_password`), as does the new `PUT /api/server/sign-in` with `"factor_required": false`.
+- To connect apps in one click, enter their addresses once under Server › General › Other nex apps. Apps in your
+  local network (LAN, VPN) also need **Connections into the local network** there.
+
 ## 1.1.0 – 2026-11-25
 
 Accounts, sign-in and mail are built anew, the same way as in the other nex apps. Your notes are not touched.

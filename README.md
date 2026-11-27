@@ -10,7 +10,7 @@ soon on iPhone and iPad.
 
 nexnotes has a calm look of its own: honey as the one accent, notes on a quiet paper, light and dark.
 
-**1.1.0** is the current release. Keep backups all the same, see [Backup](#backup).
+**1.2.0** is the current release. Keep backups all the same, see [Backup](#backup).
 
 ![A recipe note with a photo and a checklist, beside the tiles, the folders and the list of the folder](docs/screenshots/note-dark.png)
 
@@ -69,9 +69,11 @@ view at a time and installs from the browser as an app.*
   deleted notes and folders stay in the trash for 90 days (both periods set by the operator).
 - **Export** of a note as Markdown (a ZIP with its attachments) or as a PDF set on the server with
   [Typst](https://typst.app); a folder or everything as a ZIP of Markdown files in their folders.
-- **Connections**: send a line or a whole checklist to [nextasks](https://github.com/DerKezorm/nextasks) as tasks; a
-  [nexdeck](https://github.com/DerKezorm/nexdeck) card with pinned notes or a checklist to tick off; an **MCP**
-  endpoint for AI tools, with a key or by OAuth with the member's consent.
+- **Connections**: the other nex apps connect in one click (see [Connecting nex apps](#connecting-nex-apps)): send
+  a line or a whole checklist to [nextasks](https://github.com/DerKezorm/nextasks) as tasks, put a note into nexlore,
+  let nextime make a note to an event. A [nexdeck](https://github.com/DerKezorm/nexdeck) card with pinned notes or a
+  checklist to tick off; an **MCP** endpoint for AI tools, with a key or by OAuth with the member's consent, and
+  rights per tool.
 - **An API** for programs and scripts under `/api/v1`, with its own description at `/api/v1/docs`, see
   [For programs](#for-programs).
 - **On the phone**: one view at a time, installable as a web app; on Android nexnotes appears in the share menu, and
@@ -81,11 +83,30 @@ view at a time and installs from the browser as an app.*
 - **Accounts** by invitation only, sign-in with username or email, passkeys, a second factor (TOTP with recovery
   codes), a list of the devices you are signed in on, a forgotten password by mail, profile pictures, sign-in through
   any number of OpenID Connect providers side by side.
-- **For the operator**: backups every night, to download, upload and restore; a log in four levels; a page that says
-  what nexnotes takes on the disk; switches for read links, link previews, the API, MCP and password sign-in.
+- **For the operator**: backups at a time of day of your choice, to download, upload and restore; a log in four
+  levels; a page that says what nexnotes takes on the disk; a check whether the server is ready for the internet;
+  switches for read links, link previews, the API, MCP, connections with other nex apps and password sign-in.
 - **Languages**: English and German, plus languages of your own as JSON files.
 
 An iPhone and iPad app for nexnotes is coming to the App Store.
+
+## Connecting nex apps
+
+nexnotes works with three other nex apps. Each person connects their own account under
+**Settings › My account › Connections**, card **Other nex apps**: **Connect with …** opens the other app, you agree
+once, and you are back, connected. No key to copy. The page where you agree says what each app may do; each may do
+only that. The card shows since when you are connected and when it was last used, and **Disconnect** ends it on both
+sides.
+
+| App | What you can do |
+|---|---|
+| nextasks | Send the line at the cursor, selected lines or a whole note to nextasks as tasks, with a list and an optional due date; the line keeps a mark that leads to its task, and the task leads back. You choose the areas and lists nexnotes may use. |
+| nexlore | **To nexlore** in a note's menu puts the note into a space of nexlore you pick, with its title and text. Notes in the vault are never sent. |
+| nextime | **Note in nexnotes** in an event's panel in nextime makes a note in your inbox with the event's title, time, place and notes. nextime may only add notes. |
+
+The operator enters the address of each app once under **Settings › Server › General › Other nex apps**; after that
+every account only clicks. Apps in the local network (LAN, VPN) need **Connections into the local network** there as
+well. A connection to nextasks made with an API key keeps working; **Connect again** turns it into the new kind.
 
 ## Start
 
@@ -106,7 +127,7 @@ services:
 ```
 
 Then `docker compose up -d`. Images for `linux/amd64` and `linux/arm64` are on the GitHub Container Registry, one tag
-per release (`1.1.0`, also `1.1`) and `latest`. The [docker-compose.yml](docker-compose.yml) in this repository has the same service
+per release (`1.2.0`, also `1.2`) and `latest`. The [docker-compose.yml](docker-compose.yml) in this repository has the same service
 with every option explained; it builds from source with `docker compose up -d --build`.
 
 Open `http://<your-host>:8570`. The first account you create there becomes the operator. It needs the **setup code**
@@ -180,7 +201,7 @@ Notes in the vault are encrypted on the device; neither the key nor a backup ope
 ### Backup
 
 Back up with nexnotes's own backups under **Settings › Server › Storage and backups**: every night from the start
-(seven kept), every week or only by hand, and one before every update. They copy the database consistently while it runs, together with the attachments and `secret.key`, into
+(seven kept), every week, every month or only by hand, at a time of day you choose, and one before every update. They copy the database consistently while it runs, together with the attachments and `secret.key`, into
 one ZIP with a checksum for every file. A backup holds everything; keep downloaded copies as carefully as the data
 folder itself. Exports in `exports/` are in no backup.
 
@@ -240,14 +261,19 @@ curl -H "Authorization: Bearer $NEXNOTES_TOKEN" https://notes.example.com/api/v1
 What is under `/api/v1` stays: new fields may come, nothing is renamed or taken away. A change that would break a
 program goes to `/api/v2` beside it.
 
-**MCP**: an API key with "Also for AI tools (MCP)" opens `/api/mcp` for tools that speak the Model Context Protocol; a
-tool can also connect itself by OAuth, with the member's consent. The operator can switch MCP off for the whole server.
+**MCP**: `/api/mcp` is for tools that speak the Model Context Protocol. Every account makes MCP keys under
+**Settings › My account › Connections › AI tools (MCP)**, read only or read and write, for all notes or chosen
+folders; a tool can also connect itself by OAuth, with the member's consent. For every key and program each tool can
+be allowed, denied or set to ask first; what asks waits under **Waiting requests** and is announced to the member's
+browsers. Older API keys with "Also for AI tools (MCP)" keep working. MCP is off on a new installation; the operator
+switches it under **Settings › Server › General › Interfaces**.
 
 ## Languages
 
-nexnotes speaks English and German and follows the browser unless an account picks a language. Put a language file
-(`nl.json`, same keys as the English one) into `<data>/locales` and restart: it is offered in the language menu,
-marked as yours. What a file leaves out shows in English.
+nexnotes speaks English and German and follows the browser unless an account picks a language. The operator uploads a
+language file (`nl.json`, same keys as the English one; a template is offered for download) under
+**Settings › Server › General › Languages**, or puts it into `<data>/locales` and restarts: it is offered in the
+language menu, marked as yours. What a file leaves out shows in English.
 
 ## Security in short
 
@@ -259,8 +285,9 @@ marked as yours. What a file leaves out shows in English.
 - Notifications to the iOS app and to browsers are encrypted for the device before they leave.
 - What somebody may not see answers exactly like what does not exist.
 - The log never contains note contents, passwords, keys or tokens.
-- Once a day nexnotes asks GitHub whether a newer release is out; only the question goes out. It can be switched off
-  in the settings.
+- Whether a newer release is out, nexnotes asks GitHub at most once a day, and only when an operator opens the page
+  **About nexnotes** in the settings; only the question goes out, not even the server's version. A new installation
+  asks once at setup whether to look at all, and the operator can switch it off on that page.
 
 Report a vulnerability privately, see [SECURITY.md](SECURITY.md).
 
