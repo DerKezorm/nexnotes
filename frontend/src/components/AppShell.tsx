@@ -38,8 +38,10 @@ export function AppShell() {
   // A new page closes the sidebar on a phone.
   useEffect(() => setOpen(false), [location.pathname])
 
+  // `relative` (B7): hidden texts (`sr-only`, absolute) are placed and clipped in this frame instead of making the page
+  // taller than the window.
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="relative flex h-dvh overflow-hidden">
       {/* Folded away beside the notes ("Hide sidebar", `sidebarFold.ts`): hidden, not gone, so it keeps its state. */}
       <div className={'relative hidden shrink-0 ' + (folded ? '' : 'md:flex')} data-testid="shell-sidebar">
         <Sidebar width={sidebarWidth} />
