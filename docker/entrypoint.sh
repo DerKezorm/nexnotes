@@ -84,6 +84,6 @@ if ! gosu nexnotes sh -c 'touch /data/.write-test' 2>/dev/null; then
     echo "  run 'id' on the host and use the uid and gid it reports." >&2
     exit 1
 fi
-rm -f /data/.write-test
+gosu nexnotes rm -f /data/.write-test
 
 exec gosu nexnotes "$@"
