@@ -397,6 +397,49 @@ def test_notes1_ec9_an_older_database_gets_the_new_columns_at_the_start(tmp_path
         assert connection.execute(text("SELECT name, role FROM accounts")).one() == ("robin", "member")
 
 
+def test_notes1_ec9_a_start_that_stopped_after_the_columns_runs_their_migrations_at_the_next(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Befundsuche 28.11.2026: the one-time migrations of a column (MCP stays on, ``mcp_store.migrate``) ran only at
+    the start that added it; one that stopped in between lost them for good. They are owed until they ran."""
+    from sqlalchemy import create_engine, text
+
+    from app import db as database
+    from app.models import Base
+    from app.services import backups, konten_wanderung, mcp_store
+
+    old = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    Base.metadata.create_all(old)
+    with old.begin() as connection:
+        connection.execute(text("ALTER TABLE api_tokens DROP COLUMN refreshed_at"))
+    monkeypatch.setattr(database, "engine", old)
+    monkeypatch.setattr(backups, "create", lambda **_: None)
+    run = konten_wanderung.run
+
+    def stops(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("the container stopped")
+
+    monkeypatch.setattr(konten_wanderung, "run", stops)
+    with pytest.raises(RuntimeError):
+        database.init_db()
+    monkeypatch.setattr(konten_wanderung, "run", run)
+    database.init_db()
+    with old.connect() as connection:
+        found = connection.execute(text("SELECT value FROM settings WHERE key = 'mcp_enabled'")).scalar()
+        assert found is not None and json.loads(found) is True
+        assert connection.execute(text("SELECT count(*) FROM settings WHERE key = :key"),
+                                  {"key": database.OWED}).scalar() == 0
+    # Owed once only: the operator switches MCP off, the next start leaves it off.
+    with old.begin() as connection:
+        connection.execute(text("UPDATE settings SET value = 'false' WHERE key = 'mcp_enabled'"))
+    database.init_db()
+    with old.connect() as connection:
+        assert json.loads(connection.execute(text("SELECT value FROM settings WHERE key = 'mcp_enabled'")).scalar()) \
+            is False
+    assert mcp_store.MARK == "api_tokens.refreshed_at"
+    old.dispose()
+
+
 # --- AC-6, AC-7, AC-8, AC-11: the server settings ------------------------------------------------------------------
 
 

@@ -41,7 +41,13 @@ def _writer(request: Request) -> Caller:
     return wall(request, write=True)
 
 
+def _adder(request: Request) -> Caller:
+    return wall(request, write=True, adds=True)
+
+
 Writer = Annotated[Caller, Depends(_writer)]
+#: ``POST /notes``: a writing token, or a connection's token with ``notes.add`` (module verbinden).
+Adder = Annotated[Caller, Depends(_adder)]
 FolderId = Annotated[str, Path(min_length=1, max_length=36)]
 
 
@@ -79,7 +85,7 @@ class NoteIn(BaseModel):
 
 @router.post("/notes", status_code=201, responses=NOTE_ERRORS,
              summary="Make a note from Markdown; in the inbox unless a folder is named")
-async def make_note(body: NoteIn, caller: Writer, request: Request) -> JSONResponse:
+async def make_note(body: NoteIn, caller: Adder, request: Request) -> JSONResponse:
     note_id, new = await asyncio.to_thread(apiwrite.create, caller, body)
     answer = await _note_answer(caller, note_id, request, True)
     answer.status_code = 201 if new else 200

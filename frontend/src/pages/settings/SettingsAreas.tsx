@@ -3,9 +3,11 @@
  * files (`AccountTab`, `AppearanceArea`, `ConnectionsTab`, `GeneralCards`, `SignInArea`, `ServerCards`, `StorageArea`,
  * `AccountsTab`, `LogCard`, `AboutArea`); an area only picks them.
  */
+import { useTranslation } from 'react-i18next'
+
 import { AppsOperator } from '../../connect/AppsArea'
 import { AllKeys, Interfaces } from '../../tokens/KeysCards'
-import type { GeneralPart } from '../../vendor/nexui'
+import { Button, Notice, type GeneralPart } from '../../vendor/nexui'
 import { AboutArea } from './AboutArea'
 import { AccountsTab } from './AccountsTab'
 import { AccountTab } from './AccountTab'
@@ -67,8 +69,22 @@ export function AreaContent({ area }: { area: AreaSlug }) {
 
 /** The server's own settings, for the operator, read once for the cards of an area. */
 function ServerCardsOf({ area }: { area: 'general' | 'ocr' }) {
+  const { t } = useTranslation()
   const server = useServerSettings()
-  if (!server.settings) return null
+  if (!server.settings) {
+    if (!server.failed) return null
+    // Not read (the network, the server): said, with the way to ask again, instead of an empty area.
+    return (
+      <Notice tone="danger" testId="server-settings-failed">
+        <span className="flex flex-wrap items-center justify-between gap-3">
+          <span>{server.failed}</span>
+          <Button kind="secondary" icon="RotateCcw" onClick={() => void server.reload()} testId="server-settings-retry">
+            {t('common.retry')}
+          </Button>
+        </span>
+      </Notice>
+    )
+  }
   return (
     <>
       {area === 'general' && (

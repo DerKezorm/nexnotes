@@ -5,8 +5,10 @@
  * is connected (V23). Since verbinden 0.1.8 only the operator sets the other apps up ("Einrichten") and starts a new
  * connection by hand; a key typed in before stays the account's to change (V46).
  */
+import { useEffect, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { loadNextasks } from '../nextasks/api'
 import { AreaChoice, NextasksSection } from '../nextasks/NextasksSection'
 import { useMe } from '../state/auth'
 import { ConnectionsArea, ConnectionsOperatorCard } from '../vendor/nexverbinden'
@@ -24,12 +26,31 @@ export function AppsArea() {
       operator={operator}
       request={connectRequest}
       manual={{ nextasks: <NextasksSection bare /> }}
-      extra={(view) => (view.partner === 'nextasks' && WITH_LISTS.has(view.state) ? <AreaChoice /> : null)}
+      extra={(view) =>
+        view.partner === 'nextasks' ? (
+          <>
+            <NextasksFollows state={view.state} />
+            {WITH_LISTS.has(view.state) && <AreaChoice />}
+          </>
+        ) : null
+      }
       areaWord={t('tokens.dialog.folders')}
       language={i18n.language}
       navigate={(address) => leave.to(address)}
     />
   )
+}
+
+/** The notes' own knowledge of nextasks (the button "An nextasks", the marks) follows the card: connected or
+ * disconnected there, it is asked again (it is asked once per page otherwise). */
+function NextasksFollows({ state }: { state: string }) {
+  const before = useRef(state)
+  useEffect(() => {
+    if (before.current === state) return
+    before.current = state
+    void loadNextasks(true).catch(() => undefined)
+  }, [state])
+  return null
 }
 
 /** Server › General: "Andere nex-Apps", the switch and the addresses of the other apps (V14), and since verbinden 0.1.8

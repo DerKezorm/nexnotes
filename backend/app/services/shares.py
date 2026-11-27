@@ -645,7 +645,7 @@ def my_links(db: Session, account: Account) -> list[dict[str, Any]]:
 def resolve(db: Session, token: str) -> tuple[ReadLink | None, Note | None, bool]:
     """The link of a token and its note when it works now; and whether the token was known at all (an unknown one is
     a miss for the brake, EC-7). Nothing of a link that ended: expired or revoked (EC-5), switched off (AC-10), its
-    note in the trash or locked (EC-6), its owner deleted (EC-4)."""
+    note in the trash or locked (EC-6), its owner deleted (EC-4) or blocked by the operator (as everywhere else)."""
     link = db.scalar(select(ReadLink).where(ReadLink.token_hash == hash_token(token)))
     if link is None:
         return None, None, False
@@ -653,7 +653,7 @@ def resolve(db: Session, token: str) -> tuple[ReadLink | None, Note | None, bool
         return None, None, True
     note = db.get(Note, link.note_id)
     owner = db.get(Account, link.owner_id)
-    if note is None or note.deleted_at is not None or owner is None or owner.deleted_at is not None \
+    if note is None or note.deleted_at is not None or account_out(owner) \
             or note.owner_id != link.owner_id or _hidden(db, note.id):
         return None, None, True
     return link, note, True

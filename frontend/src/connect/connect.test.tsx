@@ -10,7 +10,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 
 import i18n from '../i18n'
-import { setNextasks } from '../nextasks/api'
+import { nextasksStatus, setNextasks } from '../nextasks/api'
 import type { PartnerView } from '../vendor/nexverbinden'
 import { AppsArea } from './AppsArea'
 
@@ -152,5 +152,29 @@ describe('the cards of the other nex apps (module verbinden)', () => {
     await open(card)
     expect(paths).toContain('/api/nextasks/areas')
     expect($('nextasks-form', card)).toBeNull()
+  })
+
+  it('asks for nextasks again once the card disconnects it, so the notes no longer offer sending', async () => {
+    views[0] = view('nextasks', { state: 'connected', address: 'https://tasks.example.com', host: 'tasks.example.com', account: 'kim', uses: ['tasks.read', 'tasks.write'], uses_levels: { 'tasks.read': 'read', 'tasks.write': 'write' } })
+    status = { connected: true, local_allowed: false, url: 'https://tasks.example.com', host: 'tasks.example.com', name: 'kim', by: 'connection' }
+    const served = globalThis.fetch
+    vi.stubGlobal('fetch', async (input: string, init?: RequestInit) => {
+      if (init?.method === 'DELETE' && new URL(input, 'http://localhost').pathname === '/api/connect/partners/nextasks') {
+        status = { connected: false, local_allowed: false }
+        return new Response(JSON.stringify(view('nextasks', { uses: ['tasks.read', 'tasks.write'] })), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      }
+      return served(input, init)
+    })
+    // What the open notes know of nextasks (the button "An nextasks"), asked once for the page.
+    setNextasks(status as never)
+    await show()
+    const card = $('connection-nextasks')!
+    await open(card)
+    await act(async () => $('connection-disconnect', card)!.click())
+    const dialog = $('connection-disconnect-dialog')!
+    const buttons = [...dialog.querySelectorAll<HTMLButtonElement>('button')]
+    await act(async () => buttons[buttons.length - 1].click())
+    await settle()
+    expect(nextasksStatus()?.connected).toBe(false)
   })
 })

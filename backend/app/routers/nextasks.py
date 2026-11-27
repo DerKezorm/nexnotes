@@ -64,7 +64,7 @@ def connect(body: ConnectIn, account: Account, db: DbSession) -> dict[str, Any]:
             row = nextasks.connect(db, account.id, body.url, body.token)
     except NextasksError as exc:
         raise _fail(exc) from exc
-    return nextasks.connection_out(db, row)
+    return nextasks.connection_out(db, row, account.id)
 
 
 @router.delete("", status_code=204, summary="Disconnect nextasks; the tasks and the marks stay")

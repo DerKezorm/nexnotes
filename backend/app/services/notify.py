@@ -314,7 +314,7 @@ def _state(db: Session, account: Account, note_id: str | None, path: list[str], 
 def devices_of(db: Session, account: Account, session_id: int | None) -> dict[str, Any]:
     """Where the account's notifications arrive (AC-8): its iOS devices and its browsers, and whether this browser
     is one of them."""
-    apps = [{"id": token.id, "name": token.name, "on": True} for _device, token in apppush.devices(db, account.id)]
+    apps = _apps_of(db, account)
     browsers = []
     this_browser = False
     for row in webpush.subscriptions(db, account.id):
@@ -325,6 +325,30 @@ def devices_of(db: Session, account: Account, session_id: int | None) -> dict[st
                          "since": row.created_at.isoformat() if row.created_at else None,
                          "last_ok_at": row.last_ok_at.isoformat() if row.last_ok_at else None})
     return {"apps": apps, "browsers": browsers, "this_browser": this_browser}
+
+
+#: The kinds of the notes' notifications on an iOS device (module geraete): one of them on, the device counts as on.
+APP_KINDS = ("changed", "trashed")
+
+
+def _apps_of(db: Session, account: Account) -> list[dict[str, Any]]:
+    """The account's iOS devices signed up for notifications as the sending sees them (``_enqueue_devices``): a
+    blocked one is not there, and one with every kind switched off in the app shows as off."""
+    from ..vendor.nexgeraete import push
+    from .geraete_config import CONFIG
+    from .geraete_store import GeraeteStore
+
+    store = GeraeteStore(db)
+    holder = store.holder(account.id)
+    apps = []
+    for _row, token in apppush.devices(db, account.id):
+        device = store.device(token.id)
+        if device is None:
+            continue
+        on = holder is not None and not holder.out and device.push is not None and any(
+            push.understood(CONFIG, device, kind) and push.wanted(CONFIG, device, holder, kind) for kind in APP_KINDS)
+        apps.append({"id": token.id, "name": token.name, "on": on})
+    return apps
 
 
 def probe(db: Session, account: Account, row: WebPushSubscription) -> None:

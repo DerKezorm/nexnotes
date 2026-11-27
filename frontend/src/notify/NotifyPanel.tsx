@@ -110,7 +110,7 @@ export function NotifyPanel({ kind, id, onChange }: { kind: NotifyKind; id: stri
         {settings.devices.apps.map((app) => (
           <span key={`app-${app.id}`} className="flex justify-between gap-3 text-[13.5px]">
             <span className="min-w-0 truncate">{app.name}</span>
-            <span className="text-ok-500">{t('notify.on')}</span>
+            {app.on ? <span className="text-ok-500">{t('notify.on')}</span> : <span className="text-mist-500" data-testid="notify-app-off">{t('notify.off')}</span>}
           </span>
         ))}
         {others.map((each) => (

@@ -164,6 +164,7 @@
     "copied": "Kopiert",
     "copy": "Kopieren",
     "done": "Fertig",
+    "retry": "Erneut versuchen",
     "save": "Speichern"
   },
   "connections": {
@@ -1646,6 +1647,7 @@
     "browserOn": "{{browser}} auf {{system}}",
     "otherBrowser": "Anderer Browser",
     "on": "an",
+    "off": "aus",
     "allow": "Erlauben",
     "stop": "Ausschalten",
     "denied": "nicht erlaubt",

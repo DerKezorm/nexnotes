@@ -3,7 +3,7 @@
 
 nexnotes is a guest at nextasks (tasks to read and write, NOTES-19) and at the other notes app of the catalog (notes
 to add), and the host of nextime (it adds notes into the folders it was given). What a connection opens here is
-``/api/v1`` with the right of its purpose and the folders given (``routers/api_v1.wall``).
+``POST /api/v1/notes`` into the folders given, nothing else (``routers/api_v1.wall``).
 
 ⚠️ **Old connections.** The connection to nextasks typed in by hand (``nextasks_connections``, ``PUT /api/nextasks``,
 also from the iPhone app) keeps working; the module reads it to show it ("Verbunden über API-Schlüssel ntk_…"). Since
@@ -34,7 +34,7 @@ from ..models_verbinden import (
 )
 from ..security import account_out, decrypt_secret, encrypt_secret
 from ..vendor import nexverbinden
-from . import apitokens, settings_service
+from . import apitokens, settings_service, totp
 
 logger = logging.getLogger("nexnotes.connect")
 
@@ -192,8 +192,10 @@ class VerbindenStore:
     # --- the account and the app 
 
     def account_may(self, account_id: Any) -> bool:
+        """Blocked, deleted, or owing the second factor the operator requires (EC-9, as API and MCP keys): the
+        account's connections rest."""
         account = self.db.get(Account, int(account_id))
-        return account is not None and not account_out(account)
+        return account is not None and not account_out(account) and not totp.setup_required(self.db, account)
 
     def account_name(self, account_id: Any) -> str:
         """The account's user name, as the other app names it ("verbunden als kim"); the shown name with the picture

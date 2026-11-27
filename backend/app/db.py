@@ -6,6 +6,7 @@ Renaming or dropping never happens automatically.
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import unicodedata
@@ -93,14 +94,37 @@ def init_db() -> None:
     for table in Base.metadata.sorted_tables:
         for table_index in table.indexes:
             table_index.create(engine, checkfirst=True)
+    # The columns added at this start, and those of a start that stopped before their migrations ran (``OWED``).
+    owed = sorted(set(added) | set(_owed()))
     # What the shared account module needs of a database of an older version (only adding).
     from .services import konten_wanderung
 
-    konten_wanderung.run(engine, added=added)
+    konten_wanderung.run(engine, added=owed)
     # MCP access stays on where it was on from the start (module mcp, decision 5); a new installation starts off.
     from .services import mcp_store
 
-    mcp_store.migrate(engine, added)
+    mcp_store.migrate(engine, owed)
+    if owed:
+        with engine.begin() as connection:
+            connection.execute(text("DELETE FROM settings WHERE key = :key"), {"key": OWED})
+
+
+#: The setting that names the columns (``table.column``) whose one-time migrations have not run yet: written in one
+#: transaction with the columns, removed once the migrations ran. A start that stops in between (a failed index, a
+#: container stopped) runs them at the next start, whose ``added`` is empty by then.
+OWED = "migrations_owed"
+
+
+def _owed() -> list[str]:
+    if not inspect(engine).has_table("settings"):
+        return []
+    with engine.connect() as connection:
+        raw = connection.execute(text("SELECT value FROM settings WHERE key = :key"), {"key": OWED}).scalar()
+    try:
+        found = json.loads(raw) if isinstance(raw, str) else raw
+    except ValueError:
+        return []
+    return [str(name) for name in found] if isinstance(found, list) else []
 
 
 def _sql_literal(value: Any) -> str:
@@ -131,6 +155,13 @@ def _add_missing_columns() -> list[str]:
         backups.create(kind=backups.UPDATE, note="before adding columns")
     added: list[str] = []
     with engine.begin() as connection:
+        if missing and inspector.has_table("settings"):
+            # First, so the transaction starts here (pysqlite opens it before a write, not before ALTER TABLE): the
+            # columns and the note of their migrations owed are kept together or not at all.
+            owed = sorted({f"{column.table.name}.{column.name}" for column in missing} | set(_owed()))
+            connection.execute(text("DELETE FROM settings WHERE key = :key"), {"key": OWED})
+            connection.execute(text("INSERT INTO settings (key, value) VALUES (:key, :value)"),
+                               {"key": OWED, "value": json.dumps(owed)})
         for table in Base.metadata.sorted_tables:
             existing = {column["name"] for column in inspector.get_columns(table.name)}
             for column in table.columns:

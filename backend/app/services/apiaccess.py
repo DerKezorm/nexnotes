@@ -86,6 +86,9 @@ class Caller:
     allow_mcp: bool = False
     folder_ids: list[str] | None = None
     expires_at: datetime | None = None
+    #: The other nex app behind a connection's token (module verbinden), else empty: such a caller adds notes and
+    #: nothing more (``routers/api_v1.wall``), its ``external_ref`` in a room of its own (``apiwrite.create``).
+    partner: str = ""
     _scope: dict[bool, set[str] | None] = field(default_factory=dict, repr=False)
 
     @property

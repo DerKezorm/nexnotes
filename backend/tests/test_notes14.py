@@ -440,6 +440,28 @@ def test_notes14_ac7_the_vapid_key_is_made_at_the_start_and_kept_sealed(client):
         assert webpush.public_key(db) == first
 
 
+def test_notes14_ac8_a_device_with_every_kind_off_shows_as_off(client, operator):
+    """Befundsuche 28.11.2026: the list "Auf deinen Geräten" says what the sending does: a device whose app switched
+    off every kind of the notes' notifications (module geraete) gets nothing and shows as off."""
+    from app.services.geraete_store import GeraeteStore
+
+    with SessionLocal() as db:
+        row, _token = apitokens.make(db, db.get(Account, operator.id), "iPhone von Tester")
+        apppush.remember(db, operator.id, row.id, "1.ticket", base64.b64encode(b"\x09" * 32).decode())
+        device_id = row.id
+    assert client.get("/api/notify/devices").json()["apps"] == [
+        {"id": device_id, "name": "iPhone von Tester", "on": True}]
+    with SessionLocal() as db:
+        GeraeteStore(db).set_kinds(device_id, {"changed": False, "trashed": False})
+        db.commit()
+    assert client.get("/api/notify/devices").json()["apps"] == [
+        {"id": device_id, "name": "iPhone von Tester", "on": False}]
+    with SessionLocal() as db:
+        GeraeteStore(db).set_kinds(device_id, {"changed": False, "trashed": True})
+        db.commit()
+    assert client.get("/api/notify/devices").json()["apps"][0]["on"] is True
+
+
 def test_notes14_ac6_the_relay_gets_only_what_is_encrypted_for_the_device(client, operator, anna, as_anna, relayed):
     note_id = shared_note(client, anna)
     switch(client, "note", note_id)

@@ -97,9 +97,10 @@ CONNECTION_PREFIX = "nnx_"
 
 
 def _connection(token: str) -> Caller:
-    """A token of a connection with another nex app (module verbinden): it opens ``/api/v1`` with the right of its
-    purpose and the folders given, as an API token would (stage 1 of the plan). Its own switch "Verbindungen mit
-    anderen nex-Apps" counts, not the one of the API; a refusal answers in the module's words."""
+    """A token of a connection with another nex app (module verbinden): its purpose ``notes.add`` opens the one route
+    that adds a note (``POST /api/v1/notes``, ``wall(adds=True)``) into the folders given, nothing else of
+    ``/api/v1`` (the consent page names "Notizen anlegen" only). Its own switch "Verbindungen mit anderen nex-Apps"
+    counts, not the one of the API; a refusal answers in the module's words."""
     from datetime import UTC
 
     from ..services.verbinden_store import CONFIG, VerbindenStore
@@ -117,15 +118,22 @@ def _connection(token: str) -> Caller:
         db.expunge(account)
     return Caller(account=account, token_id=-abs(hash(found.connection_id)) - 1, token_name=found.partner,
                   kind=TOKEN_API, level=found.level if found.level in apiaccess.LEVELS else "read",
-                  folder_ids=[str(area) for area in found.areas] if found.areas is not None else None)
+                  folder_ids=[str(area) for area in found.areas] if found.areas is not None else None,
+                  partner=found.partner)
 
 
-def wall(request: Request, *, card: bool = False, write: bool = False) -> Caller:
+def wall(request: Request, *, card: bool = False, write: bool = False, adds: bool = False) -> Caller:
+    """``adds``: the route makes a note (``POST /notes``), the only one a connection's token opens."""
     if request.headers.get("origin"):
         raise Refused("origin_refused")
     token = _bearer(request)
     if token and token.startswith(CONNECTION_PREFIX):
         caller = _connection(token)
+        if not adds:
+            from ..vendor import nexverbinden
+
+            refusal = nexverbinden.Refused("purpose_missing")
+            raise HTTPException(status_code=refusal.status, detail=refusal.as_dict())
         if not apibrake.allow(caller.token_id):
             raise Refused("slow_down", headers={"Retry-After": "60"})
         if write and not caller.writes:

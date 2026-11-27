@@ -669,11 +669,16 @@ def connect(db: Session, account_id: int, url: str, token: str, *, device_id: in
         raise NextasksError("nextasks_token_invalid", "nextasks does not take this key.", 409)
     clean = clean_url(url)
     name = check(Access(url=clean, token=token, local=local_allowed(db)))
+    # A key typed in takes the place of a connection made with a click (the last one made counts, as a click takes
+    # the place of a key, V56): else the answer would say "by key" while the click connection went on being used.
+    clicked = _end_click_connection(db, account_id)
     row = connection_of(db, account_id)
     if row is None:
         row = NextasksConnection(account_id=account_id, url=clean, token_enc="")
         db.add(row)
-    if row.url != clean:
+    # The row of a click connection keeps no address: the one of that connection is the one compared.
+    before = row.url or (_clean_or_empty(clicked) if clicked else "")
+    if before != clean:
         # Another nextasks has other lists: what was chosen of the one before counts no more.
         row.last_list_id, row.last_list_name = "", ""
         row.task_choice, row.default_list_id = "", ""
@@ -691,11 +696,48 @@ def connect(db: Session, account_id: int, url: str, token: str, *, device_id: in
 
 
 def disconnect(db: Session, account_id: int) -> None:
+    """"Trennen" of the older ways (``DELETE /api/nextasks``, the iPhone app's ``DELETE /api/app/1/nextasks``): the
+    connection that is used ends, one made with a click too (through the module, as its card's "Trennen"), and the
+    row with the key or the choice of lists goes."""
+    if _end_click_connection(db, account_id) is not None:
+        from .verbinden_store import VerbindenStore, disconnected
+
+        disconnected(VerbindenStore(db), account_id, "nextasks")
     row = connection_of(db, account_id)
     if row is not None:
         db.delete(row)
         db.commit()
         logger.info("nextasks disconnected account_id=%s", account_id)
+
+
+def _clean_or_empty(url: str) -> str:
+    try:
+        return clean_url(url)
+    except NextasksError:
+        return ""
+
+
+def _end_click_connection(db: Session, account_id: int) -> str | None:
+    """Ends the account's connection with nextasks made with a click (module verbinden: nextasks hears it, or later),
+    leaving the row with the choice of lists; the address it had, or None when there was none."""
+    from datetime import UTC
+    from datetime import datetime as moment
+
+    from ..vendor import nexverbinden
+    from .verbinden_store import CONFIG, VerbindenStore
+
+    store = VerbindenStore(db)
+    found = store.connection(account_id, "nextasks")
+    if found is None:
+        return None
+    try:
+        nexverbinden.disconnect(store, CONFIG, account_id, "nextasks", moment.now(UTC))
+    except nexverbinden.Refused:
+        return None
+    with _areas_lock:
+        _areas_cache.pop(account_id, None)
+    logger.info("nextasks connection by click ended account_id=%s", account_id)
+    return found.partner_base
 
 
 def connection_out(db: Session, row: NextasksConnection | None, account_id: int | None = None) -> dict[str, Any]:

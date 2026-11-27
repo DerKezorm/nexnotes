@@ -1,8 +1,8 @@
 """nexnotes on the shared module verbinden (``vendor/nexverbinden`` 0.1.4), beside the module's contract tests
 (``tests/nexverbinden``):
 
-- nextime may add notes here (catalog: ``notes.add``): its token opens ``/api/v1`` with the right of the purpose and
-  only the folders given, under the switch "Verbindungen mit anderen nex-Apps", not the one of the API;
+- nextime may add notes here (catalog: ``notes.add``): its token opens ``POST /api/v1/notes`` into the folders given
+  and nothing else of ``/api/v1``, under the switch "Verbindungen mit anderen nex-Apps", not the one of the API;
 - nexnotes' requests to nextasks go through a connection of the module when there is one (it takes the place of a key
   typed in), else as before over the key;
 - the older way ``PUT /api/nextasks`` (a key typed in, NOTES-19) keeps working beside the module;
@@ -32,7 +32,7 @@ from app.vendor import nexverbinden
 from app.vendor.nexverbinden import connect
 from app.vendor.nexverbinden.reach import Answer
 
-from .test_notes3 import new_note
+from .test_notes3 import new_note, stored
 
 
 def _folder(client: TestClient, name: str) -> str:
@@ -68,9 +68,6 @@ def test_nextime_adds_notes_only_into_the_folders_it_was_given(client, operator)
     new_note(client, title="Groceries", markdown="y", folder_id=home)
     token = _connection(operator.id, "nextime", ("notes.add",), [home])
     program = TestClient(client.app)
-    listed = program.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"})
-    assert listed.status_code == 200, listed.text
-    assert [note["title"] for note in listed.json()["notes"]] == ["Groceries"]
     made = program.post("/api/v1/notes", headers={"Authorization": f"Bearer {token}"},
                         json={"title": "From the calendar", "folder_id": home})
     assert made.status_code == 201, made.text
@@ -80,12 +77,70 @@ def test_nextime_adds_notes_only_into_the_folders_it_was_given(client, operator)
     # The switch of the API is not the one of connections; theirs closes the way and deletes nothing.
     with SessionLocal() as db:
         settings_service.save(db, {"api_enabled": False})
-    assert program.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"}).status_code == 200
+    again = program.post("/api/v1/notes", headers={"Authorization": f"Bearer {token}"},
+                         json={"title": "Once more", "folder_id": home})
+    assert again.status_code == 201, again.text
     with SessionLocal() as db:
         VerbindenStore(db).set_setting("connections", False)
         db.commit()
-    off = program.get("/api/v1/notes", headers={"Authorization": f"Bearer {token}"})
+    off = program.post("/api/v1/notes", headers={"Authorization": f"Bearer {token}"},
+                       json={"title": "Off", "folder_id": home})
     assert off.status_code == 403 and off.json()["detail"]["code"] == "connections_off"
+
+
+def test_adding_notes_opens_nothing_else_of_the_api(client, operator):
+    """Befundsuche 28.11.2026: "Notizen anlegen" is all a connection with ``notes.add`` may; no reading, no searching,
+    no changing or trashing, also without a choice of folders (all of them)."""
+    note = new_note(client, title="Diary", markdown="private")["id"]
+    token = _connection(operator.id, "nextime", ("notes.add",), None)
+    program = TestClient(client.app, headers={"Authorization": f"Bearer {token}"})
+    for method, path, body in (
+        ("GET", "/api/v1/notes", None), ("GET", f"/api/v1/notes/{note}", None), ("GET", "/api/v1/me", None),
+        ("GET", "/api/v1/search?q=private", None), ("GET", "/api/v1/folders", None),
+        ("GET", "/api/v1/dashboard", None), ("DELETE", f"/api/v1/notes/{note}", None),
+        ("PATCH", f"/api/v1/notes/{note}", {"title": "Mine now"}),
+        ("PUT", f"/api/v1/notes/{note}/content", {"markdown": "gone", "base": "x"}),
+    ):
+        answer = program.request(method, path, json=body)
+        assert answer.status_code == 403, (method, path, answer.text)
+        assert answer.json()["detail"]["code"] == "purpose_missing", (method, path)
+    kept = stored(note)
+    assert kept.title == "Diary" and kept.deleted_at is None
+    assert program.post("/api/v1/notes", json={"title": "From the calendar"}).status_code == 201
+
+
+def test_a_connection_finds_again_only_the_notes_it_made(client, operator):
+    """The same ``external_ref`` gives the same note, but a connection's references stand apart from those of the
+    account's own programs: it cannot fetch one of their notes by guessing a reference."""
+    from app.models import Account
+    from app.services import apitokens
+
+    with SessionLocal() as db:
+        key = apitokens.make(db, db.get(Account, operator.id), "Script", kind="api", level="write")[1]
+    mine = client.post("/api/v1/notes", headers={"Authorization": f"Bearer {key}"},
+                       json={"title": "Secret plan", "external_ref": "nextime:1:7:"})
+    assert mine.status_code == 201, mine.text
+    token = _connection(operator.id, "nextime", ("notes.add",), None)
+    program = TestClient(client.app, headers={"Authorization": f"Bearer {token}"})
+    first = program.post("/api/v1/notes", json={"title": "Dentist", "external_ref": "nextime:1:7:"})
+    assert first.status_code == 201 and first.json()["id"] != mine.json()["id"], first.text
+    assert first.json()["title"] == "Dentist"
+    again = program.post("/api/v1/notes", json={"title": "Dentist", "external_ref": "nextime:1:7:"})
+    assert again.status_code == 200 and again.json()["id"] == first.json()["id"]
+
+
+def test_a_connection_rests_while_the_account_owes_the_second_factor(client, operator):
+    """EC-9 as for API and MCP keys: the operator requires a second factor, the account has none yet; the
+    connection's token is refused until it enrols (the module's ``account_resting``)."""
+    token = _connection(operator.id, "nextime", ("notes.add",), None)
+    program = TestClient(client.app, headers={"Authorization": f"Bearer {token}"})
+    with SessionLocal() as db:
+        settings_service.save(db, {"two_factor_required": True})
+    refused = program.post("/api/v1/notes", json={"title": "From the calendar"})
+    assert refused.status_code == 401 and refused.json()["detail"]["code"] == "account_resting", refused.text
+    with SessionLocal() as db:
+        settings_service.save(db, {"two_factor_required": False})
+    assert program.post("/api/v1/notes", json={"title": "From the calendar"}).status_code == 201
 
 
 def test_a_connection_without_the_purpose_opens_nothing(client, operator):
@@ -224,3 +279,65 @@ def test_forget_legacy_ends_the_key_typed_in_and_keeps_the_choice_of_lists(clien
     with SessionLocal() as db:
         access = nextasks_service.connected_access(db, operator.id)
     assert access.connected_by == operator.id and access.token == ""
+
+
+def _choice(account_id: int) -> tuple[str, str] | None:
+    from app.models_nextasks import NextasksConnection
+
+    with SessionLocal() as db:
+        row = db.get(NextasksConnection, account_id)
+        return None if row is None else (row.task_choice, row.default_list_id)
+
+
+def _click_with_choice(account_id: int) -> None:
+    from app.models_nextasks import NextasksConnection
+
+    _connection(account_id, "nextasks", (), None)
+    with SessionLocal() as db:
+        db.add(NextasksConnection(account_id=account_id, url="", token_enc="", task_choice='{"areas": ["a"]}',
+                                  default_list_id="l1"))
+        db.commit()
+
+
+@pytest.mark.parametrize("way", ["browser", "iphone"])
+def test_disconnecting_the_older_way_ends_a_connection_by_click(client, operator, monkeypatch, way):
+    """Befundsuche 28.11.2026: "Trennen" of ``DELETE /api/nextasks`` and of the published iPhone app
+    (``DELETE /api/app/1/nextasks``, 204 as before) ends the connection made with a click too, as the card's
+    "Trennen" does; nextasks hears it, and nexnotes no longer says "connected"."""
+    from .test_notes24 import paired
+
+    asked: list[str] = []
+    monkeypatch.setattr(connect, "_ask", lambda _c, _s, base, method, path, **kw: asked.append(path) or {})
+    _click_with_choice(operator.id)
+    device = paired(client) if way == "iphone" else None
+    gone = device.delete("/nextasks") if device else client.delete("/api/nextasks")
+    assert gone.status_code == 204
+    with SessionLocal() as db:
+        assert VerbindenStore(db).connection(operator.id, "nextasks") is None
+    assert asked == [f"{nexverbinden.PREFIX}/revoke"]
+    assert _choice(operator.id) is None
+    status = device.get("/nextasks") if device else client.get("/api/nextasks")
+    assert status.status_code == 200 and status.json()["connected"] is False
+
+
+def test_a_key_typed_in_takes_the_place_of_a_connection_by_click(client, operator, monkeypatch):
+    """Befundsuche 28.11.2026: a key typed in for nextasks (browser or iPhone app) while connected with a click: the
+    click connection ends (the last one made counts, as V56 has it the other way round), the answer says what is
+    used now, and the choice of lists stays when it is the same nextasks."""
+    monkeypatch.setattr(connect, "_ask", lambda *args, **kwargs: {})
+    monkeypatch.setattr(nextasks_service, "check", lambda access: "Kim")
+    _click_with_choice(operator.id)
+    made = client.put("/api/nextasks", json={"url": "https://nextasks.example.com", "token": "ntk_" + "a" * 40})
+    assert made.status_code == 200, made.text
+    assert made.json()["connected"] is True and made.json()["by"] == "key"
+    with SessionLocal() as db:
+        assert VerbindenStore(db).connection(operator.id, "nextasks") is None
+        access = nextasks_service.connected_access(db, operator.id)
+    assert access.connected_by is None and access.token.startswith("ntk_")
+    assert _choice(operator.id) == ('{"areas": ["a"]}', "l1")
+    assert client.get("/api/nextasks").json()["by"] == "key"
+    # Another nextasks has other lists: there the choice of before counts no more (as before).
+    _connection(operator.id, "nextasks", (), None)
+    other = client.put("/api/nextasks", json={"url": "https://tasks.other.example.com", "token": "ntk_" + "b" * 40})
+    assert other.status_code == 200 and other.json()["by"] == "key"
+    assert _choice(operator.id) == ("", "")

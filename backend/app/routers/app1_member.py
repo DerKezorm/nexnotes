@@ -328,7 +328,7 @@ def nextasks_connect(found: Device, body: NextasksIn) -> dict[str, Any]:
     try:
         with nextasks.outgoing(account.id, connecting=True), SessionLocal() as db:
             row = nextasks.connect(db, account.id, body.url, body.token, device_id=found.device.id)
-            return nextasks.connection_out(db, row)
+            return nextasks.connection_out(db, row, account.id)
     except NextasksError as exc:
         raise exc.http() from exc
 

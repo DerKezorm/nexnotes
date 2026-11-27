@@ -250,6 +250,29 @@ def test_notes13_ec5_ec6_a_link_that_ended_or_whose_note_went_or_was_locked_show
     assert refused.status_code == 409
 
 
+def test_notes13_ec4_a_link_of_a_blocked_account_shows_nothing_while_it_is_blocked(client, operator, visitor):
+    """Befundsuche 28.11.2026: an account the operator blocked is out everywhere, its read links too (page, PDF);
+    freed again, the link works until its day."""
+    from app.models import Account
+
+    note = new_note(client, title="Geheimrezept", markdown="Prise Zimt")
+    link = make_link(client, note["id"])
+
+    def blocked(on: bool) -> None:
+        with SessionLocal() as db:
+            row = db.get(Account, operator.id)
+            assert row is not None
+            row.blocked_at = datetime.now(UTC) if on else None
+            db.commit()
+
+    blocked(True)
+    for path in (link["path"], link["path"] + "/pdf"):
+        answer = visitor.get(path, headers=DE)
+        assert answer.status_code == 404 and "Geheimrezept" not in answer.text and "Zimt" not in answer.text
+    blocked(False)
+    assert visitor.get(link["path"]).status_code == 200
+
+
 def test_notes13_ec5_an_unknown_link_looks_the_same_as_one_that_ended(client, operator, visitor):
     note = new_note(client, title="Rezept")
     link = make_link(client, note["id"])

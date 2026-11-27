@@ -134,9 +134,9 @@ class Adapter(StandardAdapter):
             db.commit()
         self._session.expire_all()
 
-    def probe(self, purpose: str) -> str | None:
-        # A connection with "notes.add" opens /api/v1 like an API token with its right and folders.
-        return "/api/v1/notes"
+    def probe(self, purpose: str) -> tuple[str, str, Any] | None:
+        # A connection with "notes.add" opens the one route that adds a note, into the folders given.
+        return ("POST", "/api/v1/notes", {"title": "From the partner"})
 
     def areas_seen(self, purpose: str, answer: Any) -> set[str]:
         return {str(note["folder"]["id"]) for note in answer["notes"] if note.get("folder")}

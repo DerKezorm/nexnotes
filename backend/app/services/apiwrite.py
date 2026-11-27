@@ -124,6 +124,9 @@ def create(caller: Caller, body: Any) -> tuple[str, bool]:
     if not markdown.strip() and not notedoc.clean_title(title):
         raise invalid("markdown", "title")
     ref = body.external_ref.strip() if body.external_ref else ""
+    if ref and caller.partner:
+        # A connection's references stand apart: it finds again only the notes it made, never one of a program.
+        ref = f"verbinden:{caller.partner}:{ref}"
     with SessionLocal() as db:
         if ref:
             found = _by_ref(db, account.id, ref)

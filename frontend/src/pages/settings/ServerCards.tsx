@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api, ApiError, settingsApi, type AddressQuestion, type ServerSettings, type SettingsChange } from '../../api/client'
+import { problemText } from '../../lib/errors'
 import { formatMoment } from '../../vendor/nexui'
 import { ASKED, useAction } from './actions'
 import { MailCard as PostMailCard } from '../../vendor/nexpost/MailCard'
@@ -17,10 +18,23 @@ export type Server = ReturnType<typeof useServerSettings>
 // eslint-disable-next-line react-refresh/only-export-components
 export function useServerSettings() {
   const [settings, setSettings] = useState<ServerSettings | null>(null)
+  /** Why the settings could not be read (shown with "Erneut versuchen"); empty while they load or once they came. */
+  const [failed, setFailed] = useState('')
   const action = useAction()
+  const reload = useCallback(
+    () =>
+      settingsApi.read().then(
+        (read) => {
+          setFailed('')
+          setSettings(read)
+        },
+        (error: unknown) => setFailed(problemText(error)),
+      ),
+    [],
+  )
   useEffect(() => {
-    settingsApi.read().then(setSettings, () => undefined)
-  }, [])
+    void reload()
+  }, [reload])
   /** The switch moves at once; the server's answer confirms it, a refusal puts it back. */
   const save = async (change: SettingsChange, done?: string) => {
     const before = settings
@@ -46,8 +60,7 @@ export function useServerSettings() {
     }, done)
     return question
   }
-  const reload = useCallback(() => settingsApi.read().then(setSettings, () => undefined), [])
-  return { settings, save, saveAddress, reload, ...action }
+  return { settings, failed, save, saveAddress, reload, ...action }
 }
 
 /** The client of the post module's card: nexnotes' requests (its tab header, its errors with their codes). */

@@ -180,6 +180,12 @@ describe('NOTES-14 the bell of a shared note', () => {
     expect(box.querySelector('[data-testid="notify-preview"]')!.textContent).toBe('Anna in „Einkauf Samstag“+ Eier, + Butter')
   })
 
+  it('NOTES-14 AC-8 shows a device whose app switched every kind off as off', async () => {
+    settings = { ...settings, devices: { ...settings.devices, apps: [{ id: 4, name: 'iPhone von Nora', on: false }] } }
+    await openBell()
+    expect(box.querySelector('[data-testid="notify-app-off"]')!.textContent).toBe('aus')
+  })
+
   it('NOTES-14 AC-7 "Erlauben" asks the browser and signs it up at the server', async () => {
     await openBell()
     await click(box.querySelector('[data-testid="notify-allow"]'))
