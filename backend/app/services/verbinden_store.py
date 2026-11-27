@@ -5,10 +5,11 @@ nexnotes is a guest at nextasks (tasks to read and write, NOTES-19) and at the o
 to add), and the host of nextime (it adds notes into the folders it was given). What a connection opens here is
 ``/api/v1`` with the right of its purpose and the folders given (``routers/api_v1.wall``).
 
-⚠️ **Old connections notice nothing.** The connection to nextasks typed in by hand (``nextasks_connections``, ``PUT
-/api/nextasks``) stays as it is and keeps working; the module only reads it to show it ("Verbunden über API-Schlüssel
-ntk_…"). After "Neu verbinden" the key typed in back then ends itself at nextasks (``old_key``); nexnotes then uses
-the new connection (``services/nextasks.connected_access``).
+⚠️ **Old connections.** The connection to nextasks typed in by hand (``nextasks_connections``, ``PUT /api/nextasks``,
+also from the iPhone app) keeps working; the module reads it to show it ("Verbunden über API-Schlüssel ntk_…"). Since
+verbinden 0.2.0 (B9, V56) it ends once the account connects with a click, disconnects or declines (``forget_legacy``:
+the sealed key goes, the choice of lists stays); the key typed in back then ends itself at nextasks (``old_key``) and
+nexnotes uses the new connection (``services/nextasks.connected_access``).
 """
 
 from __future__ import annotations
@@ -227,6 +228,19 @@ class VerbindenStore:
         token = decrypt_secret(row.token_enc, f"nextasks:{row.account_id}")
         return [nexverbinden.Legacy(partner="nextasks", partner_base=row.url, shown=token[:8],
                                     ok_at=_aware(row.checked_at))]
+
+    def forget_legacy(self, account_id: Any, partner: str) -> None:
+        """verbinden 0.2.0 (B9, V56): the connection to nextasks typed in by hand ends (a click connection, "Trennen" or
+        "Ablehnen" with nextasks); the row stays with the choice of lists a click connection keeps in it. A row a paired
+        device made (``device_id``, NOTESIOS-22) ends too: the click connection counts for the account."""
+        if partner != "nextasks":
+            return
+        row = self.db.get(NextasksConnection, int(account_id))
+        if row is None or not row.token_enc:
+            return
+        row.token_enc = ""
+        row.device_id = None
+        self.db.flush()
 
     def retire_key(self, token: str) -> bool:
         """An API token of nexnotes that a partner had typed in ends itself (after the partner connected anew)."""

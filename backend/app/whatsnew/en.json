@@ -5,7 +5,7 @@
       {
         "title": "Other nex apps in one click",
         "where": "My account › Connections",
-        "body": "nextasks, nexlore and nextime each have a card of their own here. Click “Connect with …”, agree once in the other app, done: no key to copy. Beforehand it says in plain words what each app may do, and it may do no more. With nextasks you send lines or whole notes as tasks, as before; a connection made with a key keeps working. To nexlore you hand a note into a space you choose. In nextime, “Note in nexnotes” makes a note about an event in your inbox. You can end any connection here at any time, for both sides."
+        "body": "nextasks, nexlore and nextime each have a card of their own here. Click “Connect with …”, agree once in the other app, done: no key to copy. Beforehand it says in plain words what each app may do, and it may do no more. With nextasks you send lines or whole notes as tasks, as before; a connection made with a key keeps working until you connect with one click, then the new one replaces it. To nexlore you hand a note into a space you choose. In nextime, “Note in nexnotes” makes a note about an event in your inbox. You can end any connection here at any time, for both sides."
       },
       {
         "title": "Your devices in one place",
@@ -25,7 +25,7 @@
       {
         "title": "For the operator",
         "where": "Server › Connections, Server › Accounts",
-        "body": "Nothing to do for the update: nexnotes makes a backup first, every key and connected device keeps working, the published iPhone app unchanged. Under Server › Connections you enter the addresses of the other nex apps once (for apps in your own network also “Connections into the local network”); Interfaces has the switches “Allow the iPhone app” and “Connect new devices”. Under Server › Accounts › Manage you see how many devices an account has and can disconnect them. “Ready for the internet?” under Server › Sign-in checks the address, the second factor, the protection against guessing, cookies and the proxy. Switching “Require a second factor of everybody” off asks for your password.",
+        "body": "Nothing to do for the update: nexnotes makes a backup first, every key and connected device keeps working, the published iPhone app unchanged. Under Server › Connections you enter the addresses of the other nex apps once (for apps in your own network also “Connections into the local network”); nexnotes checks each address when you save it. When another nex app connects, it suggests the addresses it knows, and you take them over with one click. Interfaces has the switches “Allow the iPhone app” and “Connect new devices”. Under Server › Accounts › Manage you see how many devices an account has and can disconnect them. “Ready for the internet?” under Server › Sign-in checks the address, the second factor, the protection against guessing, cookies and the proxy. Switching “Require a second factor of everybody” off asks for your password.",
         "operator": true
       }
     ],

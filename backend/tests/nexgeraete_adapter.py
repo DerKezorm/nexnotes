@@ -169,26 +169,9 @@ class Adapter(StandardAdapter):
     def block(self, account: str = "owner") -> None:
         from app.services import accounts
 
-        if account == "operator":
-            self._spare_operator()
         db, row = self._account(account)
         with db:
             accounts.block(db, row)
-
-    def _spare_operator(self) -> None:
-        """nexnotes never blocks its last operator (``last_operator``): a second one without devices, once."""
-        from app.db import SessionLocal
-        from app.models import OPERATOR, Account
-        from app.security import hash_password
-
-        if getattr(self, "spare", None) is not None:
-            return
-        with SessionLocal() as db:
-            row = Account(name="contract-spare", display_name="Contract spare", email="spare@example.com",
-                          role=OPERATOR, password_hash=hash_password(secrets.token_urlsafe(16)))
-            db.add(row)
-            db.commit()
-            self.spare = row.id
 
     def unblock(self, account: str = "owner") -> None:
         """Unblocking ends the browser sessions of before (konten): the account's browser signs in anew."""

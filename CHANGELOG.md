@@ -23,8 +23,8 @@ more. The card shows since when you are connected, when the connection was last 
   (each line becomes a task, with a list and an optional due date, and keeps a mark that leads to it); **As a nextasks
   task** in the bar at selected text; **As a nextasks task** in a note's menu turns the whole note into one task (the
   title becomes the task, the text its notes, and the task leads back to the note). You still choose which areas and
-  lists nexnotes may use and which list comes first. A connection you made with a key keeps working as it is;
-  **Connect again** turns it into the new kind.
+  lists nexnotes may use and which list comes first. A connection you made with a key keeps working until you
+  connect with one click: the new connection replaces it.
 - **nexlore, new:** **To nexlore** in a note's menu puts the note into a space of nexlore you pick, with its title and
   text. The note stays here as it is. Notes in the vault are never sent.
 - **nextime, new:** in nextime, **Note in nexnotes** in an event's panel makes a note in your nexnotes inbox with the
@@ -32,8 +32,9 @@ more. The card shows since when you are connected, when the connection was last 
   may only add notes; it reads nothing of yours.
 - **The operator sets the other apps up once**, under **Server › Connections › Other nex apps**: the address of each app,
   and whether nexnotes may reach apps in the local network (**Connections into the local network**). After that every
-  account only clicks. Connections can be switched off for everybody there; nothing is deleted. When something goes
-  wrong in the other app, you come back to your card and read there what happened.
+  account only clicks. nexnotes checks each address when you save it. When another nex app connects, it suggests the
+  addresses it knows; you take one over with a click. Connections can be switched off for everybody there; nothing is
+  deleted. When something goes wrong in the other app, you come back to your card and read there what happened.
 
 ### iPhone, iPad and Mac
 

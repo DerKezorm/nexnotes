@@ -106,7 +106,9 @@ sides.
 
 The operator enters the address of each app once under **Settings › Server › Connections › Other nex apps**; after that
 every account only clicks. Apps in the local network (LAN, VPN) need **Connections into the local network** there as
-well. A connection to nextasks made with an API key keeps working; **Connect again** turns it into the new kind.
+well; nexnotes checks each address when it is saved, and addresses another nex app suggests are taken over with one
+click. A connection to nextasks made with an API key keeps working until the account connects with one click, which
+replaces it.
 
 ## Start
 

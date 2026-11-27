@@ -13,7 +13,7 @@ import { connectRequest, leave } from './words'
 export function Consent() {
   const { t, i18n } = useTranslation()
   const { search } = useLocation()
-  return <ConsentPage request={connectRequest} search={search} areaWord={t('tokens.dialog.folders')} language={i18n.language} navigate={(address) => leave.to(address)} />
+  return <ConsentPage app="nexnotes" request={connectRequest} search={search} areaWord={t('tokens.dialog.folders')} language={i18n.language} navigate={(address) => leave.to(address)} />
 }
 
 export function Return() {

@@ -5,7 +5,7 @@
       {
         "title": "Andere nex-Apps mit einem Klick",
         "where": "Mein Konto › Verbindungen",
-        "body": "nextasks, nexlore und nextime haben hier je eine eigene Karte. Klick auf „Mit … verbinden“, stimm in der anderen App einmal zu, fertig: kein Schlüssel zum Kopieren. Vorher steht in Worten da, was jede App darf, und mehr darf sie nicht. Mit nextasks schickst du Zeilen oder ganze Notizen als Aufgaben, wie bisher; eine Verbindung mit Schlüssel läuft weiter. An nexlore gibst du eine Notiz in einen Bereich deiner Wahl. In nextime legt „Notiz in nexnotes“ eine Notiz zu einem Termin in deinem Eingang an. Jede Verbindung lässt sich hier jederzeit beenden, für beide Seiten."
+        "body": "nextasks, nexlore und nextime haben hier je eine eigene Karte. Klick auf „Mit … verbinden“, stimm in der anderen App einmal zu, fertig: kein Schlüssel zum Kopieren. Vorher steht in Worten da, was jede App darf, und mehr darf sie nicht. Mit nextasks schickst du Zeilen oder ganze Notizen als Aufgaben, wie bisher; eine Verbindung mit Schlüssel läuft weiter, bis du per Klick verbindest, dann löst die neue sie ab. An nexlore gibst du eine Notiz in einen Bereich deiner Wahl. In nextime legt „Notiz in nexnotes“ eine Notiz zu einem Termin in deinem Eingang an. Jede Verbindung lässt sich hier jederzeit beenden, für beide Seiten."
       },
       {
         "title": "Deine Geräte an einem Ort",
@@ -25,7 +25,7 @@
       {
         "title": "Für den Betreiber",
         "where": "Server › Verbindungen, Server › Konten",
-        "body": "Beim Update ist nichts zu tun: nexnotes legt vorher eine Sicherung an, alle Schlüssel und verbundenen Geräte arbeiten weiter, die veröffentlichte iPhone-App unverändert. Unter Server › Verbindungen trägst du die Adressen der anderen nex-Apps einmal ein (für Apps im eigenen Netz dazu „Verbindungen ins eigene Netz“), unter Schnittstellen stehen die Schalter „iPhone-App erlauben“ und „Neue Geräte verbinden“. Unter Server › Konten › Verwalten siehst du, wie viele Geräte ein Konto hat, und kannst sie trennen. „Bereit fürs Internet?“ unter Server › Anmeldung prüft Adresse, zweiten Faktor, Schutz vor Raten, Cookies und Proxy. „Zweiten Faktor für alle verlangen“ abzuschalten fragt nach deinem Passwort.",
+        "body": "Beim Update ist nichts zu tun: nexnotes legt vorher eine Sicherung an, alle Schlüssel und verbundenen Geräte arbeiten weiter, die veröffentlichte iPhone-App unverändert. Unter Server › Verbindungen trägst du die Adressen der anderen nex-Apps einmal ein (für Apps im eigenen Netz dazu „Verbindungen ins eigene Netz“); nexnotes prüft jede Adresse beim Speichern. Verbindet sich eine andere nex-App, schlägt sie die Adressen vor, die sie kennt, und du übernimmst sie mit einem Klick. Unter Schnittstellen stehen die Schalter „iPhone-App erlauben“ und „Neue Geräte verbinden“. Unter Server › Konten › Verwalten siehst du, wie viele Geräte ein Konto hat, und kannst sie trennen. „Bereit fürs Internet?“ unter Server › Anmeldung prüft Adresse, zweiten Faktor, Schutz vor Raten, Cookies und Proxy. „Zweiten Faktor für alle verlangen“ abzuschalten fragt nach deinem Passwort.",
         "operator": true
       }
     ],

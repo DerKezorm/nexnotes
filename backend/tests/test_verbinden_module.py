@@ -169,7 +169,7 @@ def test_the_consent_page_shows_the_account_with_its_shown_name_and_own_picture(
         assert connect.account_card(VerbindenStore(db), operator.id)["name"] == ""
 
 
-def test_trennen_drops_the_choice_kept_for_a_click_and_never_a_key_typed_in(client, operator, monkeypatch):
+def test_trennen_drops_the_choice_kept_for_a_click_and_the_key_typed_in(client, operator, monkeypatch):
     from app.models_nextasks import NextasksConnection
     from app.security import encrypt_secret
 
@@ -181,7 +181,7 @@ def test_trennen_drops_the_choice_kept_for_a_click_and_never_a_key_typed_in(clie
     assert client.delete("/api/connect/partners/nextasks").status_code == 200
     with SessionLocal() as db:
         assert db.get(NextasksConnection, operator.id) is None
-    # A key typed in is its own connection: ending one by click leaves it.
+    # Since verbinden 0.2.0 (B9, V56) "Trennen" ends a key typed in as well: the card shows "Nicht verbunden".
     _connection(operator.id, "nextasks", (), None)
     with SessionLocal() as db:
         db.add(NextasksConnection(account_id=operator.id, url="https://nextasks.example.com",
@@ -189,4 +189,38 @@ def test_trennen_drops_the_choice_kept_for_a_click_and_never_a_key_typed_in(clie
         db.commit()
     assert client.delete("/api/connect/partners/nextasks").status_code == 200
     with SessionLocal() as db:
-        assert db.get(NextasksConnection, operator.id) is not None
+        row = db.get(NextasksConnection, operator.id)
+        assert row is None or not row.token_enc
+        assert VerbindenStore(db).legacy(operator.id) == []
+
+
+def test_forget_legacy_ends_the_key_typed_in_and_keeps_the_choice_of_lists(client, operator):
+    """verbinden 0.2.0 (B9, V56): ``forget_legacy`` empties the sealed key of nextasks, also one a paired device typed
+    in (NOTESIOS-22); the choice of lists stays, and nextasks answers only over the click connection."""
+    from app.models_nextasks import NextasksConnection
+    from app.security import encrypt_secret
+
+    with SessionLocal() as db:
+        db.add(NextasksConnection(account_id=operator.id, url="https://nextasks.example.com",
+                                  token_enc=encrypt_secret("ntk_x", f"nextasks:{operator.id}"), name="Kim",
+                                  device_id=4711, task_choice='{"areas": ["a"]}', default_list_id="l1"))
+        db.commit()
+    with SessionLocal() as db:
+        store = VerbindenStore(db)
+        store.forget_legacy(operator.id, "nexlore")  # another partner: nothing of nextasks ends
+        assert db.get(NextasksConnection, operator.id).token_enc
+        store.forget_legacy(operator.id, "nextasks")
+        db.commit()
+    with SessionLocal() as db:
+        row = db.get(NextasksConnection, operator.id)
+        assert row is not None and row.token_enc == "" and row.device_id is None
+        assert row.task_choice == '{"areas": ["a"]}' and row.default_list_id == "l1"
+        assert VerbindenStore(db).legacy(operator.id) == []
+        with pytest.raises(nextasks_service.NextasksError) as gone:
+            nextasks_service.connected_access(db, operator.id)
+        assert gone.value.code == "nextasks_not_connected"
+        VerbindenStore(db).forget_legacy(operator.id, "nextasks")  # twice is fine
+    _connection(operator.id, "nextasks", (), None)
+    with SessionLocal() as db:
+        access = nextasks_service.connected_access(db, operator.id)
+    assert access.connected_by == operator.id and access.token == ""
