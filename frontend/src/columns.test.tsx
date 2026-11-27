@@ -16,9 +16,6 @@ let root: Root
 let box: HTMLDivElement
 let me = 1
 
-/** "Was ist neu" of the shared module wasneu, which the frame asks: nothing unread. */
-const NOTHING_NEW = { version: '1.2.0', seen: '1.2.0', unread: [], more: false, current: null, earlier: false }
-
 beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   localStorage.clear()
@@ -33,9 +30,7 @@ beforeEach(async () => {
           ? { needs_setup: false, signed_in: true, code_required: true, version: '0.1.0', min_password: 12 }
           : path === '/api/auth/me'
             ? { id: me, name: 'anna', display_name: 'Anna', role: 'member', sign_in: 'password', language: 'en', version: '0.1.0', whats_new_seen: '0.1.0' }
-            : path.startsWith('/api/whats-new')
-              ? NOTHING_NEW
-              : []
+            : []
       return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } })
     }),
   )

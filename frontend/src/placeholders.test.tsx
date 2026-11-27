@@ -47,9 +47,6 @@ const ME = {
 let root: Root
 let box: HTMLDivElement
 
-/** "Was ist neu" of the shared module wasneu, which the frame asks: nothing unread. */
-const NOTHING_NEW = { version: '1.2.0', seen: '1.2.0', unread: [], more: false, current: null, earlier: false }
-
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   handler = () => undefined
@@ -59,7 +56,7 @@ beforeEach(() => {
       const path = String(input)
       const method = init?.method ?? 'GET'
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
-      const answer = handler(method, path, body) ?? (path.startsWith('/api/whats-new') ? { status: 200, body: NOTHING_NEW } : { status: 200, body: [] })
+      const answer = handler(method, path, body) ?? { status: 200, body: [] }
       return new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } })
     }),
   )

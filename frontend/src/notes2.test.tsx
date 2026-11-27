@@ -25,9 +25,6 @@ const ME = {
   two_factor: false, two_factor_recovery_left: 0, version: '0.1.0', whats_new_seen: '0.1.0',
 }
 
-/** "Was ist neu" of the shared module wasneu, which the frame asks: nothing unread. */
-const NOTHING_NEW = { version: '1.2.0', seen: '1.2.0', unread: [], more: false, current: null, earlier: false }
-
 beforeEach(async () => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   calls.length = 0
@@ -41,8 +38,7 @@ beforeEach(async () => {
       calls.push({ method, path, body })
       // The devices of an account in "Verwalten" (module geraete): none, unless a test says otherwise.
       const devices = /^\/api\/server\/accounts\/[^/]+\/devices$/.test(path) ? { status: 200, body: { count: 0, devices: [] } } : undefined
-      const news = path.startsWith('/api/whats-new') ? { status: 200, body: NOTHING_NEW } : undefined
-      const answer = handler(method, path, body) ?? devices ?? news ?? { status: 200, body: [] }
+      const answer = handler(method, path, body) ?? devices ?? { status: 200, body: [] }
       return new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } })
     }),
   )
