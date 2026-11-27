@@ -15,4 +15,4 @@ icon: bell
 
 Mitteilungen kommen gebündelt: erst, wenn zwei Minuten lang niemand mehr schreibt. Deine eigenen Änderungen melden sich nicht. Die Glocke oben sammelt alles, was du verpasst hast.
 
-Wo deine Mitteilungen ankommen, siehst du unter **Einstellungen › Mein Konto › Benachrichtigungen**: dieser Browser (ein- und ausschalten, Probemeldung schicken), deine anderen Browser mit Mitteilungen und die iPhone- und iPad-App.
+Wo deine Mitteilungen ankommen, siehst du unter **Einstellungen › Mein Konto › Benachrichtigungen**: dieser Browser (ein- und ausschalten, Probemeldung schicken), deine anderen Browser mit Mitteilungen und die iPhone- und iPad-App. Darunter stellst du je Gerät ein, welche Mitteilungen es bekommt.

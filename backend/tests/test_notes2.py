@@ -319,8 +319,10 @@ def test_notes2_ec9_the_device_of_a_blocked_or_deleted_account_gets_nothing_acce
         refused = device.put("/api/me/language", json={"language": "en"})
         assert refused.status_code == 401
         assert _row(f"p{way}").language == "de"
+        # The device rests (G26, konten 1.1.5): it stays, refused while the account is out.
+        assert device.get("/api/app/1/me").json()["detail"]["code"] == "account_blocked"
         with SessionLocal() as db:
-            assert db.scalar(select(func.count()).select_from(ApiToken).where(ApiToken.account_id == person.id)) == 0
+            assert db.scalar(select(func.count()).select_from(ApiToken).where(ApiToken.account_id == person.id)) == 1
     # A token that is still there counts for nothing while its account is blocked, however the block came about.
     late = make_account("plate")
     with SessionLocal() as db:

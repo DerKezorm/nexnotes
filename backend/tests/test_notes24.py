@@ -134,6 +134,13 @@ NOTE_B = "BBBBBBBBBBBBBBBBBBBBBB"
 NOTE_C = "CCCCCCCCCCCCCCCCCCCCCC"
 
 
+def browser_devices(client: TestClient) -> list[dict]:
+    """``GET /api/app-devices`` of the browser (module geraete, G48: an object, newest first), oldest first."""
+    answer = client.get("/api/app-devices")
+    assert answer.status_code == 200, answer.text
+    return sorted(answer.json()["devices"], key=lambda entry: entry["id"])
+
+
 def pairing(client: TestClient) -> dict:
     answer = client.post("/api/app-pairing", json={"address": "https://notes.example.com"})
     assert answer.status_code == 201, answer.text
@@ -185,7 +192,9 @@ def test_notes24_ac1_qr_code_pairs_one_device_for_ten_minutes(client, operator):
     link = urlsplit(made["link"])
     assert (link.scheme, link.netloc) == ("nexnotes", "connect")
     query = parse_qs(link.query)
-    assert query == {"server": ["https://notes.example.com"], "pairing": [made["id"]], "secret": [made["secret"]]}
+    # Module geraete (G6): the address under both names, ``server`` for nexnotes' app.
+    assert query == {"server": ["https://notes.example.com"], "address": ["https://notes.example.com"],
+                     "pairing": [made["id"]], "secret": [made["secret"]]}
     assert made["qr_svg"].startswith("<svg") and "viewBox" in made["qr_svg"]
     with SessionLocal() as db:
         row = db.get(AppPairing, made["id"])
@@ -259,7 +268,8 @@ def test_notes24_ec3_wrong_used_or_expired_codes_are_refused_and_count_at_the_br
 def _connect(client: TestClient, state: str = "S" * 22) -> str:
     answer = client.post("/api/app-connect", json={"state": state})
     assert answer.status_code == 200, answer.text
-    link = urlsplit(answer.json()["link"])
+    # Module geraete (G48): the page's link back into the app is ``redirect``.
+    link = urlsplit(answer.json()["redirect"])
     assert (link.scheme, link.netloc) == ("nexnotes", "connected")
     query = parse_qs(link.query)
     assert query["state"] == [state]
@@ -732,17 +742,17 @@ def test_notes24_ec1_wait_ends_for_a_device_disconnected_meanwhile(client, opera
 def test_notes24_ac5_devices_with_name_kind_last_contact_and_notifications(client, operator):
     phone = paired(client, "iPhone von Mila", "ios")
     mac = paired(client, "Mac mini", "mac")
-    assert client.get("/api/app-devices").json()[1]["last_seen_at"] is None
+    assert browser_devices(client)[1]["last_seen_at"] is None
     assert mac.get("/me").status_code == 200
     assert phone.client.put("/api/app/1/push", headers=phone.headers,
                             json={"ticket": "t-1", "key": base64.b64encode(b"\x09" * 32).decode()}).status_code == 204
-    listed = client.get("/api/app-devices").json()
+    listed = browser_devices(client)
     assert [(entry["name"], entry["kind"], entry["push"]) for entry in listed] == [
         ("iPhone von Mila", "ios", True), ("Mac mini", "mac", False)]
     assert all(entry["created_at"] and entry["last_seen_at"] for entry in listed)
     lena = make_account("lena")
     with new_client(lena) as other:
-        assert other.get("/api/app-devices").json() == []
+        assert browser_devices(other) == []
         assert other.delete(f"/api/app-devices/{listed[0]['id']}").status_code == 404
 
 
@@ -757,14 +767,14 @@ def test_notes24_ac5_a_disconnected_device_reaches_nothing_from_that_moment(clie
     # Also on the browser's routes.
     assert client.get(f"/api/notes/{NOTE_A}", headers=phone.headers).status_code == 401
     assert pad.get("/me").status_code == 200
-    assert [entry["name"] for entry in client.get("/api/app-devices").json()] == ["iPad"]
+    assert [entry["name"] for entry in browser_devices(client)] == ["iPad"]
 
 
 def test_notes24_ac5_the_app_disconnects_itself(client, operator):
     phone = paired(client)
     assert phone.delete("/device").status_code == 204
     assert phone.get("/me").json()["detail"]["code"] == "device_disconnected"
-    assert client.get("/api/app-devices").json() == []
+    assert browser_devices(client) == []
 
 
 def test_notes24_ac7_another_own_device_comes_in_on_its_own(client, operator):
@@ -776,12 +786,13 @@ def test_notes24_ac7_another_own_device_comes_in_on_its_own(client, operator):
     with SessionLocal() as db:
         row = db.get(ApiToken, answer.json()["device"]["id"])
         assert row.via_token_id == phone.get("/me").json()["device"]["id"]
-    assert [entry["name"] for entry in client.get("/api/app-devices").json()] == ["iPhone", "iPad"]
+    assert [entry["name"] for entry in browser_devices(client)] == ["iPhone", "iPad"]
     # Each is disconnected alone.
     assert client.delete(f"/api/app-devices/{answer.json()['device']['id']}").status_code == 204
     assert pad.get("/me").status_code == 401 and phone.get("/me").status_code == 200
-    # No factory of tokens.
-    for _ in range(devices.SIBLINGS_PER_HOUR - 1):
+    # No factory of tokens. The module counts the devices of the last hour that are still there (G33): the iPad
+    # disconnected above no longer counts.
+    for _ in range(devices.SIBLINGS_PER_HOUR):
         assert phone.post("/devices", {"device_name": "x"}).status_code == 201
     too_many = phone.post("/devices", {"device_name": "x"})
     assert too_many.status_code == 429 and too_many.headers["retry-after"] == "3600"
@@ -811,8 +822,8 @@ def test_notes24_ec5_a_blocked_or_deleted_account_turns_its_devices_away(client,
         assert "after the block" not in stored_text(NOTE_A)
         with SessionLocal() as db:
             accounts.unblock(db, db.get(Account, lena.id))
-        # The block took the device for good: from now on it hears that it was disconnected.
-        assert device.get("/me").json()["detail"]["code"] == "device_disconnected"
+        # The device rested during the block and works again without pairing anew (G26, konten 1.1.5).
+        assert device.get("/me").status_code == 200
     nina = make_account("nina")
     with new_client(nina) as other:
         device = paired(other)

@@ -618,7 +618,7 @@ def test_notes14_ec7_a_note_put_in_the_trash_says_who_did_it(client, operator, a
 # --- Push subscriptions belong to the account ---------------------------------------------------------------------------
 
 
-def test_notes14_browsers_and_devices_end_with_sign_out_block_and_delete(client, operator, anna, lena, as_anna,
+def test_notes14_browsers_end_with_sign_out_block_and_delete_and_devices_rest(client, operator, anna, lena, as_anna,
                                                                          as_lena, pushed):
     allow(as_anna)
     with new_client(anna) as second:
@@ -641,7 +641,8 @@ def test_notes14_browsers_and_devices_end_with_sign_out_block_and_delete(client,
         assert rows(anna.id) == 0
         accounts.delete_account(db, db.get(Account, lena.id))
         db.expire_all()
-        assert rows(lena.id) == 0 and db.scalar(select(PushDevice)) is None
+        # The paired device rests with its ticket while the account is out (G26, konten 1.1.5); nothing goes to it.
+        assert rows(lena.id) == 0 and db.scalar(select(PushDevice)) is not None
 
 
 def test_notes14_the_head_of_the_note_says_whether_the_bell_is_on(client, operator, anna, as_anna):

@@ -53,6 +53,10 @@ DEFAULTS: dict[str, Any] = {
     #: Members may make API tokens and programs may ask under ``/api/v1/`` (NOTES-25 AC-5), the nexdeck card too.
     #: On from the start; the MCP switch stays its own.
     "api_enabled": True,
+    #: The iPhone, iPad and Mac app may be used, and new devices may connect (module geraete, the card "Schnittstellen"
+    #: under Server › Verbindungen): both on from the start, as before the switches.
+    "app_enabled": True,
+    "app_pairing_allowed": True,
     #: A member's connection (their own nextasks, NOTES-19) may point into the operator's own network (LAN, VPN):
     #: closed from the start, as in nexmail, because then every member can make nexnotes ask an address there.
     "connections_local_network": False,
@@ -68,6 +72,8 @@ DEFAULTS: dict[str, Any] = {
     "two_factor_required": False,
     #: Ask GitHub once a day whether a newer nexnotes is out (services/updates). Only the question goes out, so on.
     "update_check": True,
+    #: The newest version the operators' devices were told about (module geraete, G18), so that none hears twice.
+    "update_told": "",
     #: Invitation mail: without a host nothing is sent, the link to copy is enough.
     "smtp_host": "",
     "smtp_port": 587,

@@ -157,7 +157,7 @@ def test_notes24_ac5_a_new_password_or_signing_out_everywhere_disconnects_the_de
     pad = paired(client, "iPad", "ipados")
     assert client.post("/api/auth/logout-all").status_code == 204
     assert pad.get("/me").json()["detail"]["code"] == "device_disconnected"
-    assert client.get("/api/app-devices").json() == []
+    assert client.get("/api/app-devices").json()["devices"] == []
 
 
 # --- B12: a second factor required ------------------------------------------------------------------------------

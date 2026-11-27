@@ -30,9 +30,7 @@ from ..models import (
     OPERATOR,
     ROLES,
     SIGN_IN_PASSWORD,
-    TOKEN_DEVICE,
     Account,
-    ApiToken,
     Invite,
     PasswordReset,
     utcnow,
@@ -321,40 +319,6 @@ def reset_expired(db: Session, token: str) -> bool:
     """Whether the link is still there and only expired (to say so instead of "not valid any more")."""
     row = db.scalar(select(PasswordReset).where(PasswordReset.token_hash == hash_token(token)))
     return row is not None and row.expires_at <= utcnow()
-
-
-def use_reset(db: Session, token: str, new: str) -> Account:
-    """The person behind the link sets a new password. Every session and paired device of the account ends, the
-    account signs in with a password from now on (a provider stays linked), and it hears about it at the next
-    sign-in."""
-    from ..security import end_all_sessions
-
-    found = find_reset(db, token)
-    if found is None:
-        if reset_expired(db, token):
-            raise AccountError("reset_expired", "This link has expired.", 404)
-        raise AccountError("reset_invalid", "This link has been used already or is not valid any more.", 404)
-    reset, account = found
-    check_password_rule(new)
-    # The link goes first, in the same transaction: two requests at once set one password, not two.
-    try:
-        gone = int(db.execute(delete(PasswordReset).where(PasswordReset.id == reset.id)).rowcount or 0) == 1
-    except OperationalError:
-        gone = False
-    if not gone:
-        db.rollback()
-        raise AccountError("reset_invalid", "This link has been used already or is not valid any more.", 404)
-    account.password_hash = hash_password(new)
-    account.password_changed_at = utcnow()
-    account.sign_in = SIGN_IN_PASSWORD
-    account.failed_logins = 0
-    account.locked_until = None
-    account.password_reset_notice = True
-    db.execute(delete(ApiToken).where(ApiToken.account_id == account.id, ApiToken.kind == TOKEN_DEVICE))
-    db.commit()
-    end_all_sessions(db, account.id)
-    logger.warning("Password set through a reset link name=%s", account.name)
-    return account
 
 
 # --- Roles, blocking, deleting ---------------------------------------------------------------------------------------

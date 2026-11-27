@@ -40,7 +40,8 @@ RAISED = re.compile(
 #: ``mail.error.*``, the key module's, checked in ``frontend/src/nexkonten.test.ts``, ``nexpost.test.ts`` and
 #: ``nexschluessel.test.tsx``; the languages module's in ``nexsprachen.test.tsx``) and name other apps in their comments;
 #: they are not nexnotes' to word.
-SHARED = {"nexkonten", "nexpost", "nexschluessel", "nexsprachen", "nexupdates", "nexmcp", "nexverbinden"}
+SHARED = {"nexkonten", "nexpost", "nexschluessel", "nexsprachen", "nexupdates", "nexmcp", "nexverbinden", "nexgeraete",
+          "nexwasneu"}
 
 
 def _sources(folder: Path, suffixes: tuple[str, ...]) -> str:
@@ -87,10 +88,12 @@ def test_every_sentence_belongs_to_a_code_still_used() -> None:
     backend, frontend = _sources(APP, (".py",)), _sources(FRONTEND, (".ts", ".tsx"))
     # The shared account module raises its codes itself (``vendor/nexkonten``); nexnotes answers some of them under
     # its older names (``konten_store.OLD_CODES``) and keeps their sentences for pages and scripts of before.
+    # The module geraete raises the codes of pairing and devices itself (``vendor/nexgeraete``).
     from app.services.konten_store import OLD_CODES
+    from app.vendor.nexgeraete import CODES as DEVICE_CODES
     from app.vendor.nexkonten import CODES
 
-    shared = set(CODES) | set(OLD_CODES.values())
+    shared = set(CODES) | set(OLD_CODES.values()) | set(DEVICE_CODES)
     unused = [code for code in texts("de") if code not in server_codes() and f'"{code}"' not in backend
               and f"'{code}'" not in frontend and f"errors.{code}" not in frontend and code not in shared]
     assert unused == []

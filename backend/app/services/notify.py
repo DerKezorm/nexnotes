@@ -548,13 +548,34 @@ def _enqueue(db: Session, account: Account, note_id: str, payload: dict[str, Any
         db.add(NotifyOutbox(account_id=account.id, channel="web", target_id=row.id, payload=payload, created_at=now,
                             next_try_at=now))
         count += 1
-    if apppush.relay_url():
-        for device, _token in apppush.devices(db, account.id):
-            if _device_shows(device.token_id, note_id):
-                continue
-            db.add(NotifyOutbox(account_id=account.id, channel="app", target_id=device.token_id, payload=payload,
-                                created_at=now, next_try_at=now))
-            count += 1
+    count += _enqueue_devices(db, account, note_id, payload, now)
+    return count
+
+
+def _enqueue_devices(db: Session, account: Account, note_id: str, payload: dict[str, Any], now: datetime) -> int:
+    """One row per device of the account that gets this kind (module geraete, G16, G25): signed up for
+    notifications, understanding the kind (the published app: ``changed`` and ``trashed``) and with it on; none while
+    the operator has the app switched off or there is no relay. Each row is sent and tried again on its own (EC-2)."""
+    from ..vendor.nexgeraete import push
+    from .geraete_config import CONFIG
+    from .geraete_store import GeraeteStore
+
+    store = GeraeteStore(db)
+    if not apppush.relay_url() or not store.switch("app"):
+        return 0
+    holder = store.holder(account.id)
+    if holder is None or holder.out:
+        return 0
+    kind = str(payload.get("type") or "changed")
+    count = 0
+    for device in store.devices_of(account.id):
+        if device.push is None or _device_shows(int(device.id), note_id):
+            continue
+        if not push.understood(CONFIG, device, kind) or not push.wanted(CONFIG, device, holder, kind):
+            continue
+        db.add(NotifyOutbox(account_id=account.id, channel="app", target_id=int(device.id), payload=payload,
+                            created_at=now, next_try_at=now))
+        count += 1
     return count
 
 
@@ -827,13 +848,13 @@ def lock_changed(db: Session, note_id: str, locked: bool) -> None:
 
 
 def _accounts_out() -> None:
-    """``security.SESSIONS_ENDED`` (a sign-out, a block, a delete, a new password): the browsers and devices of a
-    blocked or deleted account stop at once, and what waits for it goes. A sign-out took its browser along already
-    (the row hangs on the session)."""
+    """``security.SESSIONS_ENDED`` (a sign-out, a block, a delete, a new password): the browsers of a blocked or
+    deleted account stop at once, and what waits for it goes. A sign-out took its browser along already (the row hangs
+    on the session). Its paired devices rest with their push tickets (G26): nothing is queued for them while the
+    account is out (``_enqueue_devices``), and they get notifications again once it is back."""
     with SessionLocal() as db:
         out = select(Account.id).where(or_(Account.blocked_at.is_not(None), Account.deleted_at.is_not(None)))
         db.execute(delete(WebPushSubscription).where(WebPushSubscription.account_id.in_(out)))
-        db.execute(delete(PushDevice).where(PushDevice.account_id.in_(out)))
         db.execute(update(NotifyOutbox).where(NotifyOutbox.account_id.in_(out), NotifyOutbox.sent_at.is_(None),
                                               NotifyOutbox.failed_at.is_(None))
                    .values(failed_at=clock.now(), last_error="account_out", payload={}))

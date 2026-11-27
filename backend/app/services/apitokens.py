@@ -93,19 +93,14 @@ def authenticate(db: Session, token: str | None, kinds: tuple[str, ...] = KINDS)
 
 
 def shut_out(db: Session, account_id: int) -> int:
-    """A block or a delete (Bauplan E41): its paired devices go for good and are told why when they call next
-    (``account_blocked``, NOTES-24 EC-5), and so do the AI tools connected by OAuth: like sessions and devices they
-    are connected anew after unblocking. The keys the account made itself (API tokens ``nn_api_``, MCP keys
-    ``nn_mcp_``, nexdeck card keys ``nn_deck_``) stay and rest: every check refuses them while the account is out
-    (``authenticate``, ``account_out``); unblocking or bringing the account back makes them valid again, only
-    ``purge_account`` removes them."""
-    from .devices import remember_blocked
-
-    remember_blocked(db, account_id)
+    """A block or a delete (Bauplan E41, G26): the AI tools connected by OAuth go; like sessions they are connected
+    anew after unblocking. The keys the account made itself (API tokens ``nn_api_``, MCP keys ``nn_mcp_``, nexdeck card
+    keys ``nn_deck_``) and its paired devices stay and rest: every check refuses them while the account is out
+    (``authenticate``, ``account_out``, the module geraete's ``holder.out``); unblocking or bringing the account back
+    makes them valid again, only ``purge_account`` removes them."""
     result = db.execute(
         delete(ApiToken).where(
-            ApiToken.account_id == account_id,
-            (ApiToken.kind == TOKEN_DEVICE) | ((ApiToken.kind == TOKEN_MCP) & ApiToken.client_id.is_not(None)),
+            ApiToken.account_id == account_id, ApiToken.kind == TOKEN_MCP, ApiToken.client_id.is_not(None)
         )
     )
     db.commit()

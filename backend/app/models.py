@@ -366,6 +366,14 @@ class ApiToken(Base):
     full_cursor: Mapped[int | None] = mapped_column(Integer, nullable=True)
     #: The number that full list started at: its last page brings what went for good since.
     full_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Module geraete (G11, G31): what ``X-Nex-App`` says of a device (model, system, the app's version), how it came
+    #: in (``qr``, ``code``, ``browser``, ``icloud``; empty for devices of before) and its kinds of notification
+    #: switched on or off (``{}``: as the kinds start). Devices of before keep ``NULL``.
+    model: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    system: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    app_version: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    via: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    push_kinds: Mapped[Any] = mapped_column(JSON, nullable=True)
 
 
 #: Folder kinds: the account's own inbox (one per account, cannot be deleted, renamed or moved) and normal folders.

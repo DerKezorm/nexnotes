@@ -30,24 +30,24 @@ from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import delete, update
+from sqlalchemy import update
 
 from .. import __version__
 from ..db import SessionLocal
-from ..deps import client_ip
 from ..errors import detail, error
 from ..models import OPERATOR, ApiToken, Note
 from ..models import Account as AccountRow
-from ..models_notify import PushDevice
 from ..notedoc import schema as s
 from ..notedoc.room import Access
-from ..security import brake as sign_in_brake
-from ..services import apppush, appsync, devices, folders, logs, notes, notes_list, settings_service, shares
-from ..services.devices import Caller, PairingError, Refusal
+from ..services import appsync, devices, folders, geraete_store, logs, notes, notes_list, settings_service, shares
+from ..services.devices import Caller, Refusal
+from ..services.geraete_config import CONFIG as DEVICES
+from ..services.geraete_config import clock
 from ..services.inbox import inbox_for
 from ..services.oidc_store import SqlStore
+from ..vendor import nexgeraete
+from ..vendor.nexgeraete import api as geraete_api
 from ..vendor.nexoidc import providers
 
 logger = logging.getLogger("nexnotes.app")
@@ -75,21 +75,13 @@ FEATURES = ("smart_folders", "history", "trash", "gallery", "texts", "import", "
             "locked_import", "nextasks")
 
 
-def _refused(code: str, text: str, status: int, retry: int | None = None) -> HTTPException:
-    headers = {"Retry-After": str(retry)} if retry is not None else None
-    return HTTPException(status_code=status, detail=detail(code, text), headers=headers)
-
-
-_REFUSALS = {
-    "device_disconnected": "This device was disconnected. Connect it again.",
-    "account_blocked": "This account is blocked or deleted.",
-    "second_factor_required": "Set up your second factor in the browser first, then connect again.",
-}
-
-
 def _bearer(request: Request) -> str | None:
     header = request.headers.get("authorization", "")
     return header[7:].strip() if header[:7].lower() == "bearer " else None
+
+
+def _refused(refusal: Refusal) -> HTTPException:
+    return HTTPException(status_code=refusal.status, detail=detail(refusal.code, refusal.message))
 
 
 def _caller(token: str | None) -> Caller:
@@ -97,13 +89,23 @@ def _caller(token: str | None) -> Caller:
         try:
             return devices.authenticate(db, token)
         except Refusal as refusal:
-            raise _refused(refusal.code, _REFUSALS[refusal.code], 401) from refusal
+            raise _refused(refusal) from refusal
 
 
-def device(request: Request) -> Caller:
-    found = _caller(_bearer(request))
-    logs.set_actor(found.account.name)
-    return found
+#: The module's check of a key (G12, G38): the reasons in the form of the request, "last seen" with model, system and
+#: version from ``X-Nex-App``.
+_module_device = geraete_api.device(config=DEVICES, store=geraete_store.store, clock=clock.now)
+
+
+def device(found: Annotated[nexgeraete.Caller, Depends(_module_device)]) -> Caller:
+    """nexnotes' rows behind the device the module let in."""
+    with SessionLocal() as db:
+        try:
+            caller = devices.app_caller(db, found)
+        except Refusal as refusal:
+            raise _refused(refusal) from refusal
+    logs.set_actor(caller.account.name)
+    return caller
 
 
 Device = Annotated[Caller, Depends(device)]
@@ -145,71 +147,7 @@ def hello() -> dict[str, Any]:
         if providers.public_list(SqlStore(db)):
             ways.append("oidc")
     return {"app": "nexnotes", "api": API, "min_api": MIN_API, "version": __version__, "sign_in": ways,
-            "features": list(FEATURES)}
-
-
-# --- Pairing (no token; behind the sign-in brake) ------------------------------------------------------------------
-
-
-class DeviceIn(BaseModel):
-    device_name: str = Field(default="", max_length=200)
-    device_kind: str = Field(default="", max_length=16)
-
-
-class KeyIn(DeviceIn):
-    secret: str = Field(default="", max_length=200)
-
-
-class CodeIn(DeviceIn):
-    code: str = Field(default="", max_length=200)
-
-
-def _paired(token: str, account: AccountRow, row: ApiToken, status: int = 200) -> JSONResponse:
-    body = {"token": token, "account": account_out(account), "device": devices.device_out(row)}
-    # A token must not stay behind in any cache.
-    return JSONResponse(status_code=status, content=body, headers={"Cache-Control": "no-store"})
-
-
-def _pickup(request: Request, take: Any) -> JSONResponse:
-    """The brake counts per sender: there is no account to count at before the code is known (EC-3)."""
-    key = "app-pairing:" + client_ip(request)
-    wait = sign_in_brake.wait_seconds(key)
-    if wait:
-        raise _refused("too_many_attempts", "Too many attempts. Try again later.", 429, wait)
-    with SessionLocal() as db:
-        try:
-            token, account, row = take(db)
-        except PairingError as exc:
-            if exc.code == "pairing_gone":
-                sign_in_brake.failed(key)
-                logger.warning("Pairing refused")
-            raise error(exc.code, exc.text, exc.status, **exc.values) from exc
-        db.expunge(account)
-    sign_in_brake.succeeded(key)
-    return _paired(token, account, row)
-
-
-@router.post("/pairing/{pairing_id}/key", summary="The device's token for the QR code")
-def pickup_by_secret(pairing_id: str, body: KeyIn, request: Request) -> JSONResponse:
-    return _pickup(request, lambda db: devices.by_secret(db, pairing_id, body.secret, body.device_name,
-                                                         body.device_kind))
-
-
-@router.post("/pairing/code", summary="The device's token for the code of the sign-in page")
-def pickup_by_code(body: CodeIn, request: Request) -> JSONResponse:
-    return _pickup(request, lambda db: devices.by_code(db, body.code, body.device_name, body.device_kind))
-
-
-@router.post("/devices", status_code=201, summary="A token of its own for another device of this account")
-def bring_in(found: Device, body: DeviceIn) -> JSONResponse:
-    """The connection travels over iCloud to the account's other devices; each comes in under its own name (AC-7)."""
-    with SessionLocal() as db:
-        try:
-            token, row = devices.sibling(db, found.account, found.device, body.device_name, body.device_kind)
-        except PairingError as exc:
-            retry = exc.values.pop("retry_after", None)
-            raise _refused(exc.code, exc.text, exc.status, retry) from exc
-    return _paired(token, found.account, row, status=201)
+            "features": list(FEATURES), **geraete_api.hello_fields(DEVICES)}
 
 
 # --- The own device -----------------------------------------------------------------------------------------------
@@ -229,51 +167,21 @@ def me(found: Device) -> dict[str, Any]:
         history_days = settings_service.history_days(db)
         row = db.get(AccountRow, account.id)
         stored = attachments.limits(db, row or account)
+    module = geraete_api.me_fields(DEVICES, found.module)
     return {
-        "account": account_out(account),
-        "device": devices.device_out(found.device),
+        "account": module["account"],
+        "device": module["device"],
         "paper": notes.default_paper(account),
         "list_look": notes_list.list_look(account),
         "limits": {"sync_notes": SYNC_NOTES, "changes_page": appsync.PAGE, "wait_seconds": int(WAIT_SECONDS),
                    "update_bytes": s.MAX_UPDATE, "note_bytes": s.MAX_DOC, "upload_mb": upload,
                    "trash_days": trash_days, "history_days": history_days},
-        "offers": {"push": bool(apppush.relay_url()), "share_links": share_links, "link_previews": link_previews,
+        "offers": {**module["offers"], "share_links": share_links, "link_previews": link_previews,
                    "ocr": bool(ocr.engine_info().available)},
         "storage": {"used": stored["used"], "limit": stored["limit"], "full": stored["full"]},
         # The mark notifications name this server by (NOTESIOS-15): the same for every account and call.
-        "server_id": apppush.server_id(),
+        "server_id": module["server_id"],
     }
-
-
-@router.delete("/device", status_code=204, summary="This device disconnects itself")
-def forget_device(found: Device) -> Response:
-    with SessionLocal() as db:
-        devices.disconnect(db, found.account.id, found.device.id)
-    return Response(status_code=204)
-
-
-class PushIn(BaseModel):
-    ticket: str = Field(min_length=1, max_length=apppush.TICKET_MAX)
-    key: str = Field(min_length=1, max_length=100)
-
-
-@router.put("/push", status_code=204, summary="Notifications for this device: the relay's ticket and the key")
-def push_on(found: Device, body: PushIn) -> Response:
-    """Kept as nextasks keeps it (``apppush.remember``) and used for NOTES-14 (AC-6)."""
-    with SessionLocal() as db:
-        try:
-            apppush.remember(db, found.account.id, found.device.id, body.ticket, body.key)
-        except ValueError as exc:
-            raise error("push_ticket_invalid", "The ticket or the key is not usable.", 422) from exc
-    return Response(status_code=204)
-
-
-@router.delete("/push", status_code=204, summary="No more notifications for this device")
-def push_off(found: Device) -> Response:
-    with SessionLocal() as db:
-        db.execute(delete(PushDevice).where(PushDevice.token_id == found.device.id))
-        db.commit()
-    return Response(status_code=204)
 
 
 # --- What changed (AC-4, EC-4) ------------------------------------------------------------------------------------

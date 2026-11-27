@@ -27,12 +27,18 @@ let box: HTMLDivElement
 let calls: { path: string; method: string }[]
 
 const DEVICES = {
-  apps: [{ id: 7, name: 'iPhone', on: true }],
   browsers: [
     { id: 1, browser: 'Firefox', system: 'Linux', this: false, since: '2026-11-20T10:00:00Z', last_ok_at: null },
     { id: 2, browser: 'Chrome', system: 'macOS', this: true, since: '2026-11-25T10:00:00Z', last_ok_at: null },
   ],
   this_browser: true,
+}
+
+const LISTING = {
+  devices: [{ id: 7, name: 'iPhone', kind: 'ios', model: null, system: null, app_version: null, via: null, created_at: null, last_seen_at: null, push: true }],
+  max: 30,
+  app_store_url: '',
+  has_app: true,
 }
 
 beforeEach(async () => {
@@ -44,6 +50,8 @@ beforeEach(async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string, init: RequestInit = {}) => {
     calls.push({ path, method: init.method ?? 'GET' })
     if (path === '/api/notify/devices') return new Response(JSON.stringify(DEVICES), { status: 200, headers: { 'Content-Type': 'application/json' } })
+    // The devices of the module geraete: one iPhone with notifications.
+    if (path === '/api/app-devices') return new Response(JSON.stringify(LISTING), { status: 200, headers: { 'Content-Type': 'application/json' } })
     return new Response(null, { status: 204 })
   }))
   box = document.createElement('div')
@@ -74,7 +82,9 @@ describe('the area Benachrichtigungen (E57)', () => {
     expect(find('notify-browser-off')).not.toBeNull()
     expect(find('notify-browsers')?.textContent).toContain('Firefox auf Linux')
     expect(find('notify-devices')?.getAttribute('href')).toBe('/settings/connections')
-    expect(find('notify-devices-box')?.textContent).toContain('1 Gerät bekommt Mitteilungen.')
+    expect(find('notify-devices-box')?.textContent).toContain('1 Gerät verbunden, Mitteilungen auf 1 erlaubt.')
+    // After it the module's card: which kinds each device gets.
+    expect(box.querySelector('[data-card="devices-push"]')).not.toBeNull()
   })
 
   it('sends a test notification to this browser and removes another browser on the server', async () => {

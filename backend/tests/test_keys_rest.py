@@ -1,6 +1,6 @@
-"""Bauplan E41: an account's own keys rest while it is blocked or deleted and come back with it; paired devices and AI
-tools connected by OAuth are disconnected like its sessions and do not come back; only the end of the 30 days removes
-the keys."""
+"""Bauplan E41: an account's own keys rest while it is blocked or deleted and come back with it, and so do its paired
+devices (G26, konten 1.1.5); AI tools connected by OAuth are disconnected like its sessions and do not come back; only
+the end of the 30 days removes the keys and the devices."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def _rows(account: Account) -> set[str]:
         return {row.name for row in db.query(ApiToken).filter(ApiToken.account_id == account.id)}
 
 
-def test_own_keys_rest_while_the_account_is_out_and_come_back_devices_and_programs_do_not(
+def test_own_keys_and_devices_rest_while_the_account_is_out_and_come_back_programs_do_not(
     client: TestClient, operator: Account
 ) -> None:
     kim = make_account("kim")
@@ -60,15 +60,14 @@ def test_own_keys_rest_while_the_account_is_out_and_come_back_devices_and_progra
     confirm = {"current_password": PASSWORD}
     with new_client() as program:
         assert all(_works(program, label, token) for label, token in keys.items())
-        own = ("api", "mcp", "card")
+        own = ("api", "mcp", "card", "device")
 
         assert client.post(f"/api/accounts/{kim.id}/block", json=confirm).status_code == 204
         assert not any(_works(program, label, token) for label, token in keys.items())
-        assert _rows(kim) == set(own), "the own keys stay and rest; device and program are gone"
+        assert _rows(kim) == set(own), "the own keys and the device stay and rest; the program is gone"
         assert client.post(f"/api/accounts/{kim.id}/unblock", json=confirm).status_code == 204
         assert all(_works(program, label, keys[label]) for label in own)
         assert not _works(program, "program", keys["program"]), "an AI tool is connected anew after unblocking"
-        assert not _works(program, "device", keys["device"])
 
         program_again = _keys(kim)["program"]
         assert client.request("DELETE", f"/api/accounts/{kim.id}", json=confirm).status_code == 204

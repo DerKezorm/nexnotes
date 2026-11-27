@@ -1,80 +1,50 @@
 /**
- * The app connects by address (NOTES-24 AC-2): it opens `/app-connect?state=<random>` in the system's sign-in sheet.
- * Without a session the page goes to the sign-in first (password, provider with passkey, second factor) and comes
- * back here; with one it asks at once "nexnotes-App verbinden?". "Verbinden" hands a one-time code to the app
- * (`nexnotes://connected?code=…&state=…`), "Abbrechen" says so to it (`…?error=cancelled&state=…`). Nothing happens
- * without the click.
+ * The app connects by address (NOTES-24 AC-2): it opens `/app-connect?state=<random>` (with a PKCE `challenge` since
+ * the module geraete) in the system's sign-in sheet. Without a session the page goes to the sign-in first (password,
+ * provider with passkey, second factor) and comes back here; with one it asks at once. The page itself is the
+ * module's: "Verbinden" hands a one-time code to the app (`nexnotes://connected?code=…&state=…`), "Abbrechen" says so
+ * to it (`…?error=cancelled&state=…`). Nothing happens without the click.
  */
-import { useState } from 'react'
+import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Navigate, useLocation, useSearchParams } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 
-import { cancelLink, devicesApi, validState } from '../devices/api'
-import { problemText } from '../lib/errors'
-import { go } from '../lib/providers'
+import { Logo } from '../components/Logo'
+import { ThemeSwitcher } from '../components/ThemeSwitcher'
+import { deviceRequest } from '../devices/request'
 import { useAuth } from '../state/auth'
-import { AuthFrame } from './AuthPages'
+import { AppConnectPage as SharedAppConnectPage } from '../vendor/nexgeraete'
+
+/** The frame of the pages before signing in, around the module's card. */
+function frame(card: ReactNode): ReactNode {
+  return (
+    <div className="nn-scroll flex min-h-dvh flex-col overflow-y-auto">
+      <header className="flex items-center justify-between px-5 py-4">
+        <Logo withWordmark />
+        <ThemeSwitcher />
+      </header>
+      <main className="flex flex-1 items-start justify-center px-4 pt-[6vh] pb-10">{card}</main>
+    </div>
+  )
+}
 
 export function AppConnectPage() {
-  const { t } = useTranslation()
+  const { i18n } = useTranslation()
   const { status, me } = useAuth()
   const location = useLocation()
-  const [params] = useSearchParams()
-  const state = params.get('state')
-  const [problem, setProblem] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [done, setDone] = useState(false)
 
   if (status === 'loading') return null
   if (status === 'setup') return <Navigate to="/setup" replace />
-  if (status === 'signedOut') return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
-  if (!validState(state)) {
-    return (
-      <AuthFrame title={t('appConnect.title')}>
-        <p role="alert" className="text-sm text-bad-500" data-testid="app-connect-invalid">
-          {t('appConnect.invalid')}
-        </p>
-      </AuthFrame>
-    )
-  }
-
-  const connect = async () => {
-    setBusy(true)
-    setProblem('')
-    try {
-      const { link } = await devicesApi.connect(state)
-      setDone(true)
-      go(link)
-    } catch (error) {
-      setProblem(problemText(error))
-      setBusy(false)
-    }
-  }
-
-  if (done) {
-    return (
-      <AuthFrame title={t('appConnect.doneTitle')}>
-        <p className="text-sm text-mist-300" role="status" data-testid="app-connect-done">
-          {t('appConnect.done')}
-        </p>
-      </AuthFrame>
-    )
-  }
+  if (status === 'signedOut' || !me) return <Navigate to={`/login?next=${encodeURIComponent(location.pathname + location.search)}`} replace />
   return (
-    <AuthFrame title={t('appConnect.title')} text={t('appConnect.text', { account: me?.display_name || me?.name || '' })}>
-      {problem && (
-        <p role="alert" className="mb-3 text-sm text-bad-500" data-testid="app-connect-problem">
-          {problem}
-        </p>
-      )}
-      <div className="flex flex-col gap-2">
-        <button type="button" disabled={busy} onClick={() => void connect()} className="nn-btn nn-btn-accent w-full justify-center" data-testid="app-connect-confirm">
-          {t('appConnect.confirm')}
-        </button>
-        <button type="button" disabled={busy} onClick={() => go(cancelLink(state))} className="nn-btn nn-btn-ghost w-full justify-center" data-testid="app-connect-cancel">
-          {t('common.cancel')}
-        </button>
-      </div>
-    </AuthFrame>
+    <SharedAppConnectPage
+      request={deviceRequest}
+      app="nexnotes"
+      scheme="nexnotes"
+      account={{ name: me.display_name || me.name, login: me.name }}
+      language={i18n.language}
+      search={location.search}
+      frame={frame}
+    />
   )
 }

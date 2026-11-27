@@ -1,134 +1,94 @@
-"""The browser's side of the app (NOTES-24): "iPhone oder iPad verbinden" with its QR code (AC-1), the page
-``/app-connect`` that hands the app a one-time code after signing in (AC-2), and the list of devices with "Trennen"
-(AC-5). Only with a browser session: a device's token opens none of these. The rules are in ``services/devices.py``,
-the app's side in ``routers/app1.py``.
+"""The iPhone, iPad and Mac app's pairing and devices (NOTES-24): the routes of the module geraete
+(``vendor/nexgeraete``), the same in every nex app, over nexnotes' tables (``services/geraete_store.py``).
+
+Browser (``/api``, sessions only; a device's key hears ``403 browser_only``): ``/app-pairing`` (QR code and the code to
+type, AC-1), ``/app-connect`` (the page the app opens to sign in, AC-2), ``/app-devices`` (list, rename, disconnect,
+the kinds of notification per device, AC-5), ``/server/accounts/{id}/devices`` (the operator, G28).
+
+App (``/api/app/1``): ``pairing/{id}/key``, ``pairing/code``, ``devices`` (iCloud, AC-7; the list), ``device``,
+``push`` and ``push/kinds``. A request without ``X-Nex-App`` is answered in the form the published app knows (``nex``,
+nexnotes' own). The app's other routes (``hello``, ``me``, ``changes`` …) are in ``routers/app1*.py``; they take the
+module's check of a key (``app1.device``).
 """
 
 from __future__ import annotations
 
-import io
-import logging
 from typing import Annotated, Any
-from urllib.parse import quote, urlsplit
 
-import segno
-from fastapi import APIRouter, Depends, Path, Request, Response
-from pydantic import BaseModel, Field
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, Request
+from fastapi.routing import APIRoute
 
-from ..deps import DbSession, require_account
-from ..errors import error
-from ..models import Account as AccountRow
-from ..models_notify import PushDevice
-from ..services import devices, settings_service
-from ..services.devices import PairingError
+from ..db import SessionLocal
+from ..deps import client_ip, require_account, require_operator
+from ..services import geraete_store, settings_service
+from ..services.geraete_config import CONFIG, clock
+from ..vendor.nexgeraete import CLIENT_HEADER, Caller, api, devices
+from ..vendor.nexgeraete.model import Device, Holder, Store
 
-logger = logging.getLogger("nexnotes.app")
-
-router = APIRouter(prefix="/api", tags=["app"])
-
-#: The scheme the app listens to: the camera opens the QR code's link right in nexnotes.
-CONNECT_LINK = "nexnotes://connect"
-CONNECTED_LINK = "nexnotes://connected"
-
-PairingId = Annotated[str, Path(min_length=1, max_length=32)]
+# The pickups count at the sign-in brake of konten (G37, pot ``app-pairing:<sender>``); ``security.brake.forget``
+# resets it too.
+from ..vendor.nexkonten.brake import BRAKE
 
 
-def browser_account(request: Request, account: Annotated[AccountRow, Depends(require_account)]) -> AccountRow:
-    """The signed-in account of a browser: a device's token makes no pairings and disconnects nobody here."""
-    if request.headers.get("authorization", "")[:7].lower() == "bearer ":
-        raise error("browser_only", "Only in the browser.", 403)
-    return account
-
-
-Browser = Annotated[AccountRow, Depends(browser_account)]
-
-
-def _fail(exc: PairingError) -> Exception:
-    return error(exc.code, exc.text, exc.status, **exc.values)
-
-
-class PairingIn(BaseModel):
-    #: Where the browser sees nexnotes now. Counts only when the operator has set no public address; that one wins.
-    address: str = Field(default="", max_length=600)
-
-
-def _address(db: DbSession, from_browser: str, request: Request) -> str:
+def _address(_request: Request) -> str:
     """The public address from the settings wins: whoever opens nexnotes at home by its IP address still wants the app
     to know the one that works on the way."""
-    for candidate in (settings_service.public_url(db), from_browser.strip().rstrip("/"),
-                      str(request.base_url).rstrip("/")):
-        parts = urlsplit(candidate)
-        if parts.scheme in ("http", "https") and parts.netloc:
-            return f"{parts.scheme}://{parts.netloc}"
-    raise error("app_address_missing", "nexnotes does not know its address. The operator sets it.", 422)
+    with SessionLocal() as db:
+        return settings_service.public_url(db)
 
 
-def _qr_svg(link: str) -> str:
-    """Dark on white with a quiet zone, readable on a dark page too; with a ``viewBox`` so that it scales."""
-    out = io.BytesIO()
-    segno.make(link, error="m").save(out, kind="svg", scale=4, dark="#14141a", light="#ffffff", border=4,
-                                     xmldecl=False, svgns=True, omitsize=True)
-    return out.getvalue().decode("utf-8")
+def _on_paired(holder: Holder, device: Device) -> None:
+    geraete_store.on_paired(holder, device)
 
 
-@router.post("/app-pairing", status_code=201, summary="A QR code for the app (valid 10 minutes, one device)")
-def pair(account: Browser, db: DbSession, request: Request, body: PairingIn | None = None) -> dict[str, Any]:
-    address = _address(db, body.address if body else "", request)
-    try:
-        made = devices.prepare(db, account)
-    except PairingError as exc:
-        raise _fail(exc) from exc
-    link = (f"{CONNECT_LINK}?server={quote(address, safe='')}&pairing={quote(made.id, safe='')}"
-            f"&secret={quote(made.secret, safe='')}")
-    logger.info("Pairing made for the app")
-    return {"id": made.id, "secret": made.secret, "expires_at": made.expires_at.isoformat().replace("+00:00", "Z"),
-            "link": link, "address": address, "qr_svg": _qr_svg(link)}
+#: The operationIds these routes had in /api/openapi.json before the module (E53); the summaries are the module's.
+OPERATION_IDS = {
+    ("DELETE", "/api/app/1/device"): "forget_device_api_app_1_device_delete",
+    ("DELETE", "/api/app/1/devices/{device_id}"): "disconnect_device_api_app_1_devices__device_id__delete",
+    ("POST", "/api/app/1/pairing/code"): "pickup_by_code_api_app_1_pairing_code_post",
+    ("POST", "/api/app/1/pairing/{pairing_id}/key"): "pickup_by_secret_api_app_1_pairing__pairing_id__key_post",
+}
+#: The list of the app's devices is nexnotes' own route below (the order of the published app).
+OWN = ("GET", "/api/app/1/devices")
+
+router = APIRouter()
+
+_device = api.device(config=CONFIG, store=geraete_store.store, clock=clock.now)
 
 
-@router.get("/app-pairing/{pairing_id}", summary="Whether the app used the QR code")
-def pairing_state(pairing_id: PairingId, account: Browser, db: DbSession) -> dict[str, Any]:
-    try:
-        state, device = devices.state(db, pairing_id, account)
-    except PairingError as exc:
-        raise _fail(exc) from exc
-    return {"state": state, "device": devices.device_out(device) if device is not None else None}
+@router.get("/api/app/1/devices", response_model=None, tags=["app"], summary="The account's devices, this one marked",
+            operation_id="own_devices_api_app_1_devices_get")
+def own_devices(request: Request, found: Annotated[Caller, Depends(_device)],
+                data: Annotated[Store, Depends(geraete_store.store)]) -> Any:
+    """The module's list. The published app (no ``X-Nex-App``) gets it in the order it knows, oldest first; an app
+    built on the module newest first, as everywhere."""
+    listed = devices.listing(data, CONFIG, found.holder.id, this=found.device.id)
+    if request.headers.get(CLIENT_HEADER):
+        return listed
+    return sorted(listed, key=lambda entry: entry["id"])
 
 
-@router.delete("/app-pairing/{pairing_id}", status_code=204, summary="Withdraw a QR code")
-def withdraw(pairing_id: PairingId, account: Browser, db: DbSession) -> Response:
-    try:
-        devices.withdraw(db, pairing_id, account)
-    except PairingError as exc:
-        raise _fail(exc) from exc
-    return Response(status_code=204)
+def _tidy(routes: APIRouter) -> APIRouter:
+    """The module's own list of the app's devices gives way to nexnotes' (``own_devices`` above); the routes of
+    before keep their operationIds."""
+    kept = []
+    for route in routes.routes:
+        if isinstance(route, APIRoute):
+            keys = {(method, route.path) for method in route.methods}
+            if OWN in keys:
+                continue
+            for key in keys & OPERATION_IDS.keys():
+                route.operation_id = OPERATION_IDS[key]
+        kept.append(route)
+    routes.routes[:] = kept
+    return routes
 
 
-class ConnectIn(BaseModel):
-    state: str = Field(max_length=200)
-
-
-@router.post("/app-connect", summary="Connect the app that opened /app-connect: a one-time code for it")
-def connect(body: ConnectIn, account: Browser, db: DbSession) -> dict[str, str]:
-    """"Verbinden" on the page the app opened in its sign-in sheet (AC-2): the browser goes on to the link, which
-    hands the code (five minutes, once) to the app."""
-    try:
-        state = devices.clean_state(body.state)
-        code = devices.make_code(db, account, state)
-    except PairingError as exc:
-        raise _fail(exc) from exc
-    logger.info("Code made for the app")
-    return {"link": f"{CONNECTED_LINK}?code={quote(code, safe='')}&state={quote(state, safe='')}"}
-
-
-@router.get("/app-devices", summary="The own connected devices")
-def own_devices(account: Browser, db: DbSession) -> list[dict[str, Any]]:
-    pushing = set(db.scalars(select(PushDevice.token_id).where(PushDevice.account_id == account.id)))
-    return [{**devices.device_out(row), "push": row.id in pushing} for row in devices.of_account(db, account.id)]
-
-
-@router.delete("/app-devices/{device_id}", status_code=204, summary="Disconnect a device")
-def disconnect(device_id: int, account: Browser, db: DbSession) -> Response:
-    if not devices.disconnect(db, account.id, device_id):
-        raise error("not_found", "Not found.", 404)
-    return Response(status_code=204)
+router.include_router(api.browser_router(
+    config=CONFIG, store=geraete_store.store, account=require_account, operator=require_operator,
+    address=_address, send=lambda url, body: geraete_store.send(url, body), clock=clock.now,
+))
+router.include_router(_tidy(api.app_router(
+    config=CONFIG, store=geraete_store.store, brake=BRAKE, on_paired=_on_paired, sender=client_ip,
+    send=lambda url, body: geraete_store.send(url, body), clock=clock.now,
+)))

@@ -20,8 +20,7 @@ from ..db import SessionLocal
 from ..errors import error
 from ..models import Account as AccountRow
 from ..models import Folder, utcnow
-from ..models_notify import PushDevice
-from ..services import appsync, avatars, devices, folders, nextasks, notes, notes_list, shares, tags
+from ..services import appsync, avatars, folders, nextasks, notes, notes_list, shares, tags
 from ..services.inbox import inbox_for
 from ..services.nextasks import NextasksError
 from .app1 import Device, account_out
@@ -292,22 +291,6 @@ def set_paper(found: Device, body: PaperIn) -> dict[str, str]:
         row.preferences = preferences
         db.commit()
     return {"paper": paper}
-
-
-@router.get("/devices", summary="The own devices")
-def own_devices(found: Device) -> list[dict[str, Any]]:
-    with SessionLocal() as db:
-        pushing = set(db.scalars(select(PushDevice.token_id).where(PushDevice.account_id == found.account.id)))
-        return [{**devices.device_out(row), "push": row.id in pushing, "this": row.id == found.device.id}
-                for row in devices.of_account(db, found.account.id)]
-
-
-@router.delete("/devices/{device_id}", status_code=204, summary="Disconnect an own device")
-def disconnect_device(device_id: int, found: Device) -> Response:
-    with SessionLocal() as db:
-        if not devices.disconnect(db, found.account.id, device_id):
-            raise error("not_found", "Not found.", 404)
-    return Response(status_code=204)
 
 
 @router.get("/read-links", summary="The own read links")

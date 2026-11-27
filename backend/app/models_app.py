@@ -57,6 +57,8 @@ class AppPairing(Base):
     used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     device_token_id: Mapped[int | None] = mapped_column(ForeignKey("api_tokens.id", ondelete="SET NULL"),
                                                         nullable=True)
+    #: The SHA-256 of the code to type beside the QR code (module geraete, G7); empty for pairings of before.
+    code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
 
 class AppCode(Base):
@@ -69,14 +71,17 @@ class AppCode(Base):
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), index=True)
     #: What the app sent along to ``/app-connect`` and gets back beside the code.
     state: Mapped[str] = mapped_column(String(128), default="")
+    #: The app's PKCE challenge (S256), where it sent one (module geraete, G8).
+    challenge: Mapped[str | None] = mapped_column(String(128), nullable=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime)
     used_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
 
 class AppGoneDevice(Base):
-    """The SHA-256 of a device token that went with its account's block or deletion: such a device hears
-    ``account_blocked`` instead of ``device_disconnected`` (EC-5). Unblocking the account drops its rows."""
+    """The SHA-256 of a device token an earlier version deleted with its account's block or deletion: such a device
+    hears ``account_blocked`` while its account is out, else ``device_disconnected`` (EC-5). Since the module geraete
+    (G26, G42) a block deletes no device; the table is only read."""
 
     __tablename__ = "app_gone_devices"
 

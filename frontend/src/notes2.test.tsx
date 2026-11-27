@@ -36,7 +36,9 @@ beforeEach(async () => {
       const method = init?.method ?? 'GET'
       const body = typeof init?.body === 'string' ? JSON.parse(init.body) : undefined
       calls.push({ method, path, body })
-      const answer = handler(method, path, body) ?? { status: 200, body: [] }
+      // The devices of an account in "Verwalten" (module geraete): none, unless a test says otherwise.
+      const devices = /^\/api\/server\/accounts\/[^/]+\/devices$/.test(path) ? { status: 200, body: { count: 0, devices: [] } } : undefined
+      const answer = handler(method, path, body) ?? devices ?? { status: 200, body: [] }
       return new Response(JSON.stringify(answer.body), { status: answer.status, headers: { 'Content-Type': 'application/json' } })
     }),
   )

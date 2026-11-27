@@ -15,4 +15,4 @@ When someone changes a note or folder you share, nexnotes can tell you, also as 
 
 Notifications come bundled: only once nobody has written for two minutes. Your own changes are not reported. The bell at the top collects everything you missed.
 
-Where your notifications arrive is under **Settings › My account › Notifications**: this browser (switch it on and off, send a test notification), your other browsers with notifications and the iPhone and iPad app.
+Where your notifications arrive is under **Settings › My account › Notifications**: this browser (switch it on and off, send a test notification), your other browsers with notifications and the iPhone and iPad app. Below it you choose per device which notifications it gets.

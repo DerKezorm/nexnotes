@@ -22,7 +22,9 @@ import { confirmOf } from '../../lib/accountButton'
 import { copyText } from '../../lib/copy'
 import { bytes } from '../../lib/format'
 import { formatDay, formatMoment } from '../../vendor/nexui'
+import { deviceRequest } from '../../devices/request'
 import { useAuth } from '../../state/auth'
+import { AccountDevicesPart } from '../../vendor/nexgeraete'
 import { WhatYouSeeCard } from '../../vendor/nexkonten/AccountCards'
 import {
   ACCOUNT_LIST,
@@ -281,6 +283,7 @@ function ManageDialog({ row, listed, operatorHasPassword, mailServer, onClose, o
             <Row lead={<Picture row={listed} size={48} />} name={name} badge={<Badges shown={accountBadges(listed)} />} sub={accountLine(listed)} />
           </Rows>
           <Facts items={facts} label={t(MANAGE_DIALOG.title, { name })} testId="manage-facts" />
+          <AccountDevicesPart request={deviceRequest} accountId={row.id} name={name} blocked={Boolean(listed.blocked || listed.deletedAt)} language={lang} />
           {groups.map((group) => (
             <ButtonGroup key={group.group} title={t(group.title)} layout={group.layout} testId={`manage-${group.group}`}>
               {group.actions.map((act) =>

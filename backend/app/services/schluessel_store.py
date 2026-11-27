@@ -45,7 +45,8 @@ CONFIG = AppConfig(
         # module mcp; connectors of AI tools are programs of this kind and count with them.
         KeyKind(id="mcp", prefix="nn_mcp_", areas=True, switch="mcp", programs_count=True),
     ),
-    switches=("api", "mcp"),
+    # The iPhone app's two switches (module geraete, G30) stand on the same card.
+    switches=("api", "mcp", "app", "pairing"),
     programs=True,
     mcp_path="/api/mcp",
     error_codes={"too_many_keys": "tokens_too_many"},
@@ -53,8 +54,9 @@ CONFIG = AppConfig(
     admin_extra=lambda _store, key: {"folders": len(key.areas) if key.areas is not None else 0},
 )
 
-#: The operator's switches under nexnotes' names (both on from the start).
-SWITCHES = {"api": "api_enabled", "mcp": "mcp_enabled"}
+#: The operator's switches under nexnotes' names (``api``, ``app`` and ``pairing`` on from the start, ``mcp`` off on a
+#: new installation).
+SWITCHES = {"api": "api_enabled", "mcp": "mcp_enabled", "app": "app_enabled", "pairing": "app_pairing_allowed"}
 #: The inbox in the list of folders a key may be limited to, in the account's language.
 INBOX_NAMES = {"de": "Eingang", "en": "Inbox"}
 

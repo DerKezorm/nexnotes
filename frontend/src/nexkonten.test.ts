@@ -120,6 +120,8 @@ async function show(path: string, at: string, page: string | ReactNode, answers:
         : asked.startsWith('/api/invite/') ? answers.invite
         : asked.startsWith('/api/reset/') ? answers.reset
         : asked === '/api/accounts' ? answers.accounts
+        // The devices of an account in "Verwalten" (module geraete): none.
+        : /^\/api\/server\/accounts\/[^/]+\/devices$/.test(asked) ? { count: 0, devices: [] }
         : undefined
       const status = body === undefined && asked === '/api/auth/me' ? 401 : 200
       return new Response(JSON.stringify(body ?? []), { status, headers: { 'Content-Type': 'application/json' } })

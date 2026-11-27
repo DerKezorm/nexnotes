@@ -474,3 +474,37 @@ class Adapter(StandardAdapter):
         answer = browser.get("/api/server/sign-in/readiness")
         assert answer.status_code == 200, answer.text
         return dict(answer.json())
+
+    # --- konten 1.1.5 (G26): paired devices rest ---------------------------------------------------------------------
+
+    def pair_device(self, account_id: Any) -> Any:
+        """A device paired the way the module geraete pairs one (``devices.add`` over nexnotes' store); its key."""
+        from app.db import SessionLocal
+        from app.services.geraete_config import CONFIG
+        from app.services.geraete_store import GeraeteStore
+        from app.vendor import nexgeraete
+
+        with SessionLocal() as db:
+            store = GeraeteStore(db)
+            holder = store.holder(account_id)
+            assert holder is not None
+            _device, token = nexgeraete.devices.add(store, CONFIG, holder, name="Contract", kind="ios", via="qr")
+            store.commit()
+        return token
+
+    def device_works(self, handle: Any) -> bool:
+        """nexnotes' own device route ``GET /api/app/1/me``."""
+        from fastapi.testclient import TestClient
+
+        from app.main import app
+
+        with TestClient(app, base_url="http://testserver") as device:
+            return device.get("/api/app/1/me", headers={"Authorization": f"Bearer {handle}"}).status_code == 200
+
+    def device_kept(self, handle: Any) -> bool:
+        from app.db import SessionLocal
+        from app.services.geraete_store import GeraeteStore
+        from app.vendor.nexgeraete import tokens
+
+        with SessionLocal() as db:
+            return GeraeteStore(db).device_by_hash(tokens.digest(handle)) is not None

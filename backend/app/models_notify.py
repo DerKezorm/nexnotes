@@ -112,3 +112,6 @@ class PushDevice(Base):
     key: Mapped[str] = mapped_column(String(64))
     updated_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     last_ok_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    #: The kinds of notification the device says it understands (module geraete, G16); ``NULL``: an app that says
+    #: nothing, it gets the kinds the published app knows (``changed``, ``trashed``).
+    understands: Mapped[Any] = mapped_column(JSON, nullable=True)

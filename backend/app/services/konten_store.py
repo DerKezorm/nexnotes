@@ -45,6 +45,7 @@ from ..models import Invite as InviteRow
 from ..models_accounts import EmailChange as EmailChangeRow
 from ..models_accounts import FailedUnknown, FormerName, SetupClaim
 from ..models_accounts import Passkey as PasskeyRow
+from ..models_notify import PushDevice
 from ..security import (
     LOCK_MINUTES,
     MAX_FAILURES,
@@ -55,7 +56,8 @@ from ..security import (
     server_key,
     verify_password,
 )
-from ..vendor import nexkonten
+from ..vendor import nexgeraete, nexkonten
+from ..vendor.nexgeraete.model import Device as GeraeteDevice
 from ..vendor.nexkonten import (
     Access,
     AccountId,
@@ -593,10 +595,8 @@ class KontenStore:
             if event.kind == nexkonten.EVENT_DELETED:
                 content.account_deleted(self.db, int(event.account_id))
         elif event.kind == nexkonten.EVENT_UNBLOCKED:
-            from .devices import forget_blocked
-
-            # Its devices of before were disconnected by the block; from now on they hear so (NOTES-24).
-            forget_blocked(self.db, int(event.account_id))
+            # Its paired devices rested while it was blocked (G26) and work again: nothing to do for them.
+            logger.info("Account unblocked account_id=%s", event.account_id)
         elif event.kind == nexkonten.EVENT_RESTORED:
             from . import content
 
@@ -790,7 +790,9 @@ class KontenStore:
             created_at=created,
             expires_at=_aware(row.expires_at) if row.expires_at else created + timedelta(days=36500),
             last_seen_at=_aware(row.last_used_at) if row.last_used_at else None,
-            label=row.name,
+            # The device's name, and its model where that says more (module geraete, ``describe``).
+            label=nexgeraete.describe(GeraeteDevice(id=row.id, account_id=row.account_id, name=row.name,
+                                                    model=row.model)),
         )
 
     def add_session(self, session: SessionData, token_hash: str) -> None:
@@ -959,10 +961,12 @@ class KontenStore:
             self.db.flush()
 
     def shut_out(self, account_id: AccountId) -> None:
-        """What a block or a delete ends: paired devices and AI tools connected by OAuth go (devices hear why when they
-        call next, NOTES-24 EC-5), the account's own keys rest until it is back (Bauplan E41, ``apitokens.shut_out``),
-        no browser counts as known any more. The browser sessions and a sign-in
-        waiting for its code stay as they are but count for nothing while the account is out
+        """What a block or a delete ends (konten 1.1.5): no browser counts as known any more, and AI tools connected
+        by OAuth go (``apitokens.shut_out``). The account's own keys rest until it is back (Bauplan E41), and so do its
+        paired devices (G26): they stay, the module geraete refuses them with ``account_blocked`` while the account is
+        out (``Store.holder``), and they work again after unblocking or bringing it back, without pairing anew; only
+        ``purge_account`` removes them. Nothing is written to ``app_gone_devices`` any more. The browser sessions and a
+        sign-in waiting for its code stay as they are but count for nothing while the account is out
         (``security.account_out``, the code step checks the block), so that an open window and the code step hear
         that the account is blocked instead of being sent to sign in (NOTES-2 EC-4, AC-5); unblocking and bringing
         back end them (``end_sessions``)."""
@@ -974,13 +978,14 @@ class KontenStore:
     def on_shut_out(self, account: KontoAccount) -> None:
         """konten 1.1.0 (E38): the account went out. No push goes to it while it is out: nexnotes asks before every
         message (``notify.send_round``, ``account_out``) and drops what waits (``notify._accounts_out`` on
-        ``sessions_ended``). Its web push subscriptions hang on its browser sessions and its app's on its paired
-        devices; the block ends both (``shut_out``, and ``end_sessions`` on unblocking), so nothing of them
-        comes back (``einst-fragen/nexnotes.md``, question 11)."""
+        ``sessions_ended``), and the module geraete sends nothing to the devices of an account that is out
+        (``holder.out``). Its web push subscriptions hang on its browser sessions, which end on unblocking
+        (``end_sessions``); its devices rest with their tickets and get notifications again once it is back (G26)."""
         logger.info("Account out: no pushes account_id=%s", account.id)
 
     def on_back(self, account: KontoAccount) -> None:
-        """konten 1.1.0 (E38): the account can sign in again. Pushes go to what it signs up anew (browser, device)."""
+        """konten 1.1.0 (E38): the account can sign in again. Pushes go to its resting devices again and to the browsers
+        it signs up anew."""
         logger.info("Account back: pushes again account_id=%s", account.id)
 
     def deleted_before(self, moment: datetime) -> list[AccountId]:
@@ -1003,7 +1008,9 @@ class KontenStore:
         from .verbinden_store import CONFIG, VerbindenStore
 
         nexverbinden.end_all(VerbindenStore(self.db), CONFIG, row.id, datetime.now(UTC))
-        # Its keys rested while it was deleted; now they go with it (E41).
+        # Its keys and its paired devices rested while it was deleted; now they go with it (E41, G26), the devices'
+        # push tickets with them.
+        self.db.execute(delete(PushDevice).where(PushDevice.account_id == row.id))
         self.db.execute(delete(ApiToken).where(ApiToken.account_id == row.id))
         self.db.execute(update(FormerName).where(FormerName.account_id == row.id).values(account_id=None))
         self.db.add(FormerName(account_id=None, name=row.name))

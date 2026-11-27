@@ -954,14 +954,11 @@ def _owner_went(db: Session, account_id: int) -> None:
 
 def _owner_back(db: Session, account_id: int) -> None:
     """The operator brought the account back: what it shares comes back with new numbers."""
-    from .devices import forget_blocked
-
     flush = _Flush(db)
     for share in db.scalars(select(Share).where(Share.owner_id == account_id)):
         _shared(flush, share)
     _write(flush)
     db.commit()
-    forget_blocked(db, account_id)
 
 
 def register() -> None:

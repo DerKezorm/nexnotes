@@ -13,6 +13,21 @@ from app.main import app
 KONTEN = json.loads((Path(__file__).parent / "data" / "openapi_names_konten.json").read_text(encoding="utf-8"))
 
 
+#: The routes the module geraete took over (iPhone, iPad and Mac): their operationIds stay (``routers/app_pairing.py``),
+#: the summaries are the module's.
+GERAETE_ROUTES = {
+    "POST /api/app-connect", "GET /api/app-devices", "POST /api/app-pairing", "GET /api/app-pairing/{pairing_id}",
+    "GET /api/app/1/devices", "POST /api/app/1/devices", "DELETE /api/app/1/devices/{device_id}",
+    "POST /api/app/1/pairing/code", "POST /api/app/1/pairing/{pairing_id}/key", "DELETE /api/app/1/push",
+    "PUT /api/app/1/push",
+}
+#: Bodies of those routes that went with nexnotes' own code, and names FastAPI gives otherwise now that the module's
+#: bodies of the same name are there (``AddressIn`` of oidc, ``NameIn`` of accounts), or no longer needs to
+#: (``CodeIn`` of totp).
+GERAETE_SCHEMAS = {"AddressIn", "DeviceIn", "KeyIn", "NameIn", "PairingIn", "app__routers__app1__CodeIn",
+                   "app__routers__app_pairing__ConnectIn", "app__routers__totp__CodeIn"}
+
+
 def _names() -> dict[str, dict[str, str | None]]:
     described = app.openapi()
     return {
@@ -25,13 +40,15 @@ def _names() -> dict[str, dict[str, str | None]]:
 def test_every_route_of_before_keeps_its_operation_id_and_summary() -> None:
     now = _names()
     changed = {route: (before, now.get(route)) for route, before in KONTEN["routes"].items() if now.get(route) != before}
-    assert changed == {}
+    taken_over = {route: pair for route, pair in changed.items() if route in GERAETE_ROUTES}
+    assert {route: pair for route, pair in changed.items() if route not in taken_over} == {}
+    assert all(pair[1] is not None and pair[0]["operationId"] == pair[1]["operationId"] for pair in taken_over.values())
     assert len(KONTEN["routes"]) > 300
 
 
 def test_every_schema_of_before_keeps_its_name() -> None:
     schemas = set(app.openapi().get("components", {}).get("schemas", {}))
-    assert sorted(set(KONTEN["schemas"]) - schemas) == []
+    assert sorted(set(KONTEN["schemas"]) - schemas - GERAETE_SCHEMAS) == []
 
 
 def test_the_names_this_pass_had_changed_are_back() -> None:

@@ -168,8 +168,11 @@ def test_keys_of_the_old_ways_and_the_new_ones_are_the_same_keys(client: TestCli
 
 
 def test_the_interfaces_card_switches_what_general_switched(client: TestClient, operator: Account) -> None:
-    assert client.get("/api/connections/interfaces").json() == {"api": True, "mcp": True}
-    assert client.put("/api/connections/interfaces", json={"mcp": False}).json() == {"api": True, "mcp": False}
+    # Since the module geraete the card switches the iPhone app too (G30).
+    both = {"app": True, "pairing": True}
+    assert client.get("/api/connections/interfaces").json() == {"api": True, "mcp": True, **both}
+    assert client.put("/api/connections/interfaces", json={"mcp": False}).json() == {"api": True, "mcp": False,
+                                                                                     **both}
     assert client.get("/api/settings").json()["mcp_enabled"] is False
     client.put("/api/settings", json={"api_enabled": False})
     assert client.get("/api/connections/interfaces").json()["api"] is False

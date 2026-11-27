@@ -960,9 +960,7 @@
     "notifications": {
       "ways": "Notifications come when others change a shared note whose bell you switched on. Which notes and folders notify, you set at their bell.",
       "probeSent": "Test notification sent. It shows in this browser in a moment.",
-      "since": "since {{when}}",
-      "apps_one": "{{count}} device gets notifications.",
-      "apps_other": "{{count}} devices get notifications."
+      "since": "since {{when}}"
     }
   },
   "setup": {
@@ -1904,45 +1902,6 @@
     "making": "Making it …",
     "made": "“{{name}}” is ready.",
     "open": "Open"
-  },
-  "devices": {
-    "section": {
-      "title": "Devices",
-      "text": "iPhone, iPad and Mac with the nexnotes app.",
-      "none": "No device connected yet.",
-      "connect": "Connect iPhone or iPad",
-      "lastSeen": "last seen {{when}}",
-      "neverSeen": "not seen yet",
-      "push": "notifications on",
-      "disconnect": "Disconnect",
-      "disconnectTitle": "Disconnect “{{name}}”?",
-      "disconnectText": "From now on the device cannot reach your notes. To connect it again, scan a new code.",
-      "pushOff": "Notifications off"
-    },
-    "kind": {
-      "ios": "iOS app",
-      "mac": "iPad app on the Mac"
-    },
-    "connect": {
-      "title": "Connect iPhone or iPad",
-      "qr": "QR code to connect",
-      "valid": "Valid for 10 minutes",
-      "renew": "New code",
-      "expired": "The code has expired.",
-      "step1": "Open nexnotes on the iPhone or iPad.",
-      "step2": "Tap “Connect server” and scan the code.",
-      "step3": "Done. Your notes load, and the sign-in travels to your other devices through your Apple ID.",
-      "noCamera": "Without a camera: in the app, enter the address",
-      "noCameraEnd": "and sign in."
-    }
-  },
-  "appConnect": {
-    "title": "Connect the nexnotes app to this account?",
-    "text": "Signed in as {{account}}. The app gets the same rights you have in the browser.",
-    "confirm": "Connect",
-    "invalid": "The nexnotes app opens this page itself. Start connecting in the app.",
-    "doneTitle": "Connected",
-    "done": "Carry on in the app."
   },
   "emailLink": {
     "title": "Confirm the new address",

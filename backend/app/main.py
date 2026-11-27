@@ -72,7 +72,18 @@ from .routers import totp as totp_router
 from .routers import vault as vault_router
 from .routers import verbinden as verbinden_router
 from .security import HashingBusy, purge_sessions
-from .services import backups, cleanup, locales, logs, oidc_store, post_store, settings_service, totp, updates
+from .services import (
+    backups,
+    cleanup,
+    geraete_store,
+    locales,
+    logs,
+    oidc_store,
+    post_store,
+    settings_service,
+    totp,
+    updates,
+)
 from .services.konten_store import KontenStore
 from .vendor import nexoidc
 from .vendor.nexkonten import factor as konten_factor
@@ -88,6 +99,9 @@ LOCALES_OPERATION_IDS = {
     "upload": "upload_locale_api_locales__code__put",
     "remove": "delete_locale_api_locales__code__delete",
 }
+
+#: The daily run of the module geraete in the cleanup's rounds.
+DEVICE_SWEEP = "idle devices"
 
 #: The frame's routers. The note features add theirs here (``FEATURE_ROUTERS``), each a module with ``router``.
 ROUTERS = [
@@ -146,6 +160,12 @@ async def _sweep_forever(stop: asyncio.Event) -> None:
         if rounds % 60 == 0:
             with SessionLocal() as db:
                 purge_sessions(db)
+            # What the operator's look at "Über nexnotes" found goes to the operators' devices once per version
+            # (module geraete, G18); no question of its own (U19).
+            try:
+                await asyncio.to_thread(geraete_store.tell_newer)
+            except Exception:
+                logger.exception("Telling the devices of a new version failed")
         rounds += 1
         try:
             await asyncio.wait_for(stop.wait(), 60)
@@ -193,6 +213,9 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     _remember_version()
     # The update check on this data (module updates); no bell, so no look in the background (U19).
     updates.configure()
+    # Devices unused for a year are disconnected (module geraete, G27), once a day.
+    if all(name != DEVICE_SWEEP for name, _job in cleanup._jobs):
+        cleanup.register(DEVICE_SWEEP, geraete_store.sweep, every=24 * 3600)
     # The TLS context of the calls to providers and authentik, read once here outside the event loop (vendor/nexoidc).
     await nexoidc.warm()
     private.tighten_all()

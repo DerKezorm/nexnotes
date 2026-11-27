@@ -2,21 +2,23 @@
  * Mein Konto › Benachrichtigungen (plan "Einstellungen", E57): nexnotes notifies through the bell of shared notes and
  * folders, so it has the area with the kit's first card "Auf welchem Weg" (`NotifyWays`): this browser (on or off, a
  * test notification), the account's browsers with notifications (removing another), and the iPhone and iPad app (it
- * is connected under Verbindungen). No mail: nexnotes sends no notification by mail. Which notes notify stays at the
- * bell of each note and folder.
+ * is connected under Verbindungen; the row is the module geraete's). After it the module's card of the devices: which
+ * kinds of notification each device gets. No mail: nexnotes sends no notification by mail. Which notes notify stays
+ * at the bell of each note and folder.
  */
 import { useCallback, useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '../../api/client'
+import { deviceRequest } from '../../devices/request'
 import { problemText } from '../../lib/errors'
 import { formatMoment } from '../../vendor/nexui'
 import { allowBrowser, browserState, stopBrowser, type BrowserState } from '../../notify/browser'
+import { DevicePushCard, useDevicesWay } from '../../vendor/nexgeraete'
 import { Notice, NotifyWays } from '../../vendor/nexui'
 import { areaPath } from './areas'
 
 type Devices = {
-  apps: { id: number; name: string; on: boolean }[]
   browsers: { id: number; browser: string; system: string; this: boolean; since: string | null; last_ok_at: string | null }[]
   this_browser: boolean
 }
@@ -29,6 +31,7 @@ export function NotificationsArea() {
   const [probing, setProbing] = useState(false)
   const [problem, setProblem] = useState('')
   const [done, setDone] = useState('')
+  const devicesWay = useDevicesWay(deviceRequest, { href: areaPath('connections'), language: i18n.language })
 
   const load = useCallback(() => {
     api<Devices>('/api/notify/devices').then(setDevices, (error) => setProblem(problemText(error)))
@@ -56,6 +59,7 @@ export function NotificationsArea() {
     entry.browser && entry.system ? t('notify.browserOn', { browser: entry.browser, system: entry.system }) : entry.browser || entry.system || t('notify.otherBrowser')
   const note = here === 'denied' ? t('notify.deniedHelp') : here === 'unsupported' ? t('notify.unsupportedHelp') : undefined
   return (
+    <>
       <NotifyWays
         subtitle={t('settings.notifications.ways')}
         browser={{
@@ -88,13 +92,12 @@ export function NotificationsArea() {
             else void run(() => api(`/api/notify/webpush/${encodeURIComponent(id)}`, { method: 'DELETE' }))
           },
         }}
-        devices={{
-          href: areaPath('connections'),
-          note: devices.apps.length ? t('settings.notifications.apps', { count: devices.apps.length }) : undefined,
-        }}
+        devices={devicesWay}
       >
         {problem && <Notice tone="danger" testId="notify-problem">{problem}</Notice>}
         {done && <Notice tone="ok" testId="notify-done">{done}</Notice>}
       </NotifyWays>
+      <DevicePushCard request={deviceRequest} app="nexnotes" language={i18n.language} connectionsHref={areaPath('connections')} />
+    </>
   )
 }
