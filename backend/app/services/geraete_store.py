@@ -3,7 +3,9 @@
 row of ``push_devices``. The module's columns came in beside them (``model``, ``system``, ``app_version``, ``via``,
 ``push_kinds``, ``push_devices.understands``); devices of before keep ``NULL`` there. Pairings and one-time codes stay
 in ``app_pairings`` (with ``code_hash``) and ``app_codes`` (with ``challenge``). A token the operator blocked
-(``blocked_at``) counts as disconnected: the store never hands it out. ``app_gone_devices`` is only read (G42).
+(``blocked_at``) counts as disconnected: the store never hands it out. ``app_gone_devices`` is only read (G42). A
+device that came in over iCloud leaves when it was made in ``app_gone_siblings`` as it goes (0.1.5, G33 anew), on every
+way a device token is deleted (``keep_siblings``).
 
 Also here: what nexnotes does around the module, the mail "Neue Anmeldung" after a new device (G29, G50), the notice of
 a new version to the operators' devices through ``nexupdates`` (G56) and the daily sweep of devices unused for a year
@@ -21,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from ..db import SessionLocal
 from ..models import OPERATOR, TOKEN_DEVICE, Account, ApiToken
-from ..models_app import AppCode, AppGoneDevice, AppPairing
+from ..models_app import AppCode, AppGoneDevice, AppGoneSibling, AppPairing
 from ..models_notify import PushDevice
 from ..security import account_out
 from ..vendor import nexgeraete
@@ -61,6 +63,25 @@ def _iso(moment: datetime | None) -> str:
 def language_of(account: Account) -> str:
     code = (account.language or account.browser_language or "en").split("-")[0].lower()
     return code if code in LANGUAGES else "en"
+
+
+def keep_siblings(db: Session, *where: Any) -> None:
+    """Before device tokens are deleted (by the module, "Abmelden" in "Angemeldete Geräte", "Überall sonst abmelden",
+    a new password): when each one that came in over iCloud was made, for the limit of the hour (geraete 0.1.5, G33
+    anew). ``where`` narrows ``api_tokens`` as the delete that follows does; blocked tokens count too."""
+    now = clock.now()
+    rows = db.execute(select(ApiToken.account_id, ApiToken.created_at).where(
+        ApiToken.kind == TOKEN_DEVICE, ApiToken.via == nexgeraete.VIA_ICLOUD, *where))
+    kept: list[AppGoneSibling] = []
+    for account_id, made in rows:
+        moment = _aware(made)
+        if moment is not None and moment > now - KEEP_ENDED:
+            kept.append(AppGoneSibling(account_id=account_id, created_at=moment))
+    if not kept:
+        return
+    db.execute(delete(AppGoneSibling).where(AppGoneSibling.created_at < now - KEEP_ENDED))
+    db.add_all(kept)
+    db.flush()
 
 
 class GeraeteStore:
@@ -138,10 +159,21 @@ class GeraeteStore:
         if not isinstance(device_id, int):
             return
         self.db.execute(delete(PushDevice).where(PushDevice.token_id == device_id))
+        keep_siblings(self.db, ApiToken.id == device_id)
         gone = self.db.execute(delete(ApiToken).where(ApiToken.id == device_id, ApiToken.kind == TOKEN_DEVICE))
         if gone.rowcount:
             self._removed = True
             logger.info("Device disconnected token_id=%s", device_id)
+
+    def sibling_times(self, account_id: Any, since: datetime) -> list[datetime]:
+        """geraete 0.1.5 (G33 anew): when each device of the account that came in over iCloud at or after ``since``
+        was made, the blocked and the disconnected ones (``app_gone_siblings``) included."""
+        living = self.db.scalars(select(ApiToken.created_at).where(
+            ApiToken.kind == TOKEN_DEVICE, ApiToken.via == nexgeraete.VIA_ICLOUD,
+            ApiToken.account_id == int(account_id), ApiToken.created_at >= since))
+        gone = self.db.scalars(select(AppGoneSibling.created_at).where(
+            AppGoneSibling.account_id == int(account_id), AppGoneSibling.created_at >= since))
+        return [moment for made in [*living, *gone] if (moment := _aware(made)) is not None]
 
     def touch(self, device_id: Any, when: datetime) -> None:
         self.db.execute(update(ApiToken).where(ApiToken.id == device_id).values(last_used_at=when))

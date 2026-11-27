@@ -193,9 +193,15 @@ class VerbindenStore:
 
     def account_may(self, account_id: Any) -> bool:
         """Blocked, deleted, or owing the second factor the operator requires (EC-9, as API and MCP keys): the
-        account's connections rest."""
+        account's connections rest. Since verbinden 0.2.1 (E41, BS5) also while the account is locked after failed
+        sign-ins (``locked_until`` still ahead); they come back once the lock runs out."""
         account = self.db.get(Account, int(account_id))
-        return account is not None and not account_out(account) and not totp.setup_required(self.db, account)
+        if account is None or account_out(account):
+            return False
+        locked = _aware(account.locked_until)
+        if locked is not None and locked > datetime.now(UTC):
+            return False
+        return not totp.setup_required(self.db, account)
 
     def account_name(self, account_id: Any) -> str:
         """The account's user name, as the other app names it ("verbunden als kim"); the shown name with the picture

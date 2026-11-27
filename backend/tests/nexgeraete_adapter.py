@@ -73,7 +73,11 @@ class Adapter(StandardAdapter):
         clock.fixed = None
 
     def restart(self) -> None:
-        """nexnotes keeps nothing of devices in memory: new clients on the same database."""
+        """nexnotes keeps nothing of devices in memory: new clients on the same database (and the module forgets what
+        its process remembers of disconnected siblings, geraete 0.1.5)."""
+        from app.vendor.nexgeraete import devices
+
+        devices.forget_gone_siblings()
         for client in self.clients.values():
             client.close()
         self.clients = {}

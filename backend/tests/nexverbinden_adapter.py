@@ -134,6 +134,33 @@ class Adapter(StandardAdapter):
             db.commit()
         self._session.expire_all()
 
+    def lock(self, role: str, locked: bool = True) -> None:
+        """Since verbinden 0.2.1 (E41, BS5): the account locked after failed sign-ins, as ``note_failure`` leaves it
+        (or the lock over)."""
+        from datetime import timedelta
+
+        from app.db import SessionLocal
+        from app.models import Account, utcnow
+        from app.security import LOCK_MINUTES
+
+        with SessionLocal() as db:
+            row = db.get(Account, self.ids[role])
+            assert row is not None
+            row.locked_until = utcnow() + timedelta(minutes=LOCK_MINUTES) if locked else None
+            row.failed_logins = 0
+            db.commit()
+        self._session.expire_all()
+
+    def require_second_factor(self, role: str, required: bool = True) -> None:
+        """Since verbinden 0.2.1 (E41): the operator requires a second factor, and ``role`` (a password account) has
+        none yet; ``required=False`` lifts the requirement again. nexnotes requires it of all accounts at once."""
+        from app.db import SessionLocal
+        from app.services import settings_service
+
+        with SessionLocal() as db:
+            settings_service.save(db, {"two_factor_required": required})
+        self._session.expire_all()
+
     def probe(self, purpose: str) -> tuple[str, str, Any] | None:
         # A connection with "notes.add" opens the one route that adds a note, into the folders given.
         return ("POST", "/api/v1/notes", {"title": "From the partner"})

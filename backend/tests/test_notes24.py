@@ -790,12 +790,37 @@ def test_notes24_ac7_another_own_device_comes_in_on_its_own(client, operator):
     # Each is disconnected alone.
     assert client.delete(f"/api/app-devices/{answer.json()['device']['id']}").status_code == 204
     assert pad.get("/me").status_code == 401 and phone.get("/me").status_code == 200
-    # No factory of tokens. The module counts the devices of the last hour that are still there (G33): the iPad
-    # disconnected above no longer counts.
-    for _ in range(devices.SIBLINGS_PER_HOUR):
+    # No factory of tokens. The module counts the devices of the last hour (G33), since geraete 0.1.5 the disconnected
+    # ones too: the iPad disconnected above still counts.
+    for _ in range(devices.SIBLINGS_PER_HOUR - 1):
         assert phone.post("/devices", {"device_name": "x"}).status_code == 201
     too_many = phone.post("/devices", {"device_name": "x"})
     assert too_many.status_code == 429 and too_many.headers["retry-after"] == "3600"
+
+
+def test_notes24_ac7_siblings_a_new_password_or_sign_out_everywhere_ends_still_count(client, operator):
+    """geraete 0.1.5 (G33 anew): devices that came in over iCloud count for the hour also when nexnotes deletes them
+    itself, by a new password (``end_all_sessions``) or "Überall sonst abmelden" (``end_everywhere``)."""
+    from app.security import end_all_sessions
+    from app.services.geraete_config import clock
+    from app.services.geraete_store import GeraeteStore
+    from app.services.konten_store import KontenStore
+
+    since = clock.now() - timedelta(hours=1)
+    lena = make_account("lena")
+    with new_client(lena) as other:
+        for browser in (client, other):
+            phone = paired(browser, "iPhone")
+            assert phone.post("/devices", {"device_name": "iPad"}).status_code == 201
+        with SessionLocal() as db:
+            end_all_sessions(db, operator.id)
+            KontenStore(db).end_everywhere(lena.id, None)
+            db.commit()
+    with SessionLocal() as db:
+        for account_id in (operator.id, lena.id):
+            assert db.scalar(select(func.count()).select_from(ApiToken).where(ApiToken.account_id == account_id,
+                                                                              ApiToken.kind == "device")) == 0
+            assert len(GeraeteStore(db).sibling_times(account_id, since)) == 1
 
 
 def test_notes24_ec1_a_disconnected_device_brings_offline_text_and_nothing_is_taken(client, operator):

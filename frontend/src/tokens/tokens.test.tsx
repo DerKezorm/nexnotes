@@ -206,12 +206,17 @@ describe('NOTES-25 API keys in Settings, Connections', () => {
     await click($('key-submit'))
     const sent = calls.find((call) => call.method === 'POST')!.body!
     expect({ ...sent, client_ref: undefined }).toEqual({ kind: 'api', name: 'Home Assistant', right: 'write', options: { mcp: true }, areas: ['f-home'], days: null, client_ref: undefined })
-    expect($('key-made')!.textContent).toContain('„Home Assistant“ angelegt')
-    expect($('key-made')!.textContent).toContain('Er wird nur dieses eine Mal angezeigt')
-    expect(($('key-secret')!.querySelector('input') ?? $('key-secret')) as HTMLElement).toBeTruthy()
+    // schluessel 1.2.0 (B23): the new key shows in the window that made it, not on the card.
+    const made = $('key-dialog')!
+    expect($('key-made', made)!.textContent).toContain('Er wird nur dieses eine Mal angezeigt')
+    expect(made.textContent).toContain('„Home Assistant“ angelegt')
+    expect(($('key-secret', made)!.querySelector('input') ?? $('key-secret', made)) as HTMLElement).toBeTruthy()
+    expect($$('key-made').every((found) => found.closest('[role="dialog"]') !== null)).toBe(true)
     expect(document.body.innerHTML).toContain(SECRET)
-    await click(button($('key-made')!, 'Kopieren'))
+    await click(button($('key-made', made)!, 'Kopieren'))
     expect(copied).toHaveBeenCalledWith(SECRET)
+    await click($('key-done', made))
+    expect($('key-dialog')).toBeNull()
     await act(async () => root.unmount())
     root = createRoot(box)
     await render(<ConnectionKeys />)

@@ -856,6 +856,9 @@ class KontenStore:
 
     def end_session(self, account_id: AccountId, uid: str) -> bool:
         if uid.startswith(DEVICE_UID) and uid[len(DEVICE_UID):].isdigit():
+            from .geraete_store import keep_siblings
+
+            keep_siblings(self.db, ApiToken.id == int(uid[len(DEVICE_UID):]), ApiToken.account_id == int(account_id))
             result = self.db.execute(
                 delete(ApiToken).where(ApiToken.id == int(uid[len(DEVICE_UID):]),
                                        ApiToken.account_id == int(account_id), ApiToken.kind == TOKEN_DEVICE)
@@ -878,6 +881,9 @@ class KontenStore:
         if keep is not None:
             statement = statement.where(AuthSession.id != keep.id)
         gone = int(self.db.execute(statement).rowcount or 0)
+        from .geraete_store import keep_siblings
+
+        keep_siblings(self.db, ApiToken.account_id == int(account_id))
         gone += int(self.db.execute(
             delete(ApiToken).where(ApiToken.account_id == int(account_id), ApiToken.kind == TOKEN_DEVICE)
         ).rowcount or 0)

@@ -88,3 +88,15 @@ class AppGoneDevice(Base):
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     account_id: Mapped[int] = mapped_column(Integer, index=True)
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+
+
+class AppGoneSibling(Base):
+    """When a device that came in over iCloud (``via='icloud'``) was made, kept once it is disconnected (module geraete
+    0.1.5, G33 anew): the limit of siblings per hour counts it still, also after a restart. Rows older than a day go
+    when the next one comes."""
+
+    __tablename__ = "app_gone_siblings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(Integer, index=True)
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime)

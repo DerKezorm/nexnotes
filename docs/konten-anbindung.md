@@ -398,6 +398,15 @@ Partner der Vertragstests (nextasks) nichts in nexnotes schreibt. Vorlage `nexve
 Dazu: `PROGRAM_PATHS` des Tab-Wächters um `/api/oauth/revoke`, `/api/connect/token|revoke|retire` (Test
 `tests/test_program_paths.py`); Geräte erreichen `/api/connect/` nicht (`DEVICE_REFUSED_PREFIXES`).
 
+Nachzug Befundsuche (bauplaene-konten `eea15a8`: ui 1.3.1, updates 0.1.4, verbinden 0.2.1, schluessel 1.2.0,
+geraete 0.1.5): `VerbindenStore.account_may` lässt Verbindungen auch während der Sperre nach Fehlversuchen ruhen
+(`locked_until`, E41/BS5), der Adapter hat `lock` und `require_second_factor`; nexnotes hat kein `on_connected` und
+ruft `access(force=True)` nicht selbst. `GeraeteStore.sibling_times` zählt getrennte iCloud-Geschwister aus
+`app_gone_siblings` mit (G33 neu); `keep_siblings` merkt sie auf jedem Weg, der Gerätetokens löscht (Modul,
+„Abmelden“ eines Geräts, „Überall sonst abmelden“, neues Passwort). Neuer API- oder MCP-Schlüssel im Fenster
+`key-dialog` (B23): `tokens.test.tsx` und die E2E-Specs `api`, `deck`, `mcp` suchen ihn dort und schließen mit
+„Fertig“.
+
 ## 1. Bestand heute (1.0.1)
 
 ### Datenmodell (`backend/app/models.py`)

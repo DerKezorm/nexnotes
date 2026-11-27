@@ -198,6 +198,9 @@ def end_all_sessions(db: Session, account_id: int, except_token: str | None = No
     if except_token:
         statement = statement.where(AuthSession.token_hash != hash_token(except_token))
     db.execute(statement)
+    from .services.geraete_store import keep_siblings
+
+    keep_siblings(db, ApiToken.account_id == account_id)
     db.execute(delete(ApiToken).where(ApiToken.account_id == account_id, ApiToken.kind == TOKEN_DEVICE))
     # The browsers known from before are forgotten too (their device cookies); the one that stays gets a new one.
     db.execute(update(Account).where(Account.id == account_id).values(device_key=new_device_key()))

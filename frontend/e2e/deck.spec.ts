@@ -16,9 +16,12 @@ async function makeKey(page: Page, name: string, level: 'read' | 'write'): Promi
   await page.getByTestId('key-name').fill(name)
   await page.getByTestId(`key-right-${level}`).click()
   await page.getByTestId('key-submit').click()
-  await expect(page.getByTestId('key-made')).toContainText(name)
-  const token = (await page.getByTestId('key-secret').locator('input').inputValue()).trim()
+  // schluessel 1.2.0 (B23): the new key shows in the window that made it, until "Done".
+  const made = page.getByTestId('key-dialog')
+  await expect(made.getByTestId('key-made')).toContainText(name)
+  const token = (await made.getByTestId('key-secret').locator('input').inputValue()).trim()
   expect(token).toMatch(/^nn_api_/)
+  await made.getByTestId('key-done').click()
   return token
 }
 

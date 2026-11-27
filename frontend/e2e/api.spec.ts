@@ -32,9 +32,12 @@ test('NOTES-25 AC-1 AC-2 AC-7 AC-8 AC-9 AC-10 a token for one folder reads, sear
   await page.getByTestId('key-areas-some').click()
   await page.getByTestId(`key-area-${home}`).check()
   await page.getByTestId('key-submit').click()
-  await expect(page.getByTestId('key-made')).toContainText('this once only')
-  const token = (await page.getByTestId('key-secret').locator('input').inputValue()).trim()
+  // schluessel 1.2.0 (B23): the new key shows in the window that made it, until "Done".
+  const made = page.getByTestId('key-dialog')
+  await expect(made.getByTestId('key-made')).toContainText('this once only')
+  const token = (await made.getByTestId('key-secret').locator('input').inputValue()).trim()
   expect(token).toMatch(/^nn_api_/)
+  await made.getByTestId('key-done').click()
   const auth = { Authorization: `Bearer ${token}` }
   const row = page.locator('[data-card="api-keys"] tr[data-testid="key-row"]').filter({ hasText: `E2E program ${stamp}` })
   await expect(row).toContainText('Read and write')
