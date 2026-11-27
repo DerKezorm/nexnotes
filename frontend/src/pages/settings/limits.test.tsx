@@ -72,5 +72,8 @@ describe('E48 the features for every account', () => {
     const card = box.querySelector<HTMLElement>('[data-card="features"]')!
     expect(card.textContent).toContain('Funktionen für alle Konten')
     expect(card.textContent).toContain('Was jedes Konto auf diesem Server nutzen darf.')
+    // verbinden 0.1.8: "Verbindungen ins eigene Netz" stands once, in the card "Andere nex-Apps" (connect/AppsArea).
+    expect(card.querySelector('[data-testid="feature-local-network"]')).toBeNull()
+    expect(card.textContent).not.toContain('eigene Netz')
   })
 })

@@ -1,6 +1,7 @@
 /**
  * Settings, Connections: the cards of the other nex apps (module verbinden) with nexnotes' parts: nextasks' older way
- * (a key typed in, NOTES-19) behind "Von Hand verbinden", and its "Bereiche und Listen" while connected with a click.
+ * (a key typed in, NOTES-19) behind "Von Hand verbinden" (since verbinden 0.1.8 for a new connection only for the
+ * operator, V46), and its "Bereiche und Listen" while connected with a click.
  * The module's card is tested in `src/nexverbinden.test.tsx`, the server's side in `backend/tests/nexverbinden` and
  * `backend/tests/test_verbinden_module.py`.
  */
@@ -18,6 +19,13 @@ let box: HTMLDivElement
 let views: PartnerView[]
 let status: Record<string, unknown>
 const paths: string[] = []
+/** The role of the signed-in account (`useMe`). */
+let role: 'operator' | 'member' = 'operator'
+
+vi.mock('../state/auth', async (original) => ({
+  ...(await original<typeof import('../state/auth')>()),
+  useMe: () => ({ id: 1, name: 'kim', role }),
+}))
 
 function view(partner: string, more: Partial<PartnerView> = {}): PartnerView {
   return {
@@ -36,6 +44,7 @@ const $ = (testId: string, within: ParentNode = document.body) => within.querySe
 beforeEach(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   paths.length = 0
+  role = 'operator'
   setNextasks(null)
   views = [view('nextasks', { uses: ['tasks.read', 'tasks.write'], uses_levels: { 'tasks.read': 'read', 'tasks.write': 'write' } }), view('nexlore'), view('nextime')]
   status = { connected: false, local_allowed: false }
@@ -99,6 +108,40 @@ describe('the cards of the other nex apps (module verbinden)', () => {
     // Not connected: no lists to choose.
     expect(paths).not.toContain('/api/nextasks/areas')
     expect(i18n.t('nextasks.section.url')).toBeTruthy()
+  })
+
+  it('V46 shows "Von Hand verbinden" for a new connection to the operator only, a key typed in stays the member\'s', async () => {
+    role = 'member'
+    await show()
+    let card = $('connection-nextasks')!
+    await open(card)
+    expect($('connection-manual', card)).toBeNull()
+    expect($('nextasks-form', card)).toBeNull()
+    await act(async () => root.unmount())
+    root = createRoot(box)
+    views[0] = view('nextasks', { state: 'legacy', address: 'https://tasks.example.com', host: 'tasks.example.com', legacy: { shown: 'ntk_AbCd', expires_at: null }, uses: ['tasks.read', 'tasks.write'], uses_levels: { 'tasks.read': 'read', 'tasks.write': 'write' } })
+    status = { connected: true, local_allowed: false, url: 'https://tasks.example.com', host: 'tasks.example.com', name: 'kim', by: 'key' }
+    await show()
+    card = $('connection-nextasks')!
+    await open(card)
+    expect($('connection-manual', card)).not.toBeNull()
+  })
+
+  it('V42 gives the operator "Einrichten" where nextasks is not set up here, the member only the sentence', async () => {
+    views[0] = view('nextasks', { set_up: false, uses: ['tasks.read', 'tasks.write'], uses_levels: { 'tasks.read': 'read', 'tasks.write': 'write' } })
+    await show()
+    let card = $('connection-nextasks')!
+    await open(card)
+    expect($('connection-not-set-up', card)).not.toBeNull()
+    expect($('connection-set-up', card)?.getAttribute('href')).toBe('/settings/general#nex-apps')
+    await act(async () => root.unmount())
+    root = createRoot(box)
+    role = 'member'
+    await show()
+    card = $('connection-nextasks')!
+    await open(card)
+    expect($('connection-not-set-up', card)).not.toBeNull()
+    expect($('connection-set-up', card)).toBeNull()
   })
 
   it('shows "Bereiche und Listen" while nextasks is connected with a click, and no form of a key', async () => {

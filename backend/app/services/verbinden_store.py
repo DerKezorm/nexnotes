@@ -16,6 +16,7 @@ from __future__ import annotations
 import logging
 from datetime import UTC, datetime
 from typing import Any
+from urllib.parse import quote
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
@@ -194,8 +195,22 @@ class VerbindenStore:
         return account is not None and not account_out(account)
 
     def account_name(self, account_id: Any) -> str:
+        """The account's user name, as the other app names it ("verbunden als kim"); the shown name with the picture
+        goes to the consent page through ``account_card`` (verbinden 0.1.8, V43). Up to 0.1.7 the shown name stood
+        here: the contract now reads this as the user name of the card."""
         account = self.db.get(Account, int(account_id))
-        return (account.display_name or account.name) if account is not None else ""
+        return account.name if account is not None else ""
+
+    def account_card(self, account_id: Any) -> dict[str, Any] | None:
+        """The account on the consent page (verbinden 0.1.8, V43): the shown name, the user name, and the own profile
+        picture at the address the sidebar asks for (``lib/avatar.ts``, the time it was set as its version). nexnotes
+        has no colour of a person (the colours of the others in a note are given per note)."""
+        account = self.db.get(Account, int(account_id))
+        if account is None:
+            return None
+        stamp = account.avatar_at.isoformat() if account.avatar_at else None
+        picture = f"/api/avatars/{account.id}?v={quote(stamp, safe='')}" if stamp else None
+        return {"name": account.display_name, "username": account.name, "picture": picture, "color": None}
 
     def areas(self, account_id: Any) -> list[dict[str, Any]]:
         """The account's folders (the inbox first, paths in the names), as a key may be limited to them."""

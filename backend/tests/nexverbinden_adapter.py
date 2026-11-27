@@ -17,8 +17,10 @@ from verbinden_contract import StandardAdapter
 
 TAB = {"X-Nexnotes-Client": "tab-connect00"}
 NAMES = ("owner", "other", "operator")
-#: The names the contract tests know the accounts by (as its partner names them).
-SHOWN = {"owner": "kim", "other": "sam", "operator": "op"}
+#: The user names the contract tests know the accounts by (as its partner names them, ``Store.account_name``).
+USER = {"owner": "kim", "other": "sam", "operator": "op"}
+#: Their shown names (``display_name``), which the consent page shows with the user name (verbinden 0.1.8, V43).
+SHOWN = {"owner": "Kim Example", "other": "Sam Example", "operator": "Op Example"}
 
 
 class Adapter(StandardAdapter):
@@ -26,6 +28,8 @@ class Adapter(StandardAdapter):
     partner = "nextasks"
     base = "https://notes.example.com"
     older_link = True
+    #: Since verbinden 0.1.8: the shown names ``account_card`` gives beside the user names.
+    shown_names = {"owner": SHOWN["owner"], "other": SHOWN["other"]}  # noqa: RUF012 (read only)
 
     def start(self, folder: Path, *, older: bool = False) -> None:
         """Three accounts with their inbox and a folder each (``owner`` has two areas to give); with ``older`` an API
@@ -43,7 +47,7 @@ class Adapter(StandardAdapter):
         self.clients: dict[str, TestClient] = {}
         with SessionLocal() as db:
             for name in NAMES:
-                row = Account(name=f"connect-{name}", display_name=SHOWN[name],
+                row = Account(name=USER[name], display_name=SHOWN[name],
                               role=OPERATOR if name == "operator" else MEMBER,
                               password_hash=hash_password(secrets.token_urlsafe(16)))
                 db.add(row)

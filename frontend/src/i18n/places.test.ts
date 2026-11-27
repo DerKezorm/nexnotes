@@ -8,6 +8,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { NEXUI_TEXTS } from '../vendor/nexui'
+import { VERBINDEN_TEXTS } from '../vendor/nexverbinden'
 import de from './de.json'
 import en from './en.json'
 
@@ -85,8 +86,9 @@ describe('the places the texts name', () => {
     expect(en.nextasks.section.how).toContain('in nextasks, create a key that reads and writes under My account › Connections › API keys')
     expect(de.errors.nextasks_not_connected).toContain('Mein Konto › Verbindungen › nextasks')
     expect(de.errors.public_url_missing).toContain('Server › Anmeldung')
-    expect(de.nextasks.section.localOff).toContain('Server › Allgemein › Funktionen für alle Konten')
-    expect(de.nextasks.section.localOff).toContain(de.server.features)
-    expect(en.nextasks.section.localOff).toContain(en.server.features)
+    // verbinden 0.1.8: the own network has one place, the module's card "Andere nex-Apps" under Server › Allgemein.
+    expect(de.nextasks.section.localOff).toContain(`Server › Allgemein › ${VERBINDEN_TEXTS.de.operator.title}`)
+    expect(en.nextasks.section.localOff).toContain(`Server › General › ${VERBINDEN_TEXTS.en.operator.title}`)
+    expect(de.nextasks.section.localOff).not.toContain(de.server.features)
   })
 })

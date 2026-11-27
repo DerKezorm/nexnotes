@@ -932,8 +932,6 @@
     "newAccountStorageHint": "Empty means no limit. Applies to accounts added from now on.",
     "years_one": "{{count}} year",
     "years_other": "{{count}} years",
-    "localNetwork": "Connections into the local network",
-    "localNetworkHint": "Members may connect their nextasks at an address in the local network (LAN, VPN) too. Then every member can have nexnotes ask addresses there.",
     "backupHolds": "A backup contains all notes with their history and trash, all attachments, the accounts with their shares, smart folders and API keys, the settings and the server’s key. Locked notes stay encrypted in it. Not included: the log, exports, caches and your own language files, nor a key set through NEXNOTES_SECRET_KEY.",
     "ocrLanguagesLabel": "Languages"
   },
@@ -1839,7 +1837,7 @@
       "urlHint": "e.g. https://tasks.example.com",
       "key": "API key",
       "keyHint": "starts with ntk_",
-      "localOff": "If your nextasks runs in the local network, the operator has to allow that first under Server › General › Features for every account.",
+      "localOff": "If your nextasks runs in the local network, the operator has to allow that first under Server › General › Other nex apps.",
       "connect": "Connect",
       "checking": "Checking …",
       "connected": "connected",

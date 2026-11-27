@@ -111,6 +111,7 @@ export function LimitsCard({ server }: { server: Server }) {
 /**
  * The switches of the features for everybody (NOTES-1 AC-8). "MCP-Zugang" and "Programmschnittstelle (API) für
  * Mitglieder" are the card "Schnittstellen" of the module schluessel (`tokens/KeysCards.tsx`), right after this one.
+ * "Verbindungen ins eigene Netz" stands once, in the card "Andere nex-Apps" of the module verbinden (0.1.8).
  */
 export function FeaturesCard({ server }: { server: Server }) {
   const { t } = useTranslation()
@@ -120,13 +121,6 @@ export function FeaturesCard({ server }: { server: Server }) {
     <Card id="features" icon="SlidersHorizontal" title={t('server.features')} subtitle={t('server.featuresHint')}>
       <CheckboxRow label={t('server.linkPreviews')} hint={t('server.linkPreviewsHint')} checked={s.link_previews} onChange={(link_previews) => void server.save({ link_previews })} testId="feature-link-previews" />
       <CheckboxRow label={t('server.shareLinks')} hint={t('server.shareLinksHint')} checked={s.share_links} onChange={(share_links) => void server.save({ share_links })} testId="feature-share-links" />
-      <CheckboxRow
-        label={t('server.localNetwork')}
-        hint={t('server.localNetworkHint')}
-        checked={Boolean(s.connections_local_network)}
-        onChange={(connections_local_network) => void server.save({ connections_local_network })}
-        testId="feature-local-network"
-      />
       <Outcome problem={server.problem} />
     </Card>
   )

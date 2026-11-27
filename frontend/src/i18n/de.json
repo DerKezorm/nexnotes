@@ -932,8 +932,6 @@
     "newAccountStorageHint": "Leer heißt ohne Grenze. Gilt für Konten, die ab jetzt dazukommen.",
     "years_one": "{{count}} Jahr",
     "years_other": "{{count}} Jahren",
-    "localNetwork": "Verbindungen ins eigene Netz",
-    "localNetworkHint": "Mitglieder dürfen ihr nextasks auch unter einer Adresse im eigenen Netz (LAN, VPN) verbinden. Dann kann jedes Mitglied nexnotes Adressen dort ansprechen lassen.",
     "backupHolds": "Eine Sicherung enthält alle Notizen samt Verlauf und Papierkorb, alle Anhänge, die Konten mit ihren Freigaben, intelligenten Ordnern und API-Schlüsseln, die Einstellungen und den Schlüssel des Servers. Gesperrte Notizen bleiben darin verschlüsselt. Nicht dabei: Log, Exporte, Zwischenspeicher und eigene Sprachdateien, auch kein über NEXNOTES_SECRET_KEY gesetzter Schlüssel.",
     "ocrLanguagesLabel": "Sprachen"
   },
@@ -1839,7 +1837,7 @@
       "urlHint": "z. B. https://tasks.example.com",
       "key": "API-Schlüssel",
       "keyHint": "beginnt mit ntk_",
-      "localOff": "Läuft dein nextasks im eigenen Netz, muss der Betreiber das unter Server › Allgemein › Funktionen für alle Konten erst erlauben.",
+      "localOff": "Läuft dein nextasks im eigenen Netz, muss der Betreiber das unter Server › Allgemein › Andere nex-Apps erst erlauben.",
       "connect": "Verbinden",
       "checking": "Wird geprüft …",
       "connected": "verbunden",

@@ -8,7 +8,9 @@
 - the older way ``PUT /api/nextasks`` (a key typed in, NOTES-19) keeps working beside the module;
 - "Verbindungen ins eigene Netz" in the module's card and nexnotes' own switch are one setting (0.1.4);
 - "Trennen" of a connection by click drops the row without a key that kept nextasks' areas and lists for it, never a
-  connection typed in (``on_disconnected``, 0.1.4).
+  connection typed in (``on_disconnected``, 0.1.4);
+- the consent page shows the account with its shown name, its user name and its own picture at the address the
+  sidebar asks for (``Store.account_card``, 0.1.8).
 """
 
 from __future__ import annotations
@@ -135,6 +137,36 @@ def test_the_own_network_is_one_setting_in_the_card_and_in_general(client, opera
     assert client.put("/api/settings", json={"connections_local_network": False}).status_code == 200
     assert client.get("/api/connect/admin").json()["local"] is False
     assert client.put("/api/connect/admin", json={"local": "yes"}).status_code == 422
+
+
+def test_the_consent_page_shows_the_account_with_its_shown_name_and_own_picture(client, operator):
+    from urllib.parse import quote
+
+    from app.models import Account
+
+    from .test_avatars import photo
+
+    with SessionLocal() as db:
+        row = db.get(Account, operator.id)
+        assert row is not None
+        row.display_name = "Kim Example"
+        db.commit()
+        card = connect.account_card(VerbindenStore(db), operator.id)
+    assert card == {"name": "Kim Example", "username": operator.name, "picture": None, "color": None}
+    stamp = client.put("/api/auth/avatar", content=photo()).json()["avatar"]
+    with SessionLocal() as db:
+        card = connect.account_card(VerbindenStore(db), operator.id)
+    # The address of ``lib/avatar.ts`` (``encodeURIComponent`` of the stamp), so the page shows the picture it has.
+    assert card["picture"] == f"/api/avatars/{operator.id}?v={quote(stamp, safe='')}"
+    shown = client.get(card["picture"])
+    assert shown.status_code == 200 and shown.headers["content-type"] == "image/webp"
+    # Without a shown name of its own the user name alone (the module leaves out a name equal to it).
+    with SessionLocal() as db:
+        row = db.get(Account, operator.id)
+        assert row is not None
+        row.display_name = ""
+        db.commit()
+        assert connect.account_card(VerbindenStore(db), operator.id)["name"] == ""
 
 
 def test_trennen_drops_the_choice_kept_for_a_click_and_never_a_key_typed_in(client, operator, monkeypatch):
