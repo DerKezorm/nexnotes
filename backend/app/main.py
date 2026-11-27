@@ -161,12 +161,12 @@ async def _sweep_forever(stop: asyncio.Event) -> None:
         if rounds % 60 == 0:
             with SessionLocal() as db:
                 purge_sessions(db)
-            # What the operator's look at "Über nexnotes" found goes to the operators' devices once per version
-            # (module geraete, G18); no question of its own (U19).
+            # The update look (module updates): only while an operator's device wants new versions (U24, G56), at
+            # most one question a day, each version told once; else nothing (U19).
             try:
-                await asyncio.to_thread(geraete_store.tell_newer)
+                await asyncio.to_thread(updates.look_once)
             except Exception:
-                logger.exception("Telling the devices of a new version failed")
+                logger.exception("The update look failed")
         rounds += 1
         try:
             await asyncio.wait_for(stop.wait(), 60)
@@ -212,7 +212,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # A restore that failed at this start: the operators hear it once (the log; the page says it too).
     backups.report_failed_restore()
     _remember_version()
-    # The update check on this data (module updates); no bell, so no look in the background (U19).
+    # The update check on this data (module updates); no bell, a look in the background only for devices (U24).
     updates.configure()
     # Devices unused for a year are disconnected (module geraete, G27), once a day.
     if all(name != DEVICE_SWEEP for name, _job in cleanup._jobs):

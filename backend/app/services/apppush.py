@@ -4,7 +4,7 @@
 The app keeps an X25519 key pair per server and hands the relay's ticket and its public key over when it signs up
 for notifications (NOTES-24 AC-6, which brings the way in: ``remember``). A notification is compact JSON
 ``{"title", "text", "note_id", "at", "type"}``, encrypted for exactly that device: a fresh X25519 pair and nonce per
-message, HKDF-SHA256 with the info ``nexnotes-push-v1``, ChaCha20-Poly1305 (``services/push_crypto.py``). The relay and
+message, HKDF-SHA256 with the info ``nexnotes-push-v1``, ChaCha20-Poly1305 (the module's ``seal``). The relay and
 Apple only ever see the ciphertext (NOTES-14 AC-6). The alert's own keys (``push_title``, ``push_body``) are strings of
 the app and say nothing about the note.
 
@@ -28,7 +28,8 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..models import ApiToken
 from ..models_notify import PushDevice
-from . import outbound, push_crypto
+from ..vendor.nexgeraete.model import PushState
+from . import outbound
 from .history import clock
 
 logger = logging.getLogger("nexnotes.notify")
@@ -127,16 +128,19 @@ def _post(url: str, body: dict[str, object]) -> int:
 POST: Callable[[str, dict[str, object]], int] = _post
 
 
-def deliver(device: PushDevice, message: dict[str, object], collapse: str = "") -> None:
-    """One message to one device. Raises ``Gone`` (410: the ticket is to go) or ``Failed`` (try again later)."""
+def deliver(push: PushState, message: dict[str, object], *, info: str, collapse: str = "") -> None:
+    """One message to one device (its push state in the module geraete), sealed with the module's ``seal`` and the
+    app's ``info`` (G55). Raises ``Gone`` (410: the ticket is to go) or ``Failed`` (try again later)."""
+    from ..vendor.nexgeraete import seal
+
     relay = relay_url()
     if not relay:
         raise Failed("no_relay")
     try:
-        enc = push_crypto.encrypt(plaintext(message), device.key)
+        enc = seal.seal(plaintext(message), push.key, info)
     except ValueError as exc:
         raise Failed("bad_key") from exc
-    body: dict[str, object] = {"ticket": device.ticket, "enc": enc}
+    body: dict[str, object] = {"ticket": push.ticket, "enc": enc}
     if collapse:
         body["collapse"] = collapse[:COLLAPSE_MAX]
     try:

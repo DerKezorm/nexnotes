@@ -81,8 +81,9 @@ more. The card shows since when you are connected, when the connection was last 
 - **What's new**: after an update a notice at the top says what is new; Settings › About nexnotes shows it again
   at any time.
 - **Updates**: a new installation asks once at setup whether nexnotes may look for new versions. Only the operator
-  sees whether a newer version is out and switches the check; members see their own version. nexnotes asks only
-  when an operator opens Settings › About nexnotes, at most once a day, and the question goes out without the
+  sees whether a newer version is out and switches the check; members see their own version. nexnotes asks when an
+  operator opens Settings › About nexnotes, at most once a day; in the background only while the check is on and a
+  device of an operator wants notices of new versions, then at most once a day. The question goes out without the
   version of this server.
 
 ### Changed

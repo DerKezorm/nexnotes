@@ -285,9 +285,10 @@ language menu, marked as yours. What a file leaves out shows in English.
 - Notifications to the iOS app and to browsers are encrypted for the device before they leave.
 - What somebody may not see answers exactly like what does not exist.
 - The log never contains note contents, passwords, keys or tokens.
-- Whether a newer release is out, nexnotes asks GitHub at most once a day, and only when an operator opens the page
-  **About nexnotes** in the settings; only the question goes out, not even the server's version. A new installation
-  asks once at setup whether to look at all, and the operator can switch it off on that page.
+- Whether a newer release is out, nexnotes asks GitHub at most once a day: when an operator opens the page **About
+  nexnotes** in the settings, and in the background only while a device of an operator wants notices of new versions;
+  only the question goes out, not even the server's version. A new installation asks once at setup whether to look
+  at all, and the operator can switch it off on that page.
 
 Report a vulnerability privately, see [SECURITY.md](SECURITY.md).
 

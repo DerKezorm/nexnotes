@@ -21,11 +21,13 @@ GERAETE_ROUTES = {
     "POST /api/app/1/pairing/code", "POST /api/app/1/pairing/{pairing_id}/key", "DELETE /api/app/1/push",
     "PUT /api/app/1/push",
 }
-#: Bodies of those routes that went with nexnotes' own code, and names FastAPI gives otherwise now that the module's
-#: bodies of the same name are there (``AddressIn`` of oidc, ``NameIn`` of accounts), or no longer needs to
-#: (``CodeIn`` of totp).
-GERAETE_SCHEMAS = {"AddressIn", "DeviceIn", "KeyIn", "NameIn", "PairingIn", "app__routers__app1__CodeIn",
-                   "app__routers__app_pairing__ConnectIn", "app__routers__totp__CodeIn"}
+#: Bodies of those routes that went with nexnotes' own code or into the module (``PushIn``, since geraete 0.1.1
+#: ``NexgeraetePushIn``, G59), and names FastAPI no longer needs to lengthen once the clashing body went (``CodeIn`` of
+#: totp; ``ConnectIn`` of nextasks, which clashed with ``ConnectIn`` of the old ``app_pairing``). Since geraete 0.1.1
+#: ``AddressIn`` of oidc and ``NameIn`` of accounts are back under their names of before.
+GERAETE_SCHEMAS = {"DeviceIn", "KeyIn", "PairingIn", "PushIn", "app__routers__app1__CodeIn",
+                   "app__routers__app_pairing__ConnectIn", "app__routers__nextasks__ConnectIn",
+                   "app__routers__totp__CodeIn"}
 
 
 def _names() -> dict[str, dict[str, str | None]]:

@@ -5,8 +5,9 @@ row of ``push_devices``. The module's columns came in beside them (``model``, ``
 in ``app_pairings`` (with ``code_hash``) and ``app_codes`` (with ``challenge``). A token the operator blocked
 (``blocked_at``) counts as disconnected: the store never hands it out. ``app_gone_devices`` is only read (G42).
 
-Also here: what nexnotes does around the module, the mail "Neue Anmeldung" after a new device (G29), the notice of a
-new version to the operators' devices (G18) and the daily sweep of devices unused for a year (G27)."""
+Also here: what nexnotes does around the module, the mail "Neue Anmeldung" after a new device (G29, G50), the notice of
+a new version to the operators' devices through ``nexupdates`` (G56) and the daily sweep of devices unused for a year
+(G27)."""
 
 from __future__ import annotations
 
@@ -297,8 +298,9 @@ def send(url: str, body: dict[str, Any]) -> int:
 
 
 def on_paired(holder: Holder, device: Device) -> None:
-    """After a new device (G29): the mail "Neue Anmeldung", as after a sign-in from a browser not known yet, to a
-    confirmed address and unless the person turned it off; the device's name and model in place of the browser."""
+    """After a new device (G29, G50): the mail "Neue Anmeldung", as after a sign-in from a browser not known yet, to a
+    confirmed address and unless the person turned it off; the device's name and model in place of the browser
+    (``nexgeraete.notices.letter``)."""
     from ..vendor.nexkonten import sessions as konten_sessions
     from . import kontenpost
     from .konten_store import KontenStore
@@ -309,40 +311,26 @@ def on_paired(holder: Holder, device: Device) -> None:
         if row is None or konto is None:
             return
         mail = konten_sessions.new_sign_in(konto, known=False, wanted=bool(row.new_sign_in_mail))
-        if kontenpost.queue(db, mail, where=nexgeraete.describe(device)):
+        if kontenpost.queue(db, mail, device=device):
             logger.info("Mail about a new device queued name=%s", row.name)
 
 
-def newer(version: str, current: str = "") -> int:
-    """A newer nexnotes is out (G18): a notice to the operators' devices that understand ``update`` and have it on,
-    leading to "Was ist neu". ``current``: the running version (this one where not given). Returns how many devices
-    took it."""
+def update_wanted() -> bool:
+    """``devices_want`` of ``nexupdates`` (G56, U24): a device of an operator wants to hear of new versions."""
+    with SessionLocal() as db:
+        return nexgeraete.notices.update_wanted(GeraeteStore(db), CONFIG)
+
+
+def newer(version: str) -> int:
+    """``on_devices`` of ``nexupdates`` (G56): a newer nexnotes is out, a notice to the operators' devices that
+    understand ``update`` and have it on, naming the running version and leading to "Was ist neu". Returns how many
+    devices took it."""
     from .. import __version__
 
     with SessionLocal() as db:
         url = f"{settings_service.public_url(db)}/settings/about"
-        told = nexgeraete.notices.newer(GeraeteStore(db), CONFIG, version, current or __version__, url, send=send)
+        told = nexgeraete.notices.newer(GeraeteStore(db), CONFIG, version, __version__, url, send=send)
     return told.sent
-
-
-def tell_newer() -> str | None:
-    """nexnotes has no bell and asks GitHub only when an operator opens "Über nexnotes" (U19): what that question
-    found goes to the operators' devices once per version, without a question of its own. Returns the version told
-    about, else None."""
-    from ..vendor.nexupdates import check
-
-    if not check.switch_on():
-        return None
-    known = check.state(on=False)
-    if not known.latest or not known.newer:
-        return None
-    with SessionLocal() as db:
-        told = str(settings_service.get(db, "update_told") or "")
-        if told and not check.is_newer(known.latest, told):
-            return None
-        settings_service.save(db, {"update_told": known.latest})
-    newer(known.latest)
-    return known.latest
 
 
 def sweep() -> int:

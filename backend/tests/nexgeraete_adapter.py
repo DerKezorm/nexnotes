@@ -169,9 +169,26 @@ class Adapter(StandardAdapter):
     def block(self, account: str = "owner") -> None:
         from app.services import accounts
 
+        if account == "operator":
+            self._spare_operator()
         db, row = self._account(account)
         with db:
             accounts.block(db, row)
+
+    def _spare_operator(self) -> None:
+        """nexnotes never blocks its last operator (``last_operator``): a second one without devices, once."""
+        from app.db import SessionLocal
+        from app.models import OPERATOR, Account
+        from app.security import hash_password
+
+        if getattr(self, "spare", None) is not None:
+            return
+        with SessionLocal() as db:
+            row = Account(name="contract-spare", display_name="Contract spare", email="spare@example.com",
+                          role=OPERATOR, password_hash=hash_password(secrets.token_urlsafe(16)))
+            db.add(row)
+            db.commit()
+            self.spare = row.id
 
     def unblock(self, account: str = "owner") -> None:
         """Unblocking ends the browser sessions of before (konten): the account's browser signs in anew."""
@@ -261,12 +278,21 @@ class Adapter(StandardAdapter):
         notify.send_round()
 
     def announce(self, version: str) -> None:
-        """``geraete_store.newer`` as ``tell_newer`` calls it. The contract expects the running version 1.2.1 in the
-        text (``test_new_version_only_to_operators_that_have_it_on`` names it; reported to the module): here it is
-        given as such."""
+        """``geraete_store.newer`` as ``nexupdates`` calls it (``on_devices``, G56), with the running version."""
         from app.services import geraete_store
 
-        geraete_store.newer(version, current="1.2.1")
+        geraete_store.newer(version)
+
+    def update_wanted(self) -> bool:
+        """``geraete_store.update_wanted``, what ``nexupdates`` asks as ``devices_want`` (G56)."""
+        from app.services import geraete_store
+
+        return geraete_store.update_wanted()
+
+    def running(self) -> str:
+        from app import __version__
+
+        return __version__
 
     def sweep(self) -> int:
         from app.services import geraete_store

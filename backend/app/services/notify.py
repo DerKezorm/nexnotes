@@ -675,13 +675,37 @@ def _deliver(db: Session, row: NotifyOutbox) -> None:
         webpush.deliver(db, target, json.dumps(body, ensure_ascii=False).encode("utf-8"), topic=opaque(about))
         target.last_ok_at = clock.now()
     elif row.channel == "app":
-        device = db.get(PushDevice, row.target_id)
-        if device is None or device.account_id != row.account_id:
-            raise LookupError
-        apppush.deliver(device, payload, collapse=opaque(str(payload.get("note_id") or "")))
-        device.last_ok_at = clock.now()
+        _deliver_app(db, row, payload)
     else:
         raise LookupError
+
+
+def _deliver_app(db: Session, row: NotifyOutbox, payload: dict[str, Any]) -> None:
+    """One message of the outbox to one device (module geraete, G55): before every try the rules of ``push.tell``,
+    as they stand now, not as they stood when the message was queued: the account not shut out (``holder.out``), the
+    operator's switch ``app`` on, the device still paired and signed up, understanding the kind and having it on.
+    Sealed with the module's ``seal`` and ``push_info``; a 410 drops the ticket (``store.set_push``, ``send_round``)."""
+    from ..vendor.nexgeraete import push
+    from .geraete_config import CONFIG
+    from .geraete_store import GeraeteStore
+
+    store = GeraeteStore(db)
+    holder = store.holder(row.account_id)
+    if holder is None or holder.out:
+        raise LookupError
+    if not store.switch("app"):
+        raise _Refused("app_off")
+    device = store.device(row.target_id)
+    if device is None or str(device.account_id) != str(row.account_id) or device.push is None:
+        raise LookupError
+    kind = str(payload.get("type") or "changed")
+    if not push.understood(CONFIG, device, kind) or not push.wanted(CONFIG, device, holder, kind):
+        raise _Refused("not_wanted")
+    apppush.deliver(device.push, payload, info=CONFIG.push_info,
+                    collapse=opaque(str(payload.get("note_id") or "")))
+    found = db.get(PushDevice, row.target_id)
+    if found is not None:
+        found.last_ok_at = clock.now()
 
 
 #: "Ein Programm wartet auf dein Ja" (module mcp, decision 14): a tool set to "ask" waits for the account's answer.
@@ -747,6 +771,8 @@ def _still_for(db: Session, account: Account, payload: dict[str, Any]) -> str:
 
 def send_round(now: datetime | None = None) -> int:
     """Sends what is due. Returns how many went out."""
+    from .geraete_store import GeraeteStore
+
     now = now or clock.now()
     sent = 0
     with SessionLocal() as db:
@@ -776,7 +802,7 @@ def send_round(now: datetime | None = None) -> int:
                 row.failed_at, row.last_error, row.payload = now, "gone", {}
             except apppush.Gone:
                 logger.info("A push ticket is gone; removing it")
-                db.execute(delete(PushDevice).where(PushDevice.token_id == row.target_id))
+                GeraeteStore(db).set_push(row.target_id, None)
                 row.failed_at, row.last_error, row.payload = now, "gone", {}
             except (webpush.Failed, apppush.Failed) as exc:
                 row.last_error = exc.code

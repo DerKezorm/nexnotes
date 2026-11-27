@@ -5,7 +5,9 @@ At most once a day the public GitHub API is asked for the newest release. Nothin
 names, no notes, no settings, not even the server's version (the module's neutral ``nex-update-check``). The switch
 ``update_check`` stays where it was, with its value; an installation from before that never stored it keeps the check
 on, a new one stores the answer of its setup (U1). Only the operator sees the state (U2, U15); a member sees its own
-version. nexnotes has no bell for operators, so nothing looks in the background (U19): the operator's page asks.
+version. nexnotes has no bell for operators: the background looks (at most once a day, only with the check on) only
+while a device of an operator wants to hear of new versions (U24, module geraete G56), and tells those devices once per
+version; without such a device nothing looks in the background (U19), the operator's page asks.
 
 The names of the module (``parse``, ``is_newer``, ``state``, ``forget``, ``State``, ``INTERVAL`` …) stand here.
 """
@@ -27,6 +29,8 @@ RELEASES_URL = f"{REPO_URL}/releases"
 PROJECT_URL = REPO_URL
 API_URL = f"https://api.github.com/repos/{REPO}/releases/latest"
 KEY = "update_check"
+#: The version the operators' devices were last told about.
+TOLD = "update_told"
 
 
 def _read_switch() -> bool | None:
@@ -41,6 +45,29 @@ def _write_switch(on: bool) -> None:
         settings_service.save(db, {KEY: bool(on)})
 
 
+def _read_told() -> str | None:
+    """The version the operators' devices were last told about (``update_told``, as before the module's look)."""
+    with SessionLocal() as db:
+        return str(settings_service.get(db, TOLD) or "") or None
+
+
+def _write_told(version: str) -> None:
+    with SessionLocal() as db:
+        settings_service.save(db, {TOLD: version})
+
+
+def _devices_want() -> bool:
+    from . import geraete_store
+
+    return geraete_store.update_wanted()
+
+
+def _on_devices(version: str) -> None:
+    from . import geraete_store
+
+    geraete_store.newer(version)
+
+
 def configure() -> nexupdates.AppConfig:
     """The module on nexnotes' storage; at import and again at every start (a test may have changed it)."""
     return nexupdates.configure(nexupdates.AppConfig(
@@ -51,8 +78,13 @@ def configure() -> nexupdates.AppConfig:
         update_url=lambda: get_settings().update_url,
         read_switch=_read_switch,
         write_switch=_write_switch,
-        # No bell (U19): no background look; the operator's page asks once a day.
+        read_told=_read_told,
+        write_told=_write_told,
+        # No bell; an operator's device that wants new versions counts as one (U24, G56), else no background look
+        # (U19) and the operator's page asks once a day.
         on_newer=None,
+        devices_want=_devices_want,
+        on_devices=_on_devices,
         logger_name="nexnotes.updates",
     ))
 

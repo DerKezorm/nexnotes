@@ -64,6 +64,9 @@ function answer(path: string): Answer | undefined {
     return { status: 200, body: { schedule, zone: 'UTC', last: null, count: 0, kept: 0, failure: null, running: false, restore_failure: null, restored: null, restore: 'restart', download_password: false, backups: [] } }
   }
   if (path === '/api/notify/devices') return { status: 200, body: { apps: [], browsers: [], this_browser: false } }
+  // No iPhone app on this server: the card of the devices' notifications stays away (module geraete; since 0.1.1 an
+  // answer of another shape, such as the `[]` below, shows a problem instead, G51).
+  if (path === '/api/app-devices') return { status: 200, body: { has_app: false, devices: [] } }
   if (path === '/api/about') return { status: 200, body: { version: '0.1.0', license: 'AGPL-3.0', repo_url: 'https://example.com/nexnotes', releases_url: 'https://example.com/nexnotes/releases', project_url: '' } }
   if (path === '/api/about/updates') return { status: 200, body: { update_check: true, checked: false, latest: null, newer: false, checked_at: null, release_url: null, hidden: false } }
   if (path.startsWith('/api/logs/level')) return { status: 200, body: { mode: 'normal', until: null, fixed_by_env: false, modes: ['quiet', 'normal', 'detailed', 'trace'] } }

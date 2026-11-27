@@ -710,6 +710,56 @@ def test_notes14_ec1_a_message_tried_again_after_the_note_was_locked_tells_nothi
         assert row is not None and row.last_error == "locked" and row.payload == {}
 
 
+def test_notes14_g55_a_message_tried_again_asks_the_rules_of_the_device_again(client, operator, anna, as_anna,
+                                                                             relayed):
+    """Module geraete G55: the outbox keeps its tries per device, and before each one it asks what ``push.tell`` asks,
+    as it stands then: the operator's switch ``app``, the kind on the device, the device still paired. Sealed with the
+    module's ``seal``; the app decrypts it as before."""
+    from app.services import settings_service
+    from app.services.geraete_store import GeraeteStore
+
+    note_id = shared_note(client, anna)
+    switch(client, "note", note_id)
+    private = X25519PrivateKey.generate()
+    key = base64.b64encode(private.public_key().public_bytes(serialization.Encoding.Raw,
+                                                             serialization.PublicFormat.Raw)).decode()
+    with SessionLocal() as db:
+        row, _token = apitokens.make(db, db.get(Account, operator.id), "iPhone")
+        apppush.remember(db, operator.id, row.id, "1.ticket", key)
+        device_id = row.id
+
+    def tried_again_after(change, undo, reason: str) -> None:
+        relayed.error = httpx.ConnectError("down")
+        add(note_id, anna, reason)
+        assert tick_after(minutes=3) == (1, 0)
+        calls = len(relayed.calls)
+        with SessionLocal() as db:
+            change(db)
+            db.commit()
+        relayed.error = None
+        assert tick_after(minutes=2) == (0, 0)
+        assert len(relayed.calls) == calls
+        with SessionLocal() as db:
+            last = db.scalars(select(NotifyOutbox).order_by(NotifyOutbox.id.desc())).first()
+            assert last is not None and last.failed_at is not None and last.payload == {}
+            assert last.last_error == reason
+            undo(db)
+            db.commit()
+
+    tried_again_after(lambda db: settings_service.save(db, {"app_enabled": False}),
+                      lambda db: settings_service.save(db, {"app_enabled": True}), "app_off")
+    tried_again_after(lambda db: GeraeteStore(db).set_kinds(device_id, {"changed": False}),
+                      lambda db: GeraeteStore(db).set_kinds(device_id, {"changed": True}), "not_wanted")
+    # Still allowed: it goes, sealed for the device as the published app reads it.
+    add(note_id, anna, "Butter")
+    assert tick_after(minutes=3) == (1, 1)
+    shown = json.loads(push_crypto.decrypt(relayed.calls[-1][1]["enc"], base64.b64encode(private.private_bytes(
+        serialization.Encoding.Raw, serialization.PrivateFormat.Raw, serialization.NoEncryption())).decode()))
+    assert shown["type"] == "changed" and shown["note_id"] == note_id
+    tried_again_after(lambda db: setattr(db.get(ApiToken, device_id), "blocked_at", datetime.now(UTC)),
+                      lambda db: None, "no_target")
+
+
 # --- AC-6: no note id for the relay and the push service ------------------------------------------------------------
 
 

@@ -5,7 +5,8 @@
  *
  * The state of the check comes from the shared module updates (`vendor/nexupdates`, `useUpdates`). Only the operator
  * sees the card "Aktualisierungen", switches the daily check and asks now (U2, U15): the question goes out for the
- * whole installation. A member sees its own version and nothing of the check. The card says what goes out. The row
+ * whole installation. nexnotes has no bell; its hint names the operator's page and the paired devices that want new
+ * versions (U24). A member sees its own version and nothing of the check. The card says what goes out. The row
  * "Was ist neu" opens the newest text of the shared module wasneu (`vendor/nexwasneu`), "Frühere Versionen" all.
  */
 import { useTranslation } from 'react-i18next'
@@ -14,7 +15,7 @@ import { tabFetch } from '../../lib/tabFetch'
 import { formatMoment } from '../../vendor/nexui'
 import { useAuth } from '../../state/auth'
 import { AboutPage, Notice, type BuiltWith } from '../../vendor/nexui'
-import { useUpdates, useUpdatesTexts, whatGoesOut } from '../../vendor/nexupdates/updates'
+import { dailyHint, useUpdates, useUpdatesTexts, whatGoesOut } from '../../vendor/nexupdates/updates'
 import { useAboutWhatsNew } from '../../vendor/nexwasneu'
 
 const PARTS: BuiltWith[] = [
@@ -64,7 +65,7 @@ export function AboutArea() {
         checking={state.checking}
         builtWith={PARTS}
         problem={state.problem}
-        texts={{ updatesWhatGoesOut: whatGoesOut(texts, 'nexnotes') }}
+        texts={{ updatesWhatGoesOut: whatGoesOut(texts, 'nexnotes'), updatesDailyHint: dailyHint(texts, { bell: false, devices: true }) }}
         {...news.about}
       />
       {news.window}

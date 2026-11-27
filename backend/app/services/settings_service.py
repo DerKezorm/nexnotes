@@ -72,7 +72,8 @@ DEFAULTS: dict[str, Any] = {
     "two_factor_required": False,
     #: Ask GitHub once a day whether a newer nexnotes is out (services/updates). Only the question goes out, so on.
     "update_check": True,
-    #: The newest version the operators' devices were told about (module geraete, G18), so that none hears twice.
+    #: The newest version the operators' devices were told about (modules updates and geraete, U24, G56), so that none
+    #: hears twice.
     "update_told": "",
     #: Invitation mail: without a host nothing is sent, the link to copy is enough.
     "smtp_host": "",

@@ -11,7 +11,8 @@ import logging
 from sqlalchemy.orm import Session
 
 from ..models import Account
-from ..vendor import nexkonten, nexpost
+from ..vendor import nexgeraete, nexkonten, nexpost
+from ..vendor.nexgeraete.model import Device
 from . import mailer, settings_service
 from .post_store import PostStore
 
@@ -57,16 +58,22 @@ def deliver_now(db: Session, mail: nexkonten.Mail) -> None:
         raise
 
 
-def queue(db: Session, mail: nexkonten.Mail | None, *, by: str = "", where: str = "", days: int = 0) -> bool:
+def queue(db: Session, mail: nexkonten.Mail | None, *, by: str = "", where: str = "", days: int = 0,
+          device: Device | None = None) -> bool:
     """Into the outbox (committed here); False when nothing went in (no mail, no server, an address the post module
-    refuses)."""
+    refuses). ``device``: the mail "Neue Anmeldung" for a newly paired device, which names it in place of a browser
+    (module geraete, ``nexgeraete.notices.letter``, G50)."""
     if mail is None or not mailer.configured(db):
         return False
     account = db.get(Account, int(mail.account_id)) if str(mail.account_id).isdigit() else None
     language = mailer.language_for(db, account)
     try:
-        letter = nexpost.letters.from_account_mail(mail, language=language, link=link_for(db, mail), by=by,
-                                                   where=where, days=days)
+        if device is not None:
+            letter = nexgeraete.notices.letter(nexpost.letters, mail, device, language=language,
+                                               link=link_for(db, mail))
+        else:
+            letter = nexpost.letters.from_account_mail(mail, language=language, link=link_for(db, mail), by=by,
+                                                       where=where, days=days)
     except (nexpost.MailError, ValueError) as exc:
         logger.warning("Mail not queued kind=%s reason=%s", mail.kind, type(exc).__name__)
         return False

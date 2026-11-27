@@ -3,7 +3,9 @@
 The contract tests in ``backend/tests/nexupdates/`` run the module's routes (``/api/about``) in nexnotes, over its
 setting ``update_check`` (``services/updates.py``). The database is the one of the test session (``tests/conftest.py``
 empties it before every test). nexnotes has no bell for operators (U19): ``has_bell = False``, so the contract checks
-that the background never looks and that the first visit of an operator to "About" asks once (updates 0.1.2).
+that the background never looks and that the first visit of an operator to "About" asks once (updates 0.1.2). It pairs
+devices (module geraete): ``has_devices = True``, an operator's device that wants ``update`` counts as a bell (U24,
+updates 0.1.3); the relay is a recorder in place of ``apppush.POST``.
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ TAB = {"X-Nexnotes-Client": "tab-updates00"}
 
 class Adapter(StandardAdapter):
     has_bell = False
+    has_devices = True
     package = "app.vendor.nexupdates"
     prefix = "/api/about"
     also: tuple[str, ...] = ()
@@ -28,10 +31,20 @@ class Adapter(StandardAdapter):
         from app.db import SessionLocal
         from app.models import MEMBER, OPERATOR, Account
         from app.security import brake, hash_password
+        from app.services import apppush
 
         brake.forget()
         self.clients: dict[str, Any] = {}
         self.ids: dict[str, int] = {}
+        self.device: int | None = None
+        self.relayed: list[dict[str, Any]] = []
+        self._post = apppush.POST
+
+        def relay(_url: str, body: dict[str, Any]) -> int:
+            self.relayed.append(body)
+            return 200
+
+        apppush.POST = relay  # type: ignore[assignment]
         with SessionLocal() as db:
             for role in ("operator", "member"):
                 row = Account(name=f"updates-{role}", display_name=f"Updates {role}",
@@ -44,9 +57,12 @@ class Adapter(StandardAdapter):
         self.restart()
 
     def stop(self) -> None:
+        from app.services import apppush
+
         for client in self.clients.values():
             client.close()
         self.clients = {}
+        apppush.POST = self._post  # type: ignore[assignment]
 
     def restart(self) -> None:
         from app.services import updates
@@ -107,3 +123,33 @@ class Adapter(StandardAdapter):
                                                 "password": "correct horse battery", "update_check": on})
         browser.close()
         assert made.status_code == 200, made.text
+
+    def want_on_device(self, on: bool) -> None:
+        """The operator's iPhone, paired once and signed up for notifications of the kind ``update`` (as an app that
+        names it does), with that kind switched on or off on the device."""
+        import hashlib
+        from datetime import UTC, datetime
+
+        from app.db import SessionLocal
+        from app.services.geraete_store import GeraeteStore
+        from app.vendor.nexgeraete import seal
+        from app.vendor.nexgeraete.model import NewDevice, PushState
+
+        with SessionLocal() as db:
+            store = GeraeteStore(db)
+            if self.device is None:
+                token = secrets.token_urlsafe(32)
+                made = store.add_device(NewDevice(
+                    account_id=self.ids["operator"], name="Operator's iPhone", kind="ios",
+                    token_hash=hashlib.sha256(token.encode()).hexdigest(), prefix="nnd_", via="qr",
+                    created_at=datetime.now(UTC)))
+                self.device = int(made.id)
+                store.set_push(self.device, PushState(ticket="updates-operator", key=seal.key_pair()[1],
+                                                      understands=("update",)))
+            store.set_kinds(self.device, {"update": on})
+            store.commit()
+
+    def devices_told(self) -> list[str]:
+        """The versions of every notice ``update`` that went to the relay (its ``collapse`` names the version)."""
+        return [str(body["collapse"]).removeprefix("update-") for body in self.relayed
+                if str(body.get("collapse", "")).startswith("update-")]
