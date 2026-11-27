@@ -472,7 +472,6 @@ export const authApi = {
   accessSeen: () => api<Me>('/api/auth/access/seen', { method: 'POST' }),
   password: (current: string, next: string, confirm: string) =>
     api<void>('/api/auth/password', { method: 'PUT', body: { current, new: next, password_confirm: confirm } }),
-  whatsNewSeen: () => api<Me>('/api/me/whats-new/seen', { method: 'POST' }),
   resetNoticeSeen: () => api<Me>('/api/me/password-reset-notice/seen', { method: 'POST' }),
   myProviders: () => api<MyProvider[]>('/api/oidc/me'),
   linkStart: (slug: string, password: string) =>

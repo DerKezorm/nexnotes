@@ -1,7 +1,8 @@
 /**
  * The frame of the signed-in app: the sidebar on the left (on a phone behind a button), the page on the right. A
  * session that ends while the page is open shows its dialog over everything, so nothing written is lost. After the
- * password was set through the operator's reset link, the account hears so once it is signed in (NOTES-2 AC-7).
+ * password was set through the operator's reset link, the account hears so once it is signed in (NOTES-2 AC-7). After an
+ * update the banner of the shared module wasneu stands under the head ("Was ist neu?", `vendor/nexwasneu`).
  */
 import { Menu } from 'lucide-react'
 import { Fragment, useEffect, useState } from 'react'
@@ -11,7 +12,9 @@ import { Outlet, useLocation } from 'react-router-dom'
 import { authApi } from '../api/client'
 import { SHELL_BANNERS, SHELL_PARTS } from '../extensions'
 import { useColumnWidth } from '../lib/columns'
+import { tabFetch } from '../lib/tabFetch'
 import { useAuth } from '../state/auth'
+import { WhatsNewAfterUpdate } from '../vendor/nexwasneu'
 import { ColumnHandle } from './ColumnHandle'
 import { Dialog } from './Dialog'
 import { Logo } from './Logo'
@@ -23,7 +26,8 @@ import { useSidebarFolded } from './sidebarFold'
 let clockTold = false
 
 export function AppShell() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const { refresh } = useAuth()
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const [sidebarWidth] = useColumnWidth('sidebar')
@@ -62,6 +66,7 @@ export function AppShell() {
           </button>
           <Logo size={26} withWordmark />
         </header>
+        <WhatsNewAfterUpdate app="nexnotes" logo="/logo.svg" fetcher={tabFetch} language={i18n.language} onSeen={() => void refresh()} />
         {SHELL_BANNERS.map((banner) => (
           <div key={banner.key}>{banner.render()}</div>
         ))}

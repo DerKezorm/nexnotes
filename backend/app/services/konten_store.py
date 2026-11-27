@@ -26,7 +26,6 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from .. import __version__
 from ..config import get_settings
 from ..models import (
     MEMBER,
@@ -56,7 +55,7 @@ from ..security import (
     server_key,
     verify_password,
 )
-from ..vendor import nexgeraete, nexkonten
+from ..vendor import nexgeraete, nexkonten, nexwasneu
 from ..vendor.nexgeraete.model import Device as GeraeteDevice
 from ..vendor.nexkonten import (
     Access,
@@ -287,7 +286,7 @@ class KontenStore:
             password_hash=hash_password(new.password) if new.password else "",
             password_changed_at=utcnow() if new.password else None,
             language=new.language or "",
-            whats_new_seen=__version__,
+            whats_new_seen=nexwasneu.seen_for_new_account(),
             # A new account starts with "system" (konten 1.1.0, E45); only accounts of before have none.
             theme=new.theme,
             # The limit new accounts start with (Bauplan E44, Server › General › Limits).

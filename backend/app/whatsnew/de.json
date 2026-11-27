@@ -1,0 +1,41 @@
+{
+  "1.2.0": {
+    "lead": "nexnotes verbindet sich jetzt mit einem Klick mit deinen anderen nex-Apps, zeigt deine iPhones, iPads und Macs an einem Ort, und die Einstellungen sind aufgebaut wie in jeder nex-App. Deine Notizen bleiben, wie sie sind.",
+    "sections": [
+      {
+        "title": "Andere nex-Apps mit einem Klick",
+        "where": "Mein Konto › Verbindungen",
+        "body": "nextasks, nexlore und nextime haben hier je eine eigene Karte. Klick auf „Mit … verbinden“, stimm in der anderen App einmal zu, fertig: kein Schlüssel zum Kopieren. Vorher steht in Worten da, was jede App darf, und mehr darf sie nicht. Mit nextasks schickst du Zeilen oder ganze Notizen als Aufgaben, wie bisher; eine Verbindung mit Schlüssel läuft weiter. An nexlore gibst du eine Notiz in einen Bereich deiner Wahl. In nextime legt „Notiz in nexnotes“ eine Notiz zu einem Termin in deinem Eingang an. Jede Verbindung lässt sich hier jederzeit beenden, für beide Seiten."
+      },
+      {
+        "title": "Deine Geräte an einem Ort",
+        "where": "Mein Konto › Verbindungen › Geräte",
+        "body": "Hier stehen alle iPhones, iPads und Macs mit der nexnotes-App und wann sie sich zuletzt gemeldet haben. Du kannst sie umbenennen, einzeln oder alle auf einmal trennen und ein neues per QR-Code verbinden. Unter Mein Konto › Benachrichtigungen stellst du je Gerät ein, welche Mitteilungen es bekommt. Kommt ein neues Gerät dazu, bekommst du eine Mail, wie bei einer Anmeldung aus einem neuen Browser. Die App selbst bleibt, wie sie ist: den Code zum Abtippen unter dem QR-Code, Modell und App-Version in der Liste nutzt erst eine kommende Version der App."
+      },
+      {
+        "title": "Einstellungen wie in jeder nex-App",
+        "where": "Einstellungen",
+        "body": "Mein Konto (Profil, Sicherheit, Darstellung, Benachrichtigungen, Verbindungen) und Server für den Betreiber haben jetzt Bereiche mit eigener Adresse. Hell oder dunkel gehört zu deinem Konto und gilt auf jedem Gerät. API-Schlüssel und KI-Werkzeuge (MCP) haben eigene Karten: MCP-Schlüssel legst du wieder von Hand an, auf Wunsch nur für bestimmte Ordner, und bestimmst je Werkzeug, ob es darf, erst fragt oder nicht darf."
+      },
+      {
+        "title": "Was ist neu",
+        "where": "Einstellungen › Über nexnotes",
+        "body": "Nach einem Update sagt dir ein Hinweis oben, was neu ist, so wie dieser Text. Unter Über nexnotes findest du ihn jederzeit wieder."
+      },
+      {
+        "title": "Für den Betreiber",
+        "where": "Server › Verbindungen, Server › Konten",
+        "body": "Beim Update ist nichts zu tun: nexnotes legt vorher eine Sicherung an, alle Schlüssel und verbundenen Geräte arbeiten weiter, die veröffentlichte iPhone-App unverändert. Unter Server › Verbindungen trägst du die Adressen der anderen nex-Apps einmal ein (für Apps im eigenen Netz dazu „Verbindungen ins eigene Netz“), unter Schnittstellen stehen die Schalter „iPhone-App erlauben“ und „Neue Geräte verbinden“. Unter Server › Konten › Verwalten siehst du, wie viele Geräte ein Konto hat, und kannst sie trennen. „Bereit fürs Internet?“ unter Server › Anmeldung prüft Adresse, zweiten Faktor, Schutz vor Raten, Cookies und Proxy. „Zweiten Faktor für alle verlangen“ abzuschalten fragt nach deinem Passwort.",
+        "operator": true
+      }
+    ],
+    "smallTitle": "Außerdem",
+    "small": [
+      "Ist ein Konto gesperrt oder gelöscht, ruhen seine Geräte und Schlüssel; ist es zurück, arbeiten sie wieder, ohne neu verbunden zu werden.",
+      "Ein Gerät, das ein Jahr lang nicht benutzt wurde, wird getrennt.",
+      "Menüs klappen nach oben auf, statt aus dem Fenster zu laufen.",
+      "Sicherungen gibt es auch monatlich, und „Jetzt sichern“ nimmt eine Notiz mit.",
+      "Mails zu deinem Konto gehen sofort hinaus."
+    ]
+  }
+}

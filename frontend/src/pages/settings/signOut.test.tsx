@@ -24,6 +24,9 @@ let root: Root
 let box: HTMLDivElement
 let here = ''
 
+/** "Was ist neu" of the shared module wasneu, which the frame asks: nothing unread. */
+const NOTHING_NEW = { version: '1.2.0', seen: '1.2.0', unread: [], more: false, current: null, earlier: false }
+
 function reply(status: number, body: unknown): Response {
   return new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
 }
@@ -46,6 +49,7 @@ beforeEach(async () => {
       }
       if (path === '/api/auth/me') return signedIn ? reply(200, me) : reply(401, { detail: { code: 'sign_in_required' } })
       if (path === '/api/auth/methods') return reply(200, { password: true, providers: [] })
+      if (path.startsWith('/api/whats-new')) return reply(200, NOTHING_NEW)
       return reply(200, [])
     }),
   )

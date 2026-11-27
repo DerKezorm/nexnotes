@@ -23,7 +23,6 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from .. import __version__
 from ..models import (
     DELETE_GRACE_DAYS,
     MEMBER,
@@ -36,6 +35,7 @@ from ..models import (
     utcnow,
 )
 from ..security import LOCK_MINUTES, MAX_FAILURES, MIN_PASSWORD, hash_password, hash_token, verify_password
+from ..vendor import nexwasneu
 from . import settings_service
 
 logger = logging.getLogger("nexnotes.auth")
@@ -157,7 +157,7 @@ def create_with_password(
         sign_in=SIGN_IN_PASSWORD,
         password_hash=hash_password(password),
         password_changed_at=utcnow(),
-        whats_new_seen=__version__,
+        whats_new_seen=nexwasneu.seen_for_new_account(),
         storage_limit=settings_service.new_account_storage_limit(db),
     )
     db.add(account)

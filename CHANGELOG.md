@@ -10,12 +10,13 @@ its settings are laid out like those of the other nex apps. Your notes are not t
 
 ### Connect nex apps
 
-Under **My account › Connections**, the card **Other nex apps** lists the apps nexnotes works with: **nextasks**,
-**nexlore** and **nextime**. Click **Connect with …**, agree once in the other app, and you are back, connected. No key
+Under **My account › Connections**, each app nexnotes works with has a card of its own: **nextasks**, **nexlore**
+and **nextime**. Click **Connect with …**, agree once in the other app, and you are back, connected. No key
 to make, copy and paste. The page where you agree says in plain words what each app may do (for example "Create and
 change tasks") and shows the account you are signed in with. Each app may only do what the connection is for, nothing
 more. The card shows since when you are connected, when the connection was last used and what it allows, with
-**Check now** and **Disconnect**, which ends it on both sides.
+**Disconnect**, which ends it on both sides (**End access** where only the other app uses nexnotes, as nextime does);
+**Check now** appears while the other app cannot be reached.
 
 - **nextasks: now connected with one click.** Everything you did with a key works the same way over the new
   connection: put the cursor in a line or select several and send them with **To nextasks** in the head of the note
@@ -33,6 +34,16 @@ more. The card shows since when you are connected, when the connection was last 
   and whether nexnotes may reach apps in the local network (**Connections into the local network**). After that every
   account only clicks. Connections can be switched off for everybody there; nothing is deleted. When something goes
   wrong in the other app, you come back to your card and read there what happened.
+
+### iPhone, iPad and Mac
+
+- **Your devices in one place**, under **My account › Connections › Devices**: every iPhone, iPad and Mac with the
+  nexnotes app and when it last checked in. Rename a device, disconnect one or all at once, and connect a new one
+  with **Connect iPhone or iPad** (QR code).
+- **Notifications per device** under My account › Notifications: which notifications each device gets.
+- **A mail when a device is added**, as for a sign-in from a new browser (unless you switched that mail off).
+- The published iPhone and iPad app keeps working unchanged. The code to type in below the QR code, and model and
+  app version in the list, need a coming version of the app.
 
 ### AI tools (MCP)
 
@@ -56,7 +67,8 @@ more. The card shows since when you are connected, when the connection was last 
 - **API keys and AI tools (MCP)** are cards of their own under My account › Connections: make a key with folders and
   an end date, see it once, edit or revoke it.
 - **Notifications** under My account › Notifications: which way your notifications come, this browser on or off with
-  a test notification, your other browsers (remove one) and the iPhone and iPad app.
+  a test notification, your other browsers (remove one), the iPhone and iPad app, and per device which
+  notifications it gets.
 - **Install on this device** is always under My account › Connections: the button where the browser offers it,
   otherwise how it is done in your browser.
 - **Ready for the internet?** under Server › Sign-in: each time you open the page, nexnotes checks its address, the
@@ -66,6 +78,8 @@ more. The card shows since when you are connected, when the connection was last 
   asks first and takes an optional note, shown with the backup in the list.
 - **Own languages** under Server › General › Languages: upload a language file and download a template. Files are
   checked more strictly, and a broken one says why.
+- **What's new**: after an update a notice at the top says what is new; Settings › About nexnotes shows it again
+  at any time.
 - **Updates**: a new installation asks once at setup whether nexnotes may look for new versions. Only the operator
   sees whether a newer version is out and switches the check; members see their own version. nexnotes asks only
   when an operator opens Settings › About nexnotes, at most once a day, and the question goes out without the
@@ -78,8 +92,8 @@ more. The card shows since when you are connected, when the connection was last 
 - The switches for the API and MCP are under Server › Connections › Interfaces.
 - The operator's account list has one row per account with **Manage**. A key the operator blocked can be unblocked
   again.
-- A blocked or deleted account's own API and MCP keys rest and work again once it is back; paired devices and
-  connected AI tools are disconnected.
+- A blocked or deleted account's own API and MCP keys and its paired devices rest and work again once it is back,
+  without connecting anew; connected AI tools are disconnected. A device not used for a year is disconnected.
 - Every signed-in account sees the profile pictures of the others, as in every nex app.
 - Mails about your account go out at once instead of within a minute.
 - A new email address shows "Address not confirmed yet" with a link to send, until you confirm it.
@@ -98,7 +112,8 @@ more. The card shows since when you are connected, when the connection was last 
 ### For the operator
 
 - **Nothing to do for an update.** Before it changes anything, nexnotes makes a backup named "before 1.2.0". Every
-  API key, MCP key and older nexdeck card key keeps working, paired devices stay connected, a connection to nextasks
+  API key, MCP key and older nexdeck card key keeps working, paired devices stay connected and the published
+  iPhone app keeps working unchanged, a connection to nextasks
   made with a key keeps working, backups stay readable, and the old addresses of the settings lead to their new
   place. No new environment variables, ports or paths.
 - **Interface change:** turning "Require a second factor of everybody" off asks for your password once more, on the
@@ -106,6 +121,9 @@ more. The card shows since when you are connected, when the connection was last 
   401 `wrong_password`), as does the new `PUT /api/server/sign-in` with `"factor_required": false`.
 - To connect apps in one click, enter their addresses once under Server › Connections › Other nex apps. Apps in your
   local network (LAN, VPN) also need **Connections into the local network** there.
+- The iPhone app has two switches under Server › Connections › Interfaces: **Allow the iPhone app** and **Connect new
+  devices** (both on). Server › Accounts › Manage shows how many devices an account has and when they last checked
+  in, and disconnects them.
 
 ## 1.1.0 – 2026-11-25
 

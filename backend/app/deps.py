@@ -23,6 +23,7 @@ from .models import OPERATOR, SIGN_IN_PASSWORD, TOKEN_DEVICE, AuthSession, OidcL
 from .models import Account as AccountRow
 from .security import SESSION_COOKIE, account_out, hash_token, session_account, session_owner
 from .services import accounts, apitokens, logs, totp
+from .vendor import nexwasneu
 from .vendor.nexkonten.brake import BRAKE, DOOR_CONFIRM, door_key
 from .vendor.nexkonten.common import FRESH_SIGN_IN_MINUTES, fresh_sign_in
 
@@ -216,6 +217,20 @@ def require_operator(request: Request, account: Annotated[AccountRow, Depends(re
 
 Account = Annotated[AccountRow, Depends(require_account)]
 OperatorAccount = Annotated[AccountRow, Depends(require_operator)]
+
+
+def whats_new_viewer(account: Account, db: DbSession) -> nexwasneu.Viewer:
+    """The signed-in account as the shared module "What's new" needs it (``vendor/nexwasneu``): the version it read,
+    whether it is an operator (sections for operators), how to store a version it read, and its own language."""
+
+    def mark(version: str) -> None:
+        row = db.get(AccountRow, account.id)
+        if row is not None:
+            row.whats_new_seen = version
+            db.commit()
+
+    return nexwasneu.Viewer(seen=account.whats_new_seen or "", operator=account.role == OPERATOR, mark=mark,
+                            language=account.language or None)
 
 
 # --- The password once more, while signed in ------------------------------------------------------------------------

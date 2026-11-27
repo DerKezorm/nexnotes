@@ -20,7 +20,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from . import __version__, private
 from .config import get_settings
 from .db import SessionLocal, init_db
-from .deps import require_operator
+from .deps import require_operator, whats_new_viewer
 from .errors import detail
 from .middleware import ForwardedProtoMiddleware, GuardMiddleware, RequestContextMiddleware, unhandled_error
 from .routers import (
@@ -85,10 +85,11 @@ from .services import (
     updates,
 )
 from .services.konten_store import KontenStore
-from .vendor import nexoidc
+from .vendor import nexoidc, nexwasneu
 from .vendor.nexkonten import factor as konten_factor
 from .vendor.nexkonten import setup as konten_setup
 from .vendor.nexsprachen import api as nexsprachen_api
+from .vendor.nexwasneu import api as wasneu_api
 
 logger = logging.getLogger("nexnotes")
 
@@ -320,6 +321,11 @@ app.include_router(nexsprachen_api.router(
     operation_ids=LOCALES_OPERATION_IDS,
     schema_names={"LanguageEntry": "LocaleEntry"},
 ))
+# "What's new" from the shared module (vendor/nexwasneu): the texts of every version in the package (whatsnew/), so the
+# image carries them; the banner after an update, the row on "About" and the history ask these routes.
+nexwasneu.configure(nexwasneu.AppConfig(app_name="nexnotes", version=lambda: __version__,
+                                        folder=Path(__file__).parent / "whatsnew", languages=("de", "en")))
+app.include_router(wasneu_api.router(viewer=whats_new_viewer))
 app.include_router(api_v1.router)
 app.include_router(api_v1_write.router)
 app.include_router(api_v1.docs_router)

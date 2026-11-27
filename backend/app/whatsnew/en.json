@@ -1,0 +1,41 @@
+{
+  "1.2.0": {
+    "lead": "nexnotes now connects with your other nex apps in one click, shows your iPhones, iPads and Macs in one place, and its settings are laid out like in every nex app. Your notes stay as they are.",
+    "sections": [
+      {
+        "title": "Other nex apps in one click",
+        "where": "My account › Connections",
+        "body": "nextasks, nexlore and nextime each have a card of their own here. Click “Connect with …”, agree once in the other app, done: no key to copy. Beforehand it says in plain words what each app may do, and it may do no more. With nextasks you send lines or whole notes as tasks, as before; a connection made with a key keeps working. To nexlore you hand a note into a space you choose. In nextime, “Note in nexnotes” makes a note about an event in your inbox. You can end any connection here at any time, for both sides."
+      },
+      {
+        "title": "Your devices in one place",
+        "where": "My account › Connections › Devices",
+        "body": "Here are all iPhones, iPads and Macs with the nexnotes app and when they last checked in. You can rename them, disconnect one or all at once, and connect a new one with the QR code. Under My account › Notifications you choose per device which notifications it gets. When a new device is added, you get a mail, as for a sign-in from a new browser. The app itself stays as it is: the code to type in below the QR code, and model and app version in the list, need a coming version of the app."
+      },
+      {
+        "title": "Settings like in every nex app",
+        "where": "Settings",
+        "body": "My account (Profile, Security, Appearance, Notifications, Connections) and Server for the operator now have areas with an address of their own. Light or dark belongs to your account and holds on every device. API keys and AI tools (MCP) have cards of their own: you make MCP keys by hand again, limited to folders if you like, and decide per tool whether it may, asks first or may not."
+      },
+      {
+        "title": "What’s new",
+        "where": "Settings › About nexnotes",
+        "body": "After an update a notice at the top tells you what is new, like this text. Under About nexnotes you find it again at any time."
+      },
+      {
+        "title": "For the operator",
+        "where": "Server › Connections, Server › Accounts",
+        "body": "Nothing to do for the update: nexnotes makes a backup first, every key and connected device keeps working, the published iPhone app unchanged. Under Server › Connections you enter the addresses of the other nex apps once (for apps in your own network also “Connections into the local network”); Interfaces has the switches “Allow the iPhone app” and “Connect new devices”. Under Server › Accounts › Manage you see how many devices an account has and can disconnect them. “Ready for the internet?” under Server › Sign-in checks the address, the second factor, the protection against guessing, cookies and the proxy. Switching “Require a second factor of everybody” off asks for your password.",
+        "operator": true
+      }
+    ],
+    "smallTitle": "Also",
+    "small": [
+      "While an account is blocked or deleted, its devices and keys rest; once it is back, they work again without connecting anew.",
+      "A device not used for a year is disconnected.",
+      "Menus open upward instead of running off the window.",
+      "Backups can also run monthly, and “Back up now” takes a note.",
+      "Mails about your account go out at once."
+    ]
+  }
+}

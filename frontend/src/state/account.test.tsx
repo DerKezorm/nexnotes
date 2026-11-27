@@ -61,12 +61,16 @@ function answer(path: string, method: string): Response {
   return reply(200, {})
 }
 
+/** "Was ist neu" of the shared module wasneu, which the frame asks: nothing unread. */
+const NOTHING_NEW = { version: '1.2.0', seen: '1.2.0', unread: [], more: false, current: null, earlier: false }
+
 function serve(): void {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input), 'http://localhost')
       const method = init?.method ?? 'GET'
+      if (url.pathname.startsWith('/api/whats-new')) return new Response(JSON.stringify(NOTHING_NEW), { status: 200, headers: { 'Content-Type': 'application/json' } })
       const response = answer(url.pathname, method)
       // Held back: the answer was made for the account of that moment and arrives later.
       if (holding && ['/api/tags', '/api/folders', '/api/search'].includes(url.pathname)) {
