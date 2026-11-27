@@ -157,7 +157,7 @@ describe('the invitation page', () => {
 })
 
 describe('the account page', () => {
-  const me = { id: 2, name: 'alex', display_name: '', avatar: null, role: 'member', sign_in: 'password', email: '', provider_email: '', two_factor: false, suite: '' }
+  const me = { id: 2, name: 'alex', display_name: '', avatar: null, role: 'member', sign_in: 'password', email: '', provider_email: '', two_factor: false }
 
   async function account(at: string, mine: Record<string, unknown>[], change: Record<string, unknown> = {}) {
     const { AccountTab } = await import('./settings/AccountTab')

@@ -87,7 +87,7 @@ def test_unknown_api_paths_are_404_not_the_start_page(tmp_path: Path) -> None:
 def test_a_cookie_suffix_keeps_two_instances_on_one_host_apart(monkeypatch) -> None:
     from app.config import Settings
 
-    assert Settings(cookie_suffix="_suite").cookie_name_suffix() == "_suite"
+    assert Settings(cookie_suffix="_second").cookie_name_suffix() == "_second"
     # Anything a cookie name cannot carry stops the start (NOTES-1 EC-5) instead of being cut out quietly.
     with pytest.raises(ValidationError):
         Settings(cookie_suffix="a;b=c d")

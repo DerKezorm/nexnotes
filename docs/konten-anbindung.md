@@ -338,7 +338,7 @@ Aus `bauplaene` Zweig `einst-module` (bis `84d152a`), je `tools/sync.py copy`, `
 
 | Modul | Fassung | was nexnotes dafür gebaut hat | alte Wege (bleiben) | Umwege |
 |---|---|---|---|---|
-| ui | 1.1.3 | `AboutPage showUpdates` (Mitglieder ohne Karte „Aktualisierungen“) | – | – |
+| ui | 1.3.2 | `AboutPage showUpdates` (Mitglieder ohne Karte „Aktualisierungen“) | – | – |
 | schluessel | 1.1.2 | `CONFIG`: Extra `mcp` an API-Schlüsseln ausgedient (`retired_options`), Art `mcp` wieder anlegbar mit Ordnern, Programme zählen mit; Vorlage `nexschluessel.test.tsx` 1.1.0 | `POST /api/tokens` setzt `mcp: true` weiter (`retired=True`, Entscheidung 12) | – |
 | sicherung | 1.0.5 | nichts (keine App-Tests mit altem Wortlaut oder „Jetzt sichern“ ohne Bestätigen); neuer Vertragstest herunterladen → hochladen → prüfen grün | `/api/backups/*` | – |
 | updates | 0.1.2 | `services/updates.py` = `configure` + Modulnamen, `routers/about.py` = `nexupdates.api.router` (Zusammenfassungen von vorher, E53), Einrichtung mit „Nach neuen Versionen sehen“ (`UpdateSetupRow bell={false}`: Satz ohne Glocke, `SetupIn.update_check` → `at_setup`), `AboutArea` mit `useUpdates`; keine Glocke, also kein Blick im Hintergrund (U19) | `/api/about`, `/api/about/updates` (Mitglied: alte Form leer + `hidden`, U21), Schalter `update_check` | – (Adapter `has_bell = False`; die Glocken-Fälle laufen) |

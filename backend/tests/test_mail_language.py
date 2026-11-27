@@ -97,7 +97,6 @@ def test_an_invitation_to_an_address_without_an_account_speaks_the_inviters_lang
     assert answer.json()["link"] in body
     # How long it holds, in the receiver's words.
     assert "Die Einladung gilt 7 Tage." in body
-    assert "nexsuite" not in body
 
 
 def test_an_english_invitation_keeps_its_wording_and_says_how_long_it_holds(
