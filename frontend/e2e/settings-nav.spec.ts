@@ -26,9 +26,13 @@ test('NOTES-2 AC-9 the operator sees both groups, each area at its own address',
   await expect(nav.getByText('My account', { exact: true })).toBeVisible()
   await expect(nav.getByText('Server', { exact: true })).toBeVisible()
   await expect(page.getByTestId('settings-back')).toBeHidden()
-  for (const name of ['Profile', 'Security', 'Appearance', 'Connections', 'General', 'Sign-in', 'Mail', 'Storage and backups', 'Text recognition', 'Accounts', 'Log']) {
+  for (const name of ['Profile', 'Security', 'Appearance', 'General', 'Sign-in', 'Mail', 'Storage and backups', 'Text recognition', 'Accounts', 'Log']) {
     await expect(nav.getByRole('link', { name, exact: true })).toBeVisible()
   }
+  // "Connections" twice since E67: My account › Connections and Server › Connections, each at its own address.
+  await expect(nav.getByRole('link', { name: 'Connections', exact: true })).toHaveCount(2)
+  await expect(nav.getByTestId('settings-nav-connections')).toHaveAttribute('href', '/settings/connections')
+  await expect(nav.getByTestId('settings-nav-server-connections')).toHaveAttribute('href', '/settings/server-connections')
   await expect(nav.getByRole('link', { name: 'Profile', exact: true })).toHaveAttribute('aria-current', 'page')
   await nav.getByRole('link', { name: 'Storage and backups', exact: true }).click()
   await expect(page).toHaveURL(/\/settings\/storage$/)

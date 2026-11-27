@@ -94,8 +94,8 @@ test('NOTES-25 AC-5 the operator switches the API off and on again', async ({ pa
   const made = await page.request.post('/api/tokens', { data: { name: `E2E switch ${Date.now()}`, level: 'read' }, headers: TAB })
   const token = (await made.json()).token as string
   const auth = { Authorization: `Bearer ${token}` }
-  // The switch is in the card "Interfaces" of Server › General (the shared key module since the settings pass).
-  await page.goto('/settings/general')
+  // The switch is in the card "Interfaces" of Server › Connections (the shared key module; there since E67).
+  await page.goto('/settings/server-connections')
   const toggle = page.locator('[data-card="interfaces"]').getByRole('checkbox', { name: 'Programming interface (API) for members' })
   await expect(toggle).toBeChecked()
   // The box follows the server's answer (it is held while the change is on its way).
@@ -105,7 +105,7 @@ test('NOTES-25 AC-5 the operator switches the API off and on again', async ({ pa
   await page.goto('/settings/connections')
   await expect(page.getByTestId('api-keys-off')).toBeVisible()
   await expect(page.getByTestId('api-keys-new')).toBeDisabled()
-  await page.goto('/settings/general')
+  await page.goto('/settings/server-connections')
   const again = page.locator('[data-card="interfaces"]').getByRole('checkbox', { name: 'Programming interface (API) for members' })
   await again.click()
   await expect(again).toBeChecked()
