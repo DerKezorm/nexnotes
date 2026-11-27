@@ -98,7 +98,7 @@ async function settle(): Promise<void> {
 
 function Where() {
   const location = useLocation()
-  return <output data-testid="where">{location.pathname + location.search}</output>
+  return <output data-testid="where">{location.pathname + location.search + location.hash}</output>
 }
 
 async function open(at: string): Promise<void> {
@@ -136,7 +136,8 @@ describe('the addresses of the settings (NOTES-2 AC-9)', () => {
   })
 
   it('NOTES-2 AC-9 a member asking for a server area or an old server address lands on the profile', () => {
-    for (const slug of ['general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'server']) expect(resolveArea(slug, 'member', '')).toEqual({ redirect: '/settings' })
+    for (const slug of ['general', 'server-connections', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'server']) expect(resolveArea(slug, 'member', '')).toEqual({ redirect: '/settings' })
+    expect(resolveArea('general', 'member', '', '#nex-apps')).toEqual({ redirect: '/settings' })
   })
 
   it('NOTES-2 AC-9 the answer of a provider after linking goes to Security, with its message', () => {
@@ -180,7 +181,7 @@ describe('the navigation of the settings (NOTES-2 AC-9)', () => {
     await open('/settings/sign-in')
     const links = [...box.querySelectorAll<HTMLAnchorElement>('[data-testid="settings-nav"] a[data-testid^="settings-nav-"]')]
     expect(links.map((link) => link.getAttribute('href'))).toEqual(
-      ['profile', 'security', 'appearance', 'notifications', 'connections', 'general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'about'].map((slug) => `/settings/${slug}`),
+      ['profile', 'security', 'appearance', 'notifications', 'connections', 'general', 'server-connections', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log', 'about'].map((slug) => `/settings/${slug}`),
     )
     for (const link of links) expect(link.tabIndex).toBe(0)
     expect(current()).toEqual(['settings-nav-sign-in'])
@@ -263,7 +264,8 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
     ['security', ['security']],
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
     ['notifications', ['notify-ways']],
-    ['general', ['limits', 'features', 'interfaces', 'nex-apps', 'languages']],
+    ['general', ['limits', 'features', 'languages']],
+    ['server-connections', ['nex-apps', 'interfaces']],
     // The points of "Ready for the internet?" are boxes of their own in its card (here one, `ready-address`).
     ['sign-in', ['sign-in-ready', 'ready-address', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
@@ -278,7 +280,8 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
   it.each([
     ['appearance', ['appearance', 'paper', 'lists', 'guide']],
     ['notifications', ['notify-ways']],
-    ['general', ['limits', 'features', 'interfaces', 'nex-apps', 'languages']],
+    ['general', ['limits', 'features', 'languages']],
+    ['server-connections', ['nex-apps', 'interfaces']],
     ['sign-in', ['sign-in-ready', 'sign-in', 'sign-in-providers', 'sign-in-authentik']],
     ['mail', ['mail']],
     ['storage', ['storage', 'backups']],
@@ -296,7 +299,7 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
 
   it('ui 1.1.3 U-3: the line of Server › General names exactly its cards, in their order', async () => {
     await open('/settings/general')
-    const parts: Record<string, string> = { limits: 'limits', features: 'features', interfaces: 'interfaces', 'nex-apps': 'nexApps', languages: 'languages' }
+    const parts: Record<string, string> = { limits: 'limits', features: 'features', languages: 'languages' }
     const { GENERAL_PARTS } = await import('./SettingsAreas')
     expect(GENERAL_PARTS).toEqual(cards().map((id) => parts[id]))
     const texts = NEXUI_TEXTS[languageOf(i18n.language)]
@@ -304,6 +307,35 @@ describe('every card in its area (NOTES-2 AC-9)', () => {
     const line = `${said.slice(0, -1).join(', ')}${texts.and}${said.at(-1)}`
     expect($('settings-area-general')!.textContent).toContain(`${line.charAt(0).toUpperCase()}${line.slice(1)}.`)
     expect($('settings-area-general')!.textContent).not.toContain(texts.generalParts.webPush)
+    expect($('settings-area-general')!.textContent).not.toContain(texts.generalParts.interfaces)
+  })
+
+  it('E67: "Other nex apps" and "Interfaces" stand under Server › Connections, and the addresses of before lead there', async () => {
+    expect(resolveArea('general', 'operator', '', '#nex-apps')).toEqual({ redirect: '/settings/server-connections#nex-apps' })
+    expect(resolveArea('general', 'operator', '', '#interfaces')).toEqual({ redirect: '/settings/server-connections#interfaces' })
+    expect(resolveArea('general', 'operator', '', '#limits')).toEqual({ area: 'general' })
+    // The cards' "Einrichten" of before and saved links: the area opens with both cards, the anchor kept.
+    await open('/settings/general#nex-apps')
+    expect(where()).toBe('/settings/server-connections#nex-apps')
+    expect(heading()).toBe(title('server-connections'))
+    expect(heading()).toBe('Connections')
+    expect(current()).toEqual(['settings-nav-server-connections'])
+    expect(cards()).toEqual(['nex-apps', 'interfaces'])
+    expect($('settings-area-server-connections')!.textContent).toContain(areaText(KIT, 'server-connections', { app: 'nexnotes' })!.text)
+    // Every switch of both cards is there: the other nex apps, the local network, API, MCP and the MCP settings.
+    const area = $('settings-area-server-connections')!
+    for (const name of ['Connections with other nex apps', 'Connections into the local network', 'Programming interface (API) for members', 'MCP access']) {
+      expect(area.textContent).toContain(name)
+    }
+    expect(area.querySelectorAll('input[type="checkbox"]').length).toBeGreaterThanOrEqual(4)
+    act(() => root.unmount())
+    root = createRoot(box)
+    await open('/settings/general#interfaces')
+    expect(where()).toBe('/settings/server-connections#interfaces')
+    act(() => root.unmount())
+    root = createRoot(box)
+    await open('/settings/general')
+    expect(cards()).toEqual(['limits', 'features', 'languages'])
   })
 
   it('NOTES-2 AC-9 the language is set in the profile, theme and paper in Appearance', async () => {

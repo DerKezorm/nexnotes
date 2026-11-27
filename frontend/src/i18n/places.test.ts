@@ -21,7 +21,7 @@ function texts(tree: Tree, prefix = ''): [string, string][] {
 }
 
 const ACCOUNT = ['profile', 'security', 'appearance', 'notifications', 'connections'] as const
-const SERVER = ['general', 'sign-in', 'mail', 'storage', 'accounts', 'log', 'ai-provider'] as const
+const SERVER = ['general', 'server-connections', 'sign-in', 'mail', 'storage', 'accounts', 'log', 'ai-provider'] as const
 
 const LANGUAGES = [
   { name: 'de', tree: de as unknown as Tree, kit: NEXUI_TEXTS.de, own: de.settings.areas.ocr.title },
@@ -86,9 +86,11 @@ describe('the places the texts name', () => {
     expect(en.nextasks.section.how).toContain('in nextasks, create a key that reads and writes under My account › Connections › API keys')
     expect(de.errors.nextasks_not_connected).toContain('Mein Konto › Verbindungen › nextasks')
     expect(de.errors.public_url_missing).toContain('Server › Anmeldung')
-    // verbinden 0.1.8: the own network has one place, the module's card "Andere nex-Apps" under Server › Allgemein.
-    expect(de.nextasks.section.localOff).toContain(`Server › Allgemein › ${VERBINDEN_TEXTS.de.operator.title}`)
-    expect(en.nextasks.section.localOff).toContain(`Server › General › ${VERBINDEN_TEXTS.en.operator.title}`)
+    // verbinden 0.1.8: the own network has one place, the module's card "Andere nex-Apps", since E67 under Server ›
+    // Verbindungen.
+    expect(de.nextasks.section.localOff).toContain(`Server › Verbindungen › ${VERBINDEN_TEXTS.de.operator.title}`)
+    expect(en.nextasks.section.localOff).toContain(`Server › Connections › ${VERBINDEN_TEXTS.en.operator.title}`)
+    expect(de.errors.nextasks_address_local).toContain(`Server › Verbindungen › ${VERBINDEN_TEXTS.de.operator.title}`)
     expect(de.nextasks.section.localOff).not.toContain(de.server.features)
   })
 })

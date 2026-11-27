@@ -13,7 +13,7 @@ no meaning changes. Something that would break comes under `/api/v2/` beside it.
 
 ## Switching it on, getting a key
 
-- The operator's switch **Settings › Server › General › Interfaces › "Programming interface (API) for members"** is on from the start. Off, every request
+- The operator's switch **Settings › Server › Connections › Interfaces › "Programming interface (API) for members"** is on from the start. Off, every request
   under `/api/v1/` (the nexdeck card's too) answers `403 api_off`; keys are kept and work again once it is on. The
   MCP switch is separate.
 - A member makes a key under **Settings › My account › Connections › API keys › New API key**: a name, *Read only* or

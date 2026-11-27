@@ -29,7 +29,7 @@ Die Karte zeigt, mit welchem Konto du verbunden bist, seit wann, wann die andere
 
 ## Für den Betreiber
 
-Damit die Karten einen Knopf zum Verbinden zeigen, trägt der Betreiber die Adressen der anderen Apps einmal ein: **Einstellungen › Server › Allgemein › Andere nex-Apps**. In der anderen App trägt er ebenso die Adresse von nexnotes ein. Fehlt eine Adresse, sagt die Karte, dass die App auf diesem Server nicht eingerichtet ist.
+Damit die Karten einen Knopf zum Verbinden zeigen, trägt der Betreiber die Adressen der anderen Apps einmal ein: **Einstellungen › Server › Verbindungen › Andere nex-Apps**. In der anderen App trägt er ebenso die Adresse von nexnotes ein. Fehlt eine Adresse, sagt die Karte, dass die App auf diesem Server nicht eingerichtet ist.
 
 - Läuft eine App im eigenen Netz (LAN, VPN), schaltet der Betreiber an derselben Stelle **„Verbindungen ins eigene Netz“** ein.
 - Der Schalter „Verbindungen mit anderen nex-Apps“ schaltet das Verbinden für alle aus. Bestehende Verbindungen ruhen dann, gelöscht wird nichts.

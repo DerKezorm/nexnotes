@@ -23,4 +23,4 @@ Unter **Einstellungen › Mein Konto › Verbindungen › KI-Werkzeuge (MCP)** s
 
 Unter **„Rechte je Werkzeug“** legst du für jeden Schlüssel und jedes Programm fest, was es tun darf: erlauben, fragen oder verweigern. Was fragt, wartet bei „Wartende Rückfragen“ auf dein Ja.
 
-Gut zu wissen: Ältere API-Schlüssel mit dem Haken „Auch für KI-Werkzeuge (MCP)“ gelten weiter. Bei einer neuen Installation ist MCP aus; der Betreiber schaltet es unter Einstellungen › Server › Allgemein › Schnittstellen ein.
+Gut zu wissen: Ältere API-Schlüssel mit dem Haken „Auch für KI-Werkzeuge (MCP)“ gelten weiter. Bei einer neuen Installation ist MCP aus; der Betreiber schaltet es unter Einstellungen › Server › Verbindungen › Schnittstellen ein.

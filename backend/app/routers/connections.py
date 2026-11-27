@@ -1,8 +1,8 @@
-"""My account › Connections, the API keys and AI tools, and Server › General › Interfaces and Server › Accounts › API
-keys of all accounts (plan "Einstellungen"; module schluessel 1.0.0): the module's routes under ``/api/connections``,
-over nexnotes' table ``api_tokens`` (``services/schluessel_store.py``). Browser sessions only: a paired device or a
-key never manages keys (``deps.DEVICE_REFUSED_PREFIXES``). The older ways (``/api/tokens``, ``/api/admin/tokens``) stay
-in ``routers/tokens.py`` in their old shapes.
+"""My account › Connections, the API keys and AI tools, and Server › Connections › Interfaces and Server › Accounts ›
+API keys of all accounts (plan "Einstellungen"; module schluessel 1.0.0): the module's routes under
+``/api/connections``, over nexnotes' table ``api_tokens`` (``services/schluessel_store.py``). Browser sessions only: a
+paired device or a key never manages keys (``deps.DEVICE_REFUSED_PREFIXES``). The older ways (``/api/tokens``,
+``/api/admin/tokens``) stay in ``routers/tokens.py`` in their old shapes.
 """
 
 from __future__ import annotations

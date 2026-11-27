@@ -133,7 +133,7 @@ describe('the cards of the other nex apps (module verbinden)', () => {
     let card = $('connection-nextasks')!
     await open(card)
     expect($('connection-not-set-up', card)).not.toBeNull()
-    expect($('connection-set-up', card)?.getAttribute('href')).toBe('/settings/general#nex-apps')
+    expect($('connection-set-up', card)?.getAttribute('href')).toBe('/settings/server-connections#nex-apps')
     await act(async () => root.unmount())
     root = createRoot(box)
     role = 'member'

@@ -177,7 +177,7 @@ describe('the settings (NOTES-2 AC-9)', () => {
 
   it('NOTES-2 AC-9 a member finds the areas of My account; an operator also those of the server', async () => {
     const own = ['profile', 'security', 'appearance', 'notifications', 'connections']
-    const server = ['general', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log']
+    const server = ['general', 'server-connections', 'sign-in', 'mail', 'storage', 'ocr', 'accounts', 'log']
     // The shared areas in the kit's words, Text recognition in nexnotes' own.
     const titles = (keys: string[]) => keys.map((key) => (key === 'ocr' ? i18n.t('settings.areas.ocr.title') : areaText(NEXUI_TEXTS.en, key, { app: 'nexnotes' })!.title))
     // "About nexnotes" is an area of everyone's, at the end (fifth review).

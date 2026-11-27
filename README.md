@@ -104,7 +104,7 @@ sides.
 | nexlore | **To nexlore** in a note's menu puts the note into a space of nexlore you pick, with its title and text. Notes in the vault are never sent. |
 | nextime | **Note in nexnotes** in an event's panel in nextime makes a note in your inbox with the event's title, time, place and notes. nextime may only add notes. |
 
-The operator enters the address of each app once under **Settings › Server › General › Other nex apps**; after that
+The operator enters the address of each app once under **Settings › Server › Connections › Other nex apps**; after that
 every account only clicks. Apps in the local network (LAN, VPN) need **Connections into the local network** there as
 well. A connection to nextasks made with an API key keeps working; **Connect again** turns it into the new kind.
 
@@ -266,7 +266,7 @@ program goes to `/api/v2` beside it.
 folders; a tool can also connect itself by OAuth, with the member's consent. For every key and program each tool can
 be allowed, denied or set to ask first; what asks waits under **Waiting requests** and is announced to the member's
 browsers. Older API keys with "Also for AI tools (MCP)" keep working. MCP is off on a new installation; the operator
-switches it under **Settings › Server › General › Interfaces**.
+switches it under **Settings › Server › Connections › Interfaces**.
 
 ## Languages
 

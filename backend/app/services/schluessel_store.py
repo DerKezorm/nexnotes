@@ -1,6 +1,6 @@
 """nexnotes' side of the shared key module ``vendor/nexschluessel`` (plan "Einstellungen", Verbindungen 5 and 6,
-Allgemein › Schnittstellen, Konten › API-Schlüssel aller Konten): its ``AppConfig`` and the ``Store`` over the table
-``api_tokens``, as NOTES-25 and NOTES-20 wrote it.
+Server › Verbindungen › Schnittstellen, Konten › API-Schlüssel aller Konten): its ``AppConfig`` and the ``Store`` over
+the table ``api_tokens``, as NOTES-25 and NOTES-20 wrote it.
 
 ⚠️ **No row moves, no key is hashed anew.** Every key nexnotes ever handed out stays valid with its prefix, hash,
 right, folders and extra: API tokens ``nn_api_`` (kind ``api``), the older nexdeck card keys ``nn_deck_`` (kind

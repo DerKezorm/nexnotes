@@ -21,11 +21,11 @@ GUIDE = ROOT / "backend" / "app" / "guide"
 AREAS = {
     "de": {
         "Mein Konto": ("Profil", "Sicherheit", "Darstellung", "Benachrichtigungen", "Verbindungen"),
-        "Server": ("Allgemein", "Anmeldung", "Mail", "Speicher und Sicherung", "Texterkennung", "Konten", "Log"),
+        "Server": ("Allgemein", "Verbindungen", "Anmeldung", "Mail", "Speicher und Sicherung", "Texterkennung", "Konten", "Log"),
     },
     "en": {
         "My account": ("Profile", "Security", "Appearance", "Notifications", "Connections"),
-        "Server": ("General", "Sign-in", "Mail", "Storage and backups", "Text recognition", "Accounts", "Log"),
+        "Server": ("General", "Connections", "Sign-in", "Mail", "Storage and backups", "Text recognition", "Accounts", "Log"),
     },
 }
 SETTINGS = {"de": "Einstellungen", "en": "Settings"}
@@ -88,7 +88,7 @@ def test_the_guide_points_to_the_other_nex_apps_and_nexdeck_as_they_are_now() ->
     way back to its event, so the guide promises none."""
     chapter = GUIDE / "de" / "7 Verbindungen"
     apps = (chapter / "1 Andere nex-Apps verbinden.md").read_text(encoding="utf-8")
-    assert "Einstellungen › Server › Allgemein › Andere nex-Apps" in apps and "„Verbindungen ins eigene Netz“" in apps
+    assert "Einstellungen › Server › Verbindungen › Andere nex-Apps" in apps and "„Verbindungen ins eigene Netz“" in apps
     nextasks = (chapter / "2 nextasks.md").read_text(encoding="utf-8")
     assert "„Mit nextasks verbinden“" in nextasks and "API-Schlüssel" not in nextasks
     for language, folder, name in (("de", "7 Verbindungen", "4 nextime.md"), ("en", "7 Connections", "4 nextime.md")):

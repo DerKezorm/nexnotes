@@ -23,4 +23,4 @@ Under **Settings › My account › Connections › AI tools (MCP)**, "Connected
 
 Under **"Rights per tool"** you set for every key and program what it may do: allow, ask or deny. Whatever asks waits under "Waiting requests" for your yes.
 
-Good to know: older API keys with the tick "Also for AI tools (MCP)" keep working. On a new installation MCP is off; the operator switches it on under Settings › Server › General › Interfaces.
+Good to know: older API keys with the tick "Also for AI tools (MCP)" keep working. On a new installation MCP is off; the operator switches it on under Settings › Server › Connections › Interfaces.

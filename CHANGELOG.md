@@ -29,7 +29,7 @@ more. The card shows since when you are connected, when the connection was last 
 - **nextime, new:** in nextime, **Note in nexnotes** in an event's panel makes a note in your nexnotes inbox with the
   event's title, its time, place and notes. Clicking it again for the same event finds the note made before. nextime
   may only add notes; it reads nothing of yours.
-- **The operator sets the other apps up once**, under **Server › General › Other nex apps**: the address of each app,
+- **The operator sets the other apps up once**, under **Server › Connections › Other nex apps**: the address of each app,
   and whether nexnotes may reach apps in the local network (**Connections into the local network**). After that every
   account only clicks. Connections can be switched off for everybody there; nothing is deleted. When something goes
   wrong in the other app, you come back to your card and read there what happened.
@@ -50,7 +50,8 @@ more. The card shows since when you are connected, when the connection was last 
 ### Settings like in every nex app
 
 - **Areas with an address of their own**: My account (Profile, Security, Appearance, Notifications, Connections) and
-  Server for the operator. On a phone the list of the areas comes first.
+  Server for the operator, with Connections of its own for the other nex apps and the interfaces. On a phone the list
+  of the areas comes first.
 - **Light or dark belongs to your account** and follows you to every device; "As the system" follows each device.
 - **API keys and AI tools (MCP)** are cards of their own under My account › Connections: make a key with folders and
   an end date, see it once, edit or revoke it.
@@ -74,7 +75,7 @@ more. The card shows since when you are connected, when the connection was last 
 
 - Sign-in providers, authentik in one step and the mail server are under Server › Sign-in and Server › Mail, laid out
   as in the other nex apps. The test mail carries nexnotes' logo.
-- The switches for the API and MCP are under Server › General › Interfaces.
+- The switches for the API and MCP are under Server › Connections › Interfaces.
 - The operator's account list has one row per account with **Manage**. A key the operator blocked can be unblocked
   again.
 - A blocked or deleted account's own API and MCP keys rest and work again once it is back; paired devices and
@@ -103,7 +104,7 @@ more. The card shows since when you are connected, when the connection was last 
 - **Interface change:** turning "Require a second factor of everybody" off asks for your password once more, on the
   page and in the API: `PUT /api/settings` with `"two_factor_required": false` now needs `"current_password"` (else
   401 `wrong_password`), as does the new `PUT /api/server/sign-in` with `"factor_required": false`.
-- To connect apps in one click, enter their addresses once under Server › General › Other nex apps. Apps in your
+- To connect apps in one click, enter their addresses once under Server › Connections › Other nex apps. Apps in your
   local network (LAN, VPN) also need **Connections into the local network** there.
 
 ## 1.1.0 – 2026-11-25

@@ -29,7 +29,7 @@ The card shows the account you are connected with, since when, when the other ap
 
 ## For the operator
 
-For the cards to show a button to connect, the operator enters the addresses of the other apps once: **Settings › Server › General › Other nex apps**. In the other app he enters the address of nexnotes the same way. Where an address is missing, the card says that the app is not set up on this server.
+For the cards to show a button to connect, the operator enters the addresses of the other apps once: **Settings › Server › Connections › Other nex apps**. In the other app he enters the address of nexnotes the same way. Where an address is missing, the card says that the app is not set up on this server.
 
 - If an app runs in the local network (LAN, VPN), the operator switches on **"Connections into the local network"** at the same place.
 - The switch "Connections with other nex apps" turns connecting off for everybody. Existing connections then rest; nothing is deleted.

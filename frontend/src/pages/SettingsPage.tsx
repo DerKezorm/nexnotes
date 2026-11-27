@@ -22,8 +22,8 @@ export function SettingsPage() {
   const { t, i18n } = useTranslation()
   const { me } = useAuth()
   const { tab: asked } = useParams()
-  const { search } = useLocation()
-  const where = resolveArea(asked, me?.role, search)
+  const { search, hash } = useLocation()
+  const where = resolveArea(asked, me?.role, search, hash)
   const area = 'area' in where ? findArea(where.area) : undefined
   const things = t('settings.things')
   const thingsDative = t('settings.thingsDative')
