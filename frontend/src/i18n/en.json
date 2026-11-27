@@ -472,7 +472,7 @@
     "note_trashed": "This note is in the trash.",
     "nextasks_not_connected": "nextasks is not connected. Connect it under My account › Connections › nextasks.",
     "nextasks_address_invalid": "This is not an address of nextasks. It starts with http:// or https://.",
-    "nextasks_address_local": "This address is in the local network. The operator has to allow that first under Server › General › Features for every account.",
+    "nextasks_address_local": "This address is in the local network. The operator has to allow that first: Server › General › Other nex apps, “Connections into the local network”.",
     "nextasks_address_refused": "nexnotes never asks this address, not even in the local network.",
     "nextasks_unreachable": "nextasks cannot be reached right now or did not answer as expected. The note stays as it is.",
     "nextasks_address_port": "Below 1024, nexnotes only asks ports 80 and 443. Use the address nextasks runs at in the browser.",

@@ -472,7 +472,7 @@
     "note_trashed": "Diese Notiz liegt im Papierkorb.",
     "nextasks_not_connected": "nextasks ist nicht verbunden. Verbinde es unter Mein Konto › Verbindungen › nextasks.",
     "nextasks_address_invalid": "Das ist keine Adresse von nextasks. Sie beginnt mit http:// oder https://.",
-    "nextasks_address_local": "Diese Adresse liegt im eigenen Netz. Das muss der Betreiber unter Server › Allgemein › Funktionen für alle Konten erst erlauben.",
+    "nextasks_address_local": "Diese Adresse liegt im eigenen Netz. Das muss der Betreiber erst erlauben: Server › Allgemein › Andere nex-Apps, „Verbindungen ins eigene Netz“.",
     "nextasks_address_refused": "Diese Adresse fragt nexnotes nie, auch nicht im eigenen Netz.",
     "nextasks_unreachable": "nextasks ist gerade nicht erreichbar oder hat nicht passend geantwortet. Die Notiz bleibt, wie sie ist.",
     "nextasks_address_port": "Unter 1024 fragt nexnotes nur die Ports 80 und 443. Nimm die Adresse, unter der nextasks im Browser läuft.",
